@@ -1,0 +1,13 @@
+﻿# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Data samples & outputs
+*.xlsx
+*.json
+~$*.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
