@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BaseHaptic</string>
+    <string name="live">LIVE</string>
+    <string name="home">HOME</string>
+    <string name="away">AWAY</string>
+    <string name="game_details">경기 상세 보기</string>
+    <string name="no_game">진행 중인 경기가 없습니다</string>
+    <string name="connect_phone">휴대폰 앱을 열어주세요</string>
+</resources>
+
