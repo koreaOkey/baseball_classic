@@ -44,6 +44,14 @@
                     android:scheme="wear"
                     android:host="*"
                     android:pathPrefix="/game" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/theme" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/haptic" />
             </intent-filter>
         </service>
     </application>

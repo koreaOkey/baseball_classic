@@ -110,7 +110,7 @@ cd apps/watch
 - [x] DataLayerListenerService 구조
 - [ ] Data Layer API 실제 연동
 - [ ] 포그라운드 서비스 (화면 꺼져도 유지)
-- [ ] 햅틱 피드백 구현 (아웃, 홈런, 안타, 볼, 도루)
+- [x] 햅틱 피드백 구현 (HOMERUN, HIT, OUT, SCORE, STRIKE, BALL)
 - [ ] BLE 원격 하이파이브
 
 ## 구조
@@ -127,21 +127,32 @@ app/src/main/java/com/basehaptic/watch/
     │   └── NoGameScreen.kt           # 경기 없음 화면
     └── theme/
         ├── Color.kt
+        ├── TeamTheme.kt
         ├── Type.kt
         └── Theme.kt
 ```
+
+## 완료된 기능
+
+### 햅틱 피드백
+`DataLayerListenerService.kt`에 `VibrationEffect.createWaveform()` 기반으로 구현 완료.
+
+| 이벤트 | 진동 패턴 | 강도 (amplitude) |
+|--------|-----------|-------------------|
+| HOMERUN | 강한 진동 3회 (200ms on, 150ms off) | 255 |
+| HIT | 중간 진동 2회 (150ms on, 100ms off) | 180 |
+| OUT | 짧은 진동 1회 (100ms) | 150 |
+| SCORE | 강한 진동 2회 (200ms on, 200ms off) | 255 |
+| STRIKE | 짧은 진동 2회 (80ms on, 80ms off) | 120 |
+| BALL | 약한 진동 1회 (50ms) | 80 |
 
 ## 다음 단계
 1. **Mobile 앱과 Data Layer 통신 구현**
    - PutDataRequest로 경기 데이터 수신
    - 경기 상태 실시간 업데이트
-2. **햅틱 피드백 패턴 구현**
-   - `HapticManager.kt` 생성
-   - 이벤트별 진동 패턴 (아웃, 홈런, 안타, 볼, 도루)
-   - VibrationEffect API 활용
-3. **포그라운드 서비스로 백그라운드 유지**
+2. **포그라운드 서비스로 백그라운드 유지**
    - 화면 꺼져도 경기 중계 유지
    - 알림 표시 (진행 중인 경기 정보)
-4. **배터리 최적화**
+3. **배터리 최적화**
    - Doze 모드 대응
    - 워치 센서 데이터 최소화

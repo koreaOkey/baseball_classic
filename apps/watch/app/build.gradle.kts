@@ -9,7 +9,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.basehaptic.watch"
+        applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
         targetSdk = 34
         versionCode = 1
@@ -64,6 +64,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     
+    // ConstraintLayout
+    implementation("androidx.constraintlayout:constraintlayout-compose:1.0.1")
+
     // Icons
     implementation("androidx.compose.material:material-icons-extended")
     
