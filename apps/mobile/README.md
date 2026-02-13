@@ -16,6 +16,7 @@
 - **CommunityScreen**: 팀 커뮤니티 (준비중)
 - **ThemeStoreScreen**: 테마 상점 (준비중)
 - **SettingsScreen**: 앱 설정
+- **WatchTestScreen**: 워치 동기화 시뮬레이션 테스트
 
 ## 리소스
 
@@ -106,13 +107,13 @@ val {팀명} = TeamTheme(
 - Gradle 8.7 (프로젝트에 포함)
 
 ### 빌드 및 실행
-1. Android Studio에서 프로젝트 열기
+1. 루트(`baseball_classic/`)에서 Android Studio로 프로젝트 열기
 2. Gradle Sync 완료 대기
 3. 앱 실행 (Run > Run 'app')
 
 ```bash
-# 또는 명령줄에서
-./gradlew assembleDebug
+# 루트에서 모노레포 빌드
+./gradlew :apps:mobile:app:assembleDebug
 ```
 
 ## MVP 목표
@@ -125,9 +126,10 @@ val {팀명} = TeamTheme(
 - [x] 동적 테마 시스템 (팀별 색상 자동 전환)
 - [x] 설정에서 응원팀 변경
 - [ ] 백엔드 연동 (API 통신)
-- [ ] 워치 앱 연동 (Data Layer)
-- [ ] 워치 햅틱 피드백 전송
-- [ ] 실시간 데이터 업데이트
+- [x] 워치 앱 연동 (Data Layer — WearGameSyncManager)
+- [x] 워치 햅틱 피드백 전송 (WearGameSyncManager.sendHapticEvent)
+- [x] 워치 테마 동기화 (WearThemeSyncManager)
+- [ ] 실시간 데이터 업데이트 (백엔드 연동 후)
 - [ ] 커스텀 테마 상점
 
 ## 구조
@@ -150,7 +152,11 @@ app/src/main/java/com/basehaptic/mobile/
     │   ├── LiveGameScreen.kt
     │   ├── CommunityScreen.kt
     │   ├── ThemeStoreScreen.kt
-    │   └── SettingsScreen.kt
+    │   ├── SettingsScreen.kt
+    │   └── WatchTestScreen.kt   # 워치 동기화 테스트
+    ├── wear/                    # 워치 통신 모듈
+    │   ├── WearGameSyncManager.kt   # 경기 데이터 + 햅틱 전송
+    │   └── WearThemeSyncManager.kt  # 팀 테마 동기화
     └── theme/                   # 테마 및 스타일
         ├── Color.kt
         ├── Type.kt
@@ -177,10 +183,7 @@ app/src/main/res/
 ## 다음 단계
 1. ViewModel 및 Repository 패턴 적용
 2. Retrofit을 통한 백엔드 API 연동
-3. **Wearable Data Layer API를 통한 워치 앱 연동**
-   - 경기 데이터 실시간 전송 (점수, 이닝, BSO)
-   - 이벤트 발생 시 워치 햅틱 트리거
-   - 팀 테마 동기화
+3. ~~Wearable Data Layer API를 통한 워치 앱 연동~~ (완료)
 4. 실시간 데이터 업데이트 (WebSocket 또는 FCM)
 5. 로컬 데이터 저장 (DataStore/Room)
 6. 커스텀 테마 상점 구현

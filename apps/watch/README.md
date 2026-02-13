@@ -91,14 +91,13 @@ val {팀명} = WatchTeamTheme(
 - JDK 17
 
 ### 빌드 및 실행
-1. Android Studio에서 프로젝트 열기
+1. 루트(`baseball_classic/`)에서 Android Studio로 프로젝트 열기
 2. Wear OS 에뮬레이터 생성 (API 30+)
 3. Run > Run 'app'
 
 ```bash
-# 또는 명령줄에서
-cd apps/watch
-./gradlew assembleDebug
+# 루트에서 모노레포 빌드
+./gradlew :apps:watch:app:assembleDebug
 ```
 
 ## MVP 목표
@@ -108,7 +107,7 @@ cd apps/watch
 - [x] 베이스 다이아몬드
 - [x] 동적 팀 색상 테마 (모바일 연동)
 - [x] DataLayerListenerService 구조
-- [ ] Data Layer API 실제 연동
+- [x] Data Layer API 실제 연동 (모바일 → 워치 경기/테마/햅틱 동기화)
 - [ ] 포그라운드 서비스 (화면 꺼져도 유지)
 - [x] 햅틱 피드백 구현 (HOMERUN, HIT, OUT, SCORE, STRIKE, BALL)
 - [ ] BLE 원격 하이파이브
@@ -117,8 +116,8 @@ cd apps/watch
 
 ```
 app/src/main/java/com/basehaptic/watch/
-├── MainActivity.kt                    # 메인 액티비티
-├── DataLayerListenerService.kt       # 데이터 수신 서비스
+├── MainActivity.kt                    # 메인 액티비티 (BroadcastReceiver로 실시간 갱신)
+├── DataLayerListenerService.kt       # 데이터 수신 + 햅틱 피드백 서비스
 ├── data/
 │   └── GameData.kt                   # 경기 데이터 모델
 └── ui/
@@ -130,6 +129,11 @@ app/src/main/java/com/basehaptic/watch/
         ├── TeamTheme.kt
         ├── Type.kt
         └── Theme.kt
+
+app/src/main/res/
+└── drawable/                          # KBO 10개 팀 로고 (워치용)
+    ├── dosan.png, lg.png, kiwoom.png, samsung.png, lotte.png
+    ├── ssg.png, kt.png, hanwha.png, kia.png, nc.png
 ```
 
 ## 완료된 기능
@@ -147,9 +151,7 @@ app/src/main/java/com/basehaptic/watch/
 | BALL | 약한 진동 1회 (50ms) | 80 |
 
 ## 다음 단계
-1. **Mobile 앱과 Data Layer 통신 구현**
-   - PutDataRequest로 경기 데이터 수신
-   - 경기 상태 실시간 업데이트
+1. ~~Mobile 앱과 Data Layer 통신 구현~~ (완료)
 2. **포그라운드 서비스로 백그라운드 유지**
    - 화면 꺼져도 경기 중계 유지
    - 알림 표시 (진행 중인 경기 정보)
