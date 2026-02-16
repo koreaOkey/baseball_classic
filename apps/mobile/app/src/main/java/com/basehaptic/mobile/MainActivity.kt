@@ -68,7 +68,7 @@ fun BaseHapticApp(
     } else {
         Scaffold(
             bottomBar = {
-                if (currentView != Screen.LiveGame) {
+                if (currentView != Screen.LiveGame && currentView != Screen.WatchTest) {
                     BottomNavigationBar(
                         currentView = currentView,
                         onNavigate = { currentView = it }
@@ -116,7 +116,12 @@ fun BaseHapticApp(
                         },
                         purchasedThemes = purchasedThemes,
                         activeTheme = activeTheme,
-                        onSelectTheme = { activeTheme = it }
+                        onSelectTheme = { activeTheme = it },
+                        onOpenWatchTest = { currentView = Screen.WatchTest }
+                    )
+                    Screen.WatchTest -> WatchTestScreen(
+                        selectedTeam = selectedTeam,
+                        onBack = { currentView = Screen.Settings }
                     )
                 }
             }
@@ -209,4 +214,5 @@ sealed class Screen {
     object Community : Screen()
     object Store : Screen()
     object Settings : Screen()
+    object WatchTest : Screen()
 }

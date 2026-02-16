@@ -80,6 +80,9 @@ dependencies {
     
     // Lottie for animations
     implementation("com.airbnb.android:lottie-compose:6.6.2")
+
+    // Wear OS Data Layer
+    implementation("com.google.android.gms:play-services-wearable:18.2.0")
     
     // Testing
     testImplementation("junit:junit:4.13.2")

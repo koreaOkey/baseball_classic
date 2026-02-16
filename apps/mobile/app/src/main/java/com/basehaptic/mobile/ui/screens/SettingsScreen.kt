@@ -1,14 +1,39 @@
-package com.basehaptic.mobile.ui.screens
+﻿package com.basehaptic.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,15 +45,24 @@ import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.ui.components.TeamLogo
-import com.basehaptic.mobile.ui.theme.*
+import com.basehaptic.mobile.ui.theme.Gray300
+import com.basehaptic.mobile.ui.theme.Gray400
+import com.basehaptic.mobile.ui.theme.Gray500
+import com.basehaptic.mobile.ui.theme.Gray700
+import com.basehaptic.mobile.ui.theme.Gray800
+import com.basehaptic.mobile.ui.theme.Gray900
+import com.basehaptic.mobile.ui.theme.Gray950
+import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun SettingsScreen(
     selectedTeam: Team,
     onChangeTeam: (Team) -> Unit,
     purchasedThemes: List<ThemeData>,
     activeTheme: ThemeData?,
-    onSelectTheme: (ThemeData?) -> Unit
+    onSelectTheme: (ThemeData?) -> Unit,
+    onOpenWatchTest: () -> Unit
 ) {
     val teamTheme = LocalTeamTheme.current
     var showTeamPicker by remember { mutableStateOf(false) }
@@ -63,7 +97,6 @@ fun SettingsScreen(
             )
         }
 
-        // 팀 선택 피커
         if (showTeamPicker) {
             item {
                 Surface(
@@ -74,9 +107,18 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         val teams = listOf(
-                            Team.DOOSAN, Team.LG, Team.KIWOOM, Team.SAMSUNG, Team.LOTTE,
-                            Team.SSG, Team.KT, Team.HANWHA, Team.KIA, Team.NC
+                            Team.DOOSAN,
+                            Team.LG,
+                            Team.KIWOOM,
+                            Team.SAMSUNG,
+                            Team.LOTTE,
+                            Team.SSG,
+                            Team.KT,
+                            Team.HANWHA,
+                            Team.KIA,
+                            Team.NC
                         )
+
                         teams.forEach { team ->
                             Surface(
                                 modifier = Modifier
@@ -86,7 +128,11 @@ fun SettingsScreen(
                                         onChangeTeam(team)
                                         showTeamPicker = false
                                     },
-                                color = if (team == selectedTeam) teamTheme.primary.copy(alpha = 0.2f) else Color.Transparent,
+                                color = if (team == selectedTeam) {
+                                    teamTheme.primary.copy(alpha = 0.2f)
+                                } else {
+                                    Color.Transparent
+                                },
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Row(
@@ -130,7 +176,7 @@ fun SettingsScreen(
             SettingsItemWithSwitch(
                 icon = Icons.Default.Vibration,
                 title = "햅틱 피드백",
-                subtitle = "주요 이벤트 발생 시 진동 알림",
+                subtitle = "주요 이벤트 발생 시 진동으로 알림",
                 checked = hapticEnabled,
                 onCheckedChange = { hapticEnabled = it }
             )
@@ -152,9 +198,23 @@ fun SettingsScreen(
             SettingsItemWithSwitch(
                 icon = Icons.Default.Bluetooth,
                 title = "원격 하이파이브",
-                subtitle = "근처 팬과 득점 순간 공유",
+                subtitle = "친구와 득점 순간을 함께 공유",
                 checked = highFive,
                 onCheckedChange = { highFive = it }
+            )
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsSection(title = "개발자")
+        }
+
+        item {
+            SettingsItem(
+                icon = Icons.Default.Watch,
+                title = "Watch Test",
+                subtitle = "앱-워치 동기화 및 햅틱 이벤트 테스트",
+                onClick = onOpenWatchTest
             )
         }
 
@@ -168,7 +228,7 @@ fun SettingsScreen(
                 icon = Icons.Default.Info,
                 title = "버전",
                 subtitle = "1.0.0",
-                onClick = { }
+                onClick = {}
             )
         }
 
@@ -177,7 +237,7 @@ fun SettingsScreen(
                 icon = Icons.Default.Description,
                 title = "오픈소스 라이선스",
                 subtitle = "",
-                onClick = { }
+                onClick = {}
             )
         }
 
@@ -220,16 +280,16 @@ private fun SettingsItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val thm = LocalTeamTheme.current
+            val theme = LocalTeamTheme.current
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = thm.primary,
+                tint = theme.primary,
                 modifier = Modifier.size(24.dp)
             )
-            
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -246,7 +306,7 @@ private fun SettingsItem(
                     )
                 }
             }
-            
+
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
@@ -284,9 +344,9 @@ private fun SettingsItemWithSwitch(
                 tint = teamTheme.primary,
                 modifier = Modifier.size(24.dp)
             )
-            
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -303,7 +363,7 @@ private fun SettingsItemWithSwitch(
                     )
                 }
             }
-            
+
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
@@ -317,4 +377,3 @@ private fun SettingsItemWithSwitch(
         }
     }
 }
-
