@@ -1,0 +1,43 @@
+{
+  "homeTeam": "두산",
+  "awayTeam": "LG",
+  "status": "LIVE",
+  "inning": "7회말",
+  "homeScore": 3,
+  "awayScore": 2,
+  "ball": 2,
+  "strike": 1,
+  "out": 1,
+  "bases": {
+    "first": true,
+    "second": false,
+    "third": true
+  },
+  "pitcher": "김택연",
+  "batter": "문보경",
+  "observedAt": "2026-02-17T09:00:00Z",
+  "events": [
+    {
+      "sourceEventId": "relay-001",
+      "type": "HIT",
+      "description": "문보경, 좌전 안타",
+      "occurredAt": "2026-02-17T08:59:20Z",
+      "hapticPattern": "○●○●",
+      "metadata": {
+        "inning": 7,
+        "half": "말"
+      }
+    },
+    {
+      "sourceEventId": "relay-002",
+      "type": "SCORE",
+      "description": "3루 주자 홈인, 1점 추가",
+      "occurredAt": "2026-02-17T08:59:44Z",
+      "hapticPattern": "●○●○●",
+      "metadata": {
+        "inning": 7,
+        "half": "말"
+      }
+    }
+  ]
+}

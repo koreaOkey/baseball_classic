@@ -213,6 +213,7 @@ private fun ScoreSide(
     ) {
         Text(
             text = score.toString(),
+            modifier = Modifier.offset(x = 2.dp),
             color = Color.White,
             fontSize = 34.sp,
             fontWeight = FontWeight.Black,
