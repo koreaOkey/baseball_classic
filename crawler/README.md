@@ -1,42 +1,69 @@
-# Crawler (Python)
+﻿# Crawler (Python)
 
-네이버 스포츠(모바일) 중계 데이터를 주기적으로 수집/정제하는 크롤러 모듈입니다.
+이 폴더에는 야구/테니스 크롤러와 로컬 라이브 테스트 서버가 들어 있습니다.
 
-## 구성
-- `crawler.py`: (야구) 릴레이 API 수집 → 엑셀 저장 (현재는 디버깅/검증용)
-- `crawler_tennis.py`: (테니스) `scoreDetail` 기반 포인트/게임/세트 파싱 → 엑셀 저장 (검증용)
-- `live_tennis_server.py`: (테니스) 10초 폴링 + 로컬 웹서버로 상태 확인 (검증용)
-- `requirements.txt`: 파이썬 의존성
+## 파일 구성
+- `crawler.py`: 야구 중계 크롤러 (`--base-url`로 목 API 지원)
+- `crawler_tennis.py`: 테니스 `scoreDetail` 크롤러
+- `live_tennis_server.py`: 테니스 라이브 모니터 서버
+- `build_baseball_sample_data.py`: 종료된 야구 경기 데이터를 `data/mock_baseball/<game_id>`에 샘플로 저장
+- `mock_baseball_relay_server.py`: 종료된 야구 경기를 라이브처럼 재생하는 목 API 서버
+- `live_baseball_server.py`: `crawler.py`를 주기 실행하고 웹 화면으로 결과를 보여주는 서버
 
-## 실행 (로컬)
-의존성 설치:
-
+## 설치
 ```bash
 pip install -r requirements.txt
 ```
 
-야구(경기ID 예시):
+## 현재 검증 기준
+- 기준 경기: `20250902WOSK02025`
+- 목 API 포트: `8011`
+- 라이브 모니터 포트: `8010`
+- 라이브 갱신 주기: `10초`
 
+## 1) 야구 샘플 데이터 생성
 ```bash
-python crawler.py --game-id 20250501SSSK02025 --output out.xlsx
+python crawler/build_baseball_sample_data.py --game-id 20250902WOSK02025 --output-dir data/mock_baseball
 ```
 
-테니스(경기ID 예시):
+생성 파일:
+- `data/mock_baseball/20250902WOSK02025/game.json`
+- `data/mock_baseball/20250902WOSK02025/relay_inning_1.json` ... `relay_inning_9.json`
+- `data/mock_baseball/20250902WOSK02025/manifest.json`
 
+## 2) 야구 목 라이브 API 서버 실행
 ```bash
-python crawler_tennis.py --game-id eXzIlhIXM5IFA4n --output tennis.xlsx
+python crawler/mock_baseball_relay_server.py --game-id 20250902WOSK02025 --data-dir data/mock_baseball --port 8011 --step-interval 10 --step-size 25
 ```
 
-테니스 라이브 서버(10초 갱신):
+목 API 엔드포인트:
+- `http://localhost:8011/schedule/games/20250902WOSK02025`
+- `http://localhost:8011/schedule/games/20250902WOSK02025/relay?inning=1`
 
+## 3) 야구 라이브 크롤링 모니터 서버 실행
 ```bash
-python live_tennis_server.py --game-id eXzIlhIXM5IFA4n --interval 10 --port 8000 --output tennis_live.xlsx
+python crawler/live_baseball_server.py --game-id 20250902WOSK02025 --source-base-url http://localhost:8011 --interval 10 --port 8010 --output-excel data/baseball_live_output.xlsx --output-json data/baseball_live_output.json
 ```
 
-브라우저 접속: `http://localhost:8000`
+실행 예시(파일 잠금 회피용 출력 파일명):
+```bash
+python crawler/live_baseball_server.py --game-id 20250902WOSK02025 --source-base-url http://localhost:8011 --interval 10 --port 8010 --output-excel data/baseball_live_output_run2.xlsx --output-json data/baseball_live_output_run2.json
+```
 
-## 다음 단계(예정)
-- 엑셀 출력 대신 **DB upsert**로 적재
-- “새 이벤트만” 저장하도록 **idempotent 키** 설계 (gameId + seq/ids)
-- 크롤러용 인증(서비스 키) 분리 및 레이트리밋/재시도 정책 추가
+접속:
+- `http://localhost:8010`
 
+출력 파일은 `data/` 폴더에 저장됩니다.
+
+## 야구 크롤러 단독 실행
+```bash
+python crawler/crawler.py --game-id 20250902WOSK02025 --base-url http://localhost:8011 --watch --interval 10 --output data/baseball_from_mock.xlsx
+```
+
+## 트러블슈팅
+- `Permission denied: data/baseball_live_output.xlsx` 에러가 나면:
+  - 해당 파일을 열고 있는 Excel/뷰어를 닫고 다시 실행
+  - 또는 `--output-excel`, `--output-json` 파일명을 다른 이름으로 지정
+- `http://localhost:8010` 접속이 안 되면:
+  - 먼저 `mock_baseball_relay_server.py`(`8011`)가 실행 중인지 확인
+  - 그다음 `live_baseball_server.py`(`8010`)를 실행

@@ -1,14 +1,15 @@
-import argparse
+﻿import argparse
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-import requests
 import pandas as pd
+import requests
 
 
 BASE_URL = "https://api-gw.sports.naver.com"
-DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; BaseHapticCrawler/1.0)"
+DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; BaseballClassicCrawler/1.0)"
+FINAL_STATUS = {"RESULT", "END", "FINAL"}
 
 
 def fetch_json(url: str) -> Dict[str, Any]:
@@ -49,9 +50,7 @@ def build_player_map(relay_data: Dict[str, Any]) -> Dict[str, str]:
     return player_map
 
 
-def update_player_map_from_option(
-    option: Dict[str, Any], player_map: Dict[str, str]
-) -> None:
+def update_player_map_from_option(option: Dict[str, Any], player_map: Dict[str, str]) -> None:
     batter_record = option.get("batterRecord")
     if batter_record:
         player_id = str(batter_record.get("pcode") or "").strip()
@@ -69,9 +68,7 @@ def update_player_map_from_option(
 
 
 def normalize_half(home_or_away: Any) -> str:
-    if str(home_or_away) == "0":
-        return "초"
-    return "말"
+    return "top" if str(home_or_away) == "0" else "bottom"
 
 
 def get_team_names(game: Dict[str, Any]) -> Dict[str, str]:
@@ -86,16 +83,33 @@ def resolve_player_name(player_id: Optional[str], player_map: Dict[str, str]) ->
     return player_map.get(str(player_id), "")
 
 
-def should_count_ball(text: str, pitch_result: Optional[str]) -> bool:
-    if "볼" in text:
-        return True
+def should_count_ball(_: str, pitch_result: Optional[str]) -> bool:
     return pitch_result in {"B"}
 
 
-def should_count_strike(text: str, pitch_result: Optional[str]) -> bool:
-    if "스트라이크" in text or "파울" in text:
-        return True
+def should_count_strike(_: str, pitch_result: Optional[str]) -> bool:
     return pitch_result in {"T", "S", "F"}
+
+
+def _contains_any(value: str, terms: List[str]) -> bool:
+    normalized = (value or "").lower()
+    return any(term.lower() in normalized for term in terms)
+
+
+def _is_pitcher_change(live_text: str, in_pos: str, out_pos: str) -> bool:
+    return (
+        _contains_any(live_text, ["투수", "pitcher"])
+        or _contains_any(in_pos, ["투수", "pitcher"])
+        or _contains_any(out_pos, ["투수", "pitcher"])
+    )
+
+
+def _is_pinch_hitter_change(live_text: str, in_pos: str, out_pos: str) -> bool:
+    return (
+        _contains_any(live_text, ["대타", "pinch"])
+        or _contains_any(in_pos, ["대타", "pinch"])
+        or _contains_any(out_pos, ["대타", "pinch"])
+    )
 
 
 def parse_relay(
@@ -134,8 +148,21 @@ def parse_relay(
         fielding_team: str,
     ) -> None:
         nonlocal current_atbat
-        if current_atbat and current_atbat.get("batter_id") != batter_id:
+
+        if current_atbat:
+            same_batter = (
+                current_atbat.get("inning") == inn
+                and current_atbat.get("half") == half
+                and current_atbat.get("batter_id") == batter_id
+            )
+            if same_batter:
+                if pitcher_name and not current_atbat.get("pitcher"):
+                    current_atbat["pitcher"] = pitcher_name
+                if pitcher_id and not current_atbat.get("pitcher_id"):
+                    current_atbat["pitcher_id"] = pitcher_id
+                return
             close_current_atbat(None, seqno)
+
         current_atbat = {
             "inning": inn,
             "half": half,
@@ -157,9 +184,11 @@ def parse_relay(
         inn = int(relay.get("inn") or 0)
         if not (1 <= inn <= 9):
             continue
+
         half = normalize_half(relay.get("homeOrAway"))
-        batting_team = teams["away"] if half == "초" else teams["home"]
-        fielding_team = teams["home"] if half == "초" else teams["away"]
+        is_top = half == "top"
+        batting_team = teams["away"] if is_top else teams["home"]
+        fielding_team = teams["home"] if is_top else teams["away"]
 
         text_options = relay.get("textOptions") or []
         for option in sorted(text_options, key=lambda item: item.get("seqno", 0)):
@@ -184,7 +213,7 @@ def parse_relay(
                 in_pos = (in_player.get("playerPos") or "").strip()
                 out_pos = (out_player.get("playerPos") or "").strip()
 
-                if "투수" in live_text or in_pos == "투수" or out_pos == "투수":
+                if _is_pitcher_change(live_text, in_pos, out_pos):
                     pitcher_changes.append(
                         {
                             "inning": inn,
@@ -197,7 +226,7 @@ def parse_relay(
                         }
                     )
 
-                if "대타" in live_text or in_pos == "대타":
+                if _is_pinch_hitter_change(live_text, in_pos, out_pos):
                     pinch_hitters.append(
                         {
                             "inning": inn,
@@ -216,9 +245,8 @@ def parse_relay(
                 if not batter_name and batter_id:
                     batter_name = resolve_player_name(batter_id, player_map)
                 pitcher_name = resolve_player_name(pitcher_id, player_map)
-                is_pinch = (
-                    "대타" in text
-                    or (batter_record.get("posName") or "") == "대타"
+                is_pinch = _contains_any(text, ["대타", "pinch"]) or _contains_any(
+                    batter_record.get("posName") or "", ["대타", "pinch"]
                 )
                 if batter_name:
                     start_atbat(
@@ -279,13 +307,24 @@ def save_excel(
     at_bats_df = pd.DataFrame(parsed["at_bats"])
     pinch_df = pd.DataFrame(parsed["pinch_hitters"])
     pitcher_df = pd.DataFrame(parsed["pitcher_changes"])
+    summary_df = pd.DataFrame(
+        [
+            {
+                "game_id": game.get("gameId"),
+                "home_team": game.get("homeTeamName") or game.get("homeTeamShortName"),
+                "away_team": game.get("awayTeamName") or game.get("awayTeamShortName"),
+                "status": game.get("statusCode"),
+                "score_home": game.get("homeTeamScore"),
+                "score_away": game.get("awayTeamScore"),
+            }
+        ]
+    )
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        summary_df.to_excel(writer, index=False, sheet_name="match")
         at_bats_df.to_excel(writer, index=False, sheet_name="at_bats")
         pinch_df.to_excel(writer, index=False, sheet_name="pinch_hitters")
         pitcher_df.to_excel(writer, index=False, sheet_name="pitcher_changes")
-
-    return None
 
 
 def build_output_name(game_id: str) -> str:
@@ -293,55 +332,72 @@ def build_output_name(game_id: str) -> str:
     return f"relay_{game_id}_{timestamp}.xlsx"
 
 
-def run(game_id: str, output_path: Optional[str], watch: bool, interval: int) -> None:
-    game_url = f"{BASE_URL}/schedule/games/{game_id}"
+def crawl_once(game_id: str, base_url: str = BASE_URL) -> Tuple[Dict[str, Any], Dict[str, List[Dict[str, Any]]]]:
+    game_url = f"{base_url}/schedule/games/{game_id}"
+    game_data = fetch_json(game_url).get("result", {}).get("game", {})
+    if not game_data:
+        raise ValueError(f"No game data found for game_id={game_id}")
 
+    teams = get_team_names(game_data)
+    combined = {
+        "at_bats": [],
+        "pinch_hitters": [],
+        "pitcher_changes": [],
+    }
+
+    for inning in range(1, 10):
+        relay_url = f"{base_url}/schedule/games/{game_id}/relay?inning={inning}"
+        relay_data = fetch_json(relay_url).get("result", {}).get("textRelayData", {})
+        parsed = parse_relay(relay_data, teams)
+        combined["at_bats"].extend(parsed["at_bats"])
+        combined["pinch_hitters"].extend(parsed["pinch_hitters"])
+        combined["pitcher_changes"].extend(parsed["pitcher_changes"])
+
+    return game_data, combined
+
+
+def run(
+    game_id: str,
+    output_path: Optional[str],
+    watch: bool,
+    interval: int,
+    base_url: str,
+) -> None:
     while True:
-        game_data = fetch_json(game_url).get("result", {}).get("game", {})
-        teams = get_team_names(game_data)
-
-        combined = {
-            "at_bats": [],
-            "pinch_hitters": [],
-            "pitcher_changes": [],
-        }
-
-        for inning in range(1, 10):
-            relay_url = f"{BASE_URL}/schedule/games/{game_id}/relay?inning={inning}"
-            relay_data = (
-                fetch_json(relay_url).get("result", {}).get("textRelayData", {})
-            )
-            parsed = parse_relay(relay_data, teams)
-            combined["at_bats"].extend(parsed["at_bats"])
-            combined["pinch_hitters"].extend(parsed["pinch_hitters"])
-            combined["pitcher_changes"].extend(parsed["pitcher_changes"])
-
+        game_data, combined = crawl_once(game_id=game_id, base_url=base_url)
         target = output_path or build_output_name(game_id)
         save_excel(target, game_data, combined)
 
         status = (game_data.get("statusCode") or "").upper()
-        if not watch or status in {"RESULT", "END", "FINAL"}:
+        if not watch or status in FINAL_STATUS:
             break
         time.sleep(interval)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Naver Sports relay crawler")
-    parser.add_argument("--game-id", required=True, help="예: 20250501SSSK02025")
-    parser.add_argument("--output", help="엑셀 저장 경로")
+    parser = argparse.ArgumentParser(description="Naver Sports baseball relay crawler")
+    parser.add_argument("--game-id", required=True, help="example: 20250902WOSK02025")
+    parser.add_argument("--output", help="excel output path")
     parser.add_argument(
         "--watch",
         action="store_true",
-        help="라이브 경기일 때 주기적으로 갱신",
+        help="poll repeatedly until game status becomes final",
     )
+    parser.add_argument("--interval", type=int, default=30, help="watch interval in seconds")
     parser.add_argument(
-        "--interval",
-        type=int,
-        default=30,
-        help="갱신 간격(초)",
+        "--base-url",
+        default=BASE_URL,
+        help="api base url (default: official naver api)",
     )
+
     args = parser.parse_args()
-    run(args.game_id, args.output, args.watch, args.interval)
+    run(
+        game_id=args.game_id,
+        output_path=args.output,
+        watch=args.watch,
+        interval=args.interval,
+        base_url=args.base_url.rstrip("/"),
+    )
 
 
 if __name__ == "__main__":

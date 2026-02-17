@@ -37,9 +37,10 @@ backend/
 
 ## 실행 방법 (로컬)
 ```bash
-cd backend/api
+cd <repo-root>
 python -m venv .venv
 . .venv/Scripts/Activate.ps1
+cd backend/api
 pip install -r requirements.txt
 copy .env.example .env
 uvicorn app.main:app --reload --port 8080
