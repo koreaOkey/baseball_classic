@@ -44,6 +44,8 @@ class DataLayerListenerService : WearableListenerService() {
         const val KEY_BATTER = "batter"
         const val KEY_MY_TEAM = "my_team"
         const val KEY_EVENT_TYPE = "event_type"
+        const val KEY_LAST_EVENT_TYPE = "last_event_type"
+        const val KEY_LAST_EVENT_AT = "last_event_at"
     }
     
     override fun onDataChanged(dataEvents: DataEventBuffer) {
@@ -96,13 +98,13 @@ class DataLayerListenerService : WearableListenerService() {
             sendBroadcast(Intent(ACTION_THEME_UPDATED))
         }
 
-        sendBroadcast(Intent(ACTION_GAME_UPDATED))
-
-        // 이벤트 타입이 있으면 햅틱 피드백
         val eventType = dataMap.getString(KEY_EVENT_TYPE, "")
         if (eventType.isNotBlank()) {
+            saveLatestEvent(eventType)
             triggerHapticFeedback(eventType)
         }
+
+        sendBroadcast(Intent(ACTION_GAME_UPDATED))
     }
     
     /**
@@ -127,7 +129,19 @@ class DataLayerListenerService : WearableListenerService() {
     private fun handleHapticEvent(item: DataItem) {
         val dataMap = DataMapItem.fromDataItem(item).dataMap
         val eventType = dataMap.getString(KEY_EVENT_TYPE, "")
+        if (eventType.isBlank()) return
+
+        saveLatestEvent(eventType)
         triggerHapticFeedback(eventType)
+        sendBroadcast(Intent(ACTION_GAME_UPDATED))
+    }
+
+    private fun saveLatestEvent(eventType: String) {
+        getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_EVENT_TYPE, eventType.uppercase())
+            .putLong(KEY_LAST_EVENT_AT, System.currentTimeMillis())
+            .apply()
     }
     
     private fun triggerHapticFeedback(eventType: String) {

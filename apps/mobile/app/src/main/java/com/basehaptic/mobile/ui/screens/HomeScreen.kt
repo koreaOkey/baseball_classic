@@ -24,6 +24,7 @@ import com.basehaptic.mobile.data.model.*
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.*
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.compose.material3.MaterialTheme as M3Theme
@@ -34,8 +35,8 @@ fun HomeScreen(
     activeTheme: ThemeData?,
     onSelectGame: (String) -> Unit
 ) {
-    val games = remember {
-        getMockGames(selectedTeam)
+    val games = remember(selectedTeam) {
+        sortHomeGames(getMockGames(selectedTeam))
     }
     
     val teamTheme = LocalTeamTheme.current
@@ -479,25 +480,25 @@ private fun GameCard(
                 }
 
                 // Watch Status
-                if (game.status == GameStatus.LIVE) {
+                if (game.status == GameStatus.LIVE && game.isMyTeam) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Divider(
-                        color = if (game.isMyTeam) Yellow500.copy(alpha = 0.3f) else Gray800,
+                        color = Yellow500.copy(alpha = 0.3f),
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = if (game.isMyTeam) Icons.Default.Whatshot else Icons.Default.Bolt,
+                            imageVector = Icons.Default.Whatshot,
                             contentDescription = null,
-                            tint = if (game.isMyTeam) Yellow400 else Blue400,
+                            tint = Yellow400,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (game.isMyTeam) "워치에서 실시간 햅틱 중계 중" else "워치에서 실시간 중계 중",
+                            text = "\uC6CC\uCE58\uC5D0\uC11C \uC2E4\uC2DC\uAC04 \uD584\uD2F1 \uC911\uACC4 \uC911",
                             fontSize = 14.sp,
-                            fontWeight = if (game.isMyTeam) FontWeight.Medium else FontWeight.Normal,
-                            color = if (game.isMyTeam) Yellow400 else Blue400
+                            fontWeight = FontWeight.Medium,
+                            color = Yellow400
                         )
                     }
                 }
@@ -552,6 +553,31 @@ private fun TeamScoreRow(
             color = if (isWinner) Color.White else if (isScheduled) Color.White else Gray500
         )
     }
+}
+
+private fun sortHomeGames(games: List<Game>): List<Game> {
+    return games.sortedWith(
+        compareByDescending<Game> { it.isMyTeam }
+            .thenBy { statusPriority(it.status) }
+            .thenBy { scheduledTime(it) }
+            .thenBy { it.id }
+    )
+}
+
+private fun statusPriority(status: GameStatus): Int {
+    return when (status) {
+        GameStatus.LIVE -> 0
+        GameStatus.FINISHED -> 1
+        GameStatus.SCHEDULED -> 2
+    }
+}
+
+private fun scheduledTime(game: Game): LocalTime {
+    if (game.status != GameStatus.SCHEDULED) return LocalTime.MIN
+    val formatter = DateTimeFormatter.ofPattern("HH:mm")
+    return runCatching {
+        LocalTime.parse(game.time.orEmpty(), formatter)
+    }.getOrElse { LocalTime.MAX }
 }
 
 private fun getMockGames(selectedTeam: Team): List<Game> {
@@ -612,4 +638,3 @@ private fun getMockGames(selectedTeam: Team): List<Game> {
         )
     )
 }
-
