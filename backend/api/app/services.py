@@ -1,4 +1,3 @@
-import json
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -120,9 +119,7 @@ def insert_events(
             description=event_in.description,
             event_time=ensure_utc(event_in.occurredAt),
             haptic_pattern=event_in.hapticPattern,
-            payload_json=(
-                json.dumps(event_in.metadata, ensure_ascii=False) if event_in.metadata is not None else None
-            ),
+            payload_json=event_in.metadata,
         )
         db.add(event)
         inserted.append(event)

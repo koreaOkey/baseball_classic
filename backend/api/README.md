@@ -6,7 +6,7 @@ BaseHaptic MVP 백엔드 API 서버입니다.
 - Python 3.11+
 - FastAPI
 - SQLAlchemy
-- SQLite (dev 기본값)
+- SQLite (dev 기본값) / Supabase Postgres (운영/연동)
 
 ## Quick Start
 ```bash
@@ -23,6 +23,9 @@ uvicorn app.main:app --reload --port 8080
 - 상세 구조/연동 가이드는 `../README.md` 참고
 
 ## Supabase 전환
-- `BASEHAPTIC_DATABASE_URL`을 Supabase Postgres DSN으로 설정하면 됩니다.
-- 예: `postgresql+psycopg://<user>:<password>@db.<project-ref>.supabase.co:5432/postgres`
+- `BASEHAPTIC_DATABASE_URL`은 `postgresql+psycopg://...` 형식으로 설정해야 합니다.
+- Session Pooler 사용 예:
+  - `postgresql+psycopg://postgres.<project-ref>:<password>@aws-<region>.pooler.supabase.com:5432/postgres`
+- Direct host 사용 예:
+  - `postgresql+psycopg://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres`
 

@@ -62,8 +62,8 @@
 |**Common Logic**|**Kotlin Multiplatform (KMP)**|API 통신, 데이터 파싱, 캘린더 로직 공유|
 |**Android UI**|**Jetpack Compose / Wear OS**|네이티브 퍼포먼스 최적화|
 |**iOS UI**|**SwiftUI / watchOS**|향후 확장 단계에서 적용|
-|**Data Feed**|**Python (Crawler) + Socket.io**|티빙/네이버 데이터 파싱 및 저지연 전송|
-|**Real-time DB**|**Firebase / MQTT**|기기 간 상태 동기화 및 푸시 알림|
+|**Data Feed**|**Python (Crawler) + FastAPI ingest**|중계 데이터 수집 후 backend ingest API로 전송|
+|**Database**|**Supabase (PostgreSQL)**|경기/이벤트 영속 저장 및 조회|
 |**Animation**|**Lottie**|저용량 고품질 벡터 애니메이션|
 |**Proximity**|**BLE / UWB**|근거리 팬 감지 및 하이파이브 로직|
 
@@ -92,9 +92,10 @@ graph LR
 |`db/`|DB 스키마/마이그레이션|
 |`apps/mobile/`|스마트폰 앱(안드로이드 우선)|
 |`apps/watch/`|Wear OS 워치 앱|
-|`shared/`|공유 모듈(예: KMP 공통 로직)|
 |`docs/`|문서|
-|`data/`|샘플/결과 파일(기본적으로 git 추적 제외)|
+|`data/`|샘플/실행 결과 파일|
+|`Test/`|테스트 산출물 및 검증 SQL|
+|`Daily/`|일일 작업 로그|
 
 ---
 

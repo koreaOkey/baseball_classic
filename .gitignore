@@ -18,6 +18,9 @@ nul
 .idea/
 *.iml
 
+# Local backend secrets
+backend/api/.env
+
 # OS
 .DS_Store
 Thumbs.db

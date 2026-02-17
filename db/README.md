@@ -47,8 +47,13 @@ Supabase(PostgreSQL) 스키마/마이그레이션을 관리하는 영역입니�
 `themes`에 KBO 10개 팀 기본 테마(`*_base_v1`)가 삽입되어 있습니다.
 
 ## 백엔드 연결 시 참고
-`backend/api`는 현재 SQLite 기본값이지만, 환경변수 `BASEHAPTIC_DATABASE_URL`을 Supabase Postgres 연결 문자열로 바꾸면 동일 스키마로 전환 가능합니다.
+`backend/api`는 코드 기본값이 SQLite이지만, 환경변수 `BASEHAPTIC_DATABASE_URL`을 Supabase Postgres 연결 문자열로 설정하면 동일 스키마로 동작합니다.
+
+주의:
+- SQLAlchemy 드라이버는 `postgresql+psycopg://...` 형식을 사용해야 합니다.
+- 로컬 네트워크/OS에 따라 Direct host(`db.<project-ref>.supabase.co`)보다 Session Pooler가 더 안정적일 수 있습니다.
 
 예시 형식:
-`postgresql+psycopg://<user>:<password>@db.snrafqoqpmtoannnnwdq.supabase.co:5432/postgres`
+- Session Pooler: `postgresql+psycopg://postgres.snrafqoqpmtoannnnwdq:<password>@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres`
+- Direct host: `postgresql+psycopg://postgres:<password>@db.snrafqoqpmtoannnnwdq.supabase.co:5432/postgres`
 

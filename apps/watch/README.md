@@ -47,7 +47,7 @@
 
 ### 워치 테마 에셋 추가 방법
 
-1. **팀 테마 색상 정의** (`WatchTeamTheme.kt`)
+1. **팀 테마 색상 정의** (`ui/theme/TeamTheme.kt`)
 ```kotlin
 val {팀명} = WatchTeamTheme(
     teamName = "{팀명}",
@@ -72,7 +72,7 @@ val {팀명} = WatchTeamTheme(
 ```
 
 3. **모바일 앱에서 테마 동기화**
-   - 모바일 앱의 `DataLayerListenerService`가 자동으로 팀 정보 전송
+   - 모바일 앱의 `WearThemeSyncManager`가 팀 정보를 전송
    - 워치는 `teamName`을 기반으로 자동 테마 적용
 
 ### 워치 디자인 가이드라인

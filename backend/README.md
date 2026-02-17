@@ -4,7 +4,7 @@
 
 ## 이번에 구현된 내용
 - FastAPI 기반 API 서버 (`backend/api`)
-- SQLite 기반 로컬 저장소 (개발용)
+- SQLite 기반 로컬 저장소 (개발 기본값) + Supabase Postgres 연동 지원
 - crawler ingest API (서비스 키 인증)
 - 게임/상태/이벤트 조회 API
 - WebSocket 실시간 스트림 (`/ws/games/{gameId}`)
@@ -56,6 +56,11 @@ BASEHAPTIC_ENVIRONMENT=development
 BASEHAPTIC_DATABASE_URL=sqlite+pysqlite:///./basehaptic.db
 BASEHAPTIC_CRAWLER_API_KEY=dev-crawler-key
 BASEHAPTIC_CORS_ALLOW_ORIGINS=*
+```
+
+Supabase(Session Pooler) 예시:
+```env
+BASEHAPTIC_DATABASE_URL=postgresql+psycopg://postgres.<project-ref>:<password>@aws-<region>.pooler.supabase.com:5432/postgres
 ```
 
 ## crawler → backend 데이터 계약

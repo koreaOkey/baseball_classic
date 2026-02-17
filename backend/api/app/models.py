@@ -1,6 +1,7 @@
+from typing import Any
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -69,7 +70,7 @@ class GameEvent(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     haptic_pattern: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

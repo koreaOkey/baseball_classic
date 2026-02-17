@@ -125,6 +125,7 @@ val {팀명} = TeamTheme(
 - [x] 앱 아이콘 (임시)
 - [x] 동적 테마 시스템 (팀별 색상 자동 전환)
 - [x] 설정에서 응원팀 변경
+- [x] 백엔드 인프라 검증 완료 (`crawler -> backend -> Supabase`)
 - [ ] 백엔드 연동 (API 통신)
 - [x] 워치 앱 연동 (Data Layer — WearGameSyncManager)
 - [x] 워치 햅틱 피드백 전송 (WearGameSyncManager.sendHapticEvent)
@@ -182,7 +183,7 @@ app/src/main/res/
 
 ## 다음 단계
 1. ViewModel 및 Repository 패턴 적용
-2. Retrofit을 통한 백엔드 API 연동
+2. Retrofit(또는 Ktor) 기반 모바일 API 클라이언트 추가 (`/games`, `/games/{gameId}/state`, `/games/{gameId}/events`)
 3. ~~Wearable Data Layer API를 통한 워치 앱 연동~~ (완료)
 4. 실시간 데이터 업데이트 (WebSocket 또는 FCM)
 5. 로컬 데이터 저장 (DataStore/Room)
