@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import requests
 
+from backend_sender import build_snapshot_payload, post_snapshot_to_backend
+
 
 BASE_URL = "https://api-gw.sports.naver.com"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; BaseballClassicCrawler/1.0)"
@@ -332,12 +334,16 @@ def build_output_name(game_id: str) -> str:
     return f"relay_{game_id}_{timestamp}.xlsx"
 
 
-def crawl_once(game_id: str, base_url: str = BASE_URL) -> Tuple[Dict[str, Any], Dict[str, List[Dict[str, Any]]]]:
+def crawl_once_detailed(
+    game_id: str,
+    base_url: str = BASE_URL,
+) -> Tuple[Dict[str, Any], Dict[int, Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
     game_url = f"{base_url}/schedule/games/{game_id}"
     game_data = fetch_json(game_url).get("result", {}).get("game", {})
     if not game_data:
         raise ValueError(f"No game data found for game_id={game_id}")
 
+    relays_by_inning: Dict[int, Dict[str, Any]] = {}
     teams = get_team_names(game_data)
     combined = {
         "at_bats": [],
@@ -348,11 +354,17 @@ def crawl_once(game_id: str, base_url: str = BASE_URL) -> Tuple[Dict[str, Any], 
     for inning in range(1, 10):
         relay_url = f"{base_url}/schedule/games/{game_id}/relay?inning={inning}"
         relay_data = fetch_json(relay_url).get("result", {}).get("textRelayData", {})
+        relays_by_inning[inning] = relay_data
         parsed = parse_relay(relay_data, teams)
         combined["at_bats"].extend(parsed["at_bats"])
         combined["pinch_hitters"].extend(parsed["pinch_hitters"])
         combined["pitcher_changes"].extend(parsed["pitcher_changes"])
 
+    return game_data, relays_by_inning, combined
+
+
+def crawl_once(game_id: str, base_url: str = BASE_URL) -> Tuple[Dict[str, Any], Dict[str, List[Dict[str, Any]]]]:
+    game_data, _, combined = crawl_once_detailed(game_id=game_id, base_url=base_url)
     return game_data, combined
 
 
@@ -362,11 +374,32 @@ def run(
     watch: bool,
     interval: int,
     base_url: str,
+    backend_base_url: Optional[str] = None,
+    backend_api_key: Optional[str] = None,
+    backend_timeout: float = 10.0,
 ) -> None:
     while True:
-        game_data, combined = crawl_once(game_id=game_id, base_url=base_url)
+        game_data, relays_by_inning, combined = crawl_once_detailed(game_id=game_id, base_url=base_url)
         target = output_path or build_output_name(game_id)
         save_excel(target, game_data, combined)
+
+        if backend_base_url:
+            if not backend_api_key:
+                raise ValueError("--backend-api-key is required when --backend-base-url is set")
+            snapshot = build_snapshot_payload(game_data=game_data, relays_by_inning=relays_by_inning)
+            result = post_snapshot_to_backend(
+                backend_base_url=backend_base_url,
+                api_key=backend_api_key,
+                game_id=game_id,
+                payload=snapshot,
+                timeout=backend_timeout,
+            )
+            print(
+                f"[backend] gameId={result.get('gameId')} "
+                f"received={result.get('receivedEvents')} "
+                f"inserted={result.get('insertedEvents')} "
+                f"duplicates={result.get('duplicateEvents')}"
+            )
 
         status = (game_data.get("statusCode") or "").upper()
         if not watch or status in FINAL_STATUS:
@@ -389,14 +422,31 @@ def main() -> None:
         default=BASE_URL,
         help="api base url (default: official naver api)",
     )
+    parser.add_argument(
+        "--backend-base-url",
+        help="backend ingest base url, example: http://localhost:8080",
+    )
+    parser.add_argument("--backend-api-key", help="backend ingest X-API-Key value")
+    parser.add_argument(
+        "--backend-timeout",
+        type=float,
+        default=10.0,
+        help="backend ingest request timeout in seconds",
+    )
 
     args = parser.parse_args()
+    if args.backend_base_url and not args.backend_api_key:
+        parser.error("--backend-api-key is required when --backend-base-url is set")
+
     run(
         game_id=args.game_id,
         output_path=args.output,
         watch=args.watch,
         interval=args.interval,
         base_url=args.base_url.rstrip("/"),
+        backend_base_url=args.backend_base_url.rstrip("/") if args.backend_base_url else None,
+        backend_api_key=args.backend_api_key,
+        backend_timeout=args.backend_timeout,
     )
 
 

@@ -78,6 +78,30 @@ payload 핵심 필드:
 샘플 파일:
 - `backend/api/examples/crawler_snapshot.json.example`
 
+### Event Type (Current)
+
+Ingested `events[].type` values are normalized to the following set:
+
+- `BALL`
+- `STRIKE`
+- `WALK`
+- `OUT`
+- `HIT`
+- `HOMERUN`
+- `SCORE`
+- `SAC_FLY_SCORE`
+- `TAG_UP_ADVANCE`
+- `STEAL`
+- `OTHER`
+
+Current crawler-side rules:
+
+- `N구 타격` (contact only) -> `OTHER`
+- actual hit result text (`1루타/2루타/3루타/안타/내야안타/번트안타`) -> `HIT`
+- failed steal (`도루실패` with out) -> `OUT`
+- successful steal -> `STEAL`
+- `볼넷`/`고의사구` -> `WALK`
+
 ## 제공 API
 - `GET /health`
 - `GET /games?status=LIVE&limit=20`

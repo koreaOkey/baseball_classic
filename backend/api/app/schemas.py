@@ -14,10 +14,14 @@ class GameStatus(str, Enum):
 class EventType(str, Enum):
     BALL = "BALL"
     STRIKE = "STRIKE"
+    WALK = "WALK"
     OUT = "OUT"
     HIT = "HIT"
     HOMERUN = "HOMERUN"
     SCORE = "SCORE"
+    SAC_FLY_SCORE = "SAC_FLY_SCORE"
+    TAG_UP_ADVANCE = "TAG_UP_ADVANCE"
+    STEAL = "STEAL"
     OTHER = "OTHER"
 
 

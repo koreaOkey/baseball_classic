@@ -9,7 +9,8 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 
-from crawler import BASE_URL, crawl_once, save_excel
+from backend_sender import build_snapshot_payload, post_snapshot_to_backend
+from crawler import BASE_URL, crawl_once_detailed, save_excel
 
 
 CACHE_LOCK = threading.Lock()
@@ -21,6 +22,8 @@ CACHE: Dict[str, Any] = {
     "excel_path": None,
     "json_path": None,
     "source_base_url": None,
+    "backend_base_url": None,
+    "backend_result": None,
 }
 
 
@@ -45,17 +48,34 @@ def update_loop(
     source_base_url: str,
     output_excel: Optional[str],
     output_json: Optional[str],
+    backend_base_url: Optional[str],
+    backend_api_key: Optional[str],
+    backend_timeout: float,
 ) -> None:
+    if backend_base_url and not backend_api_key:
+        raise ValueError("--backend-api-key is required when --backend-base-url is set")
+
     ensure_parent(output_excel)
     ensure_parent(output_json)
 
     while True:
         try:
-            game, parsed = crawl_once(game_id=game_id, base_url=source_base_url)
+            game, relays_by_inning, parsed = crawl_once_detailed(game_id=game_id, base_url=source_base_url)
             if output_excel:
                 save_excel(output_excel, game, parsed)
             if output_json:
                 save_json(output_json, game, parsed)
+
+            backend_result = None
+            if backend_base_url and backend_api_key:
+                snapshot = build_snapshot_payload(game_data=game, relays_by_inning=relays_by_inning)
+                backend_result = post_snapshot_to_backend(
+                    backend_base_url=backend_base_url,
+                    api_key=backend_api_key,
+                    game_id=game_id,
+                    payload=snapshot,
+                    timeout=backend_timeout,
+                )
 
             with CACHE_LOCK:
                 CACHE["game"] = game
@@ -65,6 +85,8 @@ def update_loop(
                 CACHE["excel_path"] = output_excel
                 CACHE["json_path"] = output_json
                 CACHE["source_base_url"] = source_base_url
+                CACHE["backend_base_url"] = backend_base_url
+                CACHE["backend_result"] = backend_result
         except Exception as exc:  # pylint: disable=broad-except
             with CACHE_LOCK:
                 CACHE["error"] = str(exc)
@@ -82,6 +104,8 @@ def render_html() -> str:
         excel_path = CACHE.get("excel_path")
         json_path = CACHE.get("json_path")
         source_base_url = CACHE.get("source_base_url")
+        backend_base_url = CACHE.get("backend_base_url")
+        backend_result = CACHE.get("backend_result")
 
     if error and not parsed:
         return f"<html><body><h2>Error</h2><pre>{error}</pre></body></html>"
@@ -112,6 +136,16 @@ def render_html() -> str:
         notes.append(f"<p>Excel Output: {excel_path}</p>")
     if json_path:
         notes.append(f"<p>JSON Output: {json_path}</p>")
+    if backend_base_url:
+        notes.append(f"<p>Backend Base URL: {backend_base_url}</p>")
+    if backend_result:
+        notes.append(
+            "<p>Backend Ingest: "
+            f"received={backend_result.get('receivedEvents')}, "
+            f"inserted={backend_result.get('insertedEvents')}, "
+            f"duplicates={backend_result.get('duplicateEvents')}"
+            "</p>"
+        )
     if error:
         notes.append(f"<p style='color:red;'>Last Error: {error}</p>")
 
@@ -168,7 +202,12 @@ def main() -> None:
     parser.add_argument("--source-base-url", default=BASE_URL)
     parser.add_argument("--output-excel", default="data/baseball_live_output.xlsx")
     parser.add_argument("--output-json", default="data/baseball_live_output.json")
+    parser.add_argument("--backend-base-url", help="backend ingest base url, example: http://localhost:8080")
+    parser.add_argument("--backend-api-key", help="backend ingest X-API-Key value")
+    parser.add_argument("--backend-timeout", type=float, default=10.0)
     args = parser.parse_args()
+    if args.backend_base_url and not args.backend_api_key:
+        parser.error("--backend-api-key is required when --backend-base-url is set")
 
     thread = threading.Thread(
         target=update_loop,
@@ -178,6 +217,9 @@ def main() -> None:
             args.source_base_url.rstrip("/"),
             args.output_excel,
             args.output_json,
+            args.backend_base_url.rstrip("/") if args.backend_base_url else None,
+            args.backend_api_key,
+            args.backend_timeout,
         ),
         daemon=True,
     )

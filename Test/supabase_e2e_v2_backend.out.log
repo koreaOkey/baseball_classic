@@ -1,0 +1,4 @@
+INFO:     127.0.0.1:49620 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49637 - "POST /internal/crawler/games/20250902WOSK02025/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49650 - "POST /internal/crawler/games/20250902WOSK02025/snapshot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49651 - "GET /games/20250902WOSK02025/state HTTP/1.1" 200 OK

@@ -32,11 +32,20 @@ STATUS_MAP = {
 EVENT_MAP = {
     "BALL": EventType.BALL,
     "STRIKE": EventType.STRIKE,
+    "WALK": EventType.WALK,
+    "BASE_ON_BALLS": EventType.WALK,
+    "INTENTIONAL_WALK": EventType.WALK,
     "OUT": EventType.OUT,
     "HIT": EventType.HIT,
     "HOMERUN": EventType.HOMERUN,
     "HOME_RUN": EventType.HOMERUN,
     "SCORE": EventType.SCORE,
+    "SAC_FLY_SCORE": EventType.SAC_FLY_SCORE,
+    "SACRIFICE_FLY_SCORE": EventType.SAC_FLY_SCORE,
+    "TAG_UP_ADVANCE": EventType.TAG_UP_ADVANCE,
+    "TAG_UP": EventType.TAG_UP_ADVANCE,
+    "STEAL": EventType.STEAL,
+    "STOLEN_BASE": EventType.STEAL,
 }
 
 

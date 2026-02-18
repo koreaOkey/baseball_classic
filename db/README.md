@@ -57,3 +57,36 @@ Supabase(PostgreSQL) 스키마/마이그레이션을 관리하는 영역입니�
 - Session Pooler: `postgresql+psycopg://postgres.snrafqoqpmtoannnnwdq:<password>@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres`
 - Direct host: `postgresql+psycopg://postgres:<password>@db.snrafqoqpmtoannnnwdq.supabase.co:5432/postgres`
 
+## Event Type (Current)
+
+`public.game_events.event_type` currently supports:
+
+- `BALL`
+- `STRIKE`
+- `WALK`
+- `OUT`
+- `HIT`
+- `HOMERUN`
+- `SCORE`
+- `SAC_FLY_SCORE`
+- `TAG_UP_ADVANCE`
+- `STEAL`
+- `OTHER`
+
+Classification notes (crawler -> backend):
+
+- `HIT`: only hit results that imply batter advancement (single/double/triple/infield hit/bunt hit text)
+- `pitchResult=H` (e.g. `N구 타격`) is treated as `OTHER` because it is contact-in-play, not final result
+- failed steal (`도루실패` + out) is classified as `OUT`
+- successful steal is classified as `STEAL`
+- `볼넷`/`고의사구` is classified as `WALK`
+
+## Migration Notes (2026-02-18)
+
+Added migrations:
+
+- `migrations/20260218_003_expand_game_events_event_type_check.sql`
+- `migrations/20260218_004_add_walk_event_type_check.sql`
+
+These extend `game_events_event_type_check` to allow newly introduced event types.
+

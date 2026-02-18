@@ -4,6 +4,7 @@
 
 ## 파일 구성
 - `crawler.py`: 야구 중계 크롤러 (`--base-url`로 목 API 지원)
+- `backend_sender.py`: relay 데이터를 backend ingest payload로 변환/전송
 - `crawler_tennis.py`: 테니스 `scoreDetail` 크롤러
 - `live_tennis_server.py`: 테니스 라이브 모니터 서버
 - `build_baseball_sample_data.py`: 종료된 야구 경기 데이터를 `data/mock_baseball/<game_id>`에 샘플로 저장
@@ -50,6 +51,11 @@ python crawler/live_baseball_server.py --game-id 20250902WOSK02025 --source-base
 python crawler/live_baseball_server.py --game-id 20250902WOSK02025 --source-base-url http://localhost:8011 --interval 10 --port 8010 --output-excel data/baseball_live_output_run2.xlsx --output-json data/baseball_live_output_run2.json
 ```
 
+backend ingest까지 같이 수행:
+```bash
+python crawler/live_baseball_server.py --game-id 20250902WOSK02025 --source-base-url http://localhost:8011 --interval 10 --port 8010 --backend-base-url http://localhost:8080 --backend-api-key dev-crawler-key
+```
+
 접속:
 - `http://localhost:8010`
 
@@ -59,6 +65,25 @@ python crawler/live_baseball_server.py --game-id 20250902WOSK02025 --source-base
 ```bash
 python crawler/crawler.py --game-id 20250902WOSK02025 --base-url http://localhost:8011 --watch --interval 10 --output data/baseball_from_mock.xlsx
 ```
+
+crawler 단독 실행 + backend ingest 전송:
+```bash
+python crawler/crawler.py --game-id 20250902WOSK02025 --base-url http://localhost:8011 --watch --interval 10 --output data/baseball_from_mock.xlsx --backend-base-url http://localhost:8080 --backend-api-key dev-crawler-key
+```
+
+## Backend Event Type Mapping (Current)
+
+When `backend_sender.py` builds ingest payloads, event types are emitted as:
+
+- `BALL`, `STRIKE`, `WALK`, `OUT`, `HIT`, `HOMERUN`, `SCORE`, `SAC_FLY_SCORE`, `TAG_UP_ADVANCE`, `STEAL`, `OTHER`
+
+Key rules:
+
+- `N구 타격` is not final result -> `OTHER`
+- hit result text (`1루타/2루타/3루타/안타/내야안타/번트안타`) -> `HIT`
+- failed steal (`도루실패` + out) -> `OUT`
+- successful steal -> `STEAL`
+- `볼넷`/`고의사구` -> `WALK`
 
 ## 트러블슈팅
 - `Permission denied: data/baseball_live_output.xlsx` 에러가 나면:
