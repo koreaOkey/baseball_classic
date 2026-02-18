@@ -1,4 +1,4 @@
-package com.basehaptic.mobile.ui.screens
+﻿package com.basehaptic.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.*
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.*
@@ -27,6 +28,9 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.material3.MaterialTheme as M3Theme
 
 @Composable
@@ -35,8 +39,20 @@ fun HomeScreen(
     activeTheme: ThemeData?,
     onSelectGame: (String) -> Unit
 ) {
-    val games = remember(selectedTeam) {
+    val fallbackGames = remember(selectedTeam) {
         sortHomeGames(getMockGames(selectedTeam))
+    }
+    val games by produceState(initialValue = fallbackGames, selectedTeam) {
+        value = fallbackGames
+        while (currentCoroutineContext().isActive) {
+            val backendGames = runCatching {
+                BackendGamesRepository.fetchGames(selectedTeam)
+            }.getOrNull()
+            if (!backendGames.isNullOrEmpty()) {
+                value = sortHomeGames(backendGames)
+            }
+            delay(5000)
+        }
     }
     
     val teamTheme = LocalTeamTheme.current
@@ -77,7 +93,7 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "나의 응원팀",
+                                    text = "?섏쓽 ?묒썝?",
                                     fontSize = 12.sp,
                                     color = Color.White.copy(alpha = 0.7f)
                                 )
@@ -126,7 +142,7 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = LocalDate.now().format(
-                                        DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN)
+                                        DateTimeFormatter.ofPattern("M??d??(E)", Locale.KOREAN)
                                     ),
                                     fontSize = 14.sp,
                                     color = Color.White
@@ -156,19 +172,19 @@ fun HomeScreen(
                 StatCard(
                     modifier = Modifier.weight(1f),
                     value = "5승",
-                    label = "최근 10경기",
+                    label = "理쒓렐 10寃쎄린",
                     valueColor = Green500
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     value = "2위",
-                    label = "현재 순위",
+                    label = "?꾩옱 ?쒖쐞",
                     valueColor = Yellow500
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     value = "0.625",
-                    label = "승률",
+                    label = "?밸쪧",
                     valueColor = Blue500
                 )
             }
@@ -184,14 +200,14 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "오늘의 경기",
+                    text = "?ㅻ뒛??寃쎄린",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
                 TextButton(onClick = { }) {
                     Text(
-                        text = "전체보기",
+                        text = "?꾩껜蹂닿린",
                         fontSize = 14.sp,
                         color = teamTheme.primary
                     )
@@ -212,7 +228,7 @@ fun HomeScreen(
         item {
             Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "다가오는 경기",
+                text = "?ㅺ??ㅻ뒗 寃쎄린",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -237,13 +253,13 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "2월 5일 (목) 18:30",
+                            text = "2??5??(紐? 18:30",
                             fontSize = 14.sp,
                             color = Gray400
                         )
                         TextButton(onClick = { }) {
                             Text(
-                                text = "캘린더 추가",
+                                text = "罹섎┛??異붽?",
                                 fontSize = 14.sp,
                                 color = teamTheme.primary
                             )
@@ -271,7 +287,7 @@ fun HomeScreen(
                                 modifier = Modifier.padding(horizontal = 8.dp)
                             )
                             Text(
-                                text = "KT 위즈",
+                                text = "KT ?꾩쫰",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White
@@ -286,7 +302,7 @@ fun HomeScreen(
                     }
 
                     Text(
-                        text = "잠실야구장",
+                        text = "인천SSG랜더스필드",
                         fontSize = 12.sp,
                         color = Gray500,
                         modifier = Modifier.padding(top = 8.dp)
@@ -444,7 +460,7 @@ private fun GameCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "나의 팀",
+                                    text = "?섏쓽 ?",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -537,7 +553,7 @@ private fun TeamScoreRow(
                 )
                 if (pitcher != null) {
                     Text(
-                        text = "선발: ${pitcher.name}, ${pitcher.winStreak}연승, ${pitcher.record.wins}/${pitcher.record.draws}/${pitcher.record.losses}",
+                        text = "?좊컻: ${pitcher.name}, ${pitcher.winStreak}?곗듅, ${pitcher.record.wins}/${pitcher.record.draws}/${pitcher.record.losses}",
                         fontSize = 12.sp,
                         color = if (isWinner) Gray400 else Gray600,
                         modifier = Modifier.padding(top = 2.dp)
@@ -581,38 +597,39 @@ private fun scheduledTime(game: Game): LocalTime {
 }
 
 private fun getMockGames(selectedTeam: Team): List<Game> {
+    val isSsgOrKiwoomFan = selectedTeam == Team.SSG || selectedTeam == Team.KIWOOM
     return listOf(
         Game(
-            id = "1",
-            homeTeam = selectedTeam.teamName,
-            awayTeam = "LG 트윈스",
-            homeTeamId = selectedTeam,
-            awayTeamId = Team.LG,
+            id = "20250902WOSK02025",
+            homeTeam = "SSG Landers",
+            awayTeam = "Kiwoom Heroes",
+            homeTeamId = Team.SSG,
+            awayTeamId = Team.KIWOOM,
             homeScore = 3,
             awayScore = 2,
             inning = "7회말",
             status = GameStatus.LIVE,
-            isMyTeam = true,
+            isMyTeam = isSsgOrKiwoomFan,
             homePitcher = Pitcher("김민수", 3, PitcherRecord(10, 2, 5)),
             awayPitcher = Pitcher("박준용", 2, PitcherRecord(8, 1, 6))
         ),
         Game(
             id = "2",
-            homeTeam = "삼성 라이온즈",
-            awayTeam = "KIA 타이거즈",
+            homeTeam = "Samsung Lions",
+            awayTeam = "KIA Tigers",
             homeTeamId = Team.SAMSUNG,
             awayTeamId = Team.KIA,
             homeScore = 5,
             awayScore = 4,
             inning = "9회초",
             status = GameStatus.LIVE,
-            homePitcher = Pitcher("이상호", 4, PitcherRecord(12, 0, 4)),
+            homePitcher = Pitcher("이상훈", 4, PitcherRecord(12, 0, 4)),
             awayPitcher = Pitcher("김태호", 1, PitcherRecord(7, 2, 7))
         ),
         Game(
             id = "3",
-            homeTeam = "SSG 랜더스",
-            awayTeam = "한화 이글스",
+            homeTeam = "SSG Landers",
+            awayTeam = "Hanwha Eagles",
             homeTeamId = Team.SSG,
             awayTeamId = Team.HANWHA,
             homeScore = 0,
@@ -621,20 +638,20 @@ private fun getMockGames(selectedTeam: Team): List<Game> {
             status = GameStatus.SCHEDULED,
             time = "18:30",
             homePitcher = Pitcher("정상호", 2, PitcherRecord(9, 1, 5)),
-            awayPitcher = Pitcher("김민수", 3, PitcherRecord(10, 2, 5))
+            awayPitcher = Pitcher("최도윤", 3, PitcherRecord(10, 2, 5))
         ),
         Game(
             id = "4",
-            homeTeam = "NC 다이노스",
-            awayTeam = "롯데 자이언츠",
+            homeTeam = "NC Dinos",
+            awayTeam = "Lotte Giants",
             homeTeamId = Team.NC,
             awayTeamId = Team.LOTTE,
             homeScore = 8,
             awayScore = 3,
             inning = "최종",
             status = GameStatus.FINISHED,
-            homePitcher = Pitcher("김태호", 1, PitcherRecord(7, 2, 7)),
-            awayPitcher = Pitcher("박준용", 2, PitcherRecord(8, 1, 6))
+            homePitcher = Pitcher("김성호", 1, PitcherRecord(7, 2, 7)),
+            awayPitcher = Pitcher("박정수", 2, PitcherRecord(8, 1, 6))
         )
     )
 }

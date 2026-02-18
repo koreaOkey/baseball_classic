@@ -4,6 +4,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val backendBaseUrl =
+    ((project.findProperty("backendBaseUrl") as String?) ?: "http://10.0.2.2:8080")
+        .replace("\"", "\\\"")
+
 android {
     namespace = "com.basehaptic.mobile"
     compileSdk = 34
@@ -14,6 +18,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -42,6 +47,7 @@ android {
     
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     
     packaging {
