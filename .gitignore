@@ -17,6 +17,7 @@ nul
 # IDE
 .idea/
 *.iml
+Real-time Baseball Broadcast/
 
 # Local backend secrets
 backend/api/.env

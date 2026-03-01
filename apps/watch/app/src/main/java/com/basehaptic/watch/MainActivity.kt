@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.HighlightOff
-import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -33,14 +33,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
@@ -52,7 +54,6 @@ import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.ui.components.LiveGameScreen
 import com.basehaptic.watch.ui.components.NoGameScreen
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
-import com.basehaptic.watch.ui.theme.LocalWatchTeamTheme
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -210,7 +211,7 @@ private data class WatchEventUi(
 
 private const val EVENT_OVERLAY_DURATION_MS = 2200L
 private const val EVENT_OVERLAY_FRESHNESS_MS = 5000L
-private const val HOMERUN_SCREEN_DURATION_MS = 2000L
+private const val HOMERUN_SCREEN_DURATION_MS = 4000L
 
 private fun readLatestEventFromPrefs(context: Context): WatchEventInfo? {
     val prefs = context.getSharedPreferences(
@@ -271,39 +272,47 @@ private fun WatchEventOverlay(latestEvent: WatchEventInfo?) {
 
 @Composable
 private fun HomeRunTransitionScreen() {
-    val watchTheme = LocalWatchTeamTheme.current
+    val context = LocalContext.current
+    val clipUri = remember(context) {
+        Uri.parse("android.resource://${context.packageName}/${R.raw.homerun_minion_clip}")
+    }
+    val player = remember(context, clipUri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(clipUri))
+            repeatMode = Player.REPEAT_MODE_OFF
+            volume = 0f
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    DisposableEffect(player) {
+        onDispose {
+            player.release()
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(
-                        watchTheme.secondary.copy(alpha = 0.95f),
-                        watchTheme.primaryDark
-                    )
-                )
-            ),
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color.Black.copy(alpha = 0.28f))
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.SportsBaseball,
-                contentDescription = "HOME RUN",
-                tint = Color.White
-            )
-            Text(
-                text = "HOME RUN",
-                color = Color.White,
-                fontSize = 16.sp
-            )
-        }
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { viewContext ->
+                PlayerView(viewContext).apply {
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    this.player = player
+                }
+            },
+            update = { view ->
+                view.player = player
+                if (!player.isPlaying) player.play()
+            }
+        )
     }
 }
 

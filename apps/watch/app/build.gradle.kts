@@ -73,8 +73,11 @@ dependencies {
     // Horologist (Wear OS best practices)
     implementation("com.google.android.horologist:horologist-compose-layout:0.6.20")
     implementation("com.google.android.horologist:horologist-compose-material:0.6.20")
+
+    // Video playback for home-run transition clip
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
     
     // Testing
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
-
