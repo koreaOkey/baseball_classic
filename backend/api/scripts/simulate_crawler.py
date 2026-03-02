@@ -10,6 +10,8 @@ EVENT_POOL = [
     ("BALL", "볼"),
     ("STRIKE", "스트라이크"),
     ("OUT", "아웃"),
+    ("DOUBLE_PLAY", "병살"),
+    ("TRIPLE_PLAY", "삼중살"),
     ("HIT", "안타"),
     ("HOMERUN", "홈런"),
     ("SCORE", "득점"),

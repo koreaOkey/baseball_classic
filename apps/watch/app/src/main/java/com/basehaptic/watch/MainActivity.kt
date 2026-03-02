@@ -322,6 +322,8 @@ private fun eventUiFor(type: String): WatchEventUi? {
         "HIT" -> WatchEventUi("HIT", Icons.Default.Bolt, Color(0xFF22C55E))
         "SCORE" -> WatchEventUi("SCORE", Icons.Default.EmojiEvents, Color(0xFFEAB308))
         "OUT" -> WatchEventUi("OUT", Icons.Default.HighlightOff, Color(0xFFEF4444))
+        "DOUBLE_PLAY" -> WatchEventUi("병살", Icons.Default.HighlightOff, Color(0xFFF97316))
+        "TRIPLE_PLAY" -> WatchEventUi("삼중살", Icons.Default.HighlightOff, Color(0xFFDC2626))
         else -> null
     }
 }

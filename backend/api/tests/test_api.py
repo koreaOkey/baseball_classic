@@ -20,6 +20,7 @@ os.environ["BASEHAPTIC_CORS_ALLOW_ORIGINS"] = "*"
 from app.main import app  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import Game, GameBatterStat, GameLineupSlot, GameNote, GamePitcherStat  # noqa: E402
+from app.services import _event_out_count, normalize_event_type  # noqa: E402
 
 
 def sample_snapshot() -> dict:
@@ -263,3 +264,13 @@ def test_empty_details_payload_does_not_wipe_existing_rows() -> None:
             assert db.query(GameBatterStat).filter(GameBatterStat.game_id == "20250501SSSK02025").count() == 2
             assert db.query(GamePitcherStat).filter(GamePitcherStat.game_id == "20250501SSSK02025").count() == 2
             assert db.query(GameNote).filter(GameNote.game_id == "20250501SSSK02025").count() == 1
+
+
+def test_event_type_double_triple_play_mapping() -> None:
+    double_play = normalize_event_type("DOUBLE_PLAY")
+    triple_play = normalize_event_type("TRIPLE_PLAY")
+
+    assert double_play.value == "DOUBLE_PLAY"
+    assert triple_play.value == "TRIPLE_PLAY"
+    assert _event_out_count(double_play, "") == 2
+    assert _event_out_count(triple_play, "") == 3

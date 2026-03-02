@@ -67,7 +67,7 @@ private val simulationScenario = listOf(
     SimEvent(EventType.STRIKE, "한유섬에게 스트라이크", { it.copy(strike = 1) }),
     SimEvent(EventType.HIT, "한유섬, 중전 안타!", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "박성한") }),
     SimEvent(EventType.OUT, "박성한, 삼진 아웃", { it.copy(ball = 0, strike = 0, out = 2, batter = "이재원") }),
-    SimEvent(EventType.OUT, "이재원, 땅볼 아웃 — 체인지!", {
+    SimEvent(EventType.DOUBLE_PLAY, "이재원, 2루수 앞 병살타 — 체인지!", {
         it.copy(
             ball = 0, strike = 0, out = 0,
             baseFirst = false, baseSecond = false, baseThird = false,
@@ -287,6 +287,8 @@ fun WatchTestScreen(
                             Triple(EventType.HOMERUN, "홈런", teamTheme.primary),
                             Triple(EventType.HIT, "안타", Green500),
                             Triple(EventType.SCORE, "득점", Yellow500),
+                            Triple(EventType.DOUBLE_PLAY, "병살", Orange500),
+                            Triple(EventType.TRIPLE_PLAY, "삼중살", Red400),
                             Triple(EventType.OUT, "아웃", Red500),
                             Triple(EventType.STRIKE, "스트라이크", Orange500),
                             Triple(EventType.BALL, "볼", Blue500),

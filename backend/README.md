@@ -86,6 +86,8 @@ Ingested `events[].type` values are normalized to the following set:
 - `STRIKE`
 - `WALK`
 - `OUT`
+- `DOUBLE_PLAY`
+- `TRIPLE_PLAY`
 - `HIT`
 - `HOMERUN`
 - `SCORE`
@@ -97,6 +99,7 @@ Ingested `events[].type` values are normalized to the following set:
 Current crawler-side rules:
 
 - `N구 타격` (contact only) -> `OTHER`
+- `병살` -> `DOUBLE_PLAY`, `삼중살` -> `TRIPLE_PLAY`
 - actual hit result text (`1루타/2루타/3루타/안타/내야안타/번트안타`) -> `HIT`
 - failed steal (`도루실패` with out) -> `OUT`
 - successful steal -> `STEAL`
@@ -155,7 +158,7 @@ pytest -q
 권장 매핑:
 - `GameStateOut` → `sendGameData(...)`
 - `GameEventOut.type` → `eventType` 필드
-- 주요 이벤트(`HOMERUN`, `SCORE`, `HIT`, `OUT`, `STRIKE`, `BALL`) 발생 시 `sendHapticEvent(...)`
+- 주요 이벤트(`HOMERUN`, `SCORE`, `HIT`, `OUT`, `DOUBLE_PLAY`, `TRIPLE_PLAY`, `STRIKE`, `BALL`) 발생 시 `sendHapticEvent(...)`
 
 ## 통신 구조와 앱 노출 흐름
 1. crawler가 경기 snapshot/events를 백엔드 ingest API로 전송
@@ -165,4 +168,3 @@ pytest -q
 5. 워치 앱은 점수판/BSO/주자상황 UI 갱신 + 이벤트 타입별 햅틱 재생
 
 즉, 앱 화면 노출은 `backend -> mobile -> watch` 순서로 이어지고, 워치는 모바일 전달 데이터를 기준으로 동작합니다.
-

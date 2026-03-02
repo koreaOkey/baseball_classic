@@ -16,6 +16,8 @@ class EventType(str, Enum):
     STRIKE = "STRIKE"
     WALK = "WALK"
     OUT = "OUT"
+    DOUBLE_PLAY = "DOUBLE_PLAY"
+    TRIPLE_PLAY = "TRIPLE_PLAY"
     HIT = "HIT"
     HOMERUN = "HOMERUN"
     SCORE = "SCORE"

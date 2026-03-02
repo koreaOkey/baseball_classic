@@ -109,7 +109,7 @@ val {팀명} = WatchTeamTheme(
 - [x] DataLayerListenerService 구조
 - [x] Data Layer API 실제 연동 (모바일 → 워치 경기/테마/햅틱 동기화)
 - [ ] 포그라운드 서비스 (화면 꺼져도 유지)
-- [x] 햅틱 피드백 구현 (HOMERUN, HIT, OUT, SCORE, STRIKE, BALL)
+- [x] 햅틱 피드백 구현 (HOMERUN, HIT, OUT, DOUBLE_PLAY, TRIPLE_PLAY, SCORE, STRIKE, BALL)
 - [ ] BLE 원격 하이파이브
 
 ## 구조
@@ -146,6 +146,8 @@ app/src/main/res/
 | HOMERUN | 강한 진동 3회 (200ms on, 150ms off) | 255 |
 | HIT | 중간 진동 2회 (150ms on, 100ms off) | 180 |
 | OUT | 짧은 진동 1회 (100ms) | 150 |
+| DOUBLE_PLAY | 중강 진동 2회 (120ms on, 80ms off) | 210 |
+| TRIPLE_PLAY | 강한 진동 3회 (120ms on, 80ms off) | 230 |
 | SCORE | 강한 진동 2회 (200ms on, 200ms off) | 255 |
 | STRIKE | 짧은 진동 2회 (80ms on, 80ms off) | 120 |
 | BALL | 약한 진동 1회 (50ms) | 80 |

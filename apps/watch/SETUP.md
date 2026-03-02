@@ -54,7 +54,7 @@
 
 #### 수동 이벤트 전송
 
-6개 이벤트 버튼으로 원하는 햅틱 이벤트를 즉시 워치에 전송합니다.
+8개 이벤트 버튼으로 원하는 햅틱 이벤트를 즉시 워치에 전송합니다.
 이 모드는 `/haptic` 경로로 이벤트 타입만 전송하므로 경기 상태는 변경되지 않습니다.
 
 | 버튼 | 전송 이벤트 | 용도 |
@@ -62,6 +62,8 @@
 | 홈런 | `HOMERUN` | 강한 진동 3회 확인 |
 | 안타 | `HIT` | 중간 진동 2회 확인 |
 | 득점 | `SCORE` | 강한 진동 2회 확인 |
+| 병살 | `DOUBLE_PLAY` | 중강 진동 2회 확인 |
+| 삼중살 | `TRIPLE_PLAY` | 강한 진동 3회 확인 |
 | 아웃 | `OUT` | 짧은 진동 1회 확인 |
 | 스트라이크 | `STRIKE` | 가벼운 진동 2회 확인 |
 | 볼 | `BALL` | 약한 진동 1회 확인 |
@@ -146,13 +148,13 @@ base_third  : Boolean
 pitcher     : String
 batter      : String
 my_team     : String  (설정에서 선택한 응원팀)
-event_type  : String  ("HOMERUN", "HIT", "OUT", "SCORE", "STRIKE", "BALL")
+event_type  : String  ("HOMERUN", "HIT", "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY", "SCORE", "STRIKE", "BALL")
 ```
 
 #### `/haptic` DataMap 키 구성
 
 ```
-event_type  : String  ("HOMERUN", "HIT", "OUT", "SCORE", "STRIKE", "BALL")
+event_type  : String  ("HOMERUN", "HIT", "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY", "SCORE", "STRIKE", "BALL")
 ```
 
 ## 관련 소스 파일

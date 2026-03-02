@@ -75,11 +75,12 @@ python crawler/crawler.py --game-id 20250902WOSK02025 --base-url http://localhos
 
 When `backend_sender.py` builds ingest payloads, event types are emitted as:
 
-- `BALL`, `STRIKE`, `WALK`, `OUT`, `HIT`, `HOMERUN`, `SCORE`, `SAC_FLY_SCORE`, `TAG_UP_ADVANCE`, `STEAL`, `OTHER`
+- `BALL`, `STRIKE`, `WALK`, `OUT`, `DOUBLE_PLAY`, `TRIPLE_PLAY`, `HIT`, `HOMERUN`, `SCORE`, `SAC_FLY_SCORE`, `TAG_UP_ADVANCE`, `STEAL`, `OTHER`
 
 Key rules:
 
 - `N구 타격` is not final result -> `OTHER`
+- `병살` -> `DOUBLE_PLAY`, `삼중살` -> `TRIPLE_PLAY`
 - hit result text (`1루타/2루타/3루타/안타/내야안타/번트안타`) -> `HIT`
 - failed steal (`도루실패` + out) -> `OUT`
 - successful steal -> `STEAL`

@@ -12,6 +12,8 @@ enum class EventType {
     BALL,
     STRIKE,
     OUT,
+    DOUBLE_PLAY,
+    TRIPLE_PLAY,
     HIT,
     HOMERUN,
     SCORE;
@@ -22,6 +24,8 @@ enum class EventType {
                 BALL -> "○"
                 STRIKE -> "●●"
                 OUT -> "●●●"
+                DOUBLE_PLAY -> "●● ○●"
+                TRIPLE_PLAY -> "●● ●● ●"
                 HIT -> "○●○●"
                 HOMERUN -> "●●●●●"
                 SCORE -> "●○●○●"
@@ -29,4 +33,3 @@ enum class EventType {
         }
     }
 }
-

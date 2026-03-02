@@ -415,6 +415,7 @@ private fun EventCard(event: GameEvent) {
     val eventColor = when (event.type) {
         EventType.HOMERUN, EventType.SCORE -> Yellow500
         EventType.HIT -> Green500
+        EventType.DOUBLE_PLAY, EventType.TRIPLE_PLAY -> Orange500
         EventType.STRIKE, EventType.OUT -> Red500
         EventType.BALL -> Gray500
     }
@@ -538,4 +539,3 @@ private fun getMockEvents(): List<GameEvent> {
         )
     )
 }
-

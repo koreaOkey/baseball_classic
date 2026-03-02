@@ -117,6 +117,8 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
         ],
     )
     has_out = _contains_any(text, ["아웃", "삼진", "병살", "out", "strikeout", "double play"])
+    has_double_play = _contains_any(text, ["병살", "double play"])
+    has_triple_play = _contains_any(text, ["삼중살", "triple play"])
     has_sac_fly = _contains_any(text, ["희생플라이", "희생 플라이", "sacrifice fly", "sac fly"])
     has_tag_up = _contains_any(text, ["태그업", "tag up", "tag-up"])
     has_steal = _contains_any(text, ["도루", "stolen base", "steal"])
@@ -170,6 +172,11 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
             return "STRIKE"
         if pitch_result in {"H"}:
             return "OTHER"
+
+    if has_triple_play:
+        return "TRIPLE_PLAY"
+    if has_double_play:
+        return "DOUBLE_PLAY"
 
     if has_out and has_score and (has_sac_fly or has_tag_up):
         return "SAC_FLY_SCORE"
@@ -266,14 +273,21 @@ def _extract_lineup_and_boxscore(
     batter_stats: list[dict[str, Any]] = []
     pitcher_stats: list[dict[str, Any]] = []
 
-    entries = {
-        "home": _extract_latest_entry(relays_by_inning, "homeEntry") or _extract_latest_entry(relays_by_inning, "homeLineup"),
-        "away": _extract_latest_entry(relays_by_inning, "awayEntry") or _extract_latest_entry(relays_by_inning, "awayLineup"),
+    lineup_entries = {
+        "home": _extract_latest_entry(relays_by_inning, "homeLineup"),
+        "away": _extract_latest_entry(relays_by_inning, "awayLineup"),
+    }
+    entry_entries = {
+        "home": _extract_latest_entry(relays_by_inning, "homeEntry"),
+        "away": _extract_latest_entry(relays_by_inning, "awayEntry"),
     }
 
-    for team_side, entry in entries.items():
-        batters = entry.get("batter") or []
-        pitchers = entry.get("pitcher") or []
+    for team_side in ("home", "away"):
+        lineup_entry = lineup_entries.get(team_side) or {}
+        entry = entry_entries.get(team_side) or {}
+        # Prefer lineup because it typically carries full per-player boxscore.
+        batters = lineup_entry.get("batter") or entry.get("batter") or []
+        pitchers = lineup_entry.get("pitcher") or entry.get("pitcher") or []
 
         for index, batter in enumerate(batters):
             name = _pick_str(batter, ["name", "playerName"])
@@ -420,9 +434,9 @@ def _summary_from_events(events: list[dict[str, Any]]) -> dict[str, int]:
             summary[f"{side}HomeRuns"] += 1
         desc = str(event.get("description") or "").lower()
         out_delta = 0
-        if "삼중살" in desc or "triple play" in desc:
+        if event_type == "TRIPLE_PLAY" or "삼중살" in desc or "triple play" in desc:
             out_delta = 3
-        elif "병살" in desc or "double play" in desc:
+        elif event_type == "DOUBLE_PLAY" or "병살" in desc or "double play" in desc:
             out_delta = 2
         elif event_type in {"OUT", "SAC_FLY_SCORE", "TAG_UP_ADVANCE"}:
             out_delta = 1

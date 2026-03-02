@@ -40,6 +40,12 @@ EVENT_MAP = {
     "BASE_ON_BALLS": EventType.WALK,
     "INTENTIONAL_WALK": EventType.WALK,
     "OUT": EventType.OUT,
+    "DOUBLE_PLAY": EventType.DOUBLE_PLAY,
+    "DOUBLEPLAY": EventType.DOUBLE_PLAY,
+    "DP": EventType.DOUBLE_PLAY,
+    "TRIPLE_PLAY": EventType.TRIPLE_PLAY,
+    "TRIPLEPLAY": EventType.TRIPLE_PLAY,
+    "TP": EventType.TRIPLE_PLAY,
     "HIT": EventType.HIT,
     "HOMERUN": EventType.HOMERUN,
     "HOME_RUN": EventType.HOMERUN,
@@ -72,6 +78,11 @@ def normalize_event_type(raw: str) -> EventType:
 
 
 def _event_out_count(event_type: EventType, description: str) -> int:
+    if event_type == EventType.TRIPLE_PLAY:
+        return 3
+    if event_type == EventType.DOUBLE_PLAY:
+        return 2
+
     text = (description or "").lower()
     if "삼중살" in text or "triple play" in text:
         return 3
