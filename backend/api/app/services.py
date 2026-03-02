@@ -1,12 +1,16 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .models import Game, GameEvent
+from .models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat
 from .schemas import (
     BaseStatus,
+    CrawlerBatterStatIn,
     CrawlerEventIn,
+    CrawlerGameNoteIn,
+    CrawlerLineupSlotIn,
+    CrawlerPitcherStatIn,
     CrawlerSnapshotRequest,
     EventType,
     GameEventOut,
@@ -67,6 +71,47 @@ def normalize_event_type(raw: str) -> EventType:
     return EVENT_MAP.get(raw.strip().upper(), EventType.OTHER)
 
 
+def _event_out_count(event_type: EventType, description: str) -> int:
+    text = (description or "").lower()
+    if "삼중살" in text or "triple play" in text:
+        return 3
+    if "병살" in text or "double play" in text:
+        return 2
+    if event_type in {EventType.OUT, EventType.SAC_FLY_SCORE, EventType.TAG_UP_ADVANCE}:
+        return 1
+    return 0
+
+
+def _compute_event_summary(payload: CrawlerSnapshotRequest) -> dict[str, int]:
+    summary = {
+        "home_hits": 0,
+        "away_hits": 0,
+        "home_home_runs": 0,
+        "away_home_runs": 0,
+        "home_outs_total": 0,
+        "away_outs_total": 0,
+    }
+    for event in payload.events:
+        side: str | None = None
+        half = (event.metadata or {}).get("half")
+        if half in {"top", "TOP", "초"}:
+            side = "away"
+        elif half in {"bottom", "BOTTOM", "말"}:
+            side = "home"
+
+        if side is None:
+            continue
+
+        etype = normalize_event_type(event.type)
+        if etype in {EventType.HIT, EventType.HOMERUN}:
+            summary[f"{side}_hits"] += 1
+        if etype == EventType.HOMERUN:
+            summary[f"{side}_home_runs"] += 1
+        summary[f"{side}_outs_total"] += _event_out_count(etype, event.description)
+
+    return summary
+
+
 def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> Game:
     game = db.get(Game, game_id)
     if game is None:
@@ -87,6 +132,30 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
     game.base_third = payload.bases.third
     game.pitcher = payload.pitcher
     game.batter = payload.batter
+    game.observed_at = ensure_utc(payload.observedAt) if payload.observedAt else game.observed_at
+
+    computed = _compute_event_summary(payload) if payload.events else {}
+    game.home_hits = payload.homeHits if payload.homeHits is not None else computed.get("home_hits", game.home_hits)
+    game.away_hits = payload.awayHits if payload.awayHits is not None else computed.get("away_hits", game.away_hits)
+    game.home_home_runs = (
+        payload.homeHomeRuns if payload.homeHomeRuns is not None else computed.get("home_home_runs", game.home_home_runs)
+    )
+    game.away_home_runs = (
+        payload.awayHomeRuns if payload.awayHomeRuns is not None else computed.get("away_home_runs", game.away_home_runs)
+    )
+    game.home_outs_total = (
+        payload.homeOutsTotal if payload.homeOutsTotal is not None else computed.get("home_outs_total", game.home_outs_total)
+    )
+    game.away_outs_total = (
+        payload.awayOutsTotal if payload.awayOutsTotal is not None else computed.get("away_outs_total", game.away_outs_total)
+    )
+
+    if payload.events:
+        latest_event = max(payload.events, key=lambda item: ensure_utc(item.occurredAt))
+        game.last_event_type = normalize_event_type(latest_event.type).value
+        game.last_event_desc = latest_event.description
+        game.last_event_at = ensure_utc(latest_event.occurredAt)
+
     game.updated_at = ensure_utc(payload.observedAt) if payload.observedAt else now_utc()
     db.flush()
     return game
@@ -135,6 +204,160 @@ def insert_events(
 
     db.flush()
     return inserted, duplicate_count
+
+
+def _source_event_cursor_map(db: Session, game_id: str, source_ids: set[str]) -> dict[str, int]:
+    if not source_ids:
+        return {}
+    rows = db.execute(
+        select(GameEvent.source_event_id, GameEvent.cursor).where(
+            GameEvent.game_id == game_id,
+            GameEvent.source_event_id.in_(source_ids),
+        )
+    ).all()
+    return {source_id: cursor for source_id, cursor in rows}
+
+
+def _lineup_from_snapshot(db: Session, game_id: str, lineup_slots: list[CrawlerLineupSlotIn]) -> None:
+    db.execute(delete(GameLineupSlot).where(GameLineupSlot.game_id == game_id))
+    if not lineup_slots:
+        return
+
+    source_ids: set[str] = set()
+    for slot in lineup_slots:
+        if slot.enteredAtSourceEventId:
+            source_ids.add(slot.enteredAtSourceEventId)
+        if slot.exitedAtSourceEventId:
+            source_ids.add(slot.exitedAtSourceEventId)
+    source_map = _source_event_cursor_map(db, game_id, source_ids)
+
+    dedup: dict[tuple[str, int], CrawlerLineupSlotIn] = {}
+    for slot in lineup_slots:
+        dedup[(slot.teamSide, slot.battingOrder)] = slot
+
+    for slot in dedup.values():
+        db.add(
+            GameLineupSlot(
+                game_id=game_id,
+                team_side=slot.teamSide,
+                batting_order=slot.battingOrder,
+                player_id=slot.playerId,
+                player_name=slot.playerName,
+                position_code=slot.positionCode,
+                position_name=slot.positionName,
+                is_starter=slot.isStarter,
+                is_active=slot.isActive,
+                entered_at_event_cursor=source_map.get(slot.enteredAtSourceEventId or ""),
+                exited_at_event_cursor=source_map.get(slot.exitedAtSourceEventId or ""),
+            )
+        )
+
+
+def _batter_stats_from_snapshot(db: Session, game_id: str, batter_stats: list[CrawlerBatterStatIn]) -> None:
+    db.execute(delete(GameBatterStat).where(GameBatterStat.game_id == game_id))
+    if not batter_stats:
+        return
+
+    dedup: dict[tuple[str, str], CrawlerBatterStatIn] = {}
+    for stat in batter_stats:
+        dedup_key = stat.playerId or f"{stat.playerName}#{stat.battingOrder or 0}"
+        dedup[(stat.teamSide, dedup_key)] = stat
+
+    for stat in dedup.values():
+        db.add(
+            GameBatterStat(
+                game_id=game_id,
+                team_side=stat.teamSide,
+                player_id=stat.playerId,
+                player_name=stat.playerName,
+                batting_order=stat.battingOrder,
+                primary_position=stat.primaryPosition,
+                is_starter=stat.isStarter,
+                plate_appearances=stat.plateAppearances,
+                at_bats=stat.atBats,
+                runs=stat.runs,
+                hits=stat.hits,
+                rbi=stat.rbi,
+                doubles=stat.doubles,
+                triples=stat.triples,
+                home_runs=stat.homeRuns,
+                walks=stat.walks,
+                strikeouts=stat.strikeouts,
+                stolen_bases=stat.stolenBases,
+                caught_stealing=stat.caughtStealing,
+                hit_by_pitch=stat.hitByPitch,
+                sac_bunts=stat.sacBunts,
+                sac_flies=stat.sacFlies,
+                left_on_base=stat.leftOnBase,
+            )
+        )
+
+
+def _pitcher_stats_from_snapshot(db: Session, game_id: str, pitcher_stats: list[CrawlerPitcherStatIn]) -> None:
+    db.execute(delete(GamePitcherStat).where(GamePitcherStat.game_id == game_id))
+    if not pitcher_stats:
+        return
+
+    dedup: dict[tuple[str, str], CrawlerPitcherStatIn] = {}
+    for stat in pitcher_stats:
+        dedup_key = stat.playerId or f"{stat.playerName}#{stat.appearanceOrder or 0}"
+        dedup[(stat.teamSide, dedup_key)] = stat
+
+    for stat in dedup.values():
+        db.add(
+            GamePitcherStat(
+                game_id=game_id,
+                team_side=stat.teamSide,
+                appearance_order=stat.appearanceOrder,
+                player_id=stat.playerId,
+                player_name=stat.playerName,
+                is_starter=stat.isStarter,
+                outs_recorded=stat.outsRecorded,
+                hits_allowed=stat.hitsAllowed,
+                runs_allowed=stat.runsAllowed,
+                earned_runs=stat.earnedRuns,
+                walks_allowed=stat.walksAllowed,
+                strikeouts=stat.strikeouts,
+                home_runs_allowed=stat.homeRunsAllowed,
+                batters_faced=stat.battersFaced,
+                at_bats_against=stat.atBatsAgainst,
+                pitches_thrown=stat.pitchesThrown,
+            )
+        )
+
+
+def _notes_from_snapshot(db: Session, game_id: str, notes: list[CrawlerGameNoteIn]) -> None:
+    db.execute(delete(GameNote).where(GameNote.game_id == game_id))
+    if not notes:
+        return
+
+    source_ids = {note.sourceEventId for note in notes if note.sourceEventId}
+    source_map = _source_event_cursor_map(db, game_id, source_ids)
+
+    for note in notes:
+        db.add(
+            GameNote(
+                game_id=game_id,
+                team_side=note.teamSide,
+                note_type=note.noteType,
+                note_title=note.noteTitle,
+                note_body=note.noteBody,
+                inning=note.inning,
+                event_cursor=source_map.get(note.sourceEventId or ""),
+            )
+        )
+
+
+def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> None:
+    if payload.lineupSlots:
+        _lineup_from_snapshot(db, game_id, payload.lineupSlots)
+    if payload.batterStats:
+        _batter_stats_from_snapshot(db, game_id, payload.batterStats)
+    if payload.pitcherStats:
+        _pitcher_stats_from_snapshot(db, game_id, payload.pitcherStats)
+    if payload.notes:
+        _notes_from_snapshot(db, game_id, payload.notes)
+    db.flush()
 
 
 def to_game_summary(game: Game) -> GameSummaryOut:

@@ -15,6 +15,12 @@
   },
   "pitcher": "김택연",
   "batter": "문보경",
+  "homeHits": 7,
+  "awayHits": 6,
+  "homeHomeRuns": 1,
+  "awayHomeRuns": 0,
+  "homeOutsTotal": 18,
+  "awayOutsTotal": 20,
   "observedAt": "2026-02-17T09:00:00Z",
   "events": [
     {
@@ -38,6 +44,73 @@
         "inning": 7,
         "half": "말"
       }
+    }
+  ],
+  "lineupSlots": [
+    {
+      "teamSide": "home",
+      "battingOrder": 1,
+      "playerId": "H001",
+      "playerName": "홍길동",
+      "positionCode": "CF",
+      "positionName": "중견수",
+      "isStarter": true,
+      "isActive": true
+    }
+  ],
+  "batterStats": [
+    {
+      "teamSide": "home",
+      "playerId": "H001",
+      "playerName": "홍길동",
+      "battingOrder": 1,
+      "primaryPosition": "중견수",
+      "isStarter": true,
+      "plateAppearances": 4,
+      "atBats": 3,
+      "runs": 1,
+      "hits": 2,
+      "rbi": 1,
+      "doubles": 1,
+      "triples": 0,
+      "homeRuns": 0,
+      "walks": 1,
+      "strikeouts": 0,
+      "stolenBases": 0,
+      "caughtStealing": 0,
+      "hitByPitch": 0,
+      "sacBunts": 0,
+      "sacFlies": 0,
+      "leftOnBase": 1
+    }
+  ],
+  "pitcherStats": [
+    {
+      "teamSide": "home",
+      "appearanceOrder": 1,
+      "playerId": "P001",
+      "playerName": "김택연",
+      "isStarter": true,
+      "outsRecorded": 15,
+      "hitsAllowed": 4,
+      "runsAllowed": 2,
+      "earnedRuns": 2,
+      "walksAllowed": 1,
+      "strikeouts": 6,
+      "homeRunsAllowed": 0,
+      "battersFaced": 20,
+      "atBatsAgainst": 18,
+      "pitchesThrown": 88
+    }
+  ],
+  "notes": [
+    {
+      "teamSide": "home",
+      "noteType": "GAME_HIGHLIGHT",
+      "noteTitle": "결승타",
+      "noteBody": "홍길동 7회 결승타",
+      "inning": "7회말",
+      "sourceEventId": "relay-002"
     }
   ]
 }

@@ -13,7 +13,15 @@ from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
 from .models import Game, GameEvent
 from .schemas import CrawlerSnapshotRequest, EventsResponse, GameStateOut, GameStatus, GameSummaryOut, IngestResult
-from .services import build_game_state, insert_events, normalize_status, to_event_out, to_game_summary, upsert_game_from_snapshot
+from .services import (
+    build_game_state,
+    insert_events,
+    normalize_status,
+    sync_snapshot_details,
+    to_event_out,
+    to_game_summary,
+    upsert_game_from_snapshot,
+)
 
 
 settings = get_settings()
@@ -113,6 +121,7 @@ async def ingest_crawler_snapshot(
 
     game = upsert_game_from_snapshot(db, game_id=game_id, payload=payload)
     inserted_events, duplicate_count = insert_events(db, game_id=game_id, events=payload.events)
+    sync_snapshot_details(db, game_id=game_id, payload=payload)
     db.commit()
     db.refresh(game)
     state = build_game_state(db, game)

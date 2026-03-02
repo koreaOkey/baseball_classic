@@ -104,42 +104,42 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
     has_score = _contains_any(
         text,
         [
-            "\ub4dd\uc810",
-            "\ud648\uc778",
-            "\ud648\uc73c\ub85c",
-            "\uc0dd\ud658",
-            "\ucd94\uac00\uc810",
-            "\ub3d9\uc810",
-            "\uc5ed\uc804",
+            "득점",
+            "홈인",
+            "홈으로",
+            "생환",
+            "추가점",
+            "동점",
+            "역전",
             "scores",
             "scored",
             "score",
         ],
     )
-    has_out = _contains_any(text, ["\uc544\uc6c3", "\uc0bc\uc9c4", "\ubcd1\uc0b4", "out", "strikeout", "double play"])
-    has_sac_fly = _contains_any(text, ["\ud76c\uc0dd\ud50c\ub77c\uc774", "\ud76c\uc0dd \ud50c\ub77c\uc774", "sacrifice fly", "sac fly"])
-    has_tag_up = _contains_any(text, ["\ud0dc\uadf8\uc5c5", "tag up", "tag-up"])
-    has_steal = _contains_any(text, ["\ub3c4\ub8e8", "stolen base", "steal"])
+    has_out = _contains_any(text, ["아웃", "삼진", "병살", "out", "strikeout", "double play"])
+    has_sac_fly = _contains_any(text, ["희생플라이", "희생 플라이", "sacrifice fly", "sac fly"])
+    has_tag_up = _contains_any(text, ["태그업", "tag up", "tag-up"])
+    has_steal = _contains_any(text, ["도루", "stolen base", "steal"])
     has_steal_fail = _contains_any(
         text,
         [
-            "\ub3c4\ub8e8\uc2e4\ud328",
+            "도루실패",
             "caught stealing",
         ],
     )
     has_video_review = _contains_any(
         text,
         [
-            "\ube44\ub514\uc624 \ud310\ub3c5",
+            "비디오 판독",
             "video review",
         ],
     )
     has_walk = _contains_any(
         text,
         [
-            "\ubcfc\ub137",
-            "\uace0\uc758\uc0ac\uad6c",
-            "\uace0\uc758 \uc0ac\uad6c",
+            "볼넷",
+            "고의사구",
+            "고의 사구",
             "walk",
             "intentional walk",
         ],
@@ -147,16 +147,16 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
     has_hit_result = _contains_any(
         text,
         [
-            "\ub8e8\ud0c0",
-            "\uc548\ud0c0",
-            "\ub0b4\uc57c\uc548\ud0c0",
-            "\ubc88\ud2b8\uc548\ud0c0",
-            "\ub2e8\ud0c0",
-            "\uc88c\uc548",
-            "\uc6b0\uc548",
-            "\uc911\uc548",
-            "\uc88c\uc911\uc548",
-            "\uc6b0\uc911\uc548",
+            "루타",
+            "안타",
+            "내야안타",
+            "번트안타",
+            "단타",
+            "좌안",
+            "우안",
+            "중안",
+            "좌중안",
+            "우중안",
             "single",
             "double",
             "triple",
@@ -169,7 +169,6 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
         if pitch_result in {"T", "S", "F"}:
             return "STRIKE"
         if pitch_result in {"H"}:
-            # "N구 타격"은 타구 발생 이벤트이며, 안타/진루 확정 이벤트가 아님.
             return "OTHER"
 
     if has_out and has_score and (has_sac_fly or has_tag_up):
@@ -185,7 +184,7 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
     if has_walk:
         return "WALK"
 
-    if _contains_any(text, ["\ud648\ub7f0", "homerun", "home run"]):
+    if _contains_any(text, ["홈런", "homerun", "home run"]):
         return "HOMERUN"
     if has_score:
         return "SCORE"
@@ -195,6 +194,240 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
         return "HIT"
 
     return "OTHER"
+
+
+def _get_str(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _pick_str(data: Dict[str, Any], keys: List[str]) -> str:
+    for key in keys:
+        value = _get_str(data.get(key))
+        if value:
+            return value
+    return ""
+
+
+def _pick_int(data: Dict[str, Any], keys: List[str], default: int = 0) -> int:
+    for key in keys:
+        value = data.get(key)
+        if value is None:
+            continue
+        parsed = _safe_int(value, default=-1)
+        if parsed >= 0:
+            return parsed
+    return default
+
+
+def _pick_bool(data: Dict[str, Any], keys: List[str], default: bool) -> bool:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, bool):
+            return value
+        raw = _get_str(value).lower()
+        if raw in {"true", "1", "y", "yes"}:
+            return True
+        if raw in {"false", "0", "n", "no"}:
+            return False
+    return default
+
+
+def _parse_ip_to_outs(raw_value: Any) -> int:
+    raw = _get_str(raw_value)
+    if not raw:
+        return 0
+    if raw.isdigit():
+        return _safe_int(raw) * 3
+
+    if "." in raw:
+        whole, frac = raw.split(".", 1)
+        outs = _safe_int(whole, 0) * 3
+        if frac == "1":
+            outs += 1
+        elif frac == "2":
+            outs += 2
+        return outs
+
+    return 0
+
+
+def _extract_latest_entry(relays_by_inning: Dict[int, Dict[str, Any]], key: str) -> Dict[str, Any]:
+    for inning in sorted(relays_by_inning.keys(), reverse=True):
+        entry = (relays_by_inning.get(inning) or {}).get(key)
+        if isinstance(entry, dict) and entry:
+            return entry
+    return {}
+
+
+def _extract_lineup_and_boxscore(
+    relays_by_inning: Dict[int, Dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    lineup_slots: list[dict[str, Any]] = []
+    batter_stats: list[dict[str, Any]] = []
+    pitcher_stats: list[dict[str, Any]] = []
+
+    entries = {
+        "home": _extract_latest_entry(relays_by_inning, "homeEntry") or _extract_latest_entry(relays_by_inning, "homeLineup"),
+        "away": _extract_latest_entry(relays_by_inning, "awayEntry") or _extract_latest_entry(relays_by_inning, "awayLineup"),
+    }
+
+    for team_side, entry in entries.items():
+        batters = entry.get("batter") or []
+        pitchers = entry.get("pitcher") or []
+
+        for index, batter in enumerate(batters):
+            name = _pick_str(batter, ["name", "playerName"])
+            if not name:
+                continue
+
+            player_id = _pick_str(batter, ["pcode", "playerId", "player_id"]) or None
+            batting_order_raw = _pick_int(
+                batter,
+                ["batOrder", "battingOrder", "turn", "order", "bo", "seq"],
+                default=index + 1,
+            )
+            batting_order = batting_order_raw if 1 <= batting_order_raw <= 9 else None
+            position_code = _pick_str(batter, ["pos", "positionCode", "playerPos"]) or None
+            position_name = _pick_str(batter, ["posName", "positionName", "playerPosName"]) or None
+            is_starter = _pick_bool(batter, ["starter", "isStarter", "start"], default=index < 9)
+            is_active = _pick_bool(batter, ["isActive", "active", "inLineup"], default=True)
+
+            if batting_order is not None:
+                lineup_slots.append(
+                    {
+                        "teamSide": team_side,
+                        "battingOrder": batting_order,
+                        "playerId": player_id,
+                        "playerName": name,
+                        "positionCode": position_code,
+                        "positionName": position_name,
+                        "isStarter": is_starter,
+                        "isActive": is_active,
+                    }
+                )
+
+            hits = _pick_int(batter, ["h", "hit", "hits"])
+            home_runs = _pick_int(batter, ["hr", "homeRun", "homerun", "homeRuns"])
+            at_bats = _pick_int(batter, ["ab", "atBat", "atBats"])
+            walks = _pick_int(batter, ["bb", "walk", "walks", "baseOnBalls"])
+            hit_by_pitch = _pick_int(batter, ["hbp", "hitByPitch"])
+            sac_bunts = _pick_int(batter, ["sh", "sacBunt", "sacBunts"])
+            sac_flies = _pick_int(batter, ["sf", "sacFly", "sacFlies"])
+            plate_appearances = _pick_int(
+                batter,
+                ["pa", "plateAppearance", "plateAppearances"],
+                default=at_bats + walks + hit_by_pitch + sac_bunts + sac_flies,
+            )
+
+            batter_stats.append(
+                {
+                    "teamSide": team_side,
+                    "playerId": player_id,
+                    "playerName": name,
+                    "battingOrder": batting_order,
+                    "primaryPosition": position_name,
+                    "isStarter": is_starter,
+                    "plateAppearances": plate_appearances,
+                    "atBats": at_bats,
+                    "runs": _pick_int(batter, ["r", "run", "runs"]),
+                    "hits": hits,
+                    "rbi": _pick_int(batter, ["rbi"]),
+                    "doubles": _pick_int(batter, ["h2", "double", "doubles"]),
+                    "triples": _pick_int(batter, ["h3", "triple", "triples"]),
+                    "homeRuns": home_runs,
+                    "walks": walks,
+                    "strikeouts": _pick_int(batter, ["so", "kk", "strikeout", "strikeouts"]),
+                    "stolenBases": _pick_int(batter, ["sb", "stolenBase", "stolenBases"]),
+                    "caughtStealing": _pick_int(batter, ["cs", "caughtStealing"]),
+                    "hitByPitch": hit_by_pitch,
+                    "sacBunts": sac_bunts,
+                    "sacFlies": sac_flies,
+                    "leftOnBase": _pick_int(batter, ["lob", "leftOnBase"]),
+                }
+            )
+
+        for index, pitcher in enumerate(pitchers):
+            name = _pick_str(pitcher, ["name", "playerName"])
+            if not name:
+                continue
+
+            player_id = _pick_str(pitcher, ["pcode", "playerId", "player_id"]) or None
+            appearance_order = _pick_int(pitcher, ["appearanceOrder", "seq", "order"], default=index + 1)
+            is_starter = _pick_bool(pitcher, ["starter", "isStarter", "start"], default=index == 0)
+            outs_recorded = _pick_int(pitcher, ["outsRecorded", "outs"], default=0)
+            if outs_recorded == 0:
+                outs_recorded = _parse_ip_to_outs(_pick_str(pitcher, ["ip", "inn", "inning"]))
+
+            pitcher_stats.append(
+                {
+                    "teamSide": team_side,
+                    "appearanceOrder": appearance_order,
+                    "playerId": player_id,
+                    "playerName": name,
+                    "isStarter": is_starter,
+                    "outsRecorded": outs_recorded,
+                    "hitsAllowed": _pick_int(pitcher, ["h", "hit", "hits", "hitsAllowed"]),
+                    "runsAllowed": _pick_int(pitcher, ["r", "run", "runs", "runsAllowed"]),
+                    "earnedRuns": _pick_int(pitcher, ["er", "earnedRun", "earnedRuns"]),
+                    "walksAllowed": _pick_int(pitcher, ["bb", "walk", "walks", "walksAllowed"]),
+                    "strikeouts": _pick_int(pitcher, ["so", "kk", "strikeout", "strikeouts"]),
+                    "homeRunsAllowed": _pick_int(pitcher, ["hr", "homeRun", "homeRuns", "homeRunsAllowed"]),
+                    "battersFaced": _pick_int(pitcher, ["bf", "tb", "battersFaced"]),
+                    "atBatsAgainst": _pick_int(pitcher, ["ab", "atBatsAgainst"]),
+                    "pitchesThrown": _pick_int(pitcher, ["np", "pc", "pitchCount", "pitchesThrown"]),
+                }
+            )
+
+    return lineup_slots, batter_stats, pitcher_stats
+
+
+def _summary_from_batter_stats(batter_stats: list[dict[str, Any]]) -> dict[str, int]:
+    summary = {
+        "homeHits": 0,
+        "awayHits": 0,
+        "homeHomeRuns": 0,
+        "awayHomeRuns": 0,
+    }
+    for stat in batter_stats:
+        team_side = stat.get("teamSide")
+        if team_side not in {"home", "away"}:
+            continue
+        summary[f"{team_side}Hits"] += _safe_int(stat.get("hits"), 0)
+        summary[f"{team_side}HomeRuns"] += _safe_int(stat.get("homeRuns"), 0)
+    return summary
+
+
+def _summary_from_events(events: list[dict[str, Any]]) -> dict[str, int]:
+    summary = {
+        "homeHits": 0,
+        "awayHits": 0,
+        "homeHomeRuns": 0,
+        "awayHomeRuns": 0,
+        "homeOutsTotal": 0,
+        "awayOutsTotal": 0,
+    }
+    for event in events:
+        metadata = event.get("metadata") or {}
+        half = metadata.get("half")
+        side = "away" if half == "top" else "home" if half == "bottom" else None
+        if side is None:
+            continue
+
+        event_type = event.get("type")
+        if event_type in {"HIT", "HOMERUN"}:
+            summary[f"{side}Hits"] += 1
+        if event_type == "HOMERUN":
+            summary[f"{side}HomeRuns"] += 1
+        desc = str(event.get("description") or "").lower()
+        out_delta = 0
+        if "삼중살" in desc or "triple play" in desc:
+            out_delta = 3
+        elif "병살" in desc or "double play" in desc:
+            out_delta = 2
+        elif event_type in {"OUT", "SAC_FLY_SCORE", "TAG_UP_ADVANCE"}:
+            out_delta = 1
+        summary[f"{side}OutsTotal"] += out_delta
+    return summary
 
 
 def build_snapshot_payload(
@@ -272,6 +505,16 @@ def build_snapshot_payload(
             }
         )
 
+    lineup_slots, batter_stats, pitcher_stats = _extract_lineup_and_boxscore(relays_by_inning)
+
+    summary = _summary_from_events(events)
+    if batter_stats:
+        batter_summary = _summary_from_batter_stats(batter_stats)
+        summary["homeHits"] = batter_summary["homeHits"]
+        summary["awayHits"] = batter_summary["awayHits"]
+        summary["homeHomeRuns"] = batter_summary["homeHomeRuns"]
+        summary["awayHomeRuns"] = batter_summary["awayHomeRuns"]
+
     home_score = _safe_int(latest_state.get("homeScore"), default=_safe_int(game_data.get("homeTeamScore")))
     away_score = _safe_int(latest_state.get("awayScore"), default=_safe_int(game_data.get("awayTeamScore")))
 
@@ -292,8 +535,18 @@ def build_snapshot_payload(
         },
         "pitcher": pitcher_name or None,
         "batter": batter_name or None,
+        "homeHits": summary["homeHits"],
+        "awayHits": summary["awayHits"],
+        "homeHomeRuns": summary["homeHomeRuns"],
+        "awayHomeRuns": summary["awayHomeRuns"],
+        "homeOutsTotal": summary["homeOutsTotal"],
+        "awayOutsTotal": summary["awayOutsTotal"],
         "observedAt": now.isoformat().replace("+00:00", "Z"),
         "events": events,
+        "lineupSlots": lineup_slots,
+        "batterStats": batter_stats,
+        "pitcherStats": pitcher_stats,
+        "notes": [],
     }
     return payload
 

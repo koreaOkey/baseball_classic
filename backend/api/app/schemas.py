@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -40,6 +40,74 @@ class CrawlerEventIn(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+TeamSide = Literal["home", "away"]
+
+
+class CrawlerLineupSlotIn(BaseModel):
+    teamSide: TeamSide
+    battingOrder: int = Field(ge=1, le=9)
+    playerId: str | None = Field(default=None, max_length=64)
+    playerName: str = Field(min_length=1, max_length=128)
+    positionCode: str | None = Field(default=None, max_length=32)
+    positionName: str | None = Field(default=None, max_length=64)
+    isStarter: bool = False
+    isActive: bool = True
+    enteredAtSourceEventId: str | None = Field(default=None, max_length=80)
+    exitedAtSourceEventId: str | None = Field(default=None, max_length=80)
+
+
+class CrawlerBatterStatIn(BaseModel):
+    teamSide: TeamSide
+    playerId: str | None = Field(default=None, max_length=64)
+    playerName: str = Field(min_length=1, max_length=128)
+    battingOrder: int | None = Field(default=None, ge=1, le=9)
+    primaryPosition: str | None = Field(default=None, max_length=64)
+    isStarter: bool = False
+    plateAppearances: int = Field(default=0, ge=0)
+    atBats: int = Field(default=0, ge=0)
+    runs: int = Field(default=0, ge=0)
+    hits: int = Field(default=0, ge=0)
+    rbi: int = Field(default=0, ge=0)
+    doubles: int = Field(default=0, ge=0)
+    triples: int = Field(default=0, ge=0)
+    homeRuns: int = Field(default=0, ge=0)
+    walks: int = Field(default=0, ge=0)
+    strikeouts: int = Field(default=0, ge=0)
+    stolenBases: int = Field(default=0, ge=0)
+    caughtStealing: int = Field(default=0, ge=0)
+    hitByPitch: int = Field(default=0, ge=0)
+    sacBunts: int = Field(default=0, ge=0)
+    sacFlies: int = Field(default=0, ge=0)
+    leftOnBase: int = Field(default=0, ge=0)
+
+
+class CrawlerPitcherStatIn(BaseModel):
+    teamSide: TeamSide
+    appearanceOrder: int | None = Field(default=None, ge=1, le=99)
+    playerId: str | None = Field(default=None, max_length=64)
+    playerName: str = Field(min_length=1, max_length=128)
+    isStarter: bool = False
+    outsRecorded: int = Field(default=0, ge=0)
+    hitsAllowed: int = Field(default=0, ge=0)
+    runsAllowed: int = Field(default=0, ge=0)
+    earnedRuns: int = Field(default=0, ge=0)
+    walksAllowed: int = Field(default=0, ge=0)
+    strikeouts: int = Field(default=0, ge=0)
+    homeRunsAllowed: int = Field(default=0, ge=0)
+    battersFaced: int = Field(default=0, ge=0)
+    atBatsAgainst: int = Field(default=0, ge=0)
+    pitchesThrown: int = Field(default=0, ge=0)
+
+
+class CrawlerGameNoteIn(BaseModel):
+    teamSide: TeamSide | None = None
+    noteType: str = Field(min_length=1, max_length=64)
+    noteTitle: str = Field(default="", max_length=255)
+    noteBody: str = Field(default="", max_length=2000)
+    inning: str | None = Field(default=None, max_length=32)
+    sourceEventId: str | None = Field(default=None, max_length=80)
+
+
 class CrawlerSnapshotRequest(BaseModel):
     homeTeam: str = Field(min_length=1, max_length=64)
     awayTeam: str = Field(min_length=1, max_length=64)
@@ -53,8 +121,18 @@ class CrawlerSnapshotRequest(BaseModel):
     bases: BaseStatus = Field(default_factory=BaseStatus)
     pitcher: str | None = Field(default=None, max_length=128)
     batter: str | None = Field(default=None, max_length=128)
+    homeHits: int | None = Field(default=None, ge=0)
+    awayHits: int | None = Field(default=None, ge=0)
+    homeHomeRuns: int | None = Field(default=None, ge=0)
+    awayHomeRuns: int | None = Field(default=None, ge=0)
+    homeOutsTotal: int | None = Field(default=None, ge=0)
+    awayOutsTotal: int | None = Field(default=None, ge=0)
     observedAt: datetime | None = None
     events: list[CrawlerEventIn] = Field(default_factory=list)
+    lineupSlots: list[CrawlerLineupSlotIn] | None = None
+    batterStats: list[CrawlerBatterStatIn] | None = None
+    pitcherStats: list[CrawlerPitcherStatIn] | None = None
+    notes: list[CrawlerGameNoteIn] | None = None
 
 
 class IngestResult(BaseModel):
