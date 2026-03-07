@@ -23,6 +23,9 @@ import com.basehaptic.mobile.ui.theme.BaseHapticTheme
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
 
+private const val SHOW_COMMUNITY_TAB = false
+private const val SHOW_STORE_TAB = false
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -147,23 +150,27 @@ fun BottomNavigationBar(
             onClick = { onNavigate(Screen.Home) },
             activeColor = teamTheme.navIndicator
         )
-        
-        BottomNavItem(
-            icon = Icons.Default.Message,
-            label = "커뮤니티",
-            selected = currentView == Screen.Community,
-            onClick = { onNavigate(Screen.Community) },
-            activeColor = teamTheme.navIndicator
-        )
-        
-        BottomNavItem(
-            icon = Icons.Default.ShoppingBag,
-            label = "상점",
-            selected = currentView == Screen.Store,
-            onClick = { onNavigate(Screen.Store) },
-            activeColor = teamTheme.navIndicator
-        )
-        
+
+        if (SHOW_COMMUNITY_TAB) {
+            BottomNavItem(
+                icon = Icons.Default.Message,
+                label = "커뮤니티",
+                selected = currentView == Screen.Community,
+                onClick = { onNavigate(Screen.Community) },
+                activeColor = teamTheme.navIndicator
+            )
+        }
+
+        if (SHOW_STORE_TAB) {
+            BottomNavItem(
+                icon = Icons.Default.ShoppingBag,
+                label = "상점",
+                selected = currentView == Screen.Store,
+                onClick = { onNavigate(Screen.Store) },
+                activeColor = teamTheme.navIndicator
+            )
+        }
+
         BottomNavItem(
             icon = Icons.Default.Settings,
             label = "설정",

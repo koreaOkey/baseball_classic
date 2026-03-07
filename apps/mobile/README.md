@@ -18,6 +18,17 @@
 - **SettingsScreen**: 앱 설정
 - **WatchTestScreen**: 워치 동기화 시뮬레이션 테스트
 
+## 하단 네비게이션 플래그 (임시 블라인드)
+- 파일: `app/src/main/java/com/basehaptic/mobile/MainActivity.kt`
+- 플래그:
+  - `SHOW_COMMUNITY_TAB`
+  - `SHOW_STORE_TAB`
+- 현재 기본값: 둘 다 `false` (커뮤니티/상점 탭 숨김)
+- 동작:
+  - 둘 다 `false`면 하단 탭은 `홈`, `설정` 2개만 표시
+  - 둘 다 `true`면 `홈`, `커뮤니티`, `상점`, `설정` 4개 표시
+  - `NavigationBar`가 현재 노출된 탭 수 기준으로 버튼 폭을 자동 분배하여 재배치
+
 ## 리소스
 
 ### 팀 로고
