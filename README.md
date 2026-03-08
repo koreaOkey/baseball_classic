@@ -186,3 +186,46 @@ graph LR
 - **배터리 관리:** 경기 중(3~4시간) BLE 스캔과 포그라운드 유지에 따른 배터리 소모 모니터링 필요.
     
 - **애니메이션:** 워치 저장 공간을 고려해 테마별 리소스는 온디맨드(On-demand) 다운로드 방식 채택.
+
+## Recent Changes (2026-03-07)
+
+- Added event classification updates in crawler/backend ingest:
+  - video review verdict `OUT -> OUT` is classified as `OUT`
+  - pitcher substitution is classified as `PITCHER_CHANGE`
+- Added daily automation flow:
+  - schedule import at `00:05` (KST)
+  - relay availability check every minute for 10 minutes from each game `startTime`
+  - start live crawler only when relay is available
+- Added game start-time flow:
+  - `games.start_time` persisted and exposed as `startTime`
+  - mobile home list now fetches `GET /games?date=<today>`
+- Updated home cards:
+  - start time is shown on cards
+  - finished games show `game start time HH:MM game finished`
+  - finished games are sorted by start time
+- Updated watch sync UX:
+  - synced live game cards are highlighted
+  - sync confirm dialog appears only for unsynced live games
+  - already synced live game does not show confirm dialog
+- Updated count/inning behavior:
+  - ball/strike reset immediately when out count reaches 3
+  - on finished games, watch inning label is forced to `game finished` and B/S/O is normalized
+- Added event-level player columns and ingest handling:
+  - `game_events.pitcher`
+  - `game_events.batter`
+
+## Recent Changes (2026-03-08)
+
+- Added `games.game_date` and changed `/games?date=` filtering to use `game_date` first.
+- Kept safe fallback for legacy rows: if `game_date` is null, filter falls back to `game_id` date prefix.
+- Improved game-date inference from `game_id`:
+  - supports standard `YYYYMMDD...`
+  - supports WBC-like `####MMDD...YYYY` (example: `88880308AUJP02026`)
+- Updated schedule import to store `gameDate` from source (`gameDate`/`gameDateTime`) instead of forcing target date.
+- Fixed and backfilled previously mis-dated rows so `2026-03-07` and `2026-03-08` are separated correctly.
+- Hardened live dispatcher backend polling:
+  - accepts list JSON payloads from `/games`
+  - uses `limit=100` to match backend API validation limits
+- Mobile home screen behavior update:
+  - removed stale fallback list retention so previous-day games do not remain after date rollover
+  - fixed multiple mojibake/broken Korean UI strings (home cards, watch-sync dialog, live screen labels)
