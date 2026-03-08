@@ -1,15 +1,39 @@
 package com.basehaptic.mobile.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,7 +44,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.data.model.EventType
 import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.ui.theme.*
+import com.basehaptic.mobile.ui.theme.Blue500
+import com.basehaptic.mobile.ui.theme.Gray300
+import com.basehaptic.mobile.ui.theme.Gray400
+import com.basehaptic.mobile.ui.theme.Gray500
+import com.basehaptic.mobile.ui.theme.Gray600
+import com.basehaptic.mobile.ui.theme.Gray700
+import com.basehaptic.mobile.ui.theme.Gray900
+import com.basehaptic.mobile.ui.theme.Gray950
+import com.basehaptic.mobile.ui.theme.Green400
+import com.basehaptic.mobile.ui.theme.Green500
+import com.basehaptic.mobile.ui.theme.LocalTeamTheme
+import com.basehaptic.mobile.ui.theme.Orange500
+import com.basehaptic.mobile.ui.theme.Red400
+import com.basehaptic.mobile.ui.theme.Red500
+import com.basehaptic.mobile.ui.theme.Yellow400
+import com.basehaptic.mobile.ui.theme.Yellow500
 import com.basehaptic.mobile.wear.WearGameSyncManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -37,7 +76,7 @@ data class SimGameState(
     val baseFirst: Boolean = false,
     val baseSecond: Boolean = false,
     val baseThird: Boolean = false,
-    val pitcher: String = "양현종",
+    val pitcher: String = "김광현",
     val batter: String = "추신수"
 )
 
@@ -49,41 +88,87 @@ data class SimEvent(
 )
 
 private val simulationScenario = listOf(
-    SimEvent(EventType.BALL, "1회초 — 볼 원", { it.copy(ball = 1) }),
-    SimEvent(EventType.STRIKE, "스트라이크!", { it.copy(strike = 1) }),
-    SimEvent(EventType.BALL, "볼 투", { it.copy(ball = 2) }),
-    SimEvent(EventType.HIT, "추신수, 좌전 안타!", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김현수") }),
-    SimEvent(EventType.STRIKE, "김현수에게 스트라이크", { it.copy(strike = 1) }),
-    SimEvent(EventType.STRIKE, "연속 스트라이크!", { it.copy(strike = 2) }),
-    SimEvent(EventType.HOMERUN, "김현수! 투런 홈런!!", {
-        it.copy(
-            homeScore = it.homeScore + 2, ball = 0, strike = 0,
-            baseFirst = false, batter = "최정"
-        )
-    }, delayMs = 3000L),
-    SimEvent(EventType.SCORE, "SSG 2점 리드!", { it }),
+    SimEvent(EventType.BALL, "1회초 초구 볼", { it.copy(ball = 1) }),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }),
+    SimEvent(
+        EventType.HIT,
+        "추신수 좌전 안타",
+        { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김재환") }
+    ),
+    SimEvent(EventType.STRIKE, "김재환에게 스트라이크", { it.copy(strike = 1) }),
+    SimEvent(EventType.STRIKE, "연속 스트라이크", { it.copy(strike = 2) }),
+    SimEvent(
+        EventType.HOMERUN,
+        "김재환 투런 홈런",
+        {
+            it.copy(
+                homeScore = it.homeScore + 2,
+                ball = 0,
+                strike = 0,
+                baseFirst = false,
+                batter = "최정"
+            )
+        },
+        delayMs = 3000L
+    ),
+    SimEvent(EventType.SCORE, "SSG 2점 리드", { it }),
     SimEvent(EventType.BALL, "최정에게 볼", { it.copy(ball = 1) }),
-    SimEvent(EventType.OUT, "최정, 플라이 아웃", { it.copy(ball = 0, strike = 0, out = 1, batter = "한유섬") }),
-    SimEvent(EventType.STRIKE, "한유섬에게 스트라이크", { it.copy(strike = 1) }),
-    SimEvent(EventType.HIT, "한유섬, 중전 안타!", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "박성한") }),
-    SimEvent(EventType.OUT, "박성한, 삼진 아웃", { it.copy(ball = 0, strike = 0, out = 2, batter = "이재원") }),
-    SimEvent(EventType.DOUBLE_PLAY, "이재원, 2루수 앞 병살타 — 체인지!", {
-        it.copy(
-            ball = 0, strike = 0, out = 0,
-            baseFirst = false, baseSecond = false, baseThird = false,
-            inning = "1회말", pitcher = "김광현", batter = "나성범"
-        )
-    }),
+    SimEvent(
+        EventType.OUT,
+        "최정 뜬공 아웃",
+        { it.copy(ball = 0, strike = 0, out = 1, batter = "최지훈") }
+    ),
+    SimEvent(EventType.STRIKE, "최지훈에게 스트라이크", { it.copy(strike = 1) }),
+    SimEvent(
+        EventType.HIT,
+        "최지훈 중전 안타",
+        { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "박성한") }
+    ),
+    SimEvent(
+        EventType.OUT,
+        "박성한 1루 땅볼 아웃",
+        { it.copy(ball = 0, strike = 0, out = 2, batter = "이재원") }
+    ),
+    SimEvent(
+        EventType.DOUBLE_PLAY,
+        "이재원 2루수 병살타",
+        {
+            it.copy(
+                ball = 0,
+                strike = 0,
+                out = 0,
+                baseFirst = false,
+                baseSecond = false,
+                baseThird = false,
+                inning = "1회말",
+                pitcher = "김건우",
+                batter = "나성범"
+            )
+        }
+    ),
     SimEvent(EventType.STRIKE, "나성범에게 스트라이크", { it.copy(strike = 1) }),
     SimEvent(EventType.BALL, "볼", { it.copy(ball = 1) }),
-    SimEvent(EventType.HIT, "나성범, 우전 안타!", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김도영") }),
-    SimEvent(EventType.HOMERUN, "김도영!! 역전 투런 홈런!!!", {
-        it.copy(
-            awayScore = it.awayScore + 2, ball = 0, strike = 0,
-            baseFirst = false, batter = "최형우"
-        )
-    }, delayMs = 3000L),
-    SimEvent(EventType.SCORE, "KIA 역전! 2:2 → 2:3!", { it.copy(inning = "1회말") }),
+    SimEvent(
+        EventType.HIT,
+        "나성범 우전 안타",
+        { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김선빈") }
+    ),
+    SimEvent(
+        EventType.HOMERUN,
+        "김선빈 역전 투런 홈런",
+        {
+            it.copy(
+                awayScore = it.awayScore + 2,
+                ball = 0,
+                strike = 0,
+                baseFirst = false,
+                batter = "최형우"
+            )
+        },
+        delayMs = 3000L
+    ),
+    SimEvent(EventType.SCORE, "KIA 역전", { it.copy(inning = "1회말") })
 )
 
 @Composable
@@ -121,7 +206,7 @@ fun WatchTestScreen(
             baseThird = gameState.baseThird,
             pitcher = gameState.pitcher,
             batter = gameState.batter,
-            myTeam = selectedTeam.name,
+            myTeam = selectedTeam.teamName,
             eventType = eventType
         )
     }
@@ -155,7 +240,6 @@ fun WatchTestScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // -- Game State Card --
             item {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
@@ -198,14 +282,14 @@ fun WatchTestScreen(
                         )
                         Text(
                             if (bases.isEmpty()) "주자 없음" else "주자: ${bases.joinToString(", ")}",
-                            fontSize = 12.sp, color = Gray400
+                            fontSize = 12.sp,
+                            color = Gray400
                         )
-                        Text("투: ${gameState.pitcher}  타: ${gameState.batter}", fontSize = 12.sp, color = Gray400)
+                        Text("투수: ${gameState.pitcher}  타자: ${gameState.batter}", fontSize = 12.sp, color = Gray400)
                     }
                 }
             }
 
-            // -- Auto Simulation --
             item {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -223,7 +307,7 @@ fun WatchTestScreen(
                                         simIndex = 0
                                         gameState = SimGameState()
                                         logMessages = emptyList()
-                                        addLog("▶ 시뮬레이션 시작")
+                                        addLog("자동 시뮬레이션 시작")
 
                                         scope.launch {
                                             for (i in simulationScenario.indices) {
@@ -236,7 +320,7 @@ fun WatchTestScreen(
                                                 delay(event.delayMs)
                                             }
                                             isSimulating = false
-                                            addLog("■ 시뮬레이션 종료")
+                                            addLog("자동 시뮬레이션 종료")
                                         }
                                     }
                                 },
@@ -250,7 +334,7 @@ fun WatchTestScreen(
                             OutlinedButton(
                                 onClick = {
                                     isSimulating = false
-                                    addLog("■ 시뮬레이션 중단")
+                                    addLog("자동 시뮬레이션 중단")
                                 },
                                 enabled = isSimulating
                             ) {
@@ -272,7 +356,6 @@ fun WatchTestScreen(
                 }
             }
 
-            // -- Manual Event Buttons --
             item {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -291,10 +374,9 @@ fun WatchTestScreen(
                             Triple(EventType.TRIPLE_PLAY, "삼중살", Red400),
                             Triple(EventType.OUT, "아웃", Red500),
                             Triple(EventType.STRIKE, "스트라이크", Orange500),
-                            Triple(EventType.BALL, "볼", Blue500),
+                            Triple(EventType.BALL, "볼", Blue500)
                         )
 
-                        // 2 columns
                         events.chunked(2).forEach { row ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -303,7 +385,7 @@ fun WatchTestScreen(
                                 row.forEach { (type, label, color) ->
                                     Button(
                                         onClick = {
-                                            addLog("[${type}] 수동 전송")
+                                            addLog("[$type] 수동 전송")
                                             WearGameSyncManager.sendHapticEvent(context, type.name)
                                         },
                                         modifier = Modifier
@@ -315,7 +397,6 @@ fun WatchTestScreen(
                                         Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
-                                // fill empty space if odd count
                                 if (row.size < 2) {
                                     Spacer(Modifier.weight(1f))
                                 }
@@ -326,7 +407,6 @@ fun WatchTestScreen(
                 }
             }
 
-            // -- Log --
             item {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -346,10 +426,13 @@ fun WatchTestScreen(
                         }
                         if (logMessages.isEmpty()) {
                             Text(
-                                "이벤트를 전송하면 여기에 표시됩니다",
-                                fontSize = 13.sp, color = Gray600,
+                                "이벤트를 전송하면 여기에 표시됩니다.",
+                                fontSize = 13.sp,
+                                color = Gray600,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp)
                             )
                         } else {
                             logMessages.forEach { msg ->

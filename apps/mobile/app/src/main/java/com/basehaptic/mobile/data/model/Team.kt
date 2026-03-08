@@ -21,4 +21,3 @@ enum class Team(val teamName: String, val color: Color) {
         }
     }
 }
-

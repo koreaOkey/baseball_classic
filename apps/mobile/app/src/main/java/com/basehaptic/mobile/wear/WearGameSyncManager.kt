@@ -18,6 +18,7 @@ object WearGameSyncManager {
         awayTeam: String,
         homeScore: Int,
         awayScore: Int,
+        status: String = "LIVE",
         inning: String,
         ball: Int,
         strike: Int,
@@ -45,6 +46,7 @@ object WearGameSyncManager {
                     dataMap.putString("away_team", awayTeam)
                     dataMap.putInt("home_score", homeScore)
                     dataMap.putInt("away_score", awayScore)
+                    dataMap.putString("status", status)
                     dataMap.putString("inning", inning)
                     dataMap.putInt("ball", ball)
                     dataMap.putInt("strike", strike)

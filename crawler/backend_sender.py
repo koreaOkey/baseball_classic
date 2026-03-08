@@ -4,13 +4,98 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 
-LIVE_STATUS = {"LIVE", "ING", "PLAYING", "IN_PROGRESS"}
+LIVE_STATUS = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
 FINISHED_STATUS = {"FINISHED", "FINAL", "END", "RESULT"}
 
 
 def _contains_any(value: str, terms: List[str]) -> bool:
     normalized = (value or "").lower()
     return any(term.lower() in normalized for term in terms)
+
+
+def _video_review_result_is_out(text: str) -> bool:
+    compact = "".join((text or "").lower().split())
+
+    for marker in ("→", "->", "⇒", "=>"):
+        if marker not in compact:
+            continue
+        verdict = compact.rsplit(marker, 1)[1]
+        if "아웃" in verdict or "out" in verdict:
+            return True
+
+    return _contains_any(
+        compact,
+        [
+            "아웃으로번복",
+            "아웃으로정정",
+            "아웃판정유지",
+            "판정아웃",
+            "callstandsasout",
+            "callreversedtoout",
+            "reviewconfirmedout",
+        ],
+    )
+
+
+def _is_pitcher_change(option: Dict[str, Any], option_type: int, text: str) -> bool:
+    if option_type != 2:
+        return False
+
+    player_change = option.get("playerChange") or {}
+    if player_change:
+        live_text = (player_change.get("liveText") or text or "").strip()
+        in_player = player_change.get("inPlayer") or {}
+        out_player = player_change.get("outPlayer") or {}
+        in_pos = (in_player.get("playerPos") or "").strip()
+        out_pos = (out_player.get("playerPos") or "").strip()
+
+        if (
+            _contains_any(live_text, ["투수", "pitcher"])
+            or _contains_any(in_pos, ["투수", "pitcher"])
+            or _contains_any(out_pos, ["투수", "pitcher"])
+        ):
+            return True
+
+    return _contains_any(text, ["투수", "pitcher"]) and _contains_any(text, ["교체", "change"])
+
+
+def _is_half_inning_change(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return False
+
+    has_offense_token = _contains_any(
+        normalized,
+        [
+            "\uacf5\uaca9",
+            "attack",
+            "offense",
+            "batting",
+        ],
+    )
+    has_half_token = _contains_any(
+        normalized,
+        [
+            "\ud68c\ucd08",
+            "\ud68c\ub9d0",
+            "top",
+            "bottom",
+            "inning",
+            "\ucd08 \uacf5\uaca9",
+            "\ub9d0 \uacf5\uaca9",
+        ],
+    )
+    if has_offense_token and has_half_token:
+        return True
+
+    return _contains_any(
+        normalized,
+        [
+            "inning change",
+            "switch sides",
+            "change offense",
+        ],
+    )
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -38,6 +123,40 @@ def _normalize_status(raw: Any) -> str:
     if value in FINISHED_STATUS:
         return "FINISHED"
     return "SCHEDULED"
+
+
+def _extract_start_time(game_data: Dict[str, Any]) -> str | None:
+    raw = str(game_data.get("gameDateTime") or "").strip()
+    if not raw:
+        return None
+
+    try:
+        return datetime.fromisoformat(raw).strftime("%H:%M")
+    except ValueError:
+        if "T" in raw:
+            after_t = raw.split("T", 1)[1]
+            if len(after_t) >= 5 and after_t[2] == ":":
+                return after_t[:5]
+        if len(raw) >= 5 and raw[2] == ":":
+            return raw[:5]
+        return None
+
+
+def _extract_game_date(game_data: Dict[str, Any]) -> str | None:
+    raw = str(game_data.get("gameDateTime") or "").strip()
+    if raw:
+        try:
+            return datetime.fromisoformat(raw).date().isoformat()
+        except ValueError:
+            if len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+                return raw[:10]
+
+    game_date_raw = str(game_data.get("gameDate") or "").strip()
+    if len(game_date_raw) == 10 and game_date_raw[4] == "-" and game_date_raw[7] == "-":
+        return game_date_raw
+    if len(game_date_raw) == 8 and game_date_raw.isdigit():
+        return f"{game_date_raw[:4]}-{game_date_raw[4:6]}-{game_date_raw[6:8]}"
+    return None
 
 
 def _collect_player_map(relays_by_inning: Dict[int, Dict[str, Any]]) -> Dict[str, str]:
@@ -136,6 +255,9 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
             "video review",
         ],
     )
+    has_pitcher_change = _is_pitcher_change(option, option_type, text)
+    has_half_inning_change = _is_half_inning_change(text)
+    review_result_is_out = has_video_review and _video_review_result_is_out(text)
     has_walk = _contains_any(
         text,
         [
@@ -182,6 +304,12 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
         return "SAC_FLY_SCORE"
     if has_tag_up and has_out and not has_score:
         return "TAG_UP_ADVANCE"
+    if has_pitcher_change:
+        return "PITCHER_CHANGE"
+    if has_half_inning_change:
+        return "HALF_INNING_CHANGE"
+    if review_result_is_out:
+        return "OUT"
     if has_video_review:
         return "OTHER"
     if has_steal and (has_steal_fail or has_out):
@@ -282,18 +410,28 @@ def _extract_lineup_and_boxscore(
         "away": _extract_latest_entry(relays_by_inning, "awayEntry"),
     }
 
+    def identity(player: dict[str, Any]) -> str:
+        player_id = _pick_str(player, ["pcode", "playerId", "player_id"])
+        if player_id:
+            return f"id:{player_id}"
+        return f"name:{_pick_str(player, ['name', 'playerName'])}"
+
     for team_side in ("home", "away"):
         lineup_entry = lineup_entries.get(team_side) or {}
         entry = entry_entries.get(team_side) or {}
-        # Prefer lineup because it typically carries full per-player boxscore.
-        batters = lineup_entry.get("batter") or entry.get("batter") or []
-        pitchers = lineup_entry.get("pitcher") or entry.get("pitcher") or []
 
-        for index, batter in enumerate(batters):
+        lineup_batters = lineup_entry.get("batter") or []
+        entry_batters = entry.get("batter") or []
+        lineup_pitchers = lineup_entry.get("pitcher") or []
+        entry_pitchers = entry.get("pitcher") or []
+
+        seen_batter_ids: set[str] = set()
+        for index, batter in enumerate(lineup_batters):
             name = _pick_str(batter, ["name", "playerName"])
             if not name:
                 continue
 
+            seen_batter_ids.add(identity(batter))
             player_id = _pick_str(batter, ["pcode", "playerId", "player_id"]) or None
             batting_order_raw = _pick_int(
                 batter,
@@ -360,7 +498,55 @@ def _extract_lineup_and_boxscore(
                 }
             )
 
-        for index, pitcher in enumerate(pitchers):
+        for batter in entry_batters:
+            pid = identity(batter)
+            if pid in seen_batter_ids:
+                continue
+
+            name = _pick_str(batter, ["name", "playerName"])
+            if not name:
+                continue
+
+            seen_batter_ids.add(pid)
+            player_id = _pick_str(batter, ["pcode", "playerId", "player_id"]) or None
+            position_name = _pick_str(batter, ["posName", "positionName", "playerPosName", "pos"]) or None
+            batter_stats.append(
+                {
+                    "teamSide": team_side,
+                    "playerId": player_id,
+                    "playerName": name,
+                    "battingOrder": None,
+                    "primaryPosition": position_name,
+                    "isStarter": False,
+                    "plateAppearances": _pick_int(batter, ["pa", "plateAppearance", "plateAppearances"]),
+                    "atBats": _pick_int(batter, ["ab", "atBat", "atBats"]),
+                    "runs": _pick_int(batter, ["r", "run", "runs"]),
+                    "hits": _pick_int(batter, ["h", "hit", "hits"]),
+                    "rbi": _pick_int(batter, ["rbi"]),
+                    "doubles": _pick_int(batter, ["h2", "double", "doubles"]),
+                    "triples": _pick_int(batter, ["h3", "triple", "triples"]),
+                    "homeRuns": _pick_int(batter, ["hr", "homeRun", "homerun", "homeRuns"]),
+                    "walks": _pick_int(batter, ["bb", "walk", "walks", "baseOnBalls"]),
+                    "strikeouts": _pick_int(batter, ["so", "kk", "strikeout", "strikeouts"]),
+                    "stolenBases": _pick_int(batter, ["sb", "stolenBase", "stolenBases"]),
+                    "caughtStealing": _pick_int(batter, ["cs", "caughtStealing"]),
+                    "hitByPitch": _pick_int(batter, ["hbp", "hitByPitch"]),
+                    "sacBunts": _pick_int(batter, ["sh", "sacBunt", "sacBunts"]),
+                    "sacFlies": _pick_int(batter, ["sf", "sacFly", "sacFlies"]),
+                    "leftOnBase": _pick_int(batter, ["lob", "leftOnBase"]),
+                }
+            )
+
+        merged_pitchers: list[dict[str, Any]] = []
+        seen_pitcher_ids: set[str] = set()
+        for pitcher in list(lineup_pitchers) + list(entry_pitchers):
+            pid = identity(pitcher)
+            if pid in seen_pitcher_ids:
+                continue
+            seen_pitcher_ids.add(pid)
+            merged_pitchers.append(pitcher)
+
+        for index, pitcher in enumerate(merged_pitchers):
             name = _pick_str(pitcher, ["name", "playerName"])
             if not name:
                 continue
@@ -483,7 +669,7 @@ def build_snapshot_payload(
 
     batter_name = player_map.get(batter_id, "")
 
-    inning_text = (game_data.get("currentInning") or "").strip()
+    inning_text = (game_data.get("statusInfo") or game_data.get("currentInning") or "").strip()
     if not inning_text:
         if latest_inning is not None and latest_half is not None:
             inning_text = f"{latest_inning}{'B' if latest_half == 'bottom' else 'T'}"
@@ -492,12 +678,24 @@ def build_snapshot_payload(
 
     base_time = now - timedelta(milliseconds=len(options))
     events: List[Dict[str, Any]] = []
+    last_pitcher_name = pitcher_name
+    last_batter_name = batter_name
     for index, (inning, half, relay_no, option) in enumerate(options):
         seqno = _safe_int(option.get("seqno"), default=index)
         option_type = _safe_int(option.get("type"), default=-1)
         pitch_result = str(option.get("pitchResult") or "").strip().upper() or None
         event_time = base_time + timedelta(milliseconds=index)
         event_time_iso = event_time.isoformat().replace("+00:00", "Z")
+        current_state = option.get("currentGameState") or {}
+        option_pitcher_id = str(current_state.get("pitcher") or "").strip()
+        option_batter_id = str(current_state.get("batter") or "").strip()
+        option_pitcher_name = player_map.get(option_pitcher_id, "")
+        option_batter_name = player_map.get(option_batter_id, "")
+
+        if option_pitcher_name:
+            last_pitcher_name = option_pitcher_name
+        if option_batter_name:
+            last_batter_name = option_batter_name
 
         metadata: Dict[str, Any] = {
             "inning": inning,
@@ -506,8 +704,18 @@ def build_snapshot_payload(
             "seqno": seqno,
             "optionType": option_type,
         }
+        if half == "top":
+            metadata["offenseTeam"] = away_team
+            metadata["defenseTeam"] = home_team
+        elif half == "bottom":
+            metadata["offenseTeam"] = home_team
+            metadata["defenseTeam"] = away_team
         if pitch_result is not None:
             metadata["pitchResult"] = pitch_result
+        if last_pitcher_name:
+            metadata["pitcher"] = last_pitcher_name
+        if last_batter_name:
+            metadata["batter"] = last_batter_name
 
         events.append(
             {
@@ -529,8 +737,10 @@ def build_snapshot_payload(
         summary["homeHomeRuns"] = batter_summary["homeHomeRuns"]
         summary["awayHomeRuns"] = batter_summary["awayHomeRuns"]
 
-    home_score = _safe_int(latest_state.get("homeScore"), default=_safe_int(game_data.get("homeTeamScore")))
-    away_score = _safe_int(latest_state.get("awayScore"), default=_safe_int(game_data.get("awayTeamScore")))
+    home_score = _safe_int(game_data.get("homeTeamScore"), default=_safe_int(latest_state.get("homeScore")))
+    away_score = _safe_int(game_data.get("awayTeamScore"), default=_safe_int(latest_state.get("awayScore")))
+    start_time = _extract_start_time(game_data)
+    game_date = _extract_game_date(game_data)
 
     payload: Dict[str, Any] = {
         "homeTeam": home_team,
@@ -549,6 +759,8 @@ def build_snapshot_payload(
         },
         "pitcher": pitcher_name or None,
         "batter": batter_name or None,
+        "gameDate": game_date,
+        "startTime": start_time,
         "homeHits": summary["homeHits"],
         "awayHits": summary["awayHits"],
         "homeHomeRuns": summary["homeHomeRuns"],

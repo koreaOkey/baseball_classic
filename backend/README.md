@@ -94,6 +94,7 @@ Ingested `events[].type` values are normalized to the following set:
 - `SAC_FLY_SCORE`
 - `TAG_UP_ADVANCE`
 - `STEAL`
+- `PITCHER_CHANGE`
 - `OTHER`
 
 Current crawler-side rules:
@@ -104,6 +105,7 @@ Current crawler-side rules:
 - failed steal (`도루실패` with out) -> `OUT`
 - successful steal -> `STEAL`
 - `볼넷`/`고의사구` -> `WALK`
+- pitcher substitution (`투수 ... 교체`) -> `PITCHER_CHANGE`
 
 ## 제공 API
 - `GET /health`
@@ -168,3 +170,14 @@ pytest -q
 5. 워치 앱은 점수판/BSO/주자상황 UI 갱신 + 이벤트 타입별 햅틱 재생
 
 즉, 앱 화면 노출은 `backend -> mobile -> watch` 순서로 이어지고, 워치는 모바일 전달 데이터를 기준으로 동작합니다.
+
+## Recent Changes (2026-03-07)
+
+- Added `PITCHER_CHANGE` to backend event type normalization.
+- Added game-level `startTime` handling (`games.start_time`) and API exposure (`GameSummaryOut.startTime`).
+- Added date filter API usage for daily list (`GET /games?date=YYYY-MM-DD`).
+- Added immediate B/S normalization when out count is 3 (`ball=0`, `strike=0` in state response).
+- Added event-level `pitcher`/`batter` persistence and response mapping in `game_events`.
+- Added runtime schema guard for existing DBs:
+  - ensure `games.start_time`
+  - ensure `game_events.pitcher`, `game_events.batter`

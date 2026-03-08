@@ -75,7 +75,7 @@ python crawler/crawler.py --game-id 20250902WOSK02025 --base-url http://localhos
 
 When `backend_sender.py` builds ingest payloads, event types are emitted as:
 
-- `BALL`, `STRIKE`, `WALK`, `OUT`, `DOUBLE_PLAY`, `TRIPLE_PLAY`, `HIT`, `HOMERUN`, `SCORE`, `SAC_FLY_SCORE`, `TAG_UP_ADVANCE`, `STEAL`, `OTHER`
+- `BALL`, `STRIKE`, `WALK`, `OUT`, `DOUBLE_PLAY`, `TRIPLE_PLAY`, `HALF_INNING_CHANGE`, `HIT`, `HOMERUN`, `SCORE`, `SAC_FLY_SCORE`, `TAG_UP_ADVANCE`, `STEAL`, `PITCHER_CHANGE`, `OTHER`
 
 Key rules:
 
@@ -85,6 +85,50 @@ Key rules:
 - failed steal (`도루실패` + out) -> `OUT`
 - successful steal -> `STEAL`
 - `볼넷`/`고의사구` -> `WALK`
+- pitcher substitution (`투수 ... 교체`) -> `PITCHER_CHANGE`
+- offense switch text (`n회초/말 ... 공격`) -> `HALF_INNING_CHANGE`
+
+## Daily Schedule + Live Dispatcher
+
+`live_wbc_dispatcher.py` provides operations flow:
+- every day at `00:05` (KST): run schedule import (`backend/api/scripts/import_wbc_schedule.py`)
+- for today's games from backend:
+  - from each game's `startTime`
+  - check relay availability every minute
+  - stop checking after 10 minutes
+  - if relay is available, start `crawler.py --watch` for that game
+
+Run:
+```bash
+python crawler/live_wbc_dispatcher.py --backend-base-url http://localhost:8080 --backend-api-key dev-crawler-key
+```
+
+Optional tuning:
+```bash
+python crawler/live_wbc_dispatcher.py \
+  --backend-base-url http://localhost:8080 \
+  --backend-api-key dev-crawler-key \
+  --source-base-url https://api-gw.sports.naver.com \
+  --schedule-hour 0 \
+  --schedule-minute 5 \
+  --relay-check-minutes 10 \
+  --dispatch-interval-sec 15 \
+  --crawler-interval-sec 10
+```
+
+## Logs
+
+Default log folder is `log/`.
+
+- dispatcher log: `log/dispatcher_YYYYMMDD.log`
+- per-game crawler log (when launched): `log/live_crawler_<gameId>.log`
+- per-game excel snapshot (crawler output): `log/relay_<gameId>.xlsx`
+
+Quick check:
+```bash
+type log\\dispatcher_20260308.log
+type log\\live_crawler_<gameId>.log
+```
 
 ## 트러블슈팅
 - `Permission denied: data/baseball_live_output.xlsx` 에러가 나면:
@@ -93,3 +137,19 @@ Key rules:
 - `http://localhost:8010` 접속이 안 되면:
   - 먼저 `mock_baseball_relay_server.py`(`8011`)가 실행 중인지 확인
   - 그다음 `live_baseball_server.py`(`8010`)를 실행
+
+## Recent Changes (2026-03-07)
+
+- Added event classification improvements in `backend_sender.py`:
+  - video review verdict `OUT -> OUT` => `OUT`
+  - pitcher substitution detection => `PITCHER_CHANGE`
+- Snapshot payload now carries:
+  - `startTime`
+  - event metadata with `pitcher` and `batter`
+  - summary fields (`homeHits`, `awayHits`, `homeOutsTotal`, ...)
+- Added `live_wbc_dispatcher.py` for operations automation:
+  - run schedule import daily at `00:05` (KST)
+  - from each game's `startTime`, check relay availability every minute for 10 minutes
+  - start `crawler.py --watch` only when relay is available
+- `crawler.py` relay parsing now tolerates missing relay payloads safely.
+- Added crawler tests for video-review and pitcher-change classification.

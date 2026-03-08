@@ -1,4 +1,4 @@
-package com.basehaptic.mobile
+﻿package com.basehaptic.mobile
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -13,15 +13,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.ui.screens.*
 import com.basehaptic.mobile.ui.theme.BaseHapticTheme
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
+import com.basehaptic.mobile.wear.WearGameSyncManager
+import kotlin.math.max
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 
 private const val SHOW_COMMUNITY_TAB = false
 private const val SHOW_STORE_TAB = false
@@ -31,7 +41,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         
         setContent {
-            // selectedTeam 상태를 여기서 관리하여 테마에 전달
+            // ??猷⑦듃?먯꽌 ?좏깮 ? ?곹깭瑜?愿由ы븯怨??섏쐞 ?붾㈃?쇰줈 ?꾨떖
             var selectedTeam by remember { mutableStateOf(Team.DOOSAN) }
             var showOnboarding by remember { mutableStateOf(false) }
             
@@ -59,8 +69,119 @@ fun BaseHapticApp(
 ) {
     var currentView by remember { mutableStateOf<Screen>(Screen.Home) }
     var activeTheme by remember { mutableStateOf<ThemeData?>(null) }
-    var selectedGame by remember { mutableStateOf<String?>(null) }
+    var selectedGameId by remember { mutableStateOf<String?>(null) }
+    var syncedGameId by remember { mutableStateOf<String?>(null) }
+    var showWatchSyncDialog by remember { mutableStateOf(false) }
+    var pendingWatchSyncGameId by remember { mutableStateOf<String?>(null) }
     var purchasedThemes by remember { mutableStateOf<List<ThemeData>>(emptyList()) }
+    val context = LocalContext.current
+
+    LaunchedEffect(syncedGameId, selectedTeam) {
+        val targetGameId = syncedGameId
+        if (targetGameId.isNullOrBlank()) return@LaunchedEffect
+
+        var cursor = 0L
+        var localEvents: List<BackendGamesRepository.LiveEvent> = emptyList()
+        var lastWatchSignature = ""
+        var lastSentEventCursor = 0L
+        var realtimeWindowReady = false
+
+        while (currentCoroutineContext().isActive) {
+            val fetchedState = runCatching {
+                withContext(Dispatchers.IO) {
+                    BackendGamesRepository.fetchGameState(targetGameId)
+                }
+            }.getOrNull()
+
+            val fetchedEvents = runCatching {
+                withContext(Dispatchers.IO) {
+                    BackendGamesRepository.fetchGameEvents(gameId = targetGameId, after = cursor, limit = 200)
+                }
+            }.getOrNull()
+
+            val newItems = fetchedEvents?.items.orEmpty()
+            if (newItems.isNotEmpty()) {
+                if (realtimeWindowReady) {
+                    newItems
+                        .sortedBy { it.cursor }
+                        .filter { it.cursor > lastSentEventCursor }
+                        .forEach { event ->
+                            mapToWatchEventType(event.type)?.let { mapped ->
+                                WearGameSyncManager.sendHapticEvent(context, mapped)
+                            }
+                            lastSentEventCursor = max(lastSentEventCursor, event.cursor)
+                        }
+                }
+
+                localEvents = (newItems + localEvents)
+                    .distinctBy { it.cursor }
+                    .sortedByDescending { it.cursor }
+                    .take(80)
+            }
+
+            if (fetchedEvents != null) {
+                val nextCursor = fetchedEvents.nextCursor
+                    ?: newItems.maxOfOrNull { it.cursor }
+                    ?: cursor
+                cursor = max(cursor, nextCursor)
+
+                if (!realtimeWindowReady && fetchedEvents.nextCursor == null) {
+                    realtimeWindowReady = true
+                    lastSentEventCursor = max(
+                        lastSentEventCursor,
+                        localEvents.maxOfOrNull { it.cursor } ?: 0L
+                    )
+                }
+            }
+
+            val state = fetchedState
+            if (state != null) {
+                val latestEventType =
+                    localEvents.firstNotNullOfOrNull { mapToWatchEventType(it.type) }
+                        ?: mapToWatchEventType(state.lastEventType)
+                val signature = listOf(
+                    state.gameId,
+                    state.status.name,
+                    state.inning,
+                    state.homeScore.toString(),
+                    state.awayScore.toString(),
+                    state.ball.toString(),
+                    state.strike.toString(),
+                    state.out.toString(),
+                    state.baseFirst.toString(),
+                    state.baseSecond.toString(),
+                    state.baseThird.toString(),
+                    latestEventType.orEmpty()
+                ).joinToString("|")
+
+                if (signature != lastWatchSignature) {
+                    WearGameSyncManager.sendGameData(
+                        context = context,
+                        gameId = state.gameId,
+                        homeTeam = state.homeTeam,
+                        awayTeam = state.awayTeam,
+                        homeScore = state.homeScore,
+                        awayScore = state.awayScore,
+                        status = state.status.name,
+                        inning = state.inning,
+                        ball = state.ball,
+                        strike = state.strike,
+                        out = state.out,
+                        baseFirst = state.baseFirst,
+                        baseSecond = state.baseSecond,
+                        baseThird = state.baseThird,
+                        pitcher = state.pitcher,
+                        batter = state.batter,
+                        myTeam = resolveMyTeamName(selectedTeam, state),
+                        eventType = null
+                    )
+                    lastWatchSignature = signature
+                }
+            }
+
+            delay(2500)
+        }
+    }
 
     if (showOnboarding) {
         OnboardingScreen(
@@ -88,15 +209,21 @@ fun BaseHapticApp(
                     Screen.Home -> HomeScreen(
                         selectedTeam = selectedTeam,
                         activeTheme = activeTheme,
-                        onSelectGame = { gameId ->
-                            selectedGame = gameId
-                            currentView = Screen.LiveGame
+                        syncedGameId = syncedGameId,
+                        onSelectGame = { game ->
+                            selectedGameId = game.id
+                            if (game.status == GameStatus.LIVE && syncedGameId != game.id) {
+                                pendingWatchSyncGameId = game.id
+                                showWatchSyncDialog = true
+                            } else {
+                                currentView = Screen.LiveGame
+                            }
                         }
                     )
                     Screen.LiveGame -> LiveGameScreen(
-                        selectedTeam = selectedTeam,
                         activeTheme = activeTheme,
-                        gameId = selectedGame,
+                        gameId = selectedGameId,
+                        syncedGameId = syncedGameId,
                         onBack = { currentView = Screen.Home }
                     )
                     Screen.Community -> CommunityScreen(
@@ -115,7 +242,7 @@ fun BaseHapticApp(
                     Screen.Settings -> SettingsScreen(
                         selectedTeam = selectedTeam,
                         onChangeTeam = { team ->
-                            onTeamChanged(team) // 팀 변경 시 테마도 즉시 변경됨!
+                            onTeamChanged(team) // ? 蹂寃?利됱떆 ???뚮쭏?먮룄 諛섏쁺
                         },
                         purchasedThemes = purchasedThemes,
                         activeTheme = activeTheme,
@@ -128,6 +255,41 @@ fun BaseHapticApp(
                     )
                 }
             }
+        }
+
+        if (showWatchSyncDialog && pendingWatchSyncGameId != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    showWatchSyncDialog = false
+                    pendingWatchSyncGameId = null
+                    currentView = Screen.LiveGame
+                },
+                title = { Text(text = "워치 동기화") },
+                text = { Text(text = "워치로 경기 관람하시겠습니까?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            syncedGameId = pendingWatchSyncGameId
+                            showWatchSyncDialog = false
+                            pendingWatchSyncGameId = null
+                            currentView = Screen.LiveGame
+                        }
+                    ) {
+                        Text("예")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showWatchSyncDialog = false
+                            pendingWatchSyncGameId = null
+                            currentView = Screen.LiveGame
+                        }
+                    ) {
+                        Text("아니오")
+                    }
+                }
+            )
         }
     }
 }
@@ -222,4 +384,33 @@ sealed class Screen {
     object Store : Screen()
     object Settings : Screen()
     object WatchTest : Screen()
+}
+
+private fun mapToWatchEventType(type: String?): String? {
+    val normalized = type?.uppercase() ?: return null
+    return when (normalized) {
+        "BALL",
+        "STRIKE",
+        "OUT",
+        "DOUBLE_PLAY",
+        "TRIPLE_PLAY",
+        "HIT",
+        "HOMERUN",
+        "SCORE" -> normalized
+        "SAC_FLY_SCORE" -> "SCORE"
+        "TAG_UP_ADVANCE" -> "OUT"
+        else -> null
+    }
+}
+
+private fun resolveMyTeamName(
+    selectedTeam: Team,
+    state: BackendGamesRepository.LiveGameState
+): String {
+    return when {
+        selectedTeam == state.homeTeamId -> state.homeTeam
+        selectedTeam == state.awayTeamId -> state.awayTeam
+        selectedTeam != Team.NONE -> selectedTeam.teamName
+        else -> state.homeTeam
+    }
 }

@@ -19,24 +19,25 @@ os.environ["BASEHAPTIC_CORS_ALLOW_ORIGINS"] = "*"
 
 from app.main import app  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
-from app.models import Game, GameBatterStat, GameLineupSlot, GameNote, GamePitcherStat  # noqa: E402
+from app.models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat  # noqa: E402
 from app.services import _event_out_count, normalize_event_type  # noqa: E402
 
 
 def sample_snapshot() -> dict:
     return {
-        "homeTeam": "두산",
+        "homeTeam": "Doosan",
         "awayTeam": "LG",
         "status": "LIVE",
-        "inning": "7회말",
+        "inning": "7B",
         "homeScore": 3,
         "awayScore": 2,
         "ball": 2,
         "strike": 1,
         "out": 1,
         "bases": {"first": True, "second": False, "third": True},
-        "pitcher": "김택연",
-        "batter": "문보경",
+        "pitcher": "Kim Starter",
+        "batter": "Moon Batter",
+        "startTime": "18:30",
         "homeHits": 7,
         "awayHits": 6,
         "homeHomeRuns": 1,
@@ -48,17 +49,17 @@ def sample_snapshot() -> dict:
             {
                 "sourceEventId": "relay-001",
                 "type": "HIT",
-                "description": "문보경, 좌전 안타",
+                "description": "single to left",
                 "occurredAt": "2026-02-17T08:59:20Z",
-                "hapticPattern": "○●○●",
+                "hapticPattern": "HIT-HIT",
                 "metadata": {"inning": 7, "half": "bottom"},
             },
             {
                 "sourceEventId": "relay-002",
                 "type": "SCORE",
-                "description": "3루 주자 홈인, 1점 추가",
+                "description": "runner scored from third",
                 "occurredAt": "2026-02-17T08:59:44Z",
-                "hapticPattern": "●○●○●",
+                "hapticPattern": "SCORE-SCORE",
                 "metadata": {"inning": 7, "half": "bottom"},
             },
         ],
@@ -67,9 +68,9 @@ def sample_snapshot() -> dict:
                 "teamSide": "home",
                 "battingOrder": 1,
                 "playerId": "H001",
-                "playerName": "김현수",
+                "playerName": "Home One",
                 "positionCode": "LF",
-                "positionName": "좌익수",
+                "positionName": "Left Field",
                 "isStarter": True,
                 "isActive": True,
             },
@@ -77,9 +78,9 @@ def sample_snapshot() -> dict:
                 "teamSide": "away",
                 "battingOrder": 1,
                 "playerId": "A001",
-                "playerName": "문보경",
+                "playerName": "Away One",
                 "positionCode": "1B",
-                "positionName": "1루수",
+                "positionName": "First Base",
                 "isStarter": True,
                 "isActive": True,
             },
@@ -88,9 +89,9 @@ def sample_snapshot() -> dict:
             {
                 "teamSide": "home",
                 "playerId": "H001",
-                "playerName": "김현수",
+                "playerName": "Home One",
                 "battingOrder": 1,
-                "primaryPosition": "좌익수",
+                "primaryPosition": "Left Field",
                 "isStarter": True,
                 "plateAppearances": 4,
                 "atBats": 3,
@@ -102,9 +103,9 @@ def sample_snapshot() -> dict:
             {
                 "teamSide": "away",
                 "playerId": "A001",
-                "playerName": "문보경",
+                "playerName": "Away One",
                 "battingOrder": 1,
-                "primaryPosition": "1루수",
+                "primaryPosition": "First Base",
                 "isStarter": True,
                 "plateAppearances": 4,
                 "atBats": 4,
@@ -118,7 +119,7 @@ def sample_snapshot() -> dict:
                 "teamSide": "home",
                 "appearanceOrder": 1,
                 "playerId": "P001",
-                "playerName": "김택연",
+                "playerName": "Kim Starter",
                 "isStarter": True,
                 "outsRecorded": 15,
                 "hitsAllowed": 4,
@@ -132,7 +133,7 @@ def sample_snapshot() -> dict:
                 "teamSide": "away",
                 "appearanceOrder": 1,
                 "playerId": "P101",
-                "playerName": "임찬규",
+                "playerName": "Park Starter",
                 "isStarter": True,
                 "outsRecorded": 12,
                 "hitsAllowed": 6,
@@ -147,9 +148,9 @@ def sample_snapshot() -> dict:
             {
                 "teamSide": "home",
                 "noteType": "GAME_HIGHLIGHT",
-                "noteTitle": "결승타",
-                "noteBody": "김현수 7회 결승타",
-                "inning": "7회말",
+                "noteTitle": "highlight",
+                "noteBody": "home team scored",
+                "inning": "7B",
                 "sourceEventId": "relay-002",
             }
         ],
@@ -174,7 +175,9 @@ def test_ingest_and_query_flow() -> None:
 
         games = client.get("/games")
         assert games.status_code == 200
-        assert len(games.json()) == 1
+        games_body = games.json()
+        assert len(games_body) == 1
+        assert games_body[0]["startTime"] == "18:30"
 
         state = client.get("/games/20250501SSSK02025/state")
         assert state.status_code == 200
@@ -188,6 +191,8 @@ def test_ingest_and_query_flow() -> None:
         events_body = events.json()["items"]
         assert len(events_body) == 2
         assert events_body[0]["type"] == "HIT"
+        assert events_body[0]["pitcher"] == sample_snapshot()["pitcher"]
+        assert events_body[0]["batter"] == sample_snapshot()["batter"]
         assert events_body[1]["type"] == "SCORE"
 
         last_cursor = events_body[-1]["cursor"]
@@ -203,6 +208,16 @@ def test_ingest_and_query_flow() -> None:
             assert game.home_home_runs == 1
             assert game.home_outs_total == 18
             assert game.last_event_type == "SCORE"
+            assert game.start_time == "18:30"
+            first_event = (
+                db.query(GameEvent)
+                .filter(GameEvent.game_id == "20250501SSSK02025")
+                .order_by(GameEvent.cursor.asc())
+                .first()
+            )
+            assert first_event is not None
+            assert first_event.pitcher == sample_snapshot()["pitcher"]
+            assert first_event.batter == sample_snapshot()["batter"]
 
             assert db.query(GameLineupSlot).filter(GameLineupSlot.game_id == "20250501SSSK02025").count() == 2
             assert db.query(GameBatterStat).filter(GameBatterStat.game_id == "20250501SSSK02025").count() == 2
@@ -274,3 +289,228 @@ def test_event_type_double_triple_play_mapping() -> None:
     assert triple_play.value == "TRIPLE_PLAY"
     assert _event_out_count(double_play, "") == 2
     assert _event_out_count(triple_play, "") == 3
+
+
+def test_event_type_pitcher_change_mapping() -> None:
+    pitcher_change = normalize_event_type("PITCHER_CHANGE")
+
+    assert pitcher_change.value == "PITCHER_CHANGE"
+    assert _event_out_count(pitcher_change, "") == 0
+
+
+def test_event_type_half_inning_change_mapping() -> None:
+    half_inning_change = normalize_event_type("HALF_INNING_CHANGE")
+    offense_change = normalize_event_type("OFFENSE_CHANGE")
+
+    assert half_inning_change.value == "HALF_INNING_CHANGE"
+    assert offense_change.value == "HALF_INNING_CHANGE"
+    assert _event_out_count(half_inning_change, "") == 0
+
+
+def test_game_state_resets_ball_strike_when_three_outs() -> None:
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["ball"] = 2
+        payload["strike"] = 2
+        payload["out"] = 3
+
+        ingest = client.post(
+            "/internal/crawler/games/20250501SSSK02025/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        state = client.get("/games/20250501SSSK02025/state")
+        assert state.status_code == 200
+        body = state.json()
+        assert body["out"] == 3
+        assert body["ball"] == 0
+        assert body["strike"] == 0
+
+
+def test_event_pitcher_batter_prefers_metadata_values() -> None:
+    with TestClient(app) as client:
+        game_id = "20250501SSSK02025_META"
+        payload = sample_snapshot()
+        payload["pitcher"] = "fallback pitcher"
+        payload["batter"] = "fallback batter"
+        payload["events"][0]["metadata"] = {
+            "inning": 7,
+            "half": "bottom",
+            "pitcher": "event pitcher",
+            "batter": "event batter",
+        }
+
+        ingest = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        events = client.get(f"/games/{game_id}/events")
+        assert events.status_code == 200
+        first = events.json()["items"][0]
+        assert first["pitcher"] == "event pitcher"
+        assert first["batter"] == "event batter"
+
+
+def test_duplicate_events_backfill_missing_pitcher_batter() -> None:
+    with TestClient(app) as client:
+        game_id = "20250501SSSK02025_BACKFILL"
+        payload = sample_snapshot()
+        payload["pitcher"] = None
+        payload["batter"] = None
+        for event in payload["events"]:
+            event["metadata"] = {"inning": 7, "half": "bottom"}
+
+        first = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert first.status_code == 200
+
+        backfill_payload = sample_snapshot()
+        backfill_payload["pitcher"] = "backfill pitcher"
+        backfill_payload["batter"] = "backfill batter"
+
+        second = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=backfill_payload,
+        )
+        assert second.status_code == 200
+        assert second.json()["insertedEvents"] == 0
+        assert second.json()["duplicateEvents"] == 2
+
+        events = client.get(f"/games/{game_id}/events")
+        assert events.status_code == 200
+        first_event = events.json()["items"][0]
+        assert first_event["pitcher"] == "backfill pitcher"
+        assert first_event["batter"] == "backfill batter"
+
+
+def test_duplicate_events_upgrade_other_to_half_inning_change() -> None:
+    with TestClient(app) as client:
+        game_id = "20250501SSSK02025_TYPEUP"
+        first_payload = sample_snapshot()
+        first_payload["events"] = [
+            {
+                "sourceEventId": "relay-half-001",
+                "type": "OTHER",
+                "description": "6th inning top, Japan offense",
+                "occurredAt": "2026-02-17T08:59:20Z",
+                "metadata": {"inning": 6, "half": "top"},
+            }
+        ]
+
+        first = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=first_payload,
+        )
+        assert first.status_code == 200
+        assert first.json()["insertedEvents"] == 1
+
+        second_payload = sample_snapshot()
+        second_payload["events"] = [
+            {
+                "sourceEventId": "relay-half-001",
+                "type": "HALF_INNING_CHANGE",
+                "description": "6th inning top, Japan offense",
+                "occurredAt": "2026-02-17T08:59:20Z",
+                "metadata": {
+                    "inning": 6,
+                    "half": "top",
+                    "offenseTeam": "Japan",
+                    "defenseTeam": "Korea",
+                },
+            }
+        ]
+
+        second = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=second_payload,
+        )
+        assert second.status_code == 200
+        assert second.json()["insertedEvents"] == 0
+        assert second.json()["duplicateEvents"] == 1
+
+        events = client.get(f"/games/{game_id}/events")
+        assert events.status_code == 200
+        item = events.json()["items"][0]
+        assert item["type"] == "HALF_INNING_CHANGE"
+
+        with SessionLocal() as db:
+            stored = (
+                db.query(GameEvent)
+                .filter(
+                    GameEvent.game_id == game_id,
+                    GameEvent.source_event_id == "relay-half-001",
+                )
+                .first()
+            )
+            assert stored is not None
+            assert stored.event_type == "HALF_INNING_CHANGE"
+            assert stored.payload_json is not None
+            assert stored.payload_json.get("offenseTeam") == "Japan"
+            assert stored.payload_json.get("defenseTeam") == "Korea"
+
+
+def test_list_games_filters_by_date() -> None:
+    with TestClient(app) as client:
+        payload_a = sample_snapshot()
+        payload_a["startTime"] = "12:10"
+        payload_b = sample_snapshot()
+        payload_b["startTime"] = "19:40"
+
+        first = client.post(
+            "/internal/crawler/games/20260217TEST0001/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload_a,
+        )
+        assert first.status_code == 200
+
+        second = client.post(
+            "/internal/crawler/games/20260218TEST0001/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload_b,
+        )
+        assert second.status_code == 200
+
+        games = client.get("/games?date=2026-02-17")
+        assert games.status_code == 200
+        ids = [item["id"] for item in games.json()]
+        assert "20260217TEST0001" in ids
+        assert "20260218TEST0001" not in ids
+
+
+def test_list_games_filters_by_game_date_column() -> None:
+    with TestClient(app) as client:
+        payload_a = sample_snapshot()
+        payload_a["gameDate"] = "2026-03-08"
+        payload_b = sample_snapshot()
+        payload_b["gameDate"] = "2026-03-09"
+
+        first = client.post(
+            "/internal/crawler/games/WBCGAMEA001/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload_a,
+        )
+        assert first.status_code == 200
+
+        second = client.post(
+            "/internal/crawler/games/WBCGAMEB001/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload_b,
+        )
+        assert second.status_code == 200
+
+        games = client.get("/games?date=2026-03-08")
+        assert games.status_code == 200
+        ids = [item["id"] for item in games.json()]
+        assert "WBCGAMEA001" in ids
+        assert "WBCGAMEB001" not in ids

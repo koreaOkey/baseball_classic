@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -46,6 +47,9 @@ EVENT_MAP = {
     "TRIPLE_PLAY": EventType.TRIPLE_PLAY,
     "TRIPLEPLAY": EventType.TRIPLE_PLAY,
     "TP": EventType.TRIPLE_PLAY,
+    "HALF_INNING_CHANGE": EventType.HALF_INNING_CHANGE,
+    "HALFINNINGCHANGE": EventType.HALF_INNING_CHANGE,
+    "OFFENSE_CHANGE": EventType.HALF_INNING_CHANGE,
     "HIT": EventType.HIT,
     "HOMERUN": EventType.HOMERUN,
     "HOME_RUN": EventType.HOMERUN,
@@ -56,6 +60,9 @@ EVENT_MAP = {
     "TAG_UP": EventType.TAG_UP_ADVANCE,
     "STEAL": EventType.STEAL,
     "STOLEN_BASE": EventType.STEAL,
+    "PITCHER_CHANGE": EventType.PITCHER_CHANGE,
+    "PITCHING_CHANGE": EventType.PITCHER_CHANGE,
+    "PITCHER_SUBSTITUTION": EventType.PITCHER_CHANGE,
 }
 
 
@@ -123,6 +130,77 @@ def _compute_event_summary(payload: CrawlerSnapshotRequest) -> dict[str, int]:
     return summary
 
 
+def _normalize_start_time(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+
+    text = raw.strip()
+    if len(text) < 5 or text[2] != ":":
+        return None
+
+    hh_raw = text[:2]
+    mm_raw = text[3:5]
+    if not (hh_raw.isdigit() and mm_raw.isdigit()):
+        return None
+
+    hh = int(hh_raw)
+    mm = int(mm_raw)
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return None
+
+    return f"{hh:02d}:{mm:02d}"
+
+
+def _normalize_game_date(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+
+    text = raw.strip()
+    if len(text) != 10:
+        return None
+    if text[4] != "-" or text[7] != "-":
+        return None
+
+    try:
+        parsed = datetime.strptime(text, "%Y-%m-%d")
+    except ValueError:
+        return None
+
+    return parsed.date().isoformat()
+
+
+def _game_date_from_game_id(game_id: str) -> str | None:
+    if len(game_id) < 8:
+        return None
+
+    # Case 1) Standard format: YYYYMMDD...
+    if game_id[:8].isdigit():
+        raw = game_id[:8]
+        try:
+            parsed = datetime.strptime(raw, "%Y%m%d")
+            if 2000 <= parsed.year <= 2100:
+                return parsed.date().isoformat()
+        except ValueError:
+            pass
+
+    # Case 2) WBC-like format: ####MMDD....YYYY (e.g. 88880308AUJP02026)
+    # - month/day at positions [4:8]
+    # - season year in trailing 4 digits
+    mmdd = game_id[4:8] if len(game_id) >= 8 else ""
+    tail_year = game_id[-4:] if len(game_id) >= 4 else ""
+    if mmdd.isdigit() and tail_year.isdigit():
+        month = int(mmdd[:2])
+        day = int(mmdd[2:])
+        year = int(tail_year)
+        if 2000 <= year <= 2100:
+            try:
+                parsed = datetime(year=year, month=month, day=day)
+                return parsed.date().isoformat()
+            except ValueError:
+                return None
+    return None
+
+
 def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> Game:
     game = db.get(Game, game_id)
     if game is None:
@@ -143,6 +221,16 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
     game.base_third = payload.bases.third
     game.pitcher = payload.pitcher
     game.batter = payload.batter
+    normalized_game_date = _game_date_from_game_id(game_id)
+    if normalized_game_date is None:
+        normalized_game_date = _normalize_game_date(payload.gameDate)
+    if normalized_game_date is not None:
+        game.game_date = normalized_game_date
+    start_time = _normalize_start_time(payload.startTime)
+    if start_time is None and normalize_status(payload.status) == GameStatus.SCHEDULED:
+        start_time = _normalize_start_time(payload.inning)
+    if start_time is not None:
+        game.start_time = start_time
     game.observed_at = ensure_utc(payload.observedAt) if payload.observedAt else game.observed_at
 
     computed = _compute_event_summary(payload) if payload.events else {}
@@ -172,23 +260,44 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
     return game
 
 
+def _metadata_player_name(metadata: dict[str, Any] | None, keys: tuple[str, ...]) -> str | None:
+    if metadata is None:
+        return None
+
+    for key in keys:
+        value = metadata.get(key)
+        if isinstance(value, str):
+            normalized = value.strip()
+            if normalized:
+                return normalized
+        if isinstance(value, dict):
+            for nested_key in ("name", "playerName", "player_name"):
+                nested_value = value.get(nested_key)
+                if isinstance(nested_value, str):
+                    normalized = nested_value.strip()
+                    if normalized:
+                        return normalized
+    return None
+
+
 def insert_events(
     db: Session,
     game_id: str,
     events: list[CrawlerEventIn],
+    fallback_pitcher: str | None = None,
+    fallback_batter: str | None = None,
 ) -> tuple[list[GameEvent], int]:
     if not events:
         return [], 0
 
     source_ids = [item.sourceEventId for item in events]
-    existing_source_ids = set(
-        db.execute(
-            select(GameEvent.source_event_id).where(
-                GameEvent.game_id == game_id,
-                GameEvent.source_event_id.in_(source_ids),
-            )
-        ).scalars()
-    )
+    existing_events = db.execute(
+        select(GameEvent).where(
+            GameEvent.game_id == game_id,
+            GameEvent.source_event_id.in_(source_ids),
+        )
+    ).scalars().all()
+    existing_by_source = {event.source_event_id: event for event in existing_events}
 
     inserted: list[GameEvent] = []
     duplicate_count = 0
@@ -196,7 +305,33 @@ def insert_events(
 
     for event_in in sorted(events, key=lambda item: ensure_utc(item.occurredAt)):
         source_id = event_in.sourceEventId
-        if source_id in existing_source_ids or source_id in seen_in_batch:
+        normalized_event_type = normalize_event_type(event_in.type).value
+        event_pitcher = _metadata_player_name(
+            event_in.metadata,
+            ("pitcher", "pitcherName", "currentPitcher", "current_pitcher"),
+        ) or fallback_pitcher
+        event_batter = _metadata_player_name(
+            event_in.metadata,
+            ("batter", "batterName", "currentBatter", "current_batter"),
+        ) or fallback_batter
+        existing_event = existing_by_source.get(source_id)
+        if existing_event is not None:
+            duplicate_count += 1
+            if existing_event.event_type == EventType.OTHER.value and normalized_event_type != EventType.OTHER.value:
+                existing_event.event_type = normalized_event_type
+            if event_in.description and existing_event.description != event_in.description:
+                existing_event.description = event_in.description
+            if existing_event.pitcher is None and event_pitcher is not None:
+                existing_event.pitcher = event_pitcher
+            if existing_event.batter is None and event_batter is not None:
+                existing_event.batter = event_batter
+            if event_in.metadata:
+                existing_metadata = existing_event.payload_json if isinstance(existing_event.payload_json, dict) else {}
+                merged_metadata = {**existing_metadata, **event_in.metadata}
+                existing_event.payload_json = merged_metadata
+            continue
+
+        if source_id in seen_in_batch:
             duplicate_count += 1
             continue
 
@@ -204,9 +339,11 @@ def insert_events(
         event = GameEvent(
             game_id=game_id,
             source_event_id=source_id,
-            event_type=normalize_event_type(event_in.type).value,
+            event_type=normalized_event_type,
             description=event_in.description,
             event_time=ensure_utc(event_in.occurredAt),
+            pitcher=event_pitcher,
+            batter=event_batter,
             haptic_pattern=event_in.hapticPattern,
             payload_json=event_in.metadata,
         )
@@ -361,7 +498,11 @@ def _notes_from_snapshot(db: Session, game_id: str, notes: list[CrawlerGameNoteI
 
 def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> None:
     if payload.lineupSlots:
+        # Break FK dependency first: batter stats reference lineup slots by (game_id, team_side, batting_order).
+        db.execute(delete(GameBatterStat).where(GameBatterStat.game_id == game_id))
         _lineup_from_snapshot(db, game_id, payload.lineupSlots)
+        # Ensure lineup rows exist before inserting batter stats that reference them.
+        db.flush()
     if payload.batterStats:
         _batter_stats_from_snapshot(db, game_id, payload.batterStats)
     if payload.pitcherStats:
@@ -380,6 +521,8 @@ def to_game_summary(game: Game) -> GameSummaryOut:
         awayScore=game.away_score,
         inning=game.inning,
         status=normalize_status(game.status),
+        startTime=game.start_time,
+        observedAt=game.observed_at,
         updatedAt=game.updated_at,
     )
 
@@ -391,14 +534,23 @@ def to_event_out(event: GameEvent) -> GameEventOut:
         type=normalize_event_type(event.event_type),
         description=event.description,
         time=event.event_time,
+        pitcher=event.pitcher,
+        batter=event.batter,
         hapticPattern=event.haptic_pattern,
     )
+
+
+def _normalize_bso_for_state(ball: int, strike: int, out: int) -> tuple[int, int]:
+    if out >= 3:
+        return 0, 0
+    return ball, strike
 
 
 def build_game_state(db: Session, game: Game) -> GameStateOut:
     latest_event = db.execute(
         select(GameEvent).where(GameEvent.game_id == game.id).order_by(GameEvent.cursor.desc()).limit(1)
     ).scalar_one_or_none()
+    ball, strike = _normalize_bso_for_state(game.ball_count, game.strike_count, game.out_count)
 
     return GameStateOut(
         gameId=game.id,
@@ -408,8 +560,8 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         awayScore=game.away_score,
         inning=game.inning,
         status=normalize_status(game.status),
-        ball=game.ball_count,
-        strike=game.strike_count,
+        ball=ball,
+        strike=strike,
         out=game.out_count,
         bases=BaseStatus(first=game.base_first, second=game.base_second, third=game.base_third),
         pitcher=game.pitcher,

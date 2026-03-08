@@ -112,7 +112,7 @@ fun ThemeStoreScreen(
 
         item {
             Text(
-                text = "목업 데이터: 실제 결제/다운로드는 연결되지 않았습니다.",
+                text = "목업 데이터는 실제 결제/다운로드와 연결되어 있지 않습니다.",
                 fontSize = 12.sp,
                 color = Gray400,
                 textAlign = TextAlign.Center,
@@ -253,7 +253,7 @@ private fun getMockThemeStoreItems(selectedTeam: Team): List<ThemeStoreItem> {
             theme = ThemeData(
                 id = "theme_home_crowd",
                 teamId = selectedTeam,
-                name = "${selectedTeam.teamName} 홈구장 클래식",
+                name = "${selectedTeam.teamName} 홈 크라우드",
                 colors = ThemeColors(
                     primary = selectedTeam.color,
                     secondary = Gray800,
@@ -262,7 +262,7 @@ private fun getMockThemeStoreItems(selectedTeam: Team): List<ThemeStoreItem> {
                 animation = "crowd_wave"
             ),
             price = 1200,
-            subtitle = "응원팀 중심 하이라이트 + 응원석 무드"
+            subtitle = "응원단 중앙 하이라이트 + 응원가 무드"
         ),
         ThemeStoreItem(
             theme = ThemeData(
@@ -277,7 +277,7 @@ private fun getMockThemeStoreItems(selectedTeam: Team): List<ThemeStoreItem> {
                 animation = "retro_scanline"
             ),
             price = 900,
-            subtitle = "복고 감성 컬러 + 아날로그 점광 효과"
+            subtitle = "복고 감성 컬러 + 아날로그 스캔 효과"
         ),
         ThemeStoreItem(
             theme = ThemeData(
@@ -292,7 +292,7 @@ private fun getMockThemeStoreItems(selectedTeam: Team): List<ThemeStoreItem> {
                 animation = "ice_spark"
             ),
             price = 1000,
-            subtitle = "시원한 네온 라인 + 타격 이펙트 강조"
+            subtitle = "시원한 톤의 라인 + 타격 이펙트 강조"
         ),
         ThemeStoreItem(
             theme = ThemeData(
@@ -307,7 +307,7 @@ private fun getMockThemeStoreItems(selectedTeam: Team): List<ThemeStoreItem> {
                 animation = "mono_pulse"
             ),
             price = 700,
-            subtitle = "미니멀 대비 + 점수판 집중형 UI"
+            subtitle = "미니멀 대비 + 점수 집중형 UI"
         )
     )
 }

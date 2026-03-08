@@ -28,27 +28,28 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import androidx.compose.material3.MaterialTheme as M3Theme
 
 @Composable
 fun HomeScreen(
     selectedTeam: Team,
     activeTheme: ThemeData?,
-    onSelectGame: (String) -> Unit
+    syncedGameId: String?,
+    onSelectGame: (Game) -> Unit
 ) {
-    val fallbackGames = remember(selectedTeam) {
-        sortHomeGames(getMockGames(selectedTeam))
-    }
-    val games by produceState(initialValue = fallbackGames, selectedTeam) {
-        value = fallbackGames
+    val games by produceState(initialValue = emptyList<Game>(), selectedTeam) {
         while (currentCoroutineContext().isActive) {
             val backendGames = runCatching {
-                BackendGamesRepository.fetchGames(selectedTeam)
+                withContext(Dispatchers.IO) {
+                    BackendGamesRepository.fetchGames(selectedTeam)
+                }
             }.getOrNull()
-            if (!backendGames.isNullOrEmpty()) {
+            if (backendGames != null) {
                 value = sortHomeGames(backendGames)
             }
             delay(5000)
@@ -93,7 +94,7 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = "?섏쓽 ?묒썝?",
+                                    text = "BaseHaptic Live",
                                     fontSize = 12.sp,
                                     color = Color.White.copy(alpha = 0.7f)
                                 )
@@ -142,14 +143,14 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = LocalDate.now().format(
-                                        DateTimeFormatter.ofPattern("M??d??(E)", Locale.KOREAN)
+                                        DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN)
                                     ),
                                     fontSize = 14.sp,
                                     color = Color.White
                                 )
                             }
                             Text(
-                                text = "오늘의 경기 ${games.count { it.status != GameStatus.FINISHED }}개",
+                                text = "\uC624\uB298\uC758 \uACBD\uAE30 ${games.count { it.status != GameStatus.FINISHED }}\uAC1C",
                                 fontSize = 14.sp,
                                 color = Color.White.copy(alpha = 0.8f),
                                 modifier = Modifier.padding(top = 4.dp)
@@ -171,20 +172,20 @@ fun HomeScreen(
             ) {
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    value = "5승",
-                    label = "理쒓렐 10寃쎄린",
+                    value = "5\uC2B9",
+                    label = "\uCD5C\uADFC 10\uACBD\uAE30",
                     valueColor = Green500
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    value = "2위",
-                    label = "?꾩옱 ?쒖쐞",
+                    value = "2\uC704",
+                    label = "\uD604\uC7AC \uC21C\uC704",
                     valueColor = Yellow500
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     value = "0.625",
-                    label = "?밸쪧",
+                    label = "\uC2B9\uB960",
                     valueColor = Blue500
                 )
             }
@@ -200,14 +201,14 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "?ㅻ뒛??寃쎄린",
+                    text = "\uC624\uB298\uC758 \uACBD\uAE30",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
                 TextButton(onClick = { }) {
                     Text(
-                        text = "?꾩껜蹂닿린",
+                        text = "\uC804\uCCB4\uBCF4\uAE30",
                         fontSize = 14.sp,
                         color = teamTheme.primary
                     )
@@ -217,10 +218,12 @@ fun HomeScreen(
 
         // Games List
         items(games) { game ->
+            val isWatchSynced = game.status == GameStatus.LIVE && syncedGameId == game.id
             GameCard(
                 game = game,
                 primaryColor = primaryColor,
-                onClick = { onSelectGame(game.id) }
+                isWatchSynced = isWatchSynced,
+                onClick = { onSelectGame(game) }
             )
         }
 
@@ -228,7 +231,7 @@ fun HomeScreen(
         item {
             Spacer(modifier = Modifier.height(32.dp))
             Text(
-                text = "?ㅺ??ㅻ뒗 寃쎄린",
+                text = "\uB2E4\uAC00\uC624\uB294 \uACBD\uAE30",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
@@ -253,13 +256,13 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "2??5??(紐? 18:30",
+                            text = "3월 8일 18:30",
                             fontSize = 14.sp,
                             color = Gray400
                         )
                         TextButton(onClick = { }) {
                             Text(
-                                text = "罹섎┛??異붽?",
+                                text = "응원 메시지 보내기",
                                 fontSize = 14.sp,
                                 color = teamTheme.primary
                             )
@@ -287,7 +290,7 @@ fun HomeScreen(
                                 modifier = Modifier.padding(horizontal = 8.dp)
                             )
                             Text(
-                                text = "KT ?꾩쫰",
+                                text = "KT \uC704\uC988",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White
@@ -302,7 +305,7 @@ fun HomeScreen(
                     }
 
                     Text(
-                        text = "인천SSG랜더스필드",
+                        text = "\uC778\uCC9C SSG \uB79C\uB354\uC2A4\uD544\uB4DC",
                         fontSize = 12.sp,
                         color = Gray500,
                         modifier = Modifier.padding(top = 8.dp)
@@ -354,6 +357,7 @@ private fun StatCard(
 private fun GameCard(
     game: Game,
     primaryColor: Color,
+    isWatchSynced: Boolean,
     onClick: () -> Unit
 ) {
     val backgroundColor = if (game.isMyTeam) {
@@ -369,17 +373,17 @@ private fun GameCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = backgroundColor,
-        tonalElevation = if (game.isMyTeam) 2.dp else 1.dp
+        tonalElevation = if (isWatchSynced || game.isMyTeam) 2.dp else 1.dp
     ) {
         Box {
-            if (game.isMyTeam) {
+            if (isWatchSynced || game.isMyTeam) {
                 // Gradient border effect
                 Box(
                     modifier = Modifier
                         .matchParentSize()
                         .border(
-                            width = 1.dp,
-                            color = Yellow500.copy(alpha = 0.5f),
+                            width = if (isWatchSynced) 2.dp else 1.dp,
+                            color = if (isWatchSynced) Yellow500 else Yellow500.copy(alpha = 0.5f),
                             shape = RoundedCornerShape(16.dp)
                         )
                 )
@@ -416,6 +420,23 @@ private fun GameCard(
                                     fontSize = 14.sp,
                                     color = if (game.isMyTeam) Color.White.copy(alpha = 0.9f) else Gray400
                                 )
+                                if (!game.time.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "경기 시작 시간 ${game.time}",
+                                        fontSize = 12.sp,
+                                        color = Gray400
+                                    )
+                                }
+                                if (isWatchSynced) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "(워치에서 중계중)",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Yellow400
+                                    )
+                                }
                             }
                             GameStatus.SCHEDULED -> {
                                 Icon(
@@ -426,14 +447,15 @@ private fun GameCard(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = game.time ?: "",
+                                    text = if (game.time.isNullOrBlank()) "" else "경기 시작 시간 ${game.time}",
                                     fontSize = 14.sp,
                                     color = Gray400
                                 )
                             }
                             GameStatus.FINISHED -> {
+                                val startTimeText = game.time ?: "--:--"
                                 Text(
-                                    text = game.inning,
+                                    text = "\uACBD\uAE30 \uC2DC\uC791 \uC2DC\uAC04 $startTimeText \uACBD\uAE30 \uC885\uB8CC",
                                     fontSize = 14.sp,
                                     color = Gray500
                                 )
@@ -460,7 +482,7 @@ private fun GameCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "?섏쓽 ?",
+                                    text = "응원팀",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -493,30 +515,6 @@ private fun GameCard(
                         isWinner = game.status == GameStatus.FINISHED && game.homeScore > game.awayScore,
                         isMyTeam = game.isMyTeam
                     )
-                }
-
-                // Watch Status
-                if (game.status == GameStatus.LIVE && game.isMyTeam) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Divider(
-                        color = Yellow500.copy(alpha = 0.3f),
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Whatshot,
-                            contentDescription = null,
-                            tint = Yellow400,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "\uC6CC\uCE58\uC5D0\uC11C \uC2E4\uC2DC\uAC04 \uD584\uD2F1 \uC911\uACC4 \uC911",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Yellow400
-                        )
-                    }
                 }
             }
         }
@@ -553,7 +551,7 @@ private fun TeamScoreRow(
                 )
                 if (pitcher != null) {
                     Text(
-                        text = "?좊컻: ${pitcher.name}, ${pitcher.winStreak}?곗듅, ${pitcher.record.wins}/${pitcher.record.draws}/${pitcher.record.losses}",
+                        text = "선발투수 ${pitcher.name}, 최근 ${pitcher.record.wins}/${pitcher.record.draws}/${pitcher.record.losses}",
                         fontSize = 12.sp,
                         color = if (isWinner) Gray400 else Gray600,
                         modifier = Modifier.padding(top = 2.dp)
@@ -572,12 +570,23 @@ private fun TeamScoreRow(
 }
 
 private fun sortHomeGames(games: List<Game>): List<Game> {
-    return games.sortedWith(
-        compareByDescending<Game> { it.isMyTeam }
-            .thenBy { statusPriority(it.status) }
-            .thenBy { scheduledTime(it) }
-            .thenBy { it.id }
-    )
+    return games.sortedWith { a, b ->
+        val myTeamCompare = b.isMyTeam.compareTo(a.isMyTeam)
+        if (myTeamCompare != 0) return@sortedWith myTeamCompare
+
+        val statusCompare = statusPriority(a.status).compareTo(statusPriority(b.status))
+        if (statusCompare != 0) return@sortedWith statusCompare
+
+        if (a.status == GameStatus.FINISHED && b.status == GameStatus.FINISHED) {
+            val finishedTimeCompare = gameStartTime(a).compareTo(gameStartTime(b))
+            if (finishedTimeCompare != 0) return@sortedWith finishedTimeCompare
+        }
+
+        val genericTimeCompare = gameStartTime(a).compareTo(gameStartTime(b))
+        if (genericTimeCompare != 0) return@sortedWith genericTimeCompare
+
+        a.id.compareTo(b.id)
+    }
 }
 
 private fun statusPriority(status: GameStatus): Int {
@@ -588,11 +597,12 @@ private fun statusPriority(status: GameStatus): Int {
     }
 }
 
-private fun scheduledTime(game: Game): LocalTime {
-    if (game.status != GameStatus.SCHEDULED) return LocalTime.MIN
+private fun gameStartTime(game: Game): LocalTime {
+    val raw = game.time.orEmpty()
+    if (raw.isBlank()) return LocalTime.MAX
     val formatter = DateTimeFormatter.ofPattern("HH:mm")
     return runCatching {
-        LocalTime.parse(game.time.orEmpty(), formatter)
+        LocalTime.parse(raw, formatter)
     }.getOrElse { LocalTime.MAX }
 }
 
@@ -607,11 +617,11 @@ private fun getMockGames(selectedTeam: Team): List<Game> {
             awayTeamId = Team.KIWOOM,
             homeScore = 3,
             awayScore = 2,
-            inning = "7회말",
+            inning = "7회초",
             status = GameStatus.LIVE,
             isMyTeam = isSsgOrKiwoomFan,
-            homePitcher = Pitcher("김민수", 3, PitcherRecord(10, 2, 5)),
-            awayPitcher = Pitcher("박준용", 2, PitcherRecord(8, 1, 6))
+            homePitcher = Pitcher("Kim Minsu", 3, PitcherRecord(10, 2, 5)),
+            awayPitcher = Pitcher("Park Chulwoo", 2, PitcherRecord(8, 1, 6))
         ),
         Game(
             id = "2",
@@ -621,10 +631,10 @@ private fun getMockGames(selectedTeam: Team): List<Game> {
             awayTeamId = Team.KIA,
             homeScore = 5,
             awayScore = 4,
-            inning = "9회초",
+            inning = "9회말",
             status = GameStatus.LIVE,
-            homePitcher = Pitcher("이상훈", 4, PitcherRecord(12, 0, 4)),
-            awayPitcher = Pitcher("김태호", 1, PitcherRecord(7, 2, 7))
+            homePitcher = Pitcher("Lee Sanghoon", 4, PitcherRecord(12, 0, 4)),
+            awayPitcher = Pitcher("Kim Junho", 1, PitcherRecord(7, 2, 7))
         ),
         Game(
             id = "3",
@@ -637,8 +647,8 @@ private fun getMockGames(selectedTeam: Team): List<Game> {
             inning = "",
             status = GameStatus.SCHEDULED,
             time = "18:30",
-            homePitcher = Pitcher("정상호", 2, PitcherRecord(9, 1, 5)),
-            awayPitcher = Pitcher("최도윤", 3, PitcherRecord(10, 2, 5))
+            homePitcher = Pitcher("Jung Sangwoo", 2, PitcherRecord(9, 1, 5)),
+            awayPitcher = Pitcher("Choi Doyoon", 3, PitcherRecord(10, 2, 5))
         ),
         Game(
             id = "4",
@@ -648,10 +658,10 @@ private fun getMockGames(selectedTeam: Team): List<Game> {
             awayTeamId = Team.LOTTE,
             homeScore = 8,
             awayScore = 3,
-            inning = "최종",
+            inning = "FINAL",
             status = GameStatus.FINISHED,
-            homePitcher = Pitcher("김성호", 1, PitcherRecord(7, 2, 7)),
-            awayPitcher = Pitcher("박정수", 2, PitcherRecord(8, 1, 6))
+            homePitcher = Pitcher("Kim Taekho", 1, PitcherRecord(7, 2, 7)),
+            awayPitcher = Pitcher("Park Jungwoo", 2, PitcherRecord(8, 1, 6))
         )
     )
 }

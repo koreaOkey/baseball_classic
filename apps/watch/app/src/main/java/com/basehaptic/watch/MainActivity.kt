@@ -175,6 +175,9 @@ private fun readGameDataFromPrefs(context: Context): GameData? {
     )
     val gameId = prefs.getString(DataLayerListenerService.KEY_GAME_ID, "") ?: ""
     if (gameId.isBlank()) return null
+    val inning = prefs.getString(DataLayerListenerService.KEY_INNING, "") ?: ""
+    val status = prefs.getString(DataLayerListenerService.KEY_STATUS, "") ?: ""
+    val isFinished = status.equals("FINISHED", ignoreCase = true) || inning.contains("경기 종료")
 
     return GameData(
         gameId = gameId,
@@ -182,8 +185,8 @@ private fun readGameDataFromPrefs(context: Context): GameData? {
         awayTeam = prefs.getString(DataLayerListenerService.KEY_AWAY_TEAM, "") ?: "",
         homeScore = prefs.getInt(DataLayerListenerService.KEY_HOME_SCORE, 0),
         awayScore = prefs.getInt(DataLayerListenerService.KEY_AWAY_SCORE, 0),
-        inning = prefs.getString(DataLayerListenerService.KEY_INNING, "") ?: "",
-        isLive = true,
+        inning = inning,
+        isLive = !isFinished,
         ballCount = prefs.getInt(DataLayerListenerService.KEY_BALL, 0),
         strikeCount = prefs.getInt(DataLayerListenerService.KEY_STRIKE, 0),
         outCount = prefs.getInt(DataLayerListenerService.KEY_OUT, 0),

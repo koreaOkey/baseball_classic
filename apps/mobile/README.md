@@ -201,3 +201,21 @@ app/src/main/res/
 6. 커스텀 테마 상점 구현
    - 팀별 프리미엄 테마 (마스코트 애니메이션 포함)
    - 테마 구매 및 적용 시스템
+
+## Recent Changes (2026-03-07)
+
+- Home feed now loads only today's games:
+  - `BackendGamesRepository.fetchGames()` calls `GET /games?date=<LocalDate.now()>`.
+- Card status text updated:
+  - LIVE card shows inning and start time
+  - FINISHED card shows `game start time HH:MM game finished`
+- Card sorting updated:
+  - finished games are ordered by start time
+  - status priority remains `LIVE -> FINISHED -> SCHEDULED`
+- Watch sync interaction updated:
+  - tapping unsynced LIVE card opens sync confirm dialog
+  - sync starts only on confirm
+  - tapping already synced LIVE card opens game directly without confirm
+- Synced LIVE card visual state:
+  - highlighted border
+  - synced badge text near inning/status row

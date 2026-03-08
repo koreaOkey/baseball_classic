@@ -160,3 +160,13 @@ app/src/main/res/
 3. **배터리 최적화**
    - Doze 모드 대응
    - 워치 센서 데이터 최소화
+
+## Recent Changes (2026-03-07)
+
+- Added finished-state normalization in `DataLayerListenerService`:
+  - if status is finished/final, inning label is forced to `game finished`
+  - out count is normalized to `0`
+  - ball/strike are normalized to `0`
+- Added half-inning boundary normalization:
+  - when `out >= 3`, ball/strike are normalized to `0` immediately.
+- `MainActivity` now treats `game finished` inning/status as non-live state for screen rendering.

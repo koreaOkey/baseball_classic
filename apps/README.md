@@ -20,3 +20,12 @@
 ./gradlew :apps:watch:app:assembleDebug
 ```
 
+
+## Recent Changes (2026-03-07)
+
+- Mobile home list now shows only today's games via backend date filter (`/games?date=today`).
+- Game cards now show start-time information and finished-state text consistently.
+- Live-card watch sync UX was tightened:
+  - synced live card is highlighted
+  - sync approval dialog is shown only for unsynced live cards
+- Watch app finished-state display now normalizes inning/count presentation for end-of-game.

@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 import secrets
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -56,12 +56,24 @@ def health() -> dict:
 @app.get("/games", response_model=list[GameSummaryOut])
 def list_games(
     status: GameStatus | None = None,
+    game_date: date | None = Query(default=None, alias="date"),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> list[GameSummaryOut]:
-    query = select(Game).order_by(Game.updated_at.desc()).limit(limit)
+    query = select(Game)
     if status is not None:
         query = query.where(Game.status == status.value)
+    if game_date is not None:
+        iso_date = game_date.isoformat()
+        prefix = game_date.strftime("%Y%m%d")
+        query = query.where(
+            or_(
+                Game.game_date == iso_date,
+                and_(Game.game_date.is_(None), Game.id.like(f"{prefix}%")),
+            )
+        )
+
+    query = query.order_by(Game.updated_at.desc()).limit(limit)
 
     games = db.execute(query).scalars().all()
     return [to_game_summary(game) for game in games]
@@ -120,7 +132,13 @@ async def ingest_crawler_snapshot(
         raise HTTPException(status_code=401, detail="invalid crawler api key")
 
     game = upsert_game_from_snapshot(db, game_id=game_id, payload=payload)
-    inserted_events, duplicate_count = insert_events(db, game_id=game_id, events=payload.events)
+    inserted_events, duplicate_count = insert_events(
+        db,
+        game_id=game_id,
+        events=payload.events,
+        fallback_pitcher=payload.pitcher,
+        fallback_batter=payload.batter,
+    )
     sync_snapshot_details(db, game_id=game_id, payload=payload)
     db.commit()
     db.refresh(game)

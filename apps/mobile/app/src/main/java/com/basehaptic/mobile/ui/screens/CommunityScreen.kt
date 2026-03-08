@@ -1,9 +1,14 @@
 package com.basehaptic.mobile.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,6 +22,7 @@ import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.ui.theme.Gray400
 import com.basehaptic.mobile.ui.theme.Gray950
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun CommunityScreen(
     selectedTeam: Team,
@@ -52,7 +58,7 @@ fun CommunityScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Text(
-                    text = "실시간 응원 채팅 및 퀵 응원 이모티콘 기능이 곧 추가됩니다.",
+                    text = "실시간 응원 채팅과 친구 응원 공유 기능은 곧 추가됩니다.",
                     fontSize = 14.sp,
                     color = Gray400,
                     textAlign = TextAlign.Center
@@ -61,4 +67,3 @@ fun CommunityScreen(
         }
     }
 }
-

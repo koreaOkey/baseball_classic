@@ -1,4 +1,5 @@
 ﻿import argparse
+import re
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -22,6 +23,16 @@ def fetch_json(url: str) -> Dict[str, Any]:
     )
     response.raise_for_status()
     return response.json()
+
+def _current_inning_number(game_data: Dict[str, Any]) -> int:
+    text = str(game_data.get("statusInfo") or game_data.get("currentInning") or "").strip()
+    match = re.search(r"(\d+)", text)
+    if match:
+        try:
+            return max(1, int(match.group(1)))
+        except ValueError:
+            pass
+    return 9
 
 
 def build_player_map(relay_data: Dict[str, Any]) -> Dict[str, str]:
@@ -115,9 +126,10 @@ def _is_pinch_hitter_change(live_text: str, in_pos: str, out_pos: str) -> bool:
 
 
 def parse_relay(
-    relay_data: Dict[str, Any],
+    relay_data: Optional[Dict[str, Any]],
     teams: Dict[str, str],
 ) -> Dict[str, List[Dict[str, Any]]]:
+    relay_data = relay_data or {}
     player_map = build_player_map(relay_data)
     text_relays = relay_data.get("textRelays") or []
 
@@ -351,9 +363,10 @@ def crawl_once_detailed(
         "pitcher_changes": [],
     }
 
-    for inning in range(1, 10):
+    inning_limit = max(9, _current_inning_number(game_data))
+    for inning in range(1, inning_limit + 1):
         relay_url = f"{base_url}/schedule/games/{game_id}/relay?inning={inning}"
-        relay_data = fetch_json(relay_url).get("result", {}).get("textRelayData", {})
+        relay_data = fetch_json(relay_url).get("result", {}).get("textRelayData") or {}
         relays_by_inning[inning] = relay_data
         parsed = parse_relay(relay_data, teams)
         combined["at_bats"].extend(parsed["at_bats"])
@@ -377,31 +390,80 @@ def run(
     backend_base_url: Optional[str] = None,
     backend_api_key: Optional[str] = None,
     backend_timeout: float = 10.0,
+    backend_retries: int = 3,
 ) -> None:
     while True:
-        game_data, relays_by_inning, combined = crawl_once_detailed(game_id=game_id, base_url=base_url)
+        try:
+            game_data, relays_by_inning, combined = crawl_once_detailed(game_id=game_id, base_url=base_url)
+        except requests.RequestException as exc:
+            print(f"[crawl][warn] gameId={game_id} fetch_failed error={exc}", flush=True)
+            if not watch:
+                raise
+            time.sleep(interval)
+            continue
+
         target = output_path or build_output_name(game_id)
         save_excel(target, game_data, combined)
+        status = (game_data.get("statusCode") or "").upper()
+        inning = (game_data.get("statusInfo") or game_data.get("currentInning") or "-").strip()
+        away_score = game_data.get("awayTeamScore")
+        home_score = game_data.get("homeTeamScore")
+        relay_count = sum(len((relay.get("textRelays") or [])) for relay in relays_by_inning.values())
+        print(
+            f"[crawl] at={datetime.now().isoformat(timespec='seconds')} "
+            f"gameId={game_id} status={status or '-'} inning={inning or '-'} "
+            f"score={away_score}:{home_score} relayFrames={relay_count} "
+            f"atBats={len(combined['at_bats'])} pitcherChanges={len(combined['pitcher_changes'])}",
+            flush=True,
+        )
+        print(f"[output] excel={target}", flush=True)
 
         if backend_base_url:
             if not backend_api_key:
                 raise ValueError("--backend-api-key is required when --backend-base-url is set")
             snapshot = build_snapshot_payload(game_data=game_data, relays_by_inning=relays_by_inning)
-            result = post_snapshot_to_backend(
-                backend_base_url=backend_base_url,
-                api_key=backend_api_key,
-                game_id=game_id,
-                payload=snapshot,
-                timeout=backend_timeout,
-            )
             print(
-                f"[backend] gameId={result.get('gameId')} "
-                f"received={result.get('receivedEvents')} "
-                f"inserted={result.get('insertedEvents')} "
-                f"duplicates={result.get('duplicateEvents')}"
+                f"[snapshot] gameDate={snapshot.get('gameDate')} startTime={snapshot.get('startTime')} "
+                f"events={len(snapshot.get('events') or [])}",
+                flush=True,
             )
+            try:
+                last_error: requests.RequestException | None = None
+                result: Dict[str, Any] | None = None
+                attempts = max(1, backend_retries)
+                for attempt in range(1, attempts + 1):
+                    try:
+                        result = post_snapshot_to_backend(
+                            backend_base_url=backend_base_url,
+                            api_key=backend_api_key,
+                            game_id=game_id,
+                            payload=snapshot,
+                            timeout=backend_timeout,
+                        )
+                        break
+                    except requests.RequestException as exc:
+                        last_error = exc
+                        print(
+                            f"[backend][warn] gameId={game_id} ingest_retry={attempt}/{attempts} error={exc}",
+                            flush=True,
+                        )
+                        if attempt < attempts:
+                            time.sleep(min(5, attempt))
+                if result is None:
+                    raise last_error or requests.RequestException("backend ingest failed")
 
-        status = (game_data.get("statusCode") or "").upper()
+                print(
+                    f"[backend] gameId={result.get('gameId')} "
+                    f"received={result.get('receivedEvents')} "
+                    f"inserted={result.get('insertedEvents')} "
+                    f"duplicates={result.get('duplicateEvents')}",
+                    flush=True,
+                )
+            except requests.RequestException as exc:
+                print(f"[backend][error] gameId={game_id} ingest_failed error={exc}", flush=True)
+                if not watch:
+                    raise
+
         if not watch or status in FINAL_STATUS:
             break
         time.sleep(interval)
@@ -433,6 +495,12 @@ def main() -> None:
         default=10.0,
         help="backend ingest request timeout in seconds",
     )
+    parser.add_argument(
+        "--backend-retries",
+        type=int,
+        default=3,
+        help="number of backend ingest retries per poll",
+    )
 
     args = parser.parse_args()
     if args.backend_base_url and not args.backend_api_key:
@@ -447,8 +515,10 @@ def main() -> None:
         backend_base_url=args.backend_base_url.rstrip("/") if args.backend_base_url else None,
         backend_api_key=args.backend_api_key,
         backend_timeout=args.backend_timeout,
+        backend_retries=args.backend_retries,
     )
 
 
 if __name__ == "__main__":
     main()
+

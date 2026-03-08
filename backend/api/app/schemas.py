@@ -18,12 +18,14 @@ class EventType(str, Enum):
     OUT = "OUT"
     DOUBLE_PLAY = "DOUBLE_PLAY"
     TRIPLE_PLAY = "TRIPLE_PLAY"
+    HALF_INNING_CHANGE = "HALF_INNING_CHANGE"
     HIT = "HIT"
     HOMERUN = "HOMERUN"
     SCORE = "SCORE"
     SAC_FLY_SCORE = "SAC_FLY_SCORE"
     TAG_UP_ADVANCE = "TAG_UP_ADVANCE"
     STEAL = "STEAL"
+    PITCHER_CHANGE = "PITCHER_CHANGE"
     OTHER = "OTHER"
 
 
@@ -113,6 +115,7 @@ class CrawlerGameNoteIn(BaseModel):
 class CrawlerSnapshotRequest(BaseModel):
     homeTeam: str = Field(min_length=1, max_length=64)
     awayTeam: str = Field(min_length=1, max_length=64)
+    gameDate: str | None = Field(default=None, min_length=10, max_length=10)
     status: str = Field(min_length=1, max_length=32)
     inning: str = Field(min_length=1, max_length=32)
     homeScore: int = Field(ge=0, le=99)
@@ -123,6 +126,7 @@ class CrawlerSnapshotRequest(BaseModel):
     bases: BaseStatus = Field(default_factory=BaseStatus)
     pitcher: str | None = Field(default=None, max_length=128)
     batter: str | None = Field(default=None, max_length=128)
+    startTime: str | None = Field(default=None, min_length=4, max_length=5)
     homeHits: int | None = Field(default=None, ge=0)
     awayHits: int | None = Field(default=None, ge=0)
     homeHomeRuns: int | None = Field(default=None, ge=0)
@@ -154,6 +158,8 @@ class GameSummaryOut(BaseModel):
     awayScore: int
     inning: str
     status: GameStatus
+    startTime: str | None = None
+    observedAt: datetime | None = None
     updatedAt: datetime
 
 
@@ -182,6 +188,8 @@ class GameEventOut(BaseModel):
     type: EventType
     description: str
     time: datetime
+    pitcher: str | None = None
+    batter: str | None = None
     hapticPattern: str | None = None
 
 

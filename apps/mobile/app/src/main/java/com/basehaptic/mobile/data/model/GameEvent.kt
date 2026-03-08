@@ -21,14 +21,14 @@ enum class EventType {
     companion object {
         fun getHapticPattern(type: EventType): String {
             return when (type) {
-                BALL -> "○"
-                STRIKE -> "●●"
-                OUT -> "●●●"
-                DOUBLE_PLAY -> "●● ○●"
-                TRIPLE_PLAY -> "●● ●● ●"
-                HIT -> "○●○●"
-                HOMERUN -> "●●●●●"
-                SCORE -> "●○●○●"
+                BALL -> "tap"
+                STRIKE -> "tap-tap"
+                OUT -> "tap-tap-tap"
+                DOUBLE_PLAY -> "tap-pause-tap"
+                TRIPLE_PLAY -> "tap-pause-tap-pause-tap"
+                HIT -> "double-tap"
+                HOMERUN -> "triple-tap"
+                SCORE -> "tap-long"
             }
         }
     }

@@ -25,3 +25,9 @@ backend/api/.env
 # OS
 .DS_Store
 Thumbs.db
+
+# Runtime logs and pid files
+*.log
+*.err
+*.pid
+log/

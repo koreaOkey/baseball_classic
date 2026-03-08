@@ -30,6 +30,7 @@ class Game(Base):
     __tablename__ = "games"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    game_date: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
     home_team: Mapped[str] = mapped_column(String(64), nullable=False)
     away_team: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="SCHEDULED")
@@ -47,6 +48,7 @@ class Game(Base):
 
     pitcher: Mapped[str | None] = mapped_column(String(128), nullable=True)
     batter: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    start_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
     observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     home_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -98,6 +100,8 @@ class GameEvent(Base):
     event_type: Mapped[str] = mapped_column(String(24), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    pitcher: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    batter: Mapped[str | None] = mapped_column(String(128), nullable=True)
     haptic_pattern: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

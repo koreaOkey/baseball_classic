@@ -186,7 +186,7 @@ fun LiveGameScreen(
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
                 },
-            color = Color.White.copy(alpha = 0.45f),
+            color = Color.Transparent,
             fontSize = 7.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 1.2.sp

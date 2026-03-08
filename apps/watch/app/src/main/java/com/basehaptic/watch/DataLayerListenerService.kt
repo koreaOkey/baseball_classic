@@ -33,6 +33,7 @@ class DataLayerListenerService : WearableListenerService() {
         const val KEY_AWAY_TEAM = "away_team"
         const val KEY_HOME_SCORE = "home_score"
         const val KEY_AWAY_SCORE = "away_score"
+        const val KEY_STATUS = "status"
         const val KEY_INNING = "inning"
         const val KEY_BALL = "ball"
         const val KEY_STRIKE = "strike"
@@ -68,6 +69,16 @@ class DataLayerListenerService : WearableListenerService() {
      */
     private fun handleGameData(item: DataItem) {
         val dataMap = DataMapItem.fromDataItem(item).dataMap
+        val rawStatus = dataMap.getString(KEY_STATUS, "")
+        val incomingInning = dataMap.getString(KEY_INNING, "") ?: ""
+        val isFinished = rawStatus.equals("FINISHED", ignoreCase = true) ||
+            incomingInning.contains("FINAL", ignoreCase = true) ||
+            incomingInning.contains("경기 종료")
+        val rawOut = dataMap.getInt(KEY_OUT, 0).coerceAtLeast(0)
+        val normalizedOut = if (isFinished) 0 else rawOut
+        val normalizedBall = if (isFinished || rawOut >= 3) 0 else dataMap.getInt(KEY_BALL, 0).coerceAtLeast(0)
+        val normalizedStrike = if (isFinished || rawOut >= 3) 0 else dataMap.getInt(KEY_STRIKE, 0).coerceAtLeast(0)
+        val normalizedInning = if (isFinished) "경기 종료" else incomingInning
 
         getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -76,10 +87,11 @@ class DataLayerListenerService : WearableListenerService() {
             .putString(KEY_AWAY_TEAM, dataMap.getString(KEY_AWAY_TEAM, ""))
             .putInt(KEY_HOME_SCORE, dataMap.getInt(KEY_HOME_SCORE, 0))
             .putInt(KEY_AWAY_SCORE, dataMap.getInt(KEY_AWAY_SCORE, 0))
-            .putString(KEY_INNING, dataMap.getString(KEY_INNING, ""))
-            .putInt(KEY_BALL, dataMap.getInt(KEY_BALL, 0))
-            .putInt(KEY_STRIKE, dataMap.getInt(KEY_STRIKE, 0))
-            .putInt(KEY_OUT, dataMap.getInt(KEY_OUT, 0))
+            .putString(KEY_STATUS, rawStatus)
+            .putString(KEY_INNING, normalizedInning)
+            .putInt(KEY_BALL, normalizedBall)
+            .putInt(KEY_STRIKE, normalizedStrike)
+            .putInt(KEY_OUT, normalizedOut)
             .putBoolean(KEY_BASE_FIRST, dataMap.getBoolean(KEY_BASE_FIRST))
             .putBoolean(KEY_BASE_SECOND, dataMap.getBoolean(KEY_BASE_SECOND))
             .putBoolean(KEY_BASE_THIRD, dataMap.getBoolean(KEY_BASE_THIRD))
