@@ -219,3 +219,15 @@ app/src/main/res/
 - Synced LIVE card visual state:
   - highlighted border
   - synced badge text near inning/status row
+
+## Recent Changes (2026-03-13)
+
+- Added automatic watch-sync confirmation for my-team live transitions:
+  - app polls today's games and detects when a my-team game changes to `LIVE`
+  - app shows confirmation dialog: `��ġ�� ��� �����Ͻðڽ��ϱ�?`
+  - `��`: sets current game as watch sync target
+  - `�ƴϿ�`: keeps watch unsynced
+- Kept existing manual sync flow unchanged:
+  - tapping unsynced LIVE card still opens the same sync confirm dialog
+  - tapping synced LIVE card behavior is unchanged.
+- Added duplicate prompt guard per game in the app session.

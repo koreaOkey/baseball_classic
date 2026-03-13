@@ -229,3 +229,32 @@ graph LR
 - Mobile home screen behavior update:
   - removed stale fallback list retention so previous-day games do not remain after date rollover
   - fixed multiple mojibake/broken Korean UI strings (home cards, watch-sync dialog, live screen labels)
+
+## Recent Changes (2026-03-12)
+
+- Expanded schedule/dispatcher flow to support KBO as first-class input:
+  - dispatcher now accepts `--league kbo` and `--schedule-url` like
+    `https://m.sports.naver.com/kbaseball/schedule/index?category=kbo&date=2026-03-12`
+  - added `crawler/live_baseball_dispatcher.py` entrypoint (alias to existing dispatcher)
+- Expanded backend schedule import script to support KBO/WBC using the same options:
+  - `backend/api/scripts/import_wbc_schedule.py --league kbo`
+  - `backend/api/scripts/import_wbc_schedule.py --schedule-url <naver-url>`
+- Mobile backend team mapping now supports KBO Korean team names/aliases (`두산`, `롯데`, `한화`, etc.),
+  so KBO games resolve to proper team logos/themes instead of `Team.NONE`.
+
+## Recent Changes (2026-03-13)
+
+- Dispatcher/crawler pregame lineup flow was expanded:
+  - added dispatcher option `--enable-preview-lineup-precheck`
+  - when enabled, dispatcher treats `/schedule/games/{gameId}/preview` lineup data as available signal
+  - this allows crawler launch before relay text appears
+- Crawler lineup extraction was expanded:
+  - if relay lineup/entry payload is empty, crawler now uses preview lineup data
+  - preview lineup is normalized into relay-like `homeLineup/awayLineup/homeEntry/awayEntry`
+  - `lineupSlots`, `batterStats`, `pitcherStats` can be synced before first pitch
+- Mobile watch-sync UX was expanded:
+  - app now detects when the user's team game becomes `LIVE`
+  - app shows confirmation popup: `��ġ�� ��� �����Ͻðڽ��ϱ�?`
+  - `��`: sync current game to watch
+  - `�ƴϿ�`: do not sync
+  - existing manual watch-sync flow from live card tap remains unchanged

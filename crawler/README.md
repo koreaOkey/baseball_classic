@@ -1,4 +1,4 @@
-﻿# Crawler (Python)
+# Crawler (Python)
 
 이 폴더에는 야구/테니스 크롤러와 로컬 라이브 테스트 서버가 들어 있습니다.
 
@@ -90,31 +90,72 @@ Key rules:
 
 ## Daily Schedule + Live Dispatcher
 
-`live_wbc_dispatcher.py` provides operations flow:
-- every day at `00:05` (KST): run schedule import (`backend/api/scripts/import_wbc_schedule.py`)
+`live_baseball_dispatcher.py` (`live_wbc_dispatcher.py` alias) provides operations flow:
+- every day at `00:05` (KST): fetch schedule from Naver and sync to backend ingest API
+- after daily import: periodically re-import today's schedule (default every 5 minutes)
 - for today's games from backend:
-  - from each game's `startTime`
+  - from `startTime - precheck window` (default: 180 minutes before first pitch)
   - check relay availability every minute
-  - stop checking after 10 minutes
+  - if lineup/entry data is available before first pitch, treat as available
+  - optional: if `--enable-preview-lineup-precheck` is set, use `.../schedule/games/{gameId}/preview`
+    lineup data as early-availability signal even when relay payload is still empty
+  - keep checking until relay is available (or until game final status)
   - if relay is available, start `crawler.py --watch` for that game
 
 Run:
 ```bash
-python crawler/live_wbc_dispatcher.py --backend-base-url http://localhost:8080 --backend-api-key dev-crawler-key
+python crawler/live_baseball_dispatcher.py --backend-base-url http://localhost:8080 --backend-api-key dev-crawler-key
 ```
 
 Optional tuning:
 ```bash
-python crawler/live_wbc_dispatcher.py \
+python crawler/live_baseball_dispatcher.py \
   --backend-base-url http://localhost:8080 \
   --backend-api-key dev-crawler-key \
   --source-base-url https://api-gw.sports.naver.com \
   --schedule-hour 0 \
   --schedule-minute 5 \
-  --relay-check-minutes 10 \
+  --schedule-refresh-interval-sec 300 \
+  --relay-check-minutes 0 \
+  --precheck-minutes 180 \
+  --enable-preview-lineup-precheck \
   --dispatch-interval-sec 15 \
   --crawler-interval-sec 10
 ```
+KBO preset:
+```bash
+python crawler/live_baseball_dispatcher.py \
+  --backend-base-url http://localhost:8080 \
+  --backend-api-key dev-crawler-key \
+  --league kbo
+```
+KBO schedule URL (auto infer `sectionId/categoryId`):
+```bash
+python crawler/live_baseball_dispatcher.py \
+  --backend-base-url http://localhost:8080 \
+  --backend-api-key dev-crawler-key \
+  --schedule-url "https://m.sports.naver.com/kbaseball/schedule/index?category=kbo&date=2026-03-12"
+```
+Run WBC + KBO together in one process:
+```bash
+python crawler/live_baseball_dispatcher.py \
+  --backend-base-url http://localhost:8080 \
+  --backend-api-key dev-crawler-key \
+  --schedule-target wbc \
+  --schedule-target kbo
+```
+`--schedule-target` also accepts:
+- Naver URL (`https://m.sports.naver.com/...`)
+- direct `sectionId:categoryId` format (example: `kbaseball:kbo`)
+
+`--relay-check-minutes` defaults to `0` (`until-final`).
+If you want an upper bound, pass a positive number (example: `120`).
+`--precheck-minutes` defaults to `180`.
+Set a larger value to capture pre-game lineup publication earlier.
+`--enable-preview-lineup-precheck` is off by default.
+Enable it to start crawler from preview-lineup data before relay text appears.
+`--schedule-refresh-interval-sec` defaults to `300` seconds.
+Set `0` to disable periodic schedule refresh.
 
 ## Logs
 
@@ -149,7 +190,21 @@ type log\\live_crawler_<gameId>.log
   - summary fields (`homeHits`, `awayHits`, `homeOutsTotal`, ...)
 - Added `live_wbc_dispatcher.py` for operations automation:
   - run schedule import daily at `00:05` (KST)
-  - from each game's `startTime`, check relay availability every minute for 10 minutes
+  - periodically re-import today's schedule to sync delayed/final score updates
+  - from each game's `startTime`, check relay availability every minute until relay appears (or game final)
   - start `crawler.py --watch` only when relay is available
 - `crawler.py` relay parsing now tolerates missing relay payloads safely.
 - Added crawler tests for video-review and pitcher-change classification.
+
+## Recent Changes (2026-03-13)
+
+- Added dispatcher pregame lineup option:
+  - `--enable-preview-lineup-precheck`
+  - when enabled, dispatcher checks `/schedule/games/{gameId}/preview` and treats lineup presence as available.
+- Added crawler preview fallback for lineup/boxscore:
+  - when relay payload has no lineup/entry blocks, crawler fetches `/schedule/games/{gameId}/preview`
+  - preview lineup is mapped into relay-style `homeLineup/awayLineup/homeEntry/awayEntry`
+  - backend ingest now receives lineup/boxscore rows before first pitch when preview lineup is published.
+- Added/updated tests:
+  - `crawler/test_live_wbc_dispatcher.py` for preview-lineup availability and CLI flag
+  - `crawler/test_crawler_preview_lineup.py` for preview-to-relay lineup mapping

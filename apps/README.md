@@ -29,3 +29,10 @@
   - synced live card is highlighted
   - sync approval dialog is shown only for unsynced live cards
 - Watch app finished-state display now normalizes inning/count presentation for end-of-game.
+
+## Recent Changes (2026-03-13)
+
+- Mobile app now supports auto watch-sync confirmation when my-team game transitions to `LIVE`.
+- Existing manual watch-sync interaction remains available.
+- Crawler/dispatcher now supports pregame lineup start from Naver preview data via
+  `--enable-preview-lineup-precheck`.
