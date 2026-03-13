@@ -6,8 +6,10 @@ import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import org.json.JSONArray
 import org.json.JSONObject
@@ -105,7 +107,7 @@ object BackendGamesRepository {
         }
 
         return runCatching {
-            connection.inputStream.bufferedReader().use { reader ->
+            connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { reader ->
                 parser(reader.readText())
             }
         }.getOrNull().also {
@@ -208,7 +210,10 @@ object BackendGamesRepository {
     private fun formatBackendTime(raw: String): String {
         if (raw.isBlank()) return "--:--"
         return runCatching {
-            OffsetDateTime.parse(raw).toLocalTime().format(hhmmFormatter)
+            OffsetDateTime.parse(raw)
+                .atZoneSameInstant(ZoneId.systemDefault())
+                .toLocalTime()
+                .format(hhmmFormatter)
         }.getOrElse {
             val afterT = raw.substringAfter("T", missingDelimiterValue = "")
             if (afterT.length >= 5) afterT.take(5) else "--:--"
@@ -219,23 +224,38 @@ object BackendGamesRepository {
         val normalized = value.trim().lowercase()
         if (normalized.isEmpty()) return Team.NONE
 
+        val repaired = repairPotentialMojibake(value).trim().lowercase()
+        val candidates = listOf(normalized, repaired).distinct()
+
         val korea = "\uB300\uD55C\uBBFC\uAD6D"
         val japan = "\uC77C\uBCF8"
 
         return when {
-            normalized.contains("doosan") -> Team.DOOSAN
-            normalized.contains("lg") -> Team.LG
-            normalized.contains("kiwoom") -> Team.KIWOOM
-            normalized.contains("samsung") -> Team.SAMSUNG
-            normalized.contains("lotte") -> Team.LOTTE
-            normalized.contains("ssg") || normalized.contains("lander") -> Team.SSG
-            normalized.contains("kt") || normalized.contains("wiz") -> Team.KT
-            normalized.contains("hanwha") -> Team.HANWHA
-            normalized.contains("kia") -> Team.KIA
-            normalized.contains("nc") || normalized.contains("dinos") -> Team.NC
-            normalized.contains(korea.lowercase()) || normalized.contains("south korea") || normalized.contains("korea") -> Team.SSG
-            normalized.contains(japan.lowercase()) || normalized.contains("japan") -> Team.SAMSUNG
+            containsAny(candidates, "doosan", "\uB450\uC0B0", "\uBCA0\uC5B4\uC2A4") -> Team.DOOSAN
+            containsAny(candidates, "lg", "\uC5D8\uC9C0", "\uD2B8\uC708\uC2A4") -> Team.LG
+            containsAny(candidates, "kiwoom", "\uD0A4\uC6C0", "\uD790\uC5B4\uB85C\uC988", "\uB113\uC13C") -> Team.KIWOOM
+            containsAny(candidates, "samsung", "\uC0BC\uC131", "\uB77C\uC774\uC628\uC988") -> Team.SAMSUNG
+            containsAny(candidates, "lotte", "\uB86F\uB370", "\uC790\uC774\uC5B8\uCE20") -> Team.LOTTE
+            containsAny(candidates, "ssg", "lander", "\uC5D0\uC2A4\uC5D0\uC2A4\uC9C0", "\uB79C\uB354\uC2A4") -> Team.SSG
+            containsAny(candidates, "kt", "wiz", "\uCF00\uC774\uD2F0", "\uC704\uC988") -> Team.KT
+            containsAny(candidates, "hanwha", "\uD55C\uD654", "\uC774\uAE00\uC2A4") -> Team.HANWHA
+            containsAny(candidates, "kia", "\uAE30\uC544", "\uD0C0\uC774\uAC70\uC988") -> Team.KIA
+            containsAny(candidates, "nc", "dinos", "\uC5D4\uC528", "\uB2E4\uC774\uB178\uC2A4") -> Team.NC
+            containsAny(candidates, korea.lowercase(), "south korea", "korea") -> Team.SSG
+            containsAny(candidates, japan.lowercase(), "japan") -> Team.SAMSUNG
             else -> Team.NONE
         }
+    }
+
+    private fun containsAny(candidates: List<String>, vararg tokens: String): Boolean {
+        return candidates.any { source ->
+            tokens.any { token -> source.contains(token) }
+        }
+    }
+
+    private fun repairPotentialMojibake(value: String): String {
+        return runCatching {
+            String(value.toByteArray(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8)
+        }.getOrDefault(value)
     }
 }

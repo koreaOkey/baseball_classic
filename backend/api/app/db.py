@@ -49,6 +49,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_game_columns()
     _ensure_game_event_columns()
+    _ensure_boxscore_context_columns()
     _ensure_game_event_type_check_constraint()
 
 
@@ -92,6 +93,33 @@ def _ensure_game_event_columns() -> None:
     with engine.begin() as conn:
         for ddl in ddl_statements:
             conn.execute(text(ddl))
+
+
+def _ensure_boxscore_context_columns() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    target_tables = ("game_lineup_slots", "game_batter_stats", "game_pitcher_stats")
+    for table_name in target_tables:
+        if table_name not in table_names:
+            continue
+
+        columns = {column["name"] for column in inspector.get_columns(table_name)}
+        ddl_statements: list[str] = []
+        if "player_team" not in columns:
+            ddl_statements.append(f"ALTER TABLE {table_name} ADD COLUMN player_team VARCHAR(64)")
+        if "game_date" not in columns:
+            ddl_statements.append(f"ALTER TABLE {table_name} ADD COLUMN game_date VARCHAR(10)")
+        if "home_team" not in columns:
+            ddl_statements.append(f"ALTER TABLE {table_name} ADD COLUMN home_team VARCHAR(64)")
+        if "away_team" not in columns:
+            ddl_statements.append(f"ALTER TABLE {table_name} ADD COLUMN away_team VARCHAR(64)")
+
+        if not ddl_statements:
+            continue
+
+        with engine.begin() as conn:
+            for ddl in ddl_statements:
+                conn.execute(text(ddl))
 
 
 def _ensure_game_event_type_check_constraint() -> None:

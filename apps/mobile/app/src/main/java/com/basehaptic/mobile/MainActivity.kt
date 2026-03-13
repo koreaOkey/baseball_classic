@@ -26,6 +26,7 @@ import com.basehaptic.mobile.ui.theme.BaseHapticTheme
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.wear.WearGameSyncManager
+import com.basehaptic.mobile.wear.WearThemeSyncManager
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -73,8 +74,55 @@ fun BaseHapticApp(
     var syncedGameId by remember { mutableStateOf<String?>(null) }
     var showWatchSyncDialog by remember { mutableStateOf(false) }
     var pendingWatchSyncGameId by remember { mutableStateOf<String?>(null) }
+    var pendingWatchSyncNavigateToLive by remember { mutableStateOf(false) }
+    val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
+    val autoPromptedLiveGames = remember { mutableStateMapOf<String, Boolean>() }
     var purchasedThemes by remember { mutableStateOf<List<ThemeData>>(emptyList()) }
     val context = LocalContext.current
+
+    fun requestWatchSyncPrompt(gameId: String, navigateToLive: Boolean) {
+        if (syncedGameId == gameId) return
+        pendingWatchSyncGameId = gameId
+        pendingWatchSyncNavigateToLive = navigateToLive
+        showWatchSyncDialog = true
+    }
+
+    LaunchedEffect(selectedTeam) {
+        if (selectedTeam != Team.NONE) {
+            WearThemeSyncManager.syncThemeToWatch(context, selectedTeam)
+        }
+    }
+
+    LaunchedEffect(selectedTeam) {
+        if (selectedTeam == Team.NONE) return@LaunchedEffect
+        observedMyTeamGameStatus.clear()
+        autoPromptedLiveGames.clear()
+
+        while (currentCoroutineContext().isActive) {
+            val games = runCatching {
+                withContext(Dispatchers.IO) {
+                    BackendGamesRepository.fetchGames(selectedTeam)
+                }
+            }.getOrNull().orEmpty()
+
+            val myTeamGames = games.filter { it.isMyTeam }
+            for (game in myTeamGames) {
+                val previous = observedMyTeamGameStatus[game.id]
+                observedMyTeamGameStatus[game.id] = game.status
+
+                val becameLive = game.status == GameStatus.LIVE && previous != GameStatus.LIVE
+                val alreadyPrompted = autoPromptedLiveGames[game.id] == true
+                val isSynced = syncedGameId == game.id
+                if (becameLive && !alreadyPrompted && !isSynced && !showWatchSyncDialog) {
+                    autoPromptedLiveGames[game.id] = true
+                    selectedGameId = game.id
+                    requestWatchSyncPrompt(gameId = game.id, navigateToLive = false)
+                }
+            }
+
+            delay(5000)
+        }
+    }
 
     LaunchedEffect(syncedGameId, selectedTeam) {
         val targetGameId = syncedGameId
@@ -213,8 +261,7 @@ fun BaseHapticApp(
                         onSelectGame = { game ->
                             selectedGameId = game.id
                             if (game.status == GameStatus.LIVE && syncedGameId != game.id) {
-                                pendingWatchSyncGameId = game.id
-                                showWatchSyncDialog = true
+                                requestWatchSyncPrompt(gameId = game.id, navigateToLive = true)
                             } else {
                                 currentView = Screen.LiveGame
                             }
@@ -262,7 +309,10 @@ fun BaseHapticApp(
                 onDismissRequest = {
                     showWatchSyncDialog = false
                     pendingWatchSyncGameId = null
-                    currentView = Screen.LiveGame
+                    if (pendingWatchSyncNavigateToLive) {
+                        currentView = Screen.LiveGame
+                    }
+                    pendingWatchSyncNavigateToLive = false
                 },
                 title = { Text(text = "워치 동기화") },
                 text = { Text(text = "워치로 경기 관람하시겠습니까?") },
@@ -272,7 +322,10 @@ fun BaseHapticApp(
                             syncedGameId = pendingWatchSyncGameId
                             showWatchSyncDialog = false
                             pendingWatchSyncGameId = null
-                            currentView = Screen.LiveGame
+                            if (pendingWatchSyncNavigateToLive) {
+                                currentView = Screen.LiveGame
+                            }
+                            pendingWatchSyncNavigateToLive = false
                         }
                     ) {
                         Text("예")
@@ -283,7 +336,10 @@ fun BaseHapticApp(
                         onClick = {
                             showWatchSyncDialog = false
                             pendingWatchSyncGameId = null
-                            currentView = Screen.LiveGame
+                            if (pendingWatchSyncNavigateToLive) {
+                                currentView = Screen.LiveGame
+                            }
+                            pendingWatchSyncNavigateToLive = false
                         }
                     ) {
                         Text("아니오")
@@ -408,9 +464,9 @@ private fun resolveMyTeamName(
     state: BackendGamesRepository.LiveGameState
 ): String {
     return when {
-        selectedTeam == state.homeTeamId -> state.homeTeam
-        selectedTeam == state.awayTeamId -> state.awayTeam
-        selectedTeam != Team.NONE -> selectedTeam.teamName
-        else -> state.homeTeam
+        selectedTeam != Team.NONE -> selectedTeam.name
+        state.homeTeamId != Team.NONE -> state.homeTeamId.name
+        state.awayTeamId != Team.NONE -> state.awayTeamId.name
+        else -> "DEFAULT"
     }
 }

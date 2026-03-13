@@ -24,6 +24,95 @@ def fetch_json(url: str) -> Dict[str, Any]:
     response.raise_for_status()
     return response.json()
 
+
+def _pick_preview_player_value(player: Dict[str, Any], keys: List[str]) -> str:
+    for key in keys:
+        value = str(player.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _preview_player_to_entry(player: Dict[str, Any], *, batting_order: Optional[int] = None) -> Dict[str, Any]:
+    entry: Dict[str, Any] = {
+        "pcode": _pick_preview_player_value(player, ["playerCode", "pCode", "playerId"]),
+        "name": _pick_preview_player_value(player, ["playerName", "name"]),
+        "pos": _pick_preview_player_value(player, ["position", "pos"]),
+        "posName": _pick_preview_player_value(player, ["positionName", "posName"]),
+    }
+    if batting_order is not None:
+        entry["batOrder"] = batting_order
+    return entry
+
+
+def _preview_to_relay_entry(preview_data: Dict[str, Any], team_side: str) -> Dict[str, Any]:
+    team_key = "homeTeamLineUp" if team_side == "home" else "awayTeamLineUp"
+    team_lineup = preview_data.get(team_key) or {}
+    if not isinstance(team_lineup, dict):
+        return {"batter": [], "pitcher": []}
+
+    full_lineup = team_lineup.get("fullLineUp") or []
+    batter: List[Dict[str, Any]] = []
+    pitcher: List[Dict[str, Any]] = []
+    for player in full_lineup:
+        if not isinstance(player, dict):
+            continue
+        position_name = _pick_preview_player_value(player, ["positionName", "posName"])
+        position_code = _pick_preview_player_value(player, ["position", "pos"])
+        is_pitcher = "투수" in position_name or position_code == "1"
+        if is_pitcher:
+            pitcher.append(_preview_player_to_entry(player))
+            continue
+        batter.append(_preview_player_to_entry(player, batting_order=len(batter) + 1))
+
+    return {"batter": batter, "pitcher": pitcher}
+
+
+def _preview_to_relay_candidates(preview_data: Dict[str, Any], team_side: str) -> Dict[str, Any]:
+    team_key = "homeTeamLineUp" if team_side == "home" else "awayTeamLineUp"
+    team_lineup = preview_data.get(team_key) or {}
+    if not isinstance(team_lineup, dict):
+        return {"batter": [], "pitcher": []}
+
+    batter_candidates = team_lineup.get("batterCandidate") or []
+    pitcher_candidates = team_lineup.get("pitcherBullpen") or []
+
+    batter: List[Dict[str, Any]] = []
+    for player in batter_candidates:
+        if isinstance(player, dict):
+            batter.append(_preview_player_to_entry(player))
+
+    pitcher: List[Dict[str, Any]] = []
+    for player in pitcher_candidates:
+        if isinstance(player, dict):
+            pitcher.append(_preview_player_to_entry(player))
+
+    return {"batter": batter, "pitcher": pitcher}
+
+
+def _inject_preview_lineup_into_relays(relays_by_inning: Dict[int, Dict[str, Any]], preview_payload: Dict[str, Any]) -> None:
+    result = preview_payload.get("result") or {}
+    if not isinstance(result, dict):
+        return
+    preview_data = result.get("previewData") or {}
+    if not isinstance(preview_data, dict):
+        return
+
+    home_lineup = _preview_to_relay_entry(preview_data, "home")
+    away_lineup = _preview_to_relay_entry(preview_data, "away")
+    home_entry = _preview_to_relay_candidates(preview_data, "home")
+    away_entry = _preview_to_relay_candidates(preview_data, "away")
+    if not (home_lineup["batter"] or home_lineup["pitcher"] or away_lineup["batter"] or away_lineup["pitcher"]):
+        return
+
+    base_relay = relays_by_inning.get(1) or {}
+    merged = dict(base_relay)
+    merged["homeLineup"] = home_lineup
+    merged["awayLineup"] = away_lineup
+    merged["homeEntry"] = home_entry
+    merged["awayEntry"] = away_entry
+    relays_by_inning[1] = merged
+
 def _current_inning_number(game_data: Dict[str, Any]) -> int:
     text = str(game_data.get("statusInfo") or game_data.get("currentInning") or "").strip()
     match = re.search(r"(\d+)", text)
@@ -373,6 +462,21 @@ def crawl_once_detailed(
         combined["pinch_hitters"].extend(parsed["pinch_hitters"])
         combined["pitcher_changes"].extend(parsed["pitcher_changes"])
 
+    # Pregame lineup can be exposed in preview endpoint before relay text is available.
+    if not any(
+        isinstance(relay, dict) and (
+            relay.get("homeLineup") or relay.get("awayLineup") or relay.get("homeEntry") or relay.get("awayEntry")
+        )
+        for relay in relays_by_inning.values()
+    ):
+        preview_url = f"{base_url}/schedule/games/{game_id}/preview"
+        try:
+            preview_payload = fetch_json(preview_url)
+        except requests.RequestException:
+            preview_payload = {}
+        if isinstance(preview_payload, dict):
+            _inject_preview_lineup_into_relays(relays_by_inning, preview_payload)
+
     return game_data, relays_by_inning, combined
 
 
@@ -521,4 +625,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

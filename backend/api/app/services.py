@@ -366,11 +366,26 @@ def _source_event_cursor_map(db: Session, game_id: str, source_ids: set[str]) ->
     return {source_id: cursor for source_id, cursor in rows}
 
 
+def _resolve_team_context(game: Game | None, team_side: str) -> tuple[str | None, str | None, str | None, str | None]:
+    if game is None:
+        return None, None, None, None
+
+    if team_side == "home":
+        player_team = game.home_team
+    elif team_side == "away":
+        player_team = game.away_team
+    else:
+        player_team = None
+
+    return player_team, game.game_date, game.home_team, game.away_team
+
+
 def _lineup_from_snapshot(db: Session, game_id: str, lineup_slots: list[CrawlerLineupSlotIn]) -> None:
     db.execute(delete(GameLineupSlot).where(GameLineupSlot.game_id == game_id))
     if not lineup_slots:
         return
 
+    game = db.get(Game, game_id)
     source_ids: set[str] = set()
     for slot in lineup_slots:
         if slot.enteredAtSourceEventId:
@@ -384,10 +399,15 @@ def _lineup_from_snapshot(db: Session, game_id: str, lineup_slots: list[CrawlerL
         dedup[(slot.teamSide, slot.battingOrder)] = slot
 
     for slot in dedup.values():
+        player_team, game_date, home_team, away_team = _resolve_team_context(game, slot.teamSide)
         db.add(
             GameLineupSlot(
                 game_id=game_id,
                 team_side=slot.teamSide,
+                player_team=player_team,
+                game_date=game_date,
+                home_team=home_team,
+                away_team=away_team,
                 batting_order=slot.battingOrder,
                 player_id=slot.playerId,
                 player_name=slot.playerName,
@@ -406,16 +426,22 @@ def _batter_stats_from_snapshot(db: Session, game_id: str, batter_stats: list[Cr
     if not batter_stats:
         return
 
+    game = db.get(Game, game_id)
     dedup: dict[tuple[str, str], CrawlerBatterStatIn] = {}
     for stat in batter_stats:
         dedup_key = stat.playerId or f"{stat.playerName}#{stat.battingOrder or 0}"
         dedup[(stat.teamSide, dedup_key)] = stat
 
     for stat in dedup.values():
+        player_team, game_date, home_team, away_team = _resolve_team_context(game, stat.teamSide)
         db.add(
             GameBatterStat(
                 game_id=game_id,
                 team_side=stat.teamSide,
+                player_team=player_team,
+                game_date=game_date,
+                home_team=home_team,
+                away_team=away_team,
                 player_id=stat.playerId,
                 player_name=stat.playerName,
                 batting_order=stat.battingOrder,
@@ -446,16 +472,22 @@ def _pitcher_stats_from_snapshot(db: Session, game_id: str, pitcher_stats: list[
     if not pitcher_stats:
         return
 
+    game = db.get(Game, game_id)
     dedup: dict[tuple[str, str], CrawlerPitcherStatIn] = {}
     for stat in pitcher_stats:
         dedup_key = stat.playerId or f"{stat.playerName}#{stat.appearanceOrder or 0}"
         dedup[(stat.teamSide, dedup_key)] = stat
 
     for stat in dedup.values():
+        player_team, game_date, home_team, away_team = _resolve_team_context(game, stat.teamSide)
         db.add(
             GamePitcherStat(
                 game_id=game_id,
                 team_side=stat.teamSide,
+                player_team=player_team,
+                game_date=game_date,
+                home_team=home_team,
+                away_team=away_team,
                 appearance_order=stat.appearanceOrder,
                 player_id=stat.playerId,
                 player_name=stat.playerName,

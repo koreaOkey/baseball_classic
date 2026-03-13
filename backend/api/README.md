@@ -41,7 +41,7 @@ uvicorn app.main:app --reload --port 8080
 - `game_events` now stores `pitcher` and `batter`.
 - Duplicate ingest path backfills missing `pitcher`/`batter` values when later snapshots provide them.
 - Game-state response normalizes B/S to `0/0` when out count is `>= 3`.
-- Added `scripts/import_wbc_schedule.py` for date-based WBC schedule import.
+- Added `scripts/import_wbc_schedule.py` for date-based schedule import (WBC/KBO via `--league` or `--schedule-url`).
 - Added tests for:
   - `PITCHER_CHANGE` mapping
   - 3-out B/S reset
