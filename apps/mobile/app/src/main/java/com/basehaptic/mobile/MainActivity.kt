@@ -2,6 +2,7 @@
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -69,6 +70,7 @@ fun BaseHapticApp(
     onOnboardingComplete: (Team) -> Unit
 ) {
     var currentView by remember { mutableStateOf<Screen>(Screen.Home) }
+    val navigationHistory = remember { mutableStateListOf<Screen>() }
     var activeTheme by remember { mutableStateOf<ThemeData?>(null) }
     var selectedGameId by remember { mutableStateOf<String?>(null) }
     var syncedGameId by remember { mutableStateOf<String?>(null) }
@@ -85,6 +87,43 @@ fun BaseHapticApp(
         pendingWatchSyncGameId = gameId
         pendingWatchSyncNavigateToLive = navigateToLive
         showWatchSyncDialog = true
+    }
+
+    fun navigateTo(targetView: Screen) {
+        if (targetView == currentView) return
+        navigationHistory.add(currentView)
+        currentView = targetView
+    }
+
+    fun closeWatchSyncDialog() {
+        showWatchSyncDialog = false
+        pendingWatchSyncGameId = null
+        if (pendingWatchSyncNavigateToLive) {
+            navigateTo(Screen.LiveGame)
+        }
+        pendingWatchSyncNavigateToLive = false
+    }
+
+    fun navigateBack(): Boolean {
+        if (showWatchSyncDialog) {
+            closeWatchSyncDialog()
+            return true
+        }
+        if (navigationHistory.isNotEmpty()) {
+            currentView = navigationHistory.removeAt(navigationHistory.lastIndex)
+            return true
+        }
+        if (currentView != Screen.Home) {
+            currentView = Screen.Home
+            return true
+        }
+        return false
+    }
+
+    val canHandleBack =
+        showWatchSyncDialog || navigationHistory.isNotEmpty() || currentView != Screen.Home
+    BackHandler(enabled = canHandleBack) {
+        navigateBack()
     }
 
     LaunchedEffect(selectedTeam) {
@@ -243,7 +282,7 @@ fun BaseHapticApp(
                 if (currentView != Screen.LiveGame && currentView != Screen.WatchTest) {
                     BottomNavigationBar(
                         currentView = currentView,
-                        onNavigate = { currentView = it }
+                        onNavigate = { navigateTo(it) }
                     )
                 }
             }
@@ -263,7 +302,7 @@ fun BaseHapticApp(
                             if (game.status == GameStatus.LIVE && syncedGameId != game.id) {
                                 requestWatchSyncPrompt(gameId = game.id, navigateToLive = true)
                             } else {
-                                currentView = Screen.LiveGame
+                                navigateTo(Screen.LiveGame)
                             }
                         }
                     )
@@ -271,7 +310,7 @@ fun BaseHapticApp(
                         activeTheme = activeTheme,
                         gameId = selectedGameId,
                         syncedGameId = syncedGameId,
-                        onBack = { currentView = Screen.Home }
+                        onBack = { navigateBack() }
                     )
                     Screen.Community -> CommunityScreen(
                         selectedTeam = selectedTeam,
@@ -294,11 +333,11 @@ fun BaseHapticApp(
                         purchasedThemes = purchasedThemes,
                         activeTheme = activeTheme,
                         onSelectTheme = { activeTheme = it },
-                        onOpenWatchTest = { currentView = Screen.WatchTest }
+                        onOpenWatchTest = { navigateTo(Screen.WatchTest) }
                     )
                     Screen.WatchTest -> WatchTestScreen(
                         selectedTeam = selectedTeam,
-                        onBack = { currentView = Screen.Settings }
+                        onBack = { navigateBack() }
                     )
                 }
             }
@@ -306,26 +345,14 @@ fun BaseHapticApp(
 
         if (showWatchSyncDialog && pendingWatchSyncGameId != null) {
             AlertDialog(
-                onDismissRequest = {
-                    showWatchSyncDialog = false
-                    pendingWatchSyncGameId = null
-                    if (pendingWatchSyncNavigateToLive) {
-                        currentView = Screen.LiveGame
-                    }
-                    pendingWatchSyncNavigateToLive = false
-                },
+                onDismissRequest = { closeWatchSyncDialog() },
                 title = { Text(text = "워치 동기화") },
                 text = { Text(text = "워치로 경기 관람하시겠습니까?") },
                 confirmButton = {
                     TextButton(
                         onClick = {
                             syncedGameId = pendingWatchSyncGameId
-                            showWatchSyncDialog = false
-                            pendingWatchSyncGameId = null
-                            if (pendingWatchSyncNavigateToLive) {
-                                currentView = Screen.LiveGame
-                            }
-                            pendingWatchSyncNavigateToLive = false
+                            closeWatchSyncDialog()
                         }
                     ) {
                         Text("예")
@@ -333,14 +360,7 @@ fun BaseHapticApp(
                 },
                 dismissButton = {
                     TextButton(
-                        onClick = {
-                            showWatchSyncDialog = false
-                            pendingWatchSyncGameId = null
-                            if (pendingWatchSyncNavigateToLive) {
-                                currentView = Screen.LiveGame
-                            }
-                            pendingWatchSyncNavigateToLive = false
-                        }
+                        onClick = { closeWatchSyncDialog() }
                     ) {
                         Text("아니오")
                     }

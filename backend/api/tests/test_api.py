@@ -19,7 +19,7 @@ os.environ["BASEHAPTIC_CORS_ALLOW_ORIGINS"] = "*"
 
 from app.main import app  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
-from app.models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat  # noqa: E402
+from app.models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, TeamRecord  # noqa: E402
 from app.services import _event_out_count, normalize_event_type  # noqa: E402
 
 
@@ -153,6 +153,61 @@ def sample_snapshot() -> dict:
                 "inning": "7B",
                 "sourceEventId": "relay-002",
             }
+        ],
+    }
+
+
+def sample_team_records_payload() -> dict:
+    return {
+        "upperCategoryId": "kbaseball",
+        "categoryId": "kbo",
+        "seasonCode": "2026",
+        "observedAt": "2026-03-14T00:01:00Z",
+        "records": [
+            {
+                "upperCategoryId": "kbaseball",
+                "categoryId": "kbo",
+                "seasonCode": "2026",
+                "teamId": "LG",
+                "teamName": "LG",
+                "teamShortName": "LG",
+                "ranking": 1,
+                "orderNo": 1,
+                "gameType": "PRESEASON",
+                "wra": 1.0,
+                "gameCount": 2,
+                "winGameCount": 1,
+                "drawnGameCount": 1,
+                "loseGameCount": 0,
+                "gameBehind": 0.5,
+                "continuousGameResult": "1승",
+                "lastFiveGames": "-----",
+                "offenseHra": 0.30556,
+                "defenseEra": 4.0,
+                "raw": {"teamId": "LG", "ranking": 1},
+            },
+            {
+                "upperCategoryId": "kbaseball",
+                "categoryId": "kbo",
+                "seasonCode": "2026",
+                "teamId": "OB",
+                "teamName": "두산",
+                "teamShortName": "두산",
+                "ranking": 2,
+                "orderNo": 2,
+                "gameType": "PRESEASON",
+                "wra": 0.5,
+                "gameCount": 2,
+                "winGameCount": 1,
+                "drawnGameCount": 0,
+                "loseGameCount": 1,
+                "gameBehind": 1.0,
+                "continuousGameResult": "1패",
+                "lastFiveGames": "WLL--",
+                "offenseHra": 0.276,
+                "defenseEra": 3.2,
+                "raw": {"teamId": "OB", "ranking": 2},
+            },
         ],
     }
 
@@ -514,3 +569,80 @@ def test_list_games_filters_by_game_date_column() -> None:
         ids = [item["id"] for item in games.json()]
         assert "WBCGAMEA001" in ids
         assert "WBCGAMEB001" not in ids
+
+
+def test_ingest_team_record_upsert_flow() -> None:
+    with TestClient(app) as client:
+        first_payload = sample_team_records_payload()
+        first = client.post(
+            "/internal/crawler/team-records",
+            headers={"X-API-Key": "test-key"},
+            json=first_payload,
+        )
+        assert first.status_code == 200
+        first_body = first.json()
+        assert first_body["receivedRecords"] == 2
+        assert first_body["upsertedRecords"] == 2
+
+        second_payload = sample_team_records_payload()
+        second_payload["records"][0]["ranking"] = 3
+        second_payload["records"][0]["wra"] = 0.333
+        second_payload["records"][0]["raw"] = {"teamId": "LG", "ranking": 3}
+        second = client.post(
+            "/internal/crawler/team-records",
+            headers={"X-API-Key": "test-key"},
+            json=second_payload,
+        )
+        assert second.status_code == 200
+        second_body = second.json()
+        assert second_body["receivedRecords"] == 2
+        assert second_body["upsertedRecords"] == 2
+
+        with SessionLocal() as db:
+            all_rows = db.query(TeamRecord).filter(TeamRecord.category_id == "kbo", TeamRecord.season_code == "2026").all()
+            assert len(all_rows) == 2
+            lg = (
+                db.query(TeamRecord)
+                .filter(
+                    TeamRecord.category_id == "kbo",
+                    TeamRecord.season_code == "2026",
+                    TeamRecord.team_id == "LG",
+                )
+                .first()
+            )
+            assert lg is not None
+            assert lg.ranking == 3
+            assert lg.wra == 0.333
+
+
+def test_ingest_team_record_requires_valid_api_key() -> None:
+    with TestClient(app) as client:
+        denied = client.post(
+            "/internal/crawler/team-records",
+            headers={"X-API-Key": "wrong-key"},
+            json=sample_team_records_payload(),
+        )
+        assert denied.status_code == 401
+
+
+def test_get_team_record_by_team_id() -> None:
+    with TestClient(app) as client:
+        ingest = client.post(
+            "/internal/crawler/team-records",
+            headers={"X-API-Key": "test-key"},
+            json=sample_team_records_payload(),
+        )
+        assert ingest.status_code == 200
+
+        response = client.get("/team-records/LG?categoryId=kbo&seasonCode=2026")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["teamId"] == "LG"
+        assert body["ranking"] == 1
+        assert body["wra"] == 1.0
+
+
+def test_get_team_record_returns_404_when_not_found() -> None:
+    with TestClient(app) as client:
+        response = client.get("/team-records/NOPE?categoryId=kbo&seasonCode=2026")
+        assert response.status_code == 404

@@ -1,12 +1,24 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val backendBaseUrl =
-    ((project.findProperty("backendBaseUrl") as String?) ?: "http://10.0.2.2:8080")
-        .replace("\"", "\\\"")
+val localProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        localFile.inputStream().use { load(it) }
+    }
+}
+
+val backendBaseUrl = (
+    (project.findProperty("backendBaseUrl") as String?)
+        ?: localProperties.getProperty("backendBaseUrl")
+        ?: System.getenv("BACKEND_BASE_URL")
+        ?: "http://10.0.2.2:8080"
+    ).replace("\"", "\\\"")
 
 android {
     namespace = "com.basehaptic.mobile"
@@ -99,4 +111,3 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
-

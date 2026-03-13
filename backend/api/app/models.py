@@ -6,6 +6,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -230,3 +231,36 @@ class GameNote(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
     game: Mapped[Game] = relationship(back_populates="notes")
+
+
+class TeamRecord(Base):
+    __tablename__ = "team_record"
+    __table_args__ = (
+        UniqueConstraint("category_id", "season_code", "team_id", name="uq_team_record_category_season_team"),
+        Index("idx_team_record_category_season_rank", "category_id", "season_code", "ranking"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    upper_category_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    category_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    season_code: Mapped[str] = mapped_column(String(8), nullable=False)
+    team_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    team_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    team_short_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ranking: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    order_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    game_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    wra: Mapped[float | None] = mapped_column(Float, nullable=True)
+    game_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    win_game_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    drawn_game_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    lose_game_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    game_behind: Mapped[float | None] = mapped_column(Float, nullable=True)
+    continuous_game_result: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_five_games: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    offense_hra: Mapped[float | None] = mapped_column(Float, nullable=True)
+    defense_era: Mapped[float | None] = mapped_column(Float, nullable=True)
+    payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

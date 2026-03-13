@@ -312,6 +312,18 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _safe_float(value: Any, default: float | None = None) -> float | None:
+    if value is None:
+        return default
+    raw = str(value).strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 def _map_schedule_status(status_code: Any) -> str:
     raw = str(status_code or "").strip().upper()
     if raw in LIVE_STATUS_CODES:
@@ -390,6 +402,169 @@ def _fetch_schedule_games(
     if isinstance(games, list):
         return [item for item in games if isinstance(item, dict)]
     return []
+
+
+def _fetch_team_rank_rows(
+    *,
+    source_base_url: str,
+    category_id: str,
+    season_code: str,
+    timeout: float,
+) -> list[dict[str, Any]]:
+    endpoint = f"{source_base_url.rstrip('/')}/statistics/categories/{category_id}/seasons/{season_code}/teams"
+    response = requests.get(
+        endpoint,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    result = (payload.get("result") or {}) if isinstance(payload, dict) else {}
+    rows = result.get("seasonTeamStats") or []
+    if isinstance(rows, list):
+        return [item for item in rows if isinstance(item, dict)]
+    return []
+
+
+def _build_team_record_payload(
+    *,
+    section_id: str,
+    category_id: str,
+    season_code: str,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    observed_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    records: list[dict[str, Any]] = []
+    for row in rows:
+        team_id = str(row.get("teamId") or "").strip()
+        team_name = str(row.get("teamName") or row.get("teamShortName") or "").strip()
+        if not team_id or not team_name:
+            continue
+
+        record_season_code_raw = row.get("seasonId") or row.get("year") or season_code
+        record_season_code = str(record_season_code_raw).strip() or season_code
+
+        records.append(
+            {
+                "upperCategoryId": str(row.get("upperCategoryId") or section_id).strip() or section_id,
+                "categoryId": str(row.get("categoryId") or category_id).strip() or category_id,
+                "seasonCode": record_season_code,
+                "teamId": team_id,
+                "teamName": team_name,
+                "teamShortName": str(row.get("teamShortName") or "").strip() or None,
+                "ranking": _safe_int(row.get("ranking"), default=0) or None,
+                "orderNo": _safe_int(row.get("orderNo"), default=0) or None,
+                "gameType": str(row.get("gameType") or "").strip() or None,
+                "wra": _safe_float(row.get("wra")),
+                "gameCount": _safe_int(row.get("gameCount"), default=0),
+                "winGameCount": _safe_int(row.get("winGameCount"), default=0),
+                "drawnGameCount": _safe_int(row.get("drawnGameCount"), default=0),
+                "loseGameCount": _safe_int(row.get("loseGameCount"), default=0),
+                "gameBehind": _safe_float(row.get("gameBehind")),
+                "continuousGameResult": str(row.get("continuousGameResult") or "").strip() or None,
+                "lastFiveGames": str(row.get("lastFiveGames") or "").strip() or None,
+                "offenseHra": _safe_float(row.get("offenseHra")),
+                "defenseEra": _safe_float(row.get("defenseEra")),
+                "raw": row,
+            }
+        )
+
+    return {
+        "upperCategoryId": section_id,
+        "categoryId": category_id,
+        "seasonCode": season_code,
+        "observedAt": observed_at,
+        "records": records,
+    }
+
+
+def _post_team_records_to_backend(
+    *,
+    backend_base_url: str,
+    backend_api_key: str,
+    payload: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    endpoint = f"{backend_base_url.rstrip('/')}/internal/crawler/team-records"
+    response = requests.post(
+        endpoint,
+        headers={"X-API-Key": backend_api_key},
+        json=payload,
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data if isinstance(data, dict) else {}
+
+
+def _run_team_record_import(
+    *,
+    source_base_url: str,
+    backend_base_url: str,
+    backend_api_key: str,
+    section_id: str,
+    category_id: str,
+    season_code: str,
+    timeout: float,
+) -> bool:
+    if category_id.strip().lower() != "kbo":
+        LOGGER.info(
+            "[team-record] skipped category=%s season=%s reason=unsupported-category",
+            category_id,
+            season_code,
+        )
+        return False
+
+    try:
+        rows = _fetch_team_rank_rows(
+            source_base_url=source_base_url,
+            category_id=category_id,
+            season_code=season_code,
+            timeout=timeout,
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "[team-record] fetch_failed category=%s season=%s error=%s",
+            category_id,
+            season_code,
+            exc,
+        )
+        return False
+
+    if not rows:
+        LOGGER.warning("[team-record] empty category=%s season=%s", category_id, season_code)
+        return False
+
+    payload = _build_team_record_payload(
+        section_id=section_id,
+        category_id=category_id,
+        season_code=season_code,
+        rows=rows,
+    )
+    try:
+        result = _post_team_records_to_backend(
+            backend_base_url=backend_base_url,
+            backend_api_key=backend_api_key,
+            payload=payload,
+            timeout=timeout,
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "[team-record] sync_failed category=%s season=%s error=%s",
+            category_id,
+            season_code,
+            exc,
+        )
+        return False
+
+    LOGGER.info(
+        "[team-record] synced category=%s season=%s received=%s upserted=%s",
+        category_id,
+        season_code,
+        result.get("receivedRecords"),
+        result.get("upsertedRecords"),
+    )
+    return True
 
 
 def _schedule_game_to_snapshot(game: dict[str, Any], target_date: date) -> dict[str, Any]:
@@ -653,6 +828,17 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                         timeout=args.http_timeout_sec,
                     ):
                         any_success = True
+                    if not args.disable_team_record_sync:
+                        season_code = str(args.team_record_season_code or now.date().year).strip()
+                        _run_team_record_import(
+                            source_base_url=args.source_base_url,
+                            backend_base_url=args.backend_base_url,
+                            backend_api_key=args.backend_api_key,
+                            section_id=target.section_id,
+                            category_id=target.category_id,
+                            season_code=season_code,
+                            timeout=args.http_timeout_sec,
+                        )
 
                 if any_success:
                     imported_date = now.date()
@@ -794,6 +980,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=300,
         help="Re-import today's schedule every N seconds after daily import (0 to disable).",
+    )
+    parser.add_argument(
+        "--team-record-season-code",
+        default=None,
+        help=(
+            "Season code for team-rank sync (default: current year in KST). "
+            "Example: 2026"
+        ),
+    )
+    parser.add_argument(
+        "--disable-team-record-sync",
+        action="store_true",
+        help="Disable KBO team-rank sync to backend during import cycles.",
     )
     parser.add_argument("--import-retry-interval-sec", type=int, default=300)
     parser.add_argument("--http-timeout-sec", type=float, default=10.0)

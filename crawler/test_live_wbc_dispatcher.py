@@ -1,6 +1,7 @@
 import argparse
 
 from live_wbc_dispatcher import (
+    _build_team_record_payload,
     _parse_schedule_url,
     _preview_has_lineup,
     _resolve_schedule_filters,
@@ -109,3 +110,62 @@ def test_parser_preview_lineup_precheck_flag_default_and_enable() -> None:
         ]
     )
     assert args_enabled.enable_preview_lineup_precheck is True
+
+
+def test_build_team_record_payload_maps_rows() -> None:
+    payload = _build_team_record_payload(
+        section_id="kbaseball",
+        category_id="kbo",
+        season_code="2026",
+        rows=[
+            {
+                "upperCategoryId": "kbaseball",
+                "categoryId": "kbo",
+                "seasonId": "2026",
+                "teamId": "LG",
+                "teamName": "LG",
+                "teamShortName": "LG",
+                "ranking": 1,
+                "orderNo": 1,
+                "gameType": "PRESEASON",
+                "wra": 1.0,
+                "gameCount": 2,
+                "winGameCount": 1,
+                "drawnGameCount": 1,
+                "loseGameCount": 0,
+                "gameBehind": 0.5,
+                "continuousGameResult": "1승",
+                "lastFiveGames": "-----",
+                "offenseHra": 0.3,
+                "defenseEra": 4.0,
+            }
+        ],
+    )
+
+    assert payload["categoryId"] == "kbo"
+    assert payload["seasonCode"] == "2026"
+    assert len(payload["records"]) == 1
+    assert payload["records"][0]["teamId"] == "LG"
+    assert payload["records"][0]["ranking"] == 1
+    assert payload["records"][0]["raw"]["teamId"] == "LG"
+
+
+def test_parser_team_record_sync_options() -> None:
+    parser = build_parser()
+    args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
+    assert args_default.disable_team_record_sync is False
+    assert args_default.team_record_season_code is None
+
+    args_disabled = parser.parse_args(
+        [
+            "--backend-base-url",
+            "http://localhost:8080",
+            "--backend-api-key",
+            "x",
+            "--disable-team-record-sync",
+            "--team-record-season-code",
+            "2026",
+        ]
+    )
+    assert args_disabled.disable_team_record_sync is True
+    assert args_disabled.team_record_season_code == "2026"

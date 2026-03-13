@@ -4,7 +4,7 @@ from typing import Any
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat
+from .models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, TeamRecord
 from .schemas import (
     BaseStatus,
     CrawlerBatterStatIn,
@@ -13,11 +13,13 @@ from .schemas import (
     CrawlerLineupSlotIn,
     CrawlerPitcherStatIn,
     CrawlerSnapshotRequest,
+    CrawlerTeamRecordRequest,
     EventType,
     GameEventOut,
     GameStateOut,
     GameStatus,
     GameSummaryOut,
+    TeamRecordOut,
 )
 
 
@@ -542,6 +544,105 @@ def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotReq
     if payload.notes:
         _notes_from_snapshot(db, game_id, payload.notes)
     db.flush()
+
+
+def upsert_team_records(db: Session, payload: CrawlerTeamRecordRequest) -> int:
+    if not payload.records:
+        return 0
+
+    dedup: dict[str, Any] = {}
+    for record in payload.records:
+        dedup[record.teamId] = record
+
+    team_ids = list(dedup.keys())
+    existing_rows = db.execute(
+        select(TeamRecord).where(
+            TeamRecord.category_id == payload.categoryId,
+            TeamRecord.season_code == payload.seasonCode,
+            TeamRecord.team_id.in_(team_ids),
+        )
+    ).scalars().all()
+    existing_by_team_id = {row.team_id: row for row in existing_rows}
+
+    upserted = 0
+    default_observed_at = ensure_utc(payload.observedAt) if payload.observedAt else now_utc()
+    for record in dedup.values():
+        row = existing_by_team_id.get(record.teamId)
+        if row is None:
+            row = TeamRecord(
+                category_id=payload.categoryId,
+                season_code=payload.seasonCode,
+                team_id=record.teamId,
+            )
+            db.add(row)
+
+        row.upper_category_id = record.upperCategoryId or payload.upperCategoryId
+        row.team_name = record.teamName
+        row.team_short_name = record.teamShortName
+        row.ranking = record.ranking
+        row.order_no = record.orderNo
+        row.game_type = record.gameType
+        row.wra = record.wra
+        row.game_count = record.gameCount
+        row.win_game_count = record.winGameCount
+        row.drawn_game_count = record.drawnGameCount
+        row.lose_game_count = record.loseGameCount
+        row.game_behind = record.gameBehind
+        row.continuous_game_result = record.continuousGameResult
+        row.last_five_games = record.lastFiveGames
+        row.offense_hra = record.offenseHra
+        row.defense_era = record.defenseEra
+        row.payload_json = (
+            record.raw
+            if record.raw is not None
+            else record.model_dump(mode="json", exclude={"raw"}, exclude_none=True)
+        )
+        row.observed_at = ensure_utc(record.observedAt) if record.observedAt else default_observed_at
+        row.updated_at = now_utc()
+        upserted += 1
+
+    db.flush()
+    return upserted
+
+
+def get_team_record(
+    db: Session,
+    *,
+    category_id: str,
+    season_code: str,
+    team_id: str,
+) -> TeamRecord | None:
+    return db.execute(
+        select(TeamRecord).where(
+            TeamRecord.category_id == category_id,
+            TeamRecord.season_code == season_code,
+            TeamRecord.team_id == team_id,
+        )
+    ).scalar_one_or_none()
+
+
+def to_team_record_out(record: TeamRecord) -> TeamRecordOut:
+    return TeamRecordOut(
+        upperCategoryId=record.upper_category_id,
+        categoryId=record.category_id,
+        seasonCode=record.season_code,
+        teamId=record.team_id,
+        teamName=record.team_name,
+        teamShortName=record.team_short_name,
+        ranking=record.ranking,
+        wra=record.wra,
+        gameCount=record.game_count,
+        winGameCount=record.win_game_count,
+        drawnGameCount=record.drawn_game_count,
+        loseGameCount=record.lose_game_count,
+        gameBehind=record.game_behind,
+        continuousGameResult=record.continuous_game_result,
+        lastFiveGames=record.last_five_games,
+        offenseHra=record.offense_hra,
+        defenseEra=record.defense_era,
+        observedAt=record.observed_at,
+        updatedAt=record.updated_at,
+    )
 
 
 def to_game_summary(game: Game) -> GameSummaryOut:

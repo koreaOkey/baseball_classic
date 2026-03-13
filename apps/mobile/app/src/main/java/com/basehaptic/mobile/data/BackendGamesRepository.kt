@@ -52,6 +52,13 @@ object BackendGamesRepository {
         val nextCursor: Long?
     )
 
+    data class TeamRecordStats(
+        val teamId: String,
+        val ranking: Int?,
+        val wra: Double?,
+        val updatedAt: String?
+    )
+
     fun fetchGames(selectedTeam: Team): List<Game>? {
         val today = LocalDate.now().toString()
         val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games?date=$today&limit=20"
@@ -89,6 +96,15 @@ object BackendGamesRepository {
                 null
             }
             LiveEventsPage(items = items, nextCursor = nextCursor)
+        }
+    }
+
+    fun fetchTeamRecord(selectedTeam: Team): TeamRecordStats? {
+        val teamId = selectedTeam.toKboTeamId() ?: return null
+        val seasonCode = LocalDate.now().year.toString()
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/team-records/$teamId?categoryId=kbo&seasonCode=$seasonCode"
+        return getJson(endpoint) { body ->
+            JSONObject(body).toTeamRecordStats()
         }
     }
 
@@ -181,6 +197,15 @@ object BackendGamesRepository {
         )
     }
 
+    private fun JSONObject.toTeamRecordStats(): TeamRecordStats {
+        return TeamRecordStats(
+            teamId = optString("teamId"),
+            ranking = optNullableInt("ranking"),
+            wra = optNullableDouble("wra"),
+            updatedAt = optString("updatedAt").ifBlank { null }
+        )
+    }
+
     private fun statusFromBackend(raw: String): GameStatus {
         return when (raw.uppercase()) {
             "LIVE" -> GameStatus.LIVE
@@ -257,5 +282,31 @@ object BackendGamesRepository {
         return runCatching {
             String(value.toByteArray(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8)
         }.getOrDefault(value)
+    }
+
+    private fun Team.toKboTeamId(): String? {
+        return when (this) {
+            Team.DOOSAN -> "OB"
+            Team.LG -> "LG"
+            Team.KIWOOM -> "WO"
+            Team.SAMSUNG -> "SS"
+            Team.LOTTE -> "LT"
+            Team.SSG -> "SK"
+            Team.KT -> "KT"
+            Team.HANWHA -> "HH"
+            Team.KIA -> "HT"
+            Team.NC -> "NC"
+            Team.NONE -> null
+        }
+    }
+
+    private fun JSONObject.optNullableInt(key: String): Int? {
+        if (!has(key) || isNull(key)) return null
+        return runCatching { getInt(key) }.getOrNull()
+    }
+
+    private fun JSONObject.optNullableDouble(key: String): Double? {
+        if (!has(key) || isNull(key)) return null
+        return runCatching { getDouble(key) }.getOrNull()
     }
 }

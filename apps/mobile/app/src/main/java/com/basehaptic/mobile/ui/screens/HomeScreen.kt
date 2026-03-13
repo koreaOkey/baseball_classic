@@ -55,9 +55,33 @@ fun HomeScreen(
             delay(5000)
         }
     }
+
+    val teamRecordStats by produceState<BackendGamesRepository.TeamRecordStats?>(
+        initialValue = null,
+        selectedTeam
+    ) {
+        if (selectedTeam == Team.NONE) {
+            value = null
+            return@produceState
+        }
+
+        while (currentCoroutineContext().isActive) {
+            val backendTeamRecord = runCatching {
+                withContext(Dispatchers.IO) {
+                    BackendGamesRepository.fetchTeamRecord(selectedTeam)
+                }
+            }.getOrNull()
+            if (backendTeamRecord != null) {
+                value = backendTeamRecord
+            }
+            delay(30000)
+        }
+    }
     
     val teamTheme = LocalTeamTheme.current
     val primaryColor = activeTheme?.colors?.primary ?: teamTheme.primary
+    val rankingText = teamRecordStats?.ranking?.let { "${it}위" } ?: "-"
+    val wraText = teamRecordStats?.wra?.let { String.format(Locale.US, "%.3f", it) } ?: "-.--"
 
     LazyColumn(
         modifier = Modifier
@@ -178,13 +202,13 @@ fun HomeScreen(
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    value = "2\uC704",
+                    value = rankingText,
                     label = "\uD604\uC7AC \uC21C\uC704",
                     valueColor = Yellow500
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    value = "0.625",
+                    value = wraText,
                     label = "\uC2B9\uB960",
                     valueColor = Blue500
                 )

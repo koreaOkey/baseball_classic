@@ -141,12 +141,74 @@ class CrawlerSnapshotRequest(BaseModel):
     notes: list[CrawlerGameNoteIn] | None = None
 
 
+class CrawlerTeamRecordIn(BaseModel):
+    upperCategoryId: str | None = Field(default=None, max_length=32)
+    categoryId: str = Field(min_length=1, max_length=32)
+    seasonCode: str = Field(min_length=1, max_length=8)
+    teamId: str = Field(min_length=1, max_length=32)
+    teamName: str = Field(min_length=1, max_length=64)
+    teamShortName: str | None = Field(default=None, max_length=64)
+    ranking: int | None = Field(default=None, ge=1)
+    orderNo: int | None = Field(default=None, ge=1)
+    gameType: str | None = Field(default=None, max_length=32)
+    wra: float | None = Field(default=None, ge=0)
+    gameCount: int | None = Field(default=None, ge=0)
+    winGameCount: int | None = Field(default=None, ge=0)
+    drawnGameCount: int | None = Field(default=None, ge=0)
+    loseGameCount: int | None = Field(default=None, ge=0)
+    gameBehind: float | None = None
+    continuousGameResult: str | None = Field(default=None, max_length=32)
+    lastFiveGames: str | None = Field(default=None, max_length=16)
+    offenseHra: float | None = Field(default=None, ge=0)
+    defenseEra: float | None = Field(default=None, ge=0)
+    observedAt: datetime | None = None
+    raw: dict[str, Any] | None = None
+
+
+class CrawlerTeamRecordRequest(BaseModel):
+    upperCategoryId: str | None = Field(default=None, max_length=32)
+    categoryId: str = Field(min_length=1, max_length=32)
+    seasonCode: str = Field(min_length=1, max_length=8)
+    observedAt: datetime | None = None
+    records: list[CrawlerTeamRecordIn] = Field(default_factory=list)
+
+
 class IngestResult(BaseModel):
     gameId: str
     receivedEvents: int
     insertedEvents: int
     duplicateEvents: int
     status: GameStatus
+    updatedAt: datetime
+
+
+class TeamRecordIngestResult(BaseModel):
+    categoryId: str
+    seasonCode: str
+    receivedRecords: int
+    upsertedRecords: int
+    updatedAt: datetime
+
+
+class TeamRecordOut(BaseModel):
+    upperCategoryId: str | None = None
+    categoryId: str
+    seasonCode: str
+    teamId: str
+    teamName: str
+    teamShortName: str | None = None
+    ranking: int | None = None
+    wra: float | None = None
+    gameCount: int | None = None
+    winGameCount: int | None = None
+    drawnGameCount: int | None = None
+    loseGameCount: int | None = None
+    gameBehind: float | None = None
+    continuousGameResult: str | None = None
+    lastFiveGames: str | None = None
+    offenseHra: float | None = None
+    defenseEra: float | None = None
+    observedAt: datetime | None = None
     updatedAt: datetime
 
 

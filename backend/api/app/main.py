@@ -12,14 +12,27 @@ from .config import get_settings
 from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
 from .models import Game, GameEvent
-from .schemas import CrawlerSnapshotRequest, EventsResponse, GameStateOut, GameStatus, GameSummaryOut, IngestResult
+from .schemas import (
+    CrawlerSnapshotRequest,
+    CrawlerTeamRecordRequest,
+    EventsResponse,
+    GameStateOut,
+    GameStatus,
+    GameSummaryOut,
+    IngestResult,
+    TeamRecordIngestResult,
+    TeamRecordOut,
+)
 from .services import (
     build_game_state,
+    get_team_record,
     insert_events,
     normalize_status,
     sync_snapshot_details,
+    to_team_record_out,
     to_event_out,
     to_game_summary,
+    upsert_team_records,
     upsert_game_from_snapshot,
 )
 
@@ -121,6 +134,25 @@ def get_game_events(
     )
 
 
+@app.get("/team-records/{team_id}", response_model=TeamRecordOut)
+def get_team_record_by_team(
+    team_id: str,
+    category_id: str = Query(default="kbo", alias="categoryId"),
+    season_code: str | None = Query(default=None, alias="seasonCode"),
+    db: Session = Depends(get_db),
+) -> TeamRecordOut:
+    normalized_season_code = (season_code or str(datetime.now(UTC).year)).strip()
+    row = get_team_record(
+        db,
+        category_id=category_id.strip(),
+        season_code=normalized_season_code,
+        team_id=team_id.strip(),
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="team record not found")
+    return to_team_record_out(row)
+
+
 @app.post("/internal/crawler/games/{game_id}/snapshot", response_model=IngestResult)
 async def ingest_crawler_snapshot(
     game_id: str,
@@ -164,6 +196,26 @@ async def ingest_crawler_snapshot(
         duplicateEvents=duplicate_count,
         status=normalize_status(game.status),
         updatedAt=game.updated_at,
+    )
+
+
+@app.post("/internal/crawler/team-records", response_model=TeamRecordIngestResult)
+def ingest_crawler_team_records(
+    payload: CrawlerTeamRecordRequest,
+    db: Session = Depends(get_db),
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+) -> TeamRecordIngestResult:
+    if x_api_key is None or not secrets.compare_digest(x_api_key, settings.crawler_api_key):
+        raise HTTPException(status_code=401, detail="invalid crawler api key")
+
+    upserted_records = upsert_team_records(db, payload)
+    db.commit()
+    return TeamRecordIngestResult(
+        categoryId=payload.categoryId,
+        seasonCode=payload.seasonCode,
+        receivedRecords=len(payload.records),
+        upsertedRecords=upserted_records,
+        updatedAt=datetime.now(UTC),
     )
 
 
