@@ -1,6 +1,8 @@
 import argparse
+from datetime import date
 
 from live_wbc_dispatcher import (
+    _build_schedule_import_dates,
     _build_team_record_payload,
     _parse_schedule_url,
     _preview_has_lineup,
@@ -169,3 +171,36 @@ def test_parser_team_record_sync_options() -> None:
     )
     assert args_disabled.disable_team_record_sync is True
     assert args_disabled.team_record_season_code == "2026"
+
+
+def test_build_schedule_import_dates_defaults_to_at_least_one_day() -> None:
+    dates = _build_schedule_import_dates(date(2026, 3, 14), 0)
+    assert len(dates) == 1
+    assert dates[0] == date(2026, 3, 14)
+
+
+def test_build_schedule_import_dates_builds_range() -> None:
+    dates = _build_schedule_import_dates(date(2026, 3, 14), 3)
+    assert dates == [
+        date(2026, 3, 14),
+        date(2026, 3, 15),
+        date(2026, 3, 16),
+    ]
+
+
+def test_parser_schedule_import_days_default_and_override() -> None:
+    parser = build_parser()
+    args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
+    assert args_default.schedule_import_days == 30
+
+    args_custom = parser.parse_args(
+        [
+            "--backend-base-url",
+            "http://localhost:8080",
+            "--backend-api-key",
+            "x",
+            "--schedule-import-days",
+            "45",
+        ]
+    )
+    assert args_custom.schedule_import_days == 45

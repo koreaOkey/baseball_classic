@@ -77,6 +77,32 @@ fun HomeScreen(
             delay(30000)
         }
     }
+
+    val upcomingGames by produceState(
+        initialValue = emptyList<BackendGamesRepository.UpcomingGameSchedule>(),
+        selectedTeam
+    ) {
+        if (selectedTeam == Team.NONE) {
+            value = emptyList()
+            return@produceState
+        }
+
+        while (currentCoroutineContext().isActive) {
+            val backendUpcomingGames = runCatching {
+                withContext(Dispatchers.IO) {
+                    BackendGamesRepository.fetchUpcomingMyTeamGames(
+                        selectedTeam = selectedTeam,
+                        maxItems = 3,
+                        daysAhead = 30
+                    )
+                }
+            }.getOrNull()
+            if (backendUpcomingGames != null) {
+                value = backendUpcomingGames
+            }
+            delay(60000)
+        }
+    }
     
     val teamTheme = LocalTeamTheme.current
     val primaryColor = activeTheme?.colors?.primary ?: teamTheme.primary
@@ -251,90 +277,28 @@ fun HomeScreen(
             )
         }
 
-        // Upcoming Games
-        item {
-            Spacer(modifier = Modifier.height(32.dp))
-            Text(
-                text = "\uB2E4\uAC00\uC624\uB294 \uACBD\uAE30",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
-            )
+        // Upcoming Games (next 3 my-team schedules after today)
+        if (upcomingGames.isNotEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+                Text(
+                    text = "\uB2E4\uAC00\uC624\uB294 \uACBD\uAE30",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                )
+            }
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 24.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = Gray900,
-                tonalElevation = 1.dp
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "3월 8일 18:30",
-                            fontSize = 14.sp,
-                            color = Gray400
-                        )
-                        TextButton(onClick = { }) {
-                            Text(
-                                text = "응원 메시지 보내기",
-                                fontSize = 14.sp,
-                                color = teamTheme.primary
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = selectedTeam.teamName,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White
-                            )
-                            Text(
-                                text = " vs ",
-                                fontSize = 14.sp,
-                                color = Gray500,
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            )
-                            Text(
-                                text = "KT \uC704\uC988",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Default.TrendingUp,
-                            contentDescription = null,
-                            tint = Green500,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Text(
-                        text = "\uC778\uCC9C SSG \uB79C\uB354\uC2A4\uD544\uB4DC",
-                        fontSize = 12.sp,
-                        color = Gray500,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
+            items(
+                items = upcomingGames,
+                key = { "${it.gameDate}:${it.game.id}" }
+            ) { upcoming ->
+                UpcomingGameCard(
+                    selectedTeam = selectedTeam,
+                    upcoming = upcoming,
+                    primaryColor = teamTheme.primary
+                )
             }
         }
 
@@ -372,6 +336,99 @@ private fun StatCard(
                 fontSize = 11.sp,
                 color = Gray400,
                 modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun UpcomingGameCard(
+    selectedTeam: Team,
+    upcoming: BackendGamesRepository.UpcomingGameSchedule,
+    primaryColor: Color
+) {
+    val game = upcoming.game
+    val isMyTeamHome = game.homeTeamId == selectedTeam
+    val myTeamName = if (isMyTeamHome) game.homeTeam else game.awayTeam
+    val opponentTeamName = if (isMyTeamHome) game.awayTeam else game.homeTeam
+    val dateTimeText = formatUpcomingDateTime(upcoming.gameDate, game.time)
+    val venueText = if (isMyTeamHome) {
+        "${game.homeTeam} 홈경기"
+    } else {
+        "${game.homeTeam} 원정경기"
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 12.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Gray900,
+        tonalElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = dateTimeText,
+                    fontSize = 14.sp,
+                    color = Gray400
+                )
+                TextButton(onClick = { }) {
+                    Text(
+                        text = "응원 메시지 보내기",
+                        fontSize = 14.sp,
+                        color = primaryColor
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = myTeamName,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White
+                    )
+                    Text(
+                        text = " vs ",
+                        fontSize = 14.sp,
+                        color = Gray500,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    Text(
+                        text = opponentTeamName,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.TrendingUp,
+                    contentDescription = null,
+                    tint = Green500,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Text(
+                text = venueText,
+                fontSize = 12.sp,
+                color = Gray500,
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
@@ -591,6 +648,12 @@ private fun TeamScoreRow(
             color = if (isWinner) Color.White else if (isScheduled) Color.White else Gray500
         )
     }
+}
+
+private fun formatUpcomingDateTime(gameDate: LocalDate, rawTime: String?): String {
+    val dateText = gameDate.format(DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN))
+    val timeText = if (rawTime.isNullOrBlank()) "--:--" else rawTime
+    return "$dateText $timeText"
 }
 
 private fun sortHomeGames(games: List<Game>): List<Game> {

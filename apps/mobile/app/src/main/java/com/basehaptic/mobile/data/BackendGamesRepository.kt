@@ -8,6 +8,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -59,9 +60,51 @@ object BackendGamesRepository {
         val updatedAt: String?
     )
 
+    data class UpcomingGameSchedule(
+        val gameDate: LocalDate,
+        val game: Game
+    )
+
     fun fetchGames(selectedTeam: Team): List<Game>? {
-        val today = LocalDate.now().toString()
-        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games?date=$today&limit=20"
+        return fetchGamesByDate(selectedTeam = selectedTeam, targetDate = LocalDate.now())
+    }
+
+    fun fetchUpcomingMyTeamGames(
+        selectedTeam: Team,
+        maxItems: Int = 3,
+        daysAhead: Int = 30
+    ): List<UpcomingGameSchedule>? {
+        if (selectedTeam == Team.NONE) return emptyList()
+        val normalizedMaxItems = maxItems.coerceAtLeast(1)
+        val normalizedDaysAhead = daysAhead.coerceAtLeast(1)
+        val now = LocalDate.now()
+        val items = mutableListOf<UpcomingGameSchedule>()
+
+        for (offset in 1..normalizedDaysAhead) {
+            val targetDate = now.plusDays(offset.toLong())
+            val dayGames = fetchGamesByDate(selectedTeam = selectedTeam, targetDate = targetDate).orEmpty()
+            if (dayGames.isEmpty()) continue
+
+            val upcomingMyTeamGames = dayGames
+                .asSequence()
+                .filter { it.isMyTeam && it.status == GameStatus.SCHEDULED }
+                .sortedBy { parseGameTimeToSortKey(it.time) }
+                .map { game -> UpcomingGameSchedule(gameDate = targetDate, game = game) }
+                .toList()
+
+            for (entry in upcomingMyTeamGames) {
+                items.add(entry)
+                if (items.size >= normalizedMaxItems) {
+                    return items
+                }
+            }
+        }
+
+        return items
+    }
+
+    private fun fetchGamesByDate(selectedTeam: Team, targetDate: LocalDate): List<Game>? {
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games?date=${targetDate}&limit=100"
         return getJson(endpoint) { body ->
             val array = JSONArray(body)
             val items = ArrayList<Game>(array.length())
@@ -243,6 +286,14 @@ object BackendGamesRepository {
             val afterT = raw.substringAfter("T", missingDelimiterValue = "")
             if (afterT.length >= 5) afterT.take(5) else "--:--"
         }
+    }
+
+    private fun parseGameTimeToSortKey(raw: String?): Int {
+        if (raw.isNullOrBlank()) return Int.MAX_VALUE
+        return runCatching {
+            val localTime = LocalTime.parse(raw, hhmmFormatter)
+            localTime.hour * 60 + localTime.minute
+        }.getOrDefault(Int.MAX_VALUE)
     }
 
     private fun teamFromBackend(value: String): Team {

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import subprocess
 import sys
 import time
@@ -24,6 +25,7 @@ LEAGUE_PRESETS: dict[str, tuple[str, str]] = {
     "wbc": ("wbaseball", "wbc"),
     "kbo": ("kbaseball", "kbo"),
 }
+KBO_GAME_ID_PATTERN = re.compile(r"^\d{8}[A-Z]{4}\d{5}$")
 
 
 @dataclass(frozen=True)
@@ -384,6 +386,25 @@ def _fetch_schedule_games(
     target_date: date,
     timeout: float,
 ) -> list[dict[str, Any]]:
+    try:
+        calendar_games = _fetch_schedule_games_via_calendar(
+            source_base_url=source_base_url,
+            section_id=section_id,
+            category_id=category_id,
+            target_date=target_date,
+            timeout=timeout,
+        )
+        if calendar_games:
+            return calendar_games
+    except Exception as exc:
+        LOGGER.warning(
+            "[import] calendar_fetch_failed date=%s section=%s category=%s error=%s",
+            target_date.isoformat(),
+            section_id,
+            category_id,
+            exc,
+        )
+
     endpoint = f"{source_base_url.rstrip('/')}/schedule/games"
     response = requests.get(
         endpoint,
@@ -402,6 +423,81 @@ def _fetch_schedule_games(
     if isinstance(games, list):
         return [item for item in games if isinstance(item, dict)]
     return []
+
+
+def _fetch_schedule_games_via_calendar(
+    *,
+    source_base_url: str,
+    section_id: str,
+    category_id: str,
+    target_date: date,
+    timeout: float,
+) -> list[dict[str, Any]]:
+    calendar_endpoint = f"{source_base_url.rstrip('/')}/schedule/calendar"
+    response = requests.get(
+        calendar_endpoint,
+        params={
+            "sectionId": section_id,
+            "categoryId": category_id,
+            "date": target_date.isoformat(),
+        },
+        headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    result = (payload.get("result") or {}) if isinstance(payload, dict) else {}
+    dates = result.get("dates") or []
+    if not isinstance(dates, list):
+        return []
+
+    target_iso = target_date.isoformat()
+    target_prefix = target_date.strftime("%Y%m%d")
+    target_row = next(
+        (
+            item
+            for item in dates
+            if isinstance(item, dict) and str(item.get("ymd") or "").strip() == target_iso
+        ),
+        None,
+    )
+    if target_row is None:
+        return []
+
+    game_infos = target_row.get("gameInfos") or []
+    if not isinstance(game_infos, list):
+        return []
+
+    game_ids: list[str] = []
+    for info in game_infos:
+        if not isinstance(info, dict):
+            continue
+        game_id = str(info.get("gameId") or "").strip()
+        if not game_id.startswith(target_prefix):
+            continue
+        if section_id == "kbaseball" and category_id == "kbo" and not KBO_GAME_ID_PATTERN.match(game_id):
+            continue
+        game_ids.append(game_id)
+
+    if not game_ids:
+        return []
+
+    deduped_game_ids = list(dict.fromkeys(game_ids))
+    games: list[dict[str, Any]] = []
+    for game_id in deduped_game_ids:
+        game_endpoint = f"{source_base_url.rstrip('/')}/schedule/games/{game_id}"
+        game_response = requests.get(
+            game_endpoint,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
+            timeout=timeout,
+        )
+        game_response.raise_for_status()
+        game_payload = game_response.json()
+        game_result = (game_payload.get("result") or {}) if isinstance(game_payload, dict) else {}
+        game = game_result.get("game")
+        if isinstance(game, dict):
+            games.append(game)
+    return games
 
 
 def _fetch_team_rank_rows(
@@ -678,6 +774,11 @@ def _run_schedule_import(
     return failure_count == 0
 
 
+def _build_schedule_import_dates(start_date: date, days: int) -> list[date]:
+    normalized_days = max(1, days)
+    return [start_date + timedelta(days=offset) for offset in range(normalized_days)]
+
+
 def _start_crawler(
     repo_root: Path,
     python_executable: str,
@@ -816,18 +917,30 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                 mode = "daily" if should_daily_import else "refresh"
                 last_import_attempt_at = now
                 LOGGER.info("[import] due mode=%s date=%s", mode, now.date().isoformat())
-                any_success = False
+                all_success = True
+                import_dates = _build_schedule_import_dates(
+                    start_date=now.date(),
+                    days=args.schedule_import_days if should_daily_import else 1,
+                )
+                LOGGER.info(
+                    "[import] date_range mode=%s days=%s from=%s to=%s",
+                    mode,
+                    len(import_dates),
+                    import_dates[0].isoformat(),
+                    import_dates[-1].isoformat(),
+                )
                 for target in schedule_targets:
-                    if _run_schedule_import(
-                        source_base_url=args.source_base_url,
-                        backend_base_url=args.backend_base_url,
-                        backend_api_key=args.backend_api_key,
-                        target_date=now.date(),
-                        section_id=target.section_id,
-                        category_id=target.category_id,
-                        timeout=args.http_timeout_sec,
-                    ):
-                        any_success = True
+                    for import_date in import_dates:
+                        if not _run_schedule_import(
+                            source_base_url=args.source_base_url,
+                            backend_base_url=args.backend_base_url,
+                            backend_api_key=args.backend_api_key,
+                            target_date=import_date,
+                            section_id=target.section_id,
+                            category_id=target.category_id,
+                            timeout=args.http_timeout_sec,
+                        ):
+                            all_success = False
                     if not args.disable_team_record_sync:
                         season_code = str(args.team_record_season_code or now.date().year).strip()
                         _run_team_record_import(
@@ -840,7 +953,7 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                             timeout=args.http_timeout_sec,
                         )
 
-                if any_success:
+                if all_success:
                     imported_date = now.date()
                     last_import_success_at = now
                     refresh_windows(now.date())
@@ -980,6 +1093,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=300,
         help="Re-import today's schedule every N seconds after daily import (0 to disable).",
+    )
+    parser.add_argument(
+        "--schedule-import-days",
+        type=int,
+        default=30,
+        help=(
+            "Number of days to import from the current date during daily import "
+            "(default: 30). Refresh import keeps using only today's date."
+        ),
     )
     parser.add_argument(
         "--team-record-season-code",

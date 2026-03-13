@@ -258,3 +258,28 @@ graph LR
   - `��`: sync current game to watch
   - `�ƴϿ�`: do not sync
   - existing manual watch-sync flow from live card tap remains unchanged
+
+## Recent Changes (2026-03-14)
+
+- Added KBO team-rank ingest pipeline (`crawler -> backend -> Supabase`):
+  - crawler/dispatcher fetches
+    `GET /statistics/categories/{categoryId}/seasons/{seasonCode}/teams`
+  - backend ingest endpoint added:
+    `POST /internal/crawler/team-records`
+  - Supabase table added:
+    `public.team_record`
+- Added team-rank persistence model and migration:
+  - backend model/schema/service for `team_record` upsert
+  - migration file:
+    `db/migrations/20260314_008_add_team_record_table.sql`
+  - includes unique key, rank index, `updated_at` trigger, and public read RLS policy
+- Added team-rank read API for clients:
+  - `GET /team-records/{teamId}?categoryId=kbo&seasonCode=YYYY`
+  - used by mobile app (no direct DB access from app)
+- Updated mobile Home quick stats cards:
+  - `현재 순위` now uses `team_record.ranking`
+  - `승률` now uses `team_record.wra`
+  - data source is backend API ingest output, not direct DB query from mobile
+- Improved watch team-sync reliability when favorite team changes:
+  - mobile theme sync no longer skips when `connectedNodes` is temporarily empty
+  - theme sync path is now stable (`/theme/current`) so latest favorite team is kept as current state
