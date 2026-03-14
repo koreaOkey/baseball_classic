@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from typing import Annotated
+import asyncio
+import logging
 import secrets
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import and_, or_, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -38,6 +41,23 @@ from .services import (
 
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS = (0.2, 0.5, 1.0)
+
+
+def _is_snapshot_lock_timeout(exc: DBAPIError) -> bool:
+    # Supabase/Postgres can raise statement timeout while waiting on row lock:
+    # "canceling statement due to statement timeout ... while locking tuple ... in relation \"games\""
+    message = str(exc).lower()
+    original = getattr(exc, "orig", None)
+    if original is not None:
+        message = f"{message} {original}".lower()
+        sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+        if sqlstate in {"55P03", "57014"} and "lock" in message:
+            return True
+
+    return "statement timeout" in message and "locking tuple" in message and "games" in message
 
 
 @asynccontextmanager
@@ -163,17 +183,45 @@ async def ingest_crawler_snapshot(
     if x_api_key is None or not secrets.compare_digest(x_api_key, settings.crawler_api_key):
         raise HTTPException(status_code=401, detail="invalid crawler api key")
 
-    game = upsert_game_from_snapshot(db, game_id=game_id, payload=payload)
-    inserted_events, duplicate_count = insert_events(
-        db,
-        game_id=game_id,
-        events=payload.events,
-        fallback_pitcher=payload.pitcher,
-        fallback_batter=payload.batter,
-    )
-    sync_snapshot_details(db, game_id=game_id, payload=payload)
-    db.commit()
-    db.refresh(game)
+    game: Game | None = None
+    inserted_events: list[GameEvent] = []
+    duplicate_count = 0
+
+    for attempt in range(len(SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS) + 1):
+        try:
+            game = upsert_game_from_snapshot(db, game_id=game_id, payload=payload)
+            inserted_events, duplicate_count = insert_events(
+                db,
+                game_id=game_id,
+                events=payload.events,
+                fallback_pitcher=payload.pitcher,
+                fallback_batter=payload.batter,
+            )
+            sync_snapshot_details(db, game_id=game_id, payload=payload)
+            db.commit()
+            db.refresh(game)
+            break
+        except DBAPIError as exc:
+            db.rollback()
+            if not _is_snapshot_lock_timeout(exc):
+                raise
+
+            if attempt >= len(SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS):
+                logger.error("snapshot ingest lock timeout exhausted: game_id=%s", game_id)
+                raise HTTPException(status_code=503, detail="snapshot ingest busy; retry shortly") from exc
+
+            delay = SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS[attempt]
+            logger.warning(
+                "snapshot ingest lock timeout; retrying game_id=%s attempt=%s delay=%.1fs",
+                game_id,
+                attempt + 1,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+    if game is None:
+        raise HTTPException(status_code=500, detail="snapshot ingest failed")
+
     state = build_game_state(db, game)
 
     if inserted_events:

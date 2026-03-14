@@ -1,8 +1,10 @@
 import os
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 
 API_ROOT = Path(__file__).resolve().parents[1]
 if str(API_ROOT) not in sys.path:
@@ -18,6 +20,7 @@ os.environ["BASEHAPTIC_CRAWLER_API_KEY"] = "test-key"
 os.environ["BASEHAPTIC_CORS_ALLOW_ORIGINS"] = "*"
 
 from app.main import app  # noqa: E402
+from app import main as main_module  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, TeamRecord  # noqa: E402
 from app.services import _event_out_count, normalize_event_type  # noqa: E402
@@ -210,6 +213,18 @@ def sample_team_records_payload() -> dict:
             },
         ],
     }
+
+
+def _make_lock_timeout_error() -> OperationalError:
+    class _OrigError(Exception):
+        def __init__(self, message: str):
+            super().__init__(message)
+            self.sqlstate = "57014"
+
+    original = _OrigError(
+        'canceling statement due to statement timeout CONTEXT: while locking tuple (2,19) in relation "games"'
+    )
+    return OperationalError("UPDATE games ...", {}, original)
 
 
 def test_ingest_and_query_flow() -> None:
@@ -646,3 +661,52 @@ def test_get_team_record_returns_404_when_not_found() -> None:
     with TestClient(app) as client:
         response = client.get("/team-records/NOPE?categoryId=kbo&seasonCode=2026")
         assert response.status_code == 404
+
+
+def test_snapshot_ingest_retries_on_lock_timeout_and_succeeds() -> None:
+    with TestClient(app) as client:
+        game_id = "20250501SSSK02025_RETRY"
+        payload = sample_snapshot()
+        original_upsert = main_module.upsert_game_from_snapshot
+        calls = {"count": 0}
+
+        def flaky_upsert(db, game_id: str, payload):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise _make_lock_timeout_error()
+            return original_upsert(db, game_id=game_id, payload=payload)
+
+        with (
+            patch.object(main_module, "upsert_game_from_snapshot", side_effect=flaky_upsert),
+            patch.object(main_module.asyncio, "sleep", new=AsyncMock(return_value=None)),
+        ):
+            response = client.post(
+                f"/internal/crawler/games/{game_id}/snapshot",
+                headers={"X-API-Key": "test-key"},
+                json=payload,
+            )
+
+        assert response.status_code == 200
+        assert calls["count"] == 2
+
+
+def test_snapshot_ingest_returns_503_when_lock_timeout_persists() -> None:
+    with TestClient(app) as client:
+        game_id = "20250501SSSK02025_BUSY"
+        payload = sample_snapshot()
+
+        def always_lock(*args, **kwargs):
+            raise _make_lock_timeout_error()
+
+        with (
+            patch.object(main_module, "upsert_game_from_snapshot", side_effect=always_lock),
+            patch.object(main_module.asyncio, "sleep", new=AsyncMock(return_value=None)),
+        ):
+            response = client.post(
+                f"/internal/crawler/games/{game_id}/snapshot",
+                headers={"X-API-Key": "test-key"},
+                json=payload,
+            )
+
+        assert response.status_code == 503
+        assert response.json()["detail"] == "snapshot ingest busy; retry shortly"
