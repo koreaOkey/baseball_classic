@@ -60,6 +60,23 @@ def _is_snapshot_lock_timeout(exc: DBAPIError) -> bool:
     return "statement timeout" in message and "locking tuple" in message and "games" in message
 
 
+def _rollback_session_safely(db: Session, *, game_id: str, attempt: int) -> bool:
+    try:
+        db.rollback()
+        return True
+    except Exception:
+        logger.exception(
+            "snapshot ingest rollback failed: game_id=%s attempt=%s",
+            game_id,
+            attempt,
+        )
+        try:
+            db.close()
+        except Exception:
+            logger.exception("snapshot ingest session close failed: game_id=%s", game_id)
+        return False
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
@@ -202,7 +219,9 @@ async def ingest_crawler_snapshot(
             db.refresh(game)
             break
         except DBAPIError as exc:
-            db.rollback()
+            rollback_ok = _rollback_session_safely(db, game_id=game_id, attempt=attempt + 1)
+            if not rollback_ok:
+                raise HTTPException(status_code=503, detail="snapshot ingest busy; retry shortly") from exc
             if not _is_snapshot_lock_timeout(exc):
                 raise
 

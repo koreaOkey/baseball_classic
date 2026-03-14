@@ -35,6 +35,8 @@ engine = create_engine(
     future=True,
     echo=False,
     connect_args=connect_args,
+    pool_pre_ping=True,
+    pool_recycle=1800,
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

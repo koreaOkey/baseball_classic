@@ -710,3 +710,39 @@ def test_snapshot_ingest_returns_503_when_lock_timeout_persists() -> None:
 
         assert response.status_code == 503
         assert response.json()["detail"] == "snapshot ingest busy; retry shortly"
+
+
+def test_rollback_session_safely_success() -> None:
+    class DummySession:
+        def __init__(self) -> None:
+            self.rolled_back = False
+            self.closed = False
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+        def close(self) -> None:
+            self.closed = True
+
+    session = DummySession()
+    ok = main_module._rollback_session_safely(session, game_id="G1", attempt=1)
+    assert ok is True
+    assert session.rolled_back is True
+    assert session.closed is False
+
+
+def test_rollback_session_safely_handles_rollback_error() -> None:
+    class DummySession:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def rollback(self) -> None:
+            raise RuntimeError("rollback failed")
+
+        def close(self) -> None:
+            self.closed = True
+
+    session = DummySession()
+    ok = main_module._rollback_session_safely(session, game_id="G2", attempt=2)
+    assert ok is False
+    assert session.closed is True

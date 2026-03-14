@@ -204,3 +204,47 @@ def test_parser_schedule_import_days_default_and_override() -> None:
         ]
     )
     assert args_custom.schedule_import_days == 45
+
+
+def test_parser_crawler_backend_retry_options_default_and_override() -> None:
+    parser = build_parser()
+    args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
+    assert args_default.crawler_backend_timeout_sec == 15.0
+    assert args_default.crawler_backend_retries == 9
+
+    args_custom = parser.parse_args(
+        [
+            "--backend-base-url",
+            "http://localhost:8080",
+            "--backend-api-key",
+            "x",
+            "--crawler-backend-timeout-sec",
+            "15",
+            "--crawler-backend-retries",
+            "9",
+        ]
+    )
+    assert args_custom.crawler_backend_timeout_sec == 15.0
+    assert args_custom.crawler_backend_retries == 9
+
+
+def test_parser_dispatcher_singleton_options() -> None:
+    parser = build_parser()
+    args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
+    assert args_default.dispatcher_lock_file == "log/dispatcher.lock"
+    assert args_default.leader_replica_id is None
+
+    args_custom = parser.parse_args(
+        [
+            "--backend-base-url",
+            "http://localhost:8080",
+            "--backend-api-key",
+            "x",
+            "--dispatcher-lock-file",
+            "log/custom.lock",
+            "--leader-replica-id",
+            "replica-1",
+        ]
+    )
+    assert args_custom.dispatcher_lock_file == "log/custom.lock"
+    assert args_custom.leader_replica_id == "replica-1"

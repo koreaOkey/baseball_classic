@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time as dt_time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
@@ -56,6 +56,49 @@ class RunningCrawler:
     log_path: Path
     log_handle: Any
     started_at: datetime
+
+
+def _acquire_dispatcher_lock(lock_path: Path) -> TextIO | None:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            if handle.tell() == 0:
+                handle.write(" ")
+                handle.flush()
+                handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except Exception:
+        handle.close()
+        return None
+
+    handle.seek(0)
+    handle.truncate(0)
+    handle.write(f"pid={os.getpid()} startedAt={datetime.now(KST).isoformat()}\n")
+    handle.flush()
+    return handle
+
+
+def _release_dispatcher_lock(handle: TextIO) -> None:
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
 
 
 def _setup_logging(log_dir: Path) -> Path:
@@ -787,12 +830,17 @@ def _start_crawler(
     crawler_interval_sec: int,
     backend_base_url: str,
     backend_api_key: str,
+    crawler_backend_timeout_sec: float,
+    crawler_backend_retries: int,
     log_dir: Path,
 ) -> RunningCrawler:
     crawler_script = repo_root / "crawler" / "crawler.py"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"live_crawler_{game_id}.log"
     log_handle = log_path.open("a", encoding="utf-8")
+
+    normalized_backend_retries = max(1, int(crawler_backend_retries))
+    normalized_backend_timeout = max(1.0, float(crawler_backend_timeout_sec))
 
     cmd = [
         python_executable,
@@ -808,6 +856,10 @@ def _start_crawler(
         backend_base_url.rstrip("/"),
         "--backend-api-key",
         backend_api_key,
+        "--backend-timeout",
+        str(normalized_backend_timeout),
+        "--backend-retries",
+        str(normalized_backend_retries),
         "--output",
         str(log_dir / f"relay_{game_id}.xlsx"),
     ]
@@ -851,6 +903,33 @@ def run_dispatcher(args: argparse.Namespace) -> None:
         "[dispatcher] schedule_targets=%s",
         ", ".join(f"{target.section_id}:{target.category_id}({target.source})" for target in schedule_targets),
     )
+    LOGGER.info(
+        "[dispatcher] crawler_backend timeout=%ss retries=%s",
+        args.crawler_backend_timeout_sec,
+        args.crawler_backend_retries,
+    )
+
+    leader_replica_id = str(args.leader_replica_id or "").strip()
+    if leader_replica_id:
+        current_replica_id = str(os.getenv("RAILWAY_REPLICA_ID") or "").strip()
+        if current_replica_id and current_replica_id != leader_replica_id:
+            LOGGER.info(
+                "[dispatcher] skip non-leader replica current=%s leader=%s",
+                current_replica_id,
+                leader_replica_id,
+            )
+            return
+        if not current_replica_id:
+            LOGGER.warning(
+                "[dispatcher] --leader-replica-id is set (%s) but RAILWAY_REPLICA_ID is empty; continuing",
+                leader_replica_id,
+            )
+
+    lock_file = repo_root / args.dispatcher_lock_file
+    lock_handle = _acquire_dispatcher_lock(lock_file)
+    if lock_handle is None:
+        LOGGER.warning("[dispatcher] another instance is already running; lock=%s", lock_file)
+        return
 
     windows: dict[str, RelayCheckWindow] = {}
     running: dict[str, RunningCrawler] = {}
@@ -887,145 +966,154 @@ def run_dispatcher(args: argparse.Namespace) -> None:
             preview_ids,
         )
 
-    now = datetime.now(KST)
-    refresh_windows(now.date())
-
-    while True:
+    try:
         now = datetime.now(KST)
-        _cleanup_finished_processes(running)
+        refresh_windows(now.date())
 
-        import_trigger = datetime.combine(
-            now.date(),
-            dt_time(hour=args.schedule_hour, minute=args.schedule_minute),
-            tzinfo=KST,
-        )
-        should_daily_import = now >= import_trigger and imported_date != now.date()
-        should_refresh_import = (
-            args.schedule_refresh_interval_sec > 0
-            and imported_date == now.date()
-            and (
-                last_import_success_at is None
-                or now - last_import_success_at >= timedelta(seconds=args.schedule_refresh_interval_sec)
+        while True:
+            now = datetime.now(KST)
+            _cleanup_finished_processes(running)
+
+            import_trigger = datetime.combine(
+                now.date(),
+                dt_time(hour=args.schedule_hour, minute=args.schedule_minute),
+                tzinfo=KST,
             )
-        )
-        if should_daily_import or should_refresh_import:
-            should_attempt = (
-                last_import_attempt_at is None
-                or now - last_import_attempt_at >= timedelta(seconds=args.import_retry_interval_sec)
-            )
-            if should_attempt:
-                mode = "daily" if should_daily_import else "refresh"
-                last_import_attempt_at = now
-                LOGGER.info("[import] due mode=%s date=%s", mode, now.date().isoformat())
-                all_success = True
-                import_dates = _build_schedule_import_dates(
-                    start_date=now.date(),
-                    days=args.schedule_import_days if should_daily_import else 1,
+            should_daily_import = now >= import_trigger and imported_date != now.date()
+            should_refresh_import = (
+                args.schedule_refresh_interval_sec > 0
+                and imported_date == now.date()
+                and (
+                    last_import_success_at is None
+                    or now - last_import_success_at >= timedelta(seconds=args.schedule_refresh_interval_sec)
                 )
-                LOGGER.info(
-                    "[import] date_range mode=%s days=%s from=%s to=%s",
-                    mode,
-                    len(import_dates),
-                    import_dates[0].isoformat(),
-                    import_dates[-1].isoformat(),
+            )
+            if should_daily_import or should_refresh_import:
+                should_attempt = (
+                    last_import_attempt_at is None
+                    or now - last_import_attempt_at >= timedelta(seconds=args.import_retry_interval_sec)
                 )
-                for target in schedule_targets:
-                    for import_date in import_dates:
-                        if not _run_schedule_import(
-                            source_base_url=args.source_base_url,
-                            backend_base_url=args.backend_base_url,
-                            backend_api_key=args.backend_api_key,
-                            target_date=import_date,
-                            section_id=target.section_id,
-                            category_id=target.category_id,
-                            timeout=args.http_timeout_sec,
-                        ):
-                            all_success = False
-                    if not args.disable_team_record_sync:
-                        season_code = str(args.team_record_season_code or now.date().year).strip()
-                        _run_team_record_import(
-                            source_base_url=args.source_base_url,
-                            backend_base_url=args.backend_base_url,
-                            backend_api_key=args.backend_api_key,
-                            section_id=target.section_id,
-                            category_id=target.category_id,
-                            season_code=season_code,
-                            timeout=args.http_timeout_sec,
-                        )
+                if should_attempt:
+                    mode = "daily" if should_daily_import else "refresh"
+                    last_import_attempt_at = now
+                    LOGGER.info("[import] due mode=%s date=%s", mode, now.date().isoformat())
+                    all_success = True
+                    import_dates = _build_schedule_import_dates(
+                        start_date=now.date(),
+                        days=args.schedule_import_days if should_daily_import else 1,
+                    )
+                    LOGGER.info(
+                        "[import] date_range mode=%s days=%s from=%s to=%s",
+                        mode,
+                        len(import_dates),
+                        import_dates[0].isoformat(),
+                        import_dates[-1].isoformat(),
+                    )
+                    for target in schedule_targets:
+                        for import_date in import_dates:
+                            if not _run_schedule_import(
+                                source_base_url=args.source_base_url,
+                                backend_base_url=args.backend_base_url,
+                                backend_api_key=args.backend_api_key,
+                                target_date=import_date,
+                                section_id=target.section_id,
+                                category_id=target.category_id,
+                                timeout=args.http_timeout_sec,
+                            ):
+                                all_success = False
+                        if not args.disable_team_record_sync:
+                            season_code = str(args.team_record_season_code or now.date().year).strip()
+                            _run_team_record_import(
+                                source_base_url=args.source_base_url,
+                                backend_base_url=args.backend_base_url,
+                                backend_api_key=args.backend_api_key,
+                                section_id=target.section_id,
+                                category_id=target.category_id,
+                                season_code=season_code,
+                                timeout=args.http_timeout_sec,
+                            )
 
-                if all_success:
-                    imported_date = now.date()
-                    last_import_success_at = now
-                    refresh_windows(now.date())
+                    if all_success:
+                        imported_date = now.date()
+                        last_import_success_at = now
+                        refresh_windows(now.date())
 
-        max_check_window = timedelta(minutes=args.relay_check_minutes) if args.relay_check_minutes > 0 else None
-        precheck_window = timedelta(minutes=max(0, args.precheck_minutes))
-        for game_id, window in list(windows.items()):
-            if window.launched or window.exhausted:
-                continue
-            if game_id in running:
-                window.launched = True
-                continue
-            check_start_at = window.start_at - precheck_window
-            if window.checks_done == 0 and (
-                window.next_check_at is None or window.next_check_at > check_start_at
-            ):
-                window.next_check_at = check_start_at
-            if now < check_start_at:
-                continue
-            if window.next_check_at is None:
-                window.next_check_at = now
-            if now < window.next_check_at:
-                continue
+            max_check_window = timedelta(minutes=args.relay_check_minutes) if args.relay_check_minutes > 0 else None
+            precheck_window = timedelta(minutes=max(0, args.precheck_minutes))
+            for game_id, window in list(windows.items()):
+                if window.launched or window.exhausted:
+                    continue
+                if game_id in running:
+                    window.launched = True
+                    continue
+                check_start_at = window.start_at - precheck_window
+                if window.checks_done == 0 and (
+                    window.next_check_at is None or window.next_check_at > check_start_at
+                ):
+                    window.next_check_at = check_start_at
+                if now < check_start_at:
+                    continue
+                if window.next_check_at is None:
+                    window.next_check_at = now
+                if now < window.next_check_at:
+                    continue
 
-            window.checks_done += 1
-            available, is_final = _relay_is_available(
-                source_base_url=args.source_base_url,
-                game_id=game_id,
-                timeout=args.http_timeout_sec,
-                enable_preview_lineup_precheck=args.enable_preview_lineup_precheck,
-            )
-            LOGGER.info(
-                "[relay] gameId=%s check=%s maxMinutes=%s available=%s final=%s",
-                game_id,
-                window.checks_done,
-                args.relay_check_minutes if args.relay_check_minutes > 0 else "until-final",
-                available,
-                is_final,
-            )
-            if available:
-                running_crawler = _start_crawler(
-                    repo_root=repo_root,
-                    python_executable=python_executable,
-                    game_id=game_id,
+                window.checks_done += 1
+                available, is_final = _relay_is_available(
                     source_base_url=args.source_base_url,
-                    crawler_interval_sec=args.crawler_interval_sec,
-                    backend_base_url=args.backend_base_url,
-                    backend_api_key=args.backend_api_key,
-                    log_dir=log_dir,
+                    game_id=game_id,
+                    timeout=args.http_timeout_sec,
+                    enable_preview_lineup_precheck=args.enable_preview_lineup_precheck,
                 )
-                running[game_id] = running_crawler
-                window.launched = True
                 LOGGER.info(
-                    "[crawler] started gameId=%s pid=%s log=%s",
+                    "[relay] gameId=%s check=%s maxMinutes=%s available=%s final=%s",
                     game_id,
-                    running_crawler.process.pid,
-                    running_crawler.log_path,
+                    window.checks_done,
+                    args.relay_check_minutes if args.relay_check_minutes > 0 else "until-final",
+                    available,
+                    is_final,
                 )
-            else:
-                if is_final:
-                    window.exhausted = True
-                    LOGGER.info("[relay] finalized gameId=%s checks=%s", game_id, window.checks_done)
-                    continue
+                if available:
+                    running_crawler = _start_crawler(
+                        repo_root=repo_root,
+                        python_executable=python_executable,
+                        game_id=game_id,
+                        source_base_url=args.source_base_url,
+                        crawler_interval_sec=args.crawler_interval_sec,
+                        backend_base_url=args.backend_base_url,
+                        backend_api_key=args.backend_api_key,
+                        crawler_backend_timeout_sec=args.crawler_backend_timeout_sec,
+                        crawler_backend_retries=args.crawler_backend_retries,
+                        log_dir=log_dir,
+                    )
+                    running[game_id] = running_crawler
+                    window.launched = True
+                    LOGGER.info(
+                        "[crawler] started gameId=%s pid=%s log=%s",
+                        game_id,
+                        running_crawler.process.pid,
+                        running_crawler.log_path,
+                    )
+                else:
+                    if is_final:
+                        window.exhausted = True
+                        LOGGER.info("[relay] finalized gameId=%s checks=%s", game_id, window.checks_done)
+                        continue
 
-                if max_check_window is not None and now >= window.start_at + max_check_window:
-                    window.exhausted = True
-                    LOGGER.info("[relay] expired gameId=%s checks=%s", game_id, window.checks_done)
-                    continue
+                    if max_check_window is not None and now >= window.start_at + max_check_window:
+                        window.exhausted = True
+                        LOGGER.info("[relay] expired gameId=%s checks=%s", game_id, window.checks_done)
+                        continue
 
-                window.next_check_at = now + timedelta(minutes=1)
+                    window.next_check_at = now + timedelta(minutes=1)
 
-        time.sleep(args.dispatch_interval_sec)
+            time.sleep(args.dispatch_interval_sec)
+    finally:
+        for running_crawler in running.values():
+            if running_crawler.process.poll() is None:
+                running_crawler.process.terminate()
+            running_crawler.log_handle.close()
+        _release_dispatcher_lock(lock_handle)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1088,6 +1176,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--dispatch-interval-sec", type=int, default=15)
     parser.add_argument("--crawler-interval-sec", type=int, default=10)
+    parser.add_argument(
+        "--crawler-backend-timeout-sec",
+        type=float,
+        default=15.0,
+        help="Backend ingest timeout passed to crawler.py (--backend-timeout).",
+    )
+    parser.add_argument(
+        "--crawler-backend-retries",
+        type=int,
+        default=9,
+        help="Backend ingest retries passed to crawler.py (--backend-retries).",
+    )
+    parser.add_argument(
+        "--dispatcher-lock-file",
+        default="log/dispatcher.lock",
+        help="Single-instance lock file path (relative to repo root).",
+    )
+    parser.add_argument(
+        "--leader-replica-id",
+        default=os.getenv("DISPATCHER_LEADER_REPLICA_ID"),
+        help=(
+            "Optional leader replica id. When set, only matching RAILWAY_REPLICA_ID "
+            "runs dispatcher logic."
+        ),
+    )
     parser.add_argument(
         "--schedule-refresh-interval-sec",
         type=int,
