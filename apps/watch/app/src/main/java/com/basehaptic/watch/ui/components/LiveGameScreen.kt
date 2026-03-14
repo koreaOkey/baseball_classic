@@ -35,6 +35,7 @@ fun LiveGameScreen(
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
+            .offset(y = (-30).dp)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -171,7 +172,8 @@ fun LiveGameScreen(
                     bottom.linkTo(tapHint.top)
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
-                },
+                }
+                .offset(y = 35.dp),
             color = Color.White.copy(alpha = 0.62f),
             fontSize = 8.sp,
             maxLines = 1

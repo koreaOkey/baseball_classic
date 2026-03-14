@@ -2,6 +2,7 @@ package com.basehaptic.watch
 
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
@@ -47,6 +48,8 @@ class DataLayerListenerService : WearableListenerService() {
         const val KEY_EVENT_TYPE = "event_type"
         const val KEY_LAST_EVENT_TYPE = "last_event_type"
         const val KEY_LAST_EVENT_AT = "last_event_at"
+
+        private const val WAKE_LOCK_TIMEOUT_MS = 3_000L
     }
     
     override fun onDataChanged(dataEvents: DataEventBuffer) {
@@ -186,8 +189,40 @@ class DataLayerListenerService : WearableListenerService() {
             }
         }
 
+        wakeScreenForEvent(eventType.uppercase())
+
         Log.d(TAG, "Haptic feedback: $eventType")
         val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
         vibrator.vibrate(effect)
+    }
+
+    private fun wakeScreenForEvent(eventType: String) {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (powerManager?.isInteractive == true) return
+
+        if (powerManager != null) {
+            @Suppress("DEPRECATION")
+            val wakeLock = powerManager.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    PowerManager.ON_AFTER_RELEASE,
+                "$TAG:EventWakeLock"
+            )
+            wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+        }
+
+        val wakeIntent = Intent(this, MainActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            )
+            putExtra("wake_event_type", eventType)
+        }
+
+        runCatching { startActivity(wakeIntent) }
+            .onFailure { error ->
+                Log.e(TAG, "Failed to open watch screen for event: $eventType", error)
+            }
     }
 }

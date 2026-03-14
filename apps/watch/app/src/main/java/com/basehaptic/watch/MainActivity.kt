@@ -60,6 +60,9 @@ import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
         
         setContent {
             WatchApp()

@@ -276,6 +276,11 @@ graph LR
 - Added team-rank read API for clients:
   - `GET /team-records/{teamId}?categoryId=kbo&seasonCode=YYYY`
   - used by mobile app (no direct DB access from app)
+- Hardened backend team-rank API behavior:
+  - ingest endpoint enforces `X-API-Key` validation (`401` on invalid key)
+  - ingest upsert deduplicates payload rows by `teamId` before DB write
+  - team-record lookup returns `404` when data is not found
+  - added backend tests for ingest upsert/auth/not-found flows
 - Updated mobile Home quick stats cards:
   - `현재 순위` now uses `team_record.ranking`
   - `승률` now uses `team_record.wra`
@@ -283,3 +288,9 @@ graph LR
 - Improved watch team-sync reliability when favorite team changes:
   - mobile theme sync no longer skips when `connectedNodes` is temporarily empty
   - theme sync path is now stable (`/theme/current`) so latest favorite team is kept as current state
+- Updated watch haptic event behavior while screen is off:
+  - when a haptic event is received, watch now wakes screen and foregrounds `MainActivity`
+  - `MainActivity` now uses `setShowWhenLocked(true)` and `setTurnScreenOn(true)`
+- Tuned watch live screen layout position:
+  - entire `LiveGameScreen` is shifted upward with `offset(y = (-30).dp)`
+  - pitcher/batter info line is moved downward with `offset(y = 35.dp)`
