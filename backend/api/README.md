@@ -59,3 +59,27 @@ uvicorn app.main:app --reload --port 8080
 - Recommended start for Railway + Supabase Session Pooler:
   - `BASEHAPTIC_DB_POOL_SIZE=1`
   - `BASEHAPTIC_DB_MAX_OVERFLOW=0`
+
+## Incident Notes (2026-03-14)
+
+- Snapshot ingest lock contention (`/internal/crawler/games/{gameId}/snapshot`)
+  - Symptom: intermittent `503`, lock-timeout logs, and delayed game updates.
+  - Root cause: concurrent writers for same `gameId` (`schedule import` + live crawler).
+  - Backend mitigation:
+    - lock-timeout detection and bounded retry loop in ingest path.
+    - returns `503 snapshot ingest busy; retry shortly` after retry exhaustion.
+    - safe rollback handling when DB connection is already broken.
+  - Dispatcher mitigation:
+    - `LIVE` games are skipped in schedule-import snapshot sync (live crawler remains the writer).
+
+- Dispatcher duplicate-run pressure
+  - Symptom: duplicate dispatcher processes increased duplicate ingest pressure.
+  - Mitigation:
+    - single-instance lock file support (`--dispatcher-lock-file`).
+    - optional leader replica guard (`--leader-replica-id`, env: `DISPATCHER_LEADER_REPLICA_ID`).
+
+- Supabase Session Pooler saturation
+  - Symptom: `MaxClientsInSessionMode: max clients reached`.
+  - Mitigation:
+    - tightened SQLAlchemy pool defaults and env-driven tuning (see section above).
+    - operational recommendation: keep backend replicas/workers conservative during high-ingest windows.
