@@ -294,3 +294,31 @@ graph LR
 - Tuned watch live screen layout position:
   - entire `LiveGameScreen` is shifted upward with `offset(y = (-30).dp)`
   - pitcher/batter info line is moved downward with `offset(y = 35.dp)`
+- Incident fixes: snapshot ingest lock/contention and stability hardening:
+  - symptom: intermittent `503` / lock-timeout while ingesting `/internal/crawler/games/{gameId}/snapshot`
+  - root cause: concurrent writers touching the same `games` row (`schedule import` + live crawler)
+  - backend mitigation:
+    - added lock-timeout detection and retry loop in snapshot ingest
+    - if retries are exhausted, return `503 snapshot ingest busy; retry shortly`
+    - added safe rollback handling when DB connection is already broken during rollback
+  - crawler/dispatcher mitigation:
+    - dispatcher now passes crawler backend retry options (`--crawler-backend-retries`, `--crawler-backend-timeout-sec`)
+    - default values raised to `retries=9`, `timeout=15s`
+    - schedule import now skips `LIVE` games to avoid conflicting writes with live crawler
+- Incident fixes: dispatcher duplicate-run / process overlap:
+  - symptom: same dispatcher command observed in multiple processes, increasing duplicate ingest pressure
+  - mitigation:
+    - added single-instance lock file support (`--dispatcher-lock-file`)
+    - added optional replica leader guard (`--leader-replica-id`, env: `DISPATCHER_LEADER_REPLICA_ID`)
+- Incident fixes: Supabase Session Pooler connection exhaustion:
+  - symptom: `MaxClientsInSessionMode: max clients reached - in Session mode max clients are limited to pool_size`
+  - mitigation:
+    - added SQLAlchemy pool tuning config (env-driven) in backend:
+      - `BASEHAPTIC_DB_POOL_SIZE` (default `2`)
+      - `BASEHAPTIC_DB_MAX_OVERFLOW` (default `0`)
+      - `BASEHAPTIC_DB_POOL_TIMEOUT_SEC` (default `30`)
+      - `BASEHAPTIC_DB_CONNECT_TIMEOUT_SEC` (default `10`)
+      - `BASEHAPTIC_DB_POOL_RECYCLE_SEC` (default `1800`)
+    - recommendation for Railway + Supabase Session Pooler:
+      - set `BASEHAPTIC_DB_POOL_SIZE=1`
+      - set `BASEHAPTIC_DB_MAX_OVERFLOW=0`

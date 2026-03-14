@@ -47,3 +47,15 @@ uvicorn app.main:app --reload --port 8080
   - 3-out B/S reset
   - event pitcher/batter backfill
   - `/games?date=` filtering
+
+## Connection Pool Tuning (Session Pooler)
+- If you see `MaxClientsInSessionMode: max clients reached`, reduce app-side SQLAlchemy pool size.
+- Supported env vars (`BASEHAPTIC_` prefix):
+  - `DB_POOL_SIZE` (default: `2`)
+  - `DB_MAX_OVERFLOW` (default: `0`)
+  - `DB_POOL_TIMEOUT_SEC` (default: `30`)
+  - `DB_CONNECT_TIMEOUT_SEC` (default: `10`)
+  - `DB_POOL_RECYCLE_SEC` (default: `1800`)
+- Recommended start for Railway + Supabase Session Pooler:
+  - `BASEHAPTIC_DB_POOL_SIZE=1`
+  - `BASEHAPTIC_DB_MAX_OVERFLOW=0`

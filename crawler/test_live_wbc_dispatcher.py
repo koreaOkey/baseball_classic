@@ -8,6 +8,7 @@ from live_wbc_dispatcher import (
     _preview_has_lineup,
     _resolve_schedule_filters,
     _resolve_schedule_targets,
+    _should_skip_schedule_snapshot,
     build_parser,
 )
 
@@ -248,3 +249,9 @@ def test_parser_dispatcher_singleton_options() -> None:
     )
     assert args_custom.dispatcher_lock_file == "log/custom.lock"
     assert args_custom.leader_replica_id == "replica-1"
+
+
+def test_should_skip_schedule_snapshot_for_live_status() -> None:
+    assert _should_skip_schedule_snapshot({"statusCode": "LIVE"}) is True
+    assert _should_skip_schedule_snapshot({"statusCode": "ING"}) is True
+    assert _should_skip_schedule_snapshot({"statusCode": "SCHEDULED"}) is False

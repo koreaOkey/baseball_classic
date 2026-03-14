@@ -29,15 +29,28 @@ GAME_EVENT_TYPE_VALUES = (
 connect_args = {}
 if settings.database_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+else:
+    connect_args = {"connect_timeout": max(1, settings.db_connect_timeout_sec)}
 
-engine = create_engine(
-    settings.database_url,
-    future=True,
-    echo=False,
-    connect_args=connect_args,
-    pool_pre_ping=True,
-    pool_recycle=1800,
-)
+engine_kwargs = {
+    "future": True,
+    "echo": False,
+    "connect_args": connect_args,
+    "pool_pre_ping": True,
+    "pool_recycle": max(60, settings.db_pool_recycle_sec),
+}
+
+if not settings.database_url.startswith("sqlite"):
+    engine_kwargs.update(
+        {
+            "pool_size": max(1, settings.db_pool_size),
+            "max_overflow": max(0, settings.db_max_overflow),
+            "pool_timeout": max(1, settings.db_pool_timeout_sec),
+            "pool_use_lifo": True,
+        }
+    )
+
+engine = create_engine(settings.database_url, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 

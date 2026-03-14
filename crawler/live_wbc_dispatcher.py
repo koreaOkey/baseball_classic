@@ -732,6 +732,13 @@ def _schedule_game_to_snapshot(game: dict[str, Any], target_date: date) -> dict[
     }
 
 
+def _should_skip_schedule_snapshot(game: dict[str, Any]) -> bool:
+    # Live games are ingested by crawler.py in near real-time.
+    # Skipping schedule-level snapshot for LIVE avoids DB row-lock contention.
+    status = _map_schedule_status(game.get("statusCode"))
+    return status == "LIVE"
+
+
 def _post_schedule_snapshot_to_backend(
     *,
     backend_base_url: str,
@@ -779,9 +786,14 @@ def _run_schedule_import(
 
     success_count = 0
     failure_count = 0
+    skipped_live_count = 0
     for game in games:
         game_id = str(game.get("gameId") or "").strip()
         if not game_id:
+            continue
+        if _should_skip_schedule_snapshot(game):
+            skipped_live_count += 1
+            LOGGER.info("[import] skipped_live gameId=%s", game_id)
             continue
 
         payload = _schedule_game_to_snapshot(game, target_date)
@@ -809,10 +821,11 @@ def _run_schedule_import(
             LOGGER.warning("[import] sync_failed gameId=%s error=%s", game_id, exc)
 
     LOGGER.info(
-        "[import] done date=%s success=%s failed=%s",
+        "[import] done date=%s success=%s failed=%s skipped_live=%s",
         target_date.isoformat(),
         success_count,
         failure_count,
+        skipped_live_count,
     )
     return failure_count == 0
 
