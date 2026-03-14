@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     app_name: str = "BaseHaptic Backend API"
     environment: str = "development"
     database_url: str = "sqlite+pysqlite:///./basehaptic.db"
-    db_pool_size: int = 2
+    db_pool_size: int = 1
     db_max_overflow: int = 0
     db_pool_timeout_sec: int = 30
     db_connect_timeout_sec: int = 10

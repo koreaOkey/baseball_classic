@@ -20,6 +20,7 @@ import requests
 KST = ZoneInfo("Asia/Seoul")
 LIVE_STATUS_CODES = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
 FINAL_STATUS_CODES = {"RESULT", "FINAL", "END", "FINISHED"}
+RETRYABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 LOGGER = logging.getLogger("baseball_dispatcher")
 LEAGUE_PRESETS: dict[str, tuple[str, str]] = {
     "wbc": ("wbaseball", "wbc"),
@@ -617,23 +618,79 @@ def _build_team_record_payload(
     }
 
 
+def _is_retryable_backend_error(exc: requests.RequestException) -> bool:
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+        return True
+
+    if isinstance(exc, requests.HTTPError):
+        response = exc.response
+        if response is None:
+            return False
+        return response.status_code in RETRYABLE_HTTP_STATUS_CODES
+
+    return False
+
+
+def _post_json_with_retries(
+    *,
+    endpoint: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    timeout: float,
+    retries: int,
+    log_prefix: str,
+) -> dict[str, Any]:
+    attempts = max(1, int(retries))
+    last_error: requests.RequestException | None = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.post(
+                endpoint,
+                headers=headers,
+                json=payload,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data if isinstance(data, dict) else {}
+        except requests.RequestException as exc:
+            last_error = exc
+            should_retry = _is_retryable_backend_error(exc) and attempt < attempts
+            if not should_retry:
+                raise
+
+            delay = min(5.0, 0.5 * (2 ** (attempt - 1)))
+            LOGGER.warning(
+                "%s retrying attempt=%s/%s delay=%.1fs error=%s",
+                log_prefix,
+                attempt,
+                attempts,
+                delay,
+                exc,
+            )
+            time.sleep(delay)
+
+    raise last_error or requests.RequestException("backend post failed")
+
+
 def _post_team_records_to_backend(
     *,
     backend_base_url: str,
     backend_api_key: str,
     payload: dict[str, Any],
     timeout: float,
+    retries: int,
 ) -> dict[str, Any]:
     endpoint = f"{backend_base_url.rstrip('/')}/internal/crawler/team-records"
-    response = requests.post(
-        endpoint,
+    return _post_json_with_retries(
+        endpoint=endpoint,
         headers={"X-API-Key": backend_api_key},
-        json=payload,
+        payload=payload,
         timeout=timeout,
+        retries=retries,
+        log_prefix="[team-record] backend_post",
     )
-    response.raise_for_status()
-    data = response.json()
-    return data if isinstance(data, dict) else {}
 
 
 def _run_team_record_import(
@@ -644,7 +701,9 @@ def _run_team_record_import(
     section_id: str,
     category_id: str,
     season_code: str,
-    timeout: float,
+    fetch_timeout: float,
+    backend_timeout: float,
+    backend_retries: int,
 ) -> bool:
     if category_id.strip().lower() != "kbo":
         LOGGER.info(
@@ -659,7 +718,7 @@ def _run_team_record_import(
             source_base_url=source_base_url,
             category_id=category_id,
             season_code=season_code,
-            timeout=timeout,
+            timeout=fetch_timeout,
         )
     except Exception as exc:
         LOGGER.warning(
@@ -685,7 +744,8 @@ def _run_team_record_import(
             backend_base_url=backend_base_url,
             backend_api_key=backend_api_key,
             payload=payload,
-            timeout=timeout,
+            timeout=backend_timeout,
+            retries=backend_retries,
         )
     except Exception as exc:
         LOGGER.warning(
@@ -746,17 +806,17 @@ def _post_schedule_snapshot_to_backend(
     game_id: str,
     payload: dict[str, Any],
     timeout: float,
+    retries: int,
 ) -> dict[str, Any]:
     endpoint = f"{backend_base_url.rstrip('/')}/internal/crawler/games/{game_id}/snapshot"
-    response = requests.post(
-        endpoint,
+    return _post_json_with_retries(
+        endpoint=endpoint,
         headers={"X-API-Key": backend_api_key},
-        json=payload,
+        payload=payload,
         timeout=timeout,
+        retries=retries,
+        log_prefix=f"[import] backend_post gameId={game_id}",
     )
-    response.raise_for_status()
-    data = response.json()
-    return data if isinstance(data, dict) else {}
 
 
 def _run_schedule_import(
@@ -767,7 +827,9 @@ def _run_schedule_import(
     target_date: date,
     section_id: str,
     category_id: str,
-    timeout: float,
+    fetch_timeout: float,
+    backend_timeout: float,
+    backend_retries: int,
 ) -> bool:
     LOGGER.info(
         "[import] fetch date=%s section=%s category=%s",
@@ -780,7 +842,7 @@ def _run_schedule_import(
         section_id=section_id,
         category_id=category_id,
         target_date=target_date,
-        timeout=timeout,
+        timeout=fetch_timeout,
     )
     LOGGER.info("[import] fetched=%s date=%s", len(games), target_date.isoformat())
 
@@ -803,7 +865,8 @@ def _run_schedule_import(
                 backend_api_key=backend_api_key,
                 game_id=game_id,
                 payload=payload,
-                timeout=timeout,
+                timeout=backend_timeout,
+                retries=backend_retries,
             )
             success_count += 1
             LOGGER.info(
@@ -912,6 +975,12 @@ def run_dispatcher(args: argparse.Namespace) -> None:
     dispatcher_log_path = _setup_logging(log_dir)
     LOGGER.info("[dispatcher] started pid=%s log=%s", os.getpid(), dispatcher_log_path)
     schedule_targets = _resolve_schedule_targets(args)
+    backend_sync_timeout = (
+        max(1.0, float(args.backend_sync_timeout_sec))
+        if args.backend_sync_timeout_sec is not None
+        else max(1.0, float(args.http_timeout_sec))
+    )
+    backend_sync_retries = max(1, int(args.backend_sync_retries))
     LOGGER.info(
         "[dispatcher] schedule_targets=%s",
         ", ".join(f"{target.section_id}:{target.category_id}({target.source})" for target in schedule_targets),
@@ -920,6 +989,11 @@ def run_dispatcher(args: argparse.Namespace) -> None:
         "[dispatcher] crawler_backend timeout=%ss retries=%s",
         args.crawler_backend_timeout_sec,
         args.crawler_backend_retries,
+    )
+    LOGGER.info(
+        "[dispatcher] schedule_backend timeout=%ss retries=%s",
+        backend_sync_timeout,
+        backend_sync_retries,
     )
 
     leader_replica_id = str(args.leader_replica_id or "").strip()
@@ -1031,7 +1105,9 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                                 target_date=import_date,
                                 section_id=target.section_id,
                                 category_id=target.category_id,
-                                timeout=args.http_timeout_sec,
+                                fetch_timeout=args.http_timeout_sec,
+                                backend_timeout=backend_sync_timeout,
+                                backend_retries=backend_sync_retries,
                             ):
                                 all_success = False
                         if not args.disable_team_record_sync:
@@ -1043,7 +1119,9 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                                 section_id=target.section_id,
                                 category_id=target.category_id,
                                 season_code=season_code,
-                                timeout=args.http_timeout_sec,
+                                fetch_timeout=args.http_timeout_sec,
+                                backend_timeout=backend_sync_timeout,
+                                backend_retries=backend_sync_retries,
                             )
 
                     if all_success:
@@ -1244,6 +1322,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--import-retry-interval-sec", type=int, default=300)
     parser.add_argument("--http-timeout-sec", type=float, default=10.0)
+    parser.add_argument(
+        "--backend-sync-timeout-sec",
+        type=float,
+        default=None,
+        help="Timeout for dispatcher -> backend sync POST requests (default: --http-timeout-sec).",
+    )
+    parser.add_argument(
+        "--backend-sync-retries",
+        type=int,
+        default=3,
+        help="Retries for dispatcher -> backend sync POST requests.",
+    )
     parser.add_argument("--log-dir", default="log")
     return parser
 

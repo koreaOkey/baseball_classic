@@ -251,6 +251,28 @@ def test_parser_dispatcher_singleton_options() -> None:
     assert args_custom.leader_replica_id == "replica-1"
 
 
+def test_parser_schedule_backend_sync_options_default_and_override() -> None:
+    parser = build_parser()
+    args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
+    assert args_default.backend_sync_timeout_sec is None
+    assert args_default.backend_sync_retries == 3
+
+    args_custom = parser.parse_args(
+        [
+            "--backend-base-url",
+            "http://localhost:8080",
+            "--backend-api-key",
+            "x",
+            "--backend-sync-timeout-sec",
+            "45",
+            "--backend-sync-retries",
+            "5",
+        ]
+    )
+    assert args_custom.backend_sync_timeout_sec == 45.0
+    assert args_custom.backend_sync_retries == 5
+
+
 def test_should_skip_schedule_snapshot_for_live_status() -> None:
     assert _should_skip_schedule_snapshot({"statusCode": "LIVE"}) is True
     assert _should_skip_schedule_snapshot({"statusCode": "ING"}) is True

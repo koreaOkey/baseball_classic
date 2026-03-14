@@ -120,7 +120,9 @@ python crawler/live_baseball_dispatcher.py \
   --precheck-minutes 180 \
   --enable-preview-lineup-precheck \
   --dispatch-interval-sec 15 \
-  --crawler-interval-sec 10
+  --crawler-interval-sec 10 \
+  --backend-sync-timeout-sec 45 \
+  --backend-sync-retries 5
 ```
 KBO preset:
 ```bash
@@ -156,6 +158,10 @@ Set a larger value to capture pre-game lineup publication earlier.
 Enable it to start crawler from preview-lineup data before relay text appears.
 `--schedule-refresh-interval-sec` defaults to `300` seconds.
 Set `0` to disable periodic schedule refresh.
+`--backend-sync-timeout-sec` defaults to `--http-timeout-sec`.
+Increase this when backend ingest is slow during DB contention windows.
+`--backend-sync-retries` defaults to `3`.
+Retryable errors include timeout/connection errors and `5xx`, `429`, `408`.
 
 ## Logs
 

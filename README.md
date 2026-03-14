@@ -314,7 +314,7 @@ graph LR
   - symptom: `MaxClientsInSessionMode: max clients reached - in Session mode max clients are limited to pool_size`
   - mitigation:
     - added SQLAlchemy pool tuning config (env-driven) in backend:
-      - `BASEHAPTIC_DB_POOL_SIZE` (default `2`)
+      - `BASEHAPTIC_DB_POOL_SIZE` (default `1`)
       - `BASEHAPTIC_DB_MAX_OVERFLOW` (default `0`)
       - `BASEHAPTIC_DB_POOL_TIMEOUT_SEC` (default `30`)
       - `BASEHAPTIC_DB_CONNECT_TIMEOUT_SEC` (default `10`)

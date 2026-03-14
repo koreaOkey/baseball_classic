@@ -51,7 +51,7 @@ uvicorn app.main:app --reload --port 8080
 ## Connection Pool Tuning (Session Pooler)
 - If you see `MaxClientsInSessionMode: max clients reached`, reduce app-side SQLAlchemy pool size.
 - Supported env vars (`BASEHAPTIC_` prefix):
-  - `DB_POOL_SIZE` (default: `2`)
+  - `DB_POOL_SIZE` (default: `1`)
   - `DB_MAX_OVERFLOW` (default: `0`)
   - `DB_POOL_TIMEOUT_SEC` (default: `30`)
   - `DB_CONNECT_TIMEOUT_SEC` (default: `10`)
