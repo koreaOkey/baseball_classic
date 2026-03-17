@@ -99,6 +99,15 @@ object BackendGamesRepository {
         return fetchGamesByDate(selectedTeam = selectedTeam, targetDate = LocalDate.now())
     }
 
+    fun peekTodayGamesCache(context: Context, selectedTeam: Team): List<Game>? {
+        val today = LocalDate.now().toString()
+        val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedDate = prefs.getString(KEY_TODAY_GAMES_DATE, null)
+        val cachedPayload = prefs.getString(KEY_TODAY_GAMES_PAYLOAD, null)
+        if (cachedDate != today || cachedPayload.isNullOrBlank()) return null
+        return parseGamesPayload(cachedPayload, selectedTeam)
+    }
+
     fun fetchTodayGamesCached(context: Context, selectedTeam: Team): List<Game>? {
         val today = LocalDate.now().toString()
         val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)

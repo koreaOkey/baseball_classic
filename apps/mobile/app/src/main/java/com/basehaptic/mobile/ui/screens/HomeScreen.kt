@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,51 +38,12 @@ import androidx.compose.material3.MaterialTheme as M3Theme
 @Composable
 fun HomeScreen(
     selectedTeam: Team,
+    todayGames: List<Game>,
     activeTheme: ThemeData?,
     syncedGameId: String?,
     onSelectGame: (Game) -> Unit
 ) {
-    val context = LocalContext.current
-    val games by produceState(initialValue = emptyList<Game>(), selectedTeam) {
-        var frozenDate = LocalDate.now()
-        var frozenGameIds: List<String>? = null
-
-        while (currentCoroutineContext().isActive) {
-            val today = LocalDate.now()
-            if (today != frozenDate) {
-                frozenDate = today
-                frozenGameIds = null
-                value = emptyList()
-            }
-
-            val backendGames = runCatching {
-                withContext(Dispatchers.IO) {
-                    BackendGamesRepository.fetchTodayGamesCached(context.applicationContext, selectedTeam)
-                }
-            }.getOrNull()
-
-            if (backendGames != null) {
-                val sorted = sortHomeGames(backendGames)
-                val frozenIds = frozenGameIds
-                if (frozenIds == null) {
-                    if (sorted.isNotEmpty()) {
-                        frozenGameIds = sorted.map { it.id }
-                        value = sorted
-                    } else {
-                        value = emptyList()
-                    }
-                } else {
-                    value = mergeFrozenHomeGames(
-                        current = value,
-                        incoming = sorted,
-                        frozenOrder = frozenIds
-                    )
-                }
-            }
-
-            delay(30000)
-        }
-    }
+    val games = remember(todayGames) { sortHomeGames(todayGames) }
 
     val teamRecordStats by produceState<BackendGamesRepository.TeamRecordStats?>(
         initialValue = null,
@@ -116,20 +76,17 @@ fun HomeScreen(
             return@produceState
         }
 
-        while (currentCoroutineContext().isActive) {
-            val backendUpcomingGames = runCatching {
-                withContext(Dispatchers.IO) {
-                    BackendGamesRepository.fetchUpcomingMyTeamGames(
-                        selectedTeam = selectedTeam,
-                        maxItems = 3,
-                        daysAhead = 30
-                    )
-                }
-            }.getOrNull()
-            if (backendUpcomingGames != null) {
-                value = backendUpcomingGames
+        val backendUpcomingGames = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.fetchUpcomingMyTeamGames(
+                    selectedTeam = selectedTeam,
+                    maxItems = 3,
+                    daysAhead = 30
+                )
             }
-            delay(60000)
+        }.getOrNull()
+        if (backendUpcomingGames != null) {
+            value = backendUpcomingGames
         }
     }
     
@@ -705,28 +662,6 @@ private fun sortHomeGames(games: List<Game>): List<Game> {
         if (genericTimeCompare != 0) return@sortedWith genericTimeCompare
 
         a.id.compareTo(b.id)
-    }
-}
-
-private fun mergeFrozenHomeGames(
-    current: List<Game>,
-    incoming: List<Game>,
-    frozenOrder: List<String>
-): List<Game> {
-    val currentById = current.associateBy { it.id }
-    val incomingById = incoming.associateBy { it.id }
-
-    return frozenOrder.mapNotNull { gameId ->
-        val base = currentById[gameId] ?: incomingById[gameId] ?: return@mapNotNull null
-        val latest = incomingById[gameId] ?: return@mapNotNull base
-
-        base.copy(
-            homeScore = latest.homeScore,
-            awayScore = latest.awayScore,
-            inning = latest.inning,
-            status = latest.status,
-            time = latest.time
-        )
     }
 }
 

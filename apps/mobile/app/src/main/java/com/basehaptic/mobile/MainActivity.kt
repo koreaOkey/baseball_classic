@@ -18,7 +18,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeData
@@ -28,6 +32,7 @@ import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.wear.WearGameSyncManager
 import com.basehaptic.mobile.wear.WearThemeSyncManager
+import java.time.LocalDate
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -81,7 +86,11 @@ fun BaseHapticApp(
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
     val autoPromptedLiveGames = remember { mutableStateMapOf<String, Boolean>() }
     var purchasedThemes by remember { mutableStateOf<List<ThemeData>>(emptyList()) }
+    var todayGamesSnapshot by remember(selectedTeam) { mutableStateOf<List<Game>>(emptyList()) }
+    var todayGamesLoadedDate by remember(selectedTeam) { mutableStateOf<LocalDate?>(null) }
+    var todayGamesReloadToken by remember(selectedTeam) { mutableStateOf(0) }
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     fun requestWatchSyncPrompt(gameId: String, navigateToLive: Boolean) {
         if (syncedGameId == gameId) return
@@ -130,6 +139,53 @@ fun BaseHapticApp(
     LaunchedEffect(selectedTeam) {
         if (selectedTeam != Team.NONE) {
             WearThemeSyncManager.syncThemeToWatch(context, selectedTeam)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, selectedTeam, todayGamesLoadedDate) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val today = LocalDate.now()
+                if (todayGamesLoadedDate != today) {
+                    todayGamesReloadToken += 1
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(selectedTeam, todayGamesReloadToken) {
+        if (selectedTeam == Team.NONE) {
+            todayGamesSnapshot = emptyList()
+            todayGamesLoadedDate = null
+            return@LaunchedEffect
+        }
+
+        val today = LocalDate.now()
+        if (todayGamesLoadedDate == today) return@LaunchedEffect
+
+        val cachedGames = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.peekTodayGamesCache(context.applicationContext, selectedTeam)
+            }
+        }.getOrNull().orEmpty()
+        if (cachedGames.isNotEmpty()) {
+            todayGamesSnapshot = cachedGames
+        }
+
+        val freshGames = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.fetchTodayGamesCached(context.applicationContext, selectedTeam)
+            }
+        }.getOrNull()
+        if (freshGames != null) {
+            todayGamesSnapshot = freshGames
+            todayGamesLoadedDate = today
+        } else if (cachedGames.isNotEmpty()) {
+            todayGamesLoadedDate = today
         }
     }
 
@@ -330,6 +386,7 @@ fun BaseHapticApp(
                 when (currentView) {
                     Screen.Home -> HomeScreen(
                         selectedTeam = selectedTeam,
+                        todayGames = todayGamesSnapshot,
                         activeTheme = activeTheme,
                         syncedGameId = syncedGameId,
                         onSelectGame = { game ->
