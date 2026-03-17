@@ -113,11 +113,13 @@ app.add_middleware(
 
 
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict[str, Any]:
+    redis_connected, redis_detail = await redis_relay.ping()
     return {
         "status": "ok",
         "service": "backend-api",
         "environment": settings.environment,
+        "redis": redis_detail if not redis_connected else "connected",
         "time": datetime.now(UTC),
     }
 

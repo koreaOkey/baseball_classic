@@ -57,6 +57,12 @@ class RedisBroadcastRelay:
 
         self._publisher = Redis.from_url(self._redis_url, decode_responses=True)
         self._subscriber = Redis.from_url(self._redis_url, decode_responses=True)
+        is_connected, detail = await self.ping()
+        if not is_connected:
+            logger.warning("redis relay connection check failed: %s", detail)
+            await self.stop()
+            return
+
         self._stop_event.clear()
         self._subscriber_task = asyncio.create_task(
             self._run_subscribe_loop(on_message),
@@ -67,6 +73,29 @@ class RedisBroadcastRelay:
             self._channel,
             self._source_instance_id,
         )
+
+    async def ping(self) -> tuple[bool, str]:
+        if not self._redis_url:
+            return False, "not_configured"
+        if not _REDIS_AVAILABLE:
+            return False, "redis_package_missing"
+
+        client = self._publisher
+        close_after_check = False
+        if client is None:
+            client = Redis.from_url(self._redis_url, decode_responses=True)
+            close_after_check = True
+
+        try:
+            await client.ping()
+            return True, "connected"
+        except Exception as exc:
+            logger.warning("redis ping failed: %s", exc)
+            return False, f"error:{type(exc).__name__}"
+        finally:
+            if close_after_check:
+                with suppress(Exception):
+                    await client.aclose()
 
     async def stop(self) -> None:
         self._stop_event.set()
