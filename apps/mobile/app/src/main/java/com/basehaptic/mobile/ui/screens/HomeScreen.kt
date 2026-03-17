@@ -45,13 +45,43 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val games by produceState(initialValue = emptyList<Game>(), selectedTeam) {
-        val backendGames = runCatching {
-            withContext(Dispatchers.IO) {
-                BackendGamesRepository.fetchTodayGamesCached(context.applicationContext, selectedTeam)
+        var frozenDate = LocalDate.now()
+        var frozenGameIds: List<String>? = null
+
+        while (currentCoroutineContext().isActive) {
+            val today = LocalDate.now()
+            if (today != frozenDate) {
+                frozenDate = today
+                frozenGameIds = null
+                value = emptyList()
             }
-        }.getOrNull()
-        if (backendGames != null) {
-            value = sortHomeGames(backendGames)
+
+            val backendGames = runCatching {
+                withContext(Dispatchers.IO) {
+                    BackendGamesRepository.fetchTodayGamesCached(context.applicationContext, selectedTeam)
+                }
+            }.getOrNull()
+
+            if (backendGames != null) {
+                val sorted = sortHomeGames(backendGames)
+                val frozenIds = frozenGameIds
+                if (frozenIds == null) {
+                    if (sorted.isNotEmpty()) {
+                        frozenGameIds = sorted.map { it.id }
+                        value = sorted
+                    } else {
+                        value = emptyList()
+                    }
+                } else {
+                    value = mergeFrozenHomeGames(
+                        current = value,
+                        incoming = sorted,
+                        frozenOrder = frozenIds
+                    )
+                }
+            }
+
+            delay(30000)
         }
     }
 
@@ -266,7 +296,10 @@ fun HomeScreen(
         }
 
         // Games List
-        items(games) { game ->
+        items(
+            items = games,
+            key = { it.id }
+        ) { game ->
             val isWatchSynced = game.status == GameStatus.LIVE && syncedGameId == game.id
             GameCard(
                 game = game,
@@ -672,6 +705,28 @@ private fun sortHomeGames(games: List<Game>): List<Game> {
         if (genericTimeCompare != 0) return@sortedWith genericTimeCompare
 
         a.id.compareTo(b.id)
+    }
+}
+
+private fun mergeFrozenHomeGames(
+    current: List<Game>,
+    incoming: List<Game>,
+    frozenOrder: List<String>
+): List<Game> {
+    val currentById = current.associateBy { it.id }
+    val incomingById = incoming.associateBy { it.id }
+
+    return frozenOrder.mapNotNull { gameId ->
+        val base = currentById[gameId] ?: incomingById[gameId] ?: return@mapNotNull null
+        val latest = incomingById[gameId] ?: return@mapNotNull base
+
+        base.copy(
+            homeScore = latest.homeScore,
+            awayScore = latest.awayScore,
+            inning = latest.inning,
+            status = latest.status,
+            time = latest.time
+        )
     }
 }
 

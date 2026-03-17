@@ -106,16 +106,24 @@ object BackendGamesRepository {
         val cachedPayload = prefs.getString(KEY_TODAY_GAMES_PAYLOAD, null)
 
         if (cachedDate == today && !cachedPayload.isNullOrBlank()) {
-            return parseGamesPayload(cachedPayload, selectedTeam)
+            val cachedGames = parseGamesPayload(cachedPayload, selectedTeam)
+            if (!cachedGames.isNullOrEmpty()) {
+                return cachedGames
+            }
         }
 
         val freshPayload = fetchGamesByDateRaw(LocalDate.now())
         if (!freshPayload.isNullOrBlank()) {
-            prefs.edit()
-                .putString(KEY_TODAY_GAMES_DATE, today)
-                .putString(KEY_TODAY_GAMES_PAYLOAD, freshPayload)
-                .apply()
-            return parseGamesPayload(freshPayload, selectedTeam)
+            val freshGames = parseGamesPayload(freshPayload, selectedTeam)
+            if (freshGames != null) {
+                if (freshGames.isNotEmpty()) {
+                    prefs.edit()
+                        .putString(KEY_TODAY_GAMES_DATE, today)
+                        .putString(KEY_TODAY_GAMES_PAYLOAD, freshPayload)
+                        .apply()
+                }
+                return freshGames
+            }
         }
 
         if (!cachedPayload.isNullOrBlank()) {
