@@ -71,6 +71,10 @@ object WearGameSyncManager {
     }
 
     fun sendHapticEvent(context: Context, eventType: String) {
+        sendHapticEvent(context = context, eventType = eventType, cursor = null)
+    }
+
+    fun sendHapticEvent(context: Context, eventType: String, cursor: Long?) {
         Thread {
             try {
                 val nodes = Tasks.await(Wearable.getNodeClient(context).connectedNodes)
@@ -82,6 +86,9 @@ object WearGameSyncManager {
                 val timestamp = System.currentTimeMillis()
                 val request = PutDataMapRequest.create("$PATH_HAPTIC/$timestamp").apply {
                     dataMap.putString("event_type", eventType)
+                    if (cursor != null) {
+                        dataMap.putLong("event_cursor", cursor)
+                    }
                 }.asPutDataRequest().setUrgent()
 
                 Tasks.await(Wearable.getDataClient(context).putDataItem(request))

@@ -46,8 +46,10 @@ class DataLayerListenerService : WearableListenerService() {
         const val KEY_BATTER = "batter"
         const val KEY_MY_TEAM = "my_team"
         const val KEY_EVENT_TYPE = "event_type"
+        const val KEY_EVENT_CURSOR = "event_cursor"
         const val KEY_LAST_EVENT_TYPE = "last_event_type"
         const val KEY_LAST_EVENT_AT = "last_event_at"
+        const val KEY_LAST_EVENT_CURSOR = "last_event_cursor"
 
         private const val WAKE_LOCK_TIMEOUT_MS = 3_000L
     }
@@ -115,7 +117,7 @@ class DataLayerListenerService : WearableListenerService() {
 
         val eventType = dataMap.getString(KEY_EVENT_TYPE, "")
         if (eventType.isNotBlank()) {
-            saveLatestEvent(eventType)
+            saveLatestEvent(eventType, null)
             triggerHapticFeedback(eventType)
         }
 
@@ -145,17 +147,34 @@ class DataLayerListenerService : WearableListenerService() {
         val dataMap = DataMapItem.fromDataItem(item).dataMap
         val eventType = dataMap.getString(KEY_EVENT_TYPE, "")
         if (eventType.isBlank()) return
+        val eventCursor = if (dataMap.containsKey(KEY_EVENT_CURSOR)) {
+            dataMap.getLong(KEY_EVENT_CURSOR, -1L)
+        } else {
+            -1L
+        }
+        if (eventCursor > 0L) {
+            val lastCursor = getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
+                .getLong(KEY_LAST_EVENT_CURSOR, 0L)
+            if (eventCursor <= lastCursor) {
+                return
+            }
+        }
 
-        saveLatestEvent(eventType)
+        saveLatestEvent(eventType, eventCursor.takeIf { it > 0L })
         triggerHapticFeedback(eventType)
         sendBroadcast(Intent(ACTION_GAME_UPDATED))
     }
 
-    private fun saveLatestEvent(eventType: String) {
+    private fun saveLatestEvent(eventType: String, eventCursor: Long?) {
         getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_LAST_EVENT_TYPE, eventType.uppercase())
             .putLong(KEY_LAST_EVENT_AT, System.currentTimeMillis())
+            .apply {
+                if (eventCursor != null) {
+                    putLong(KEY_LAST_EVENT_CURSOR, eventCursor)
+                }
+            }
             .apply()
     }
     

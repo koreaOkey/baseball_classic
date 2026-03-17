@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,17 +43,15 @@ fun HomeScreen(
     syncedGameId: String?,
     onSelectGame: (Game) -> Unit
 ) {
+    val context = LocalContext.current
     val games by produceState(initialValue = emptyList<Game>(), selectedTeam) {
-        while (currentCoroutineContext().isActive) {
-            val backendGames = runCatching {
-                withContext(Dispatchers.IO) {
-                    BackendGamesRepository.fetchGames(selectedTeam)
-                }
-            }.getOrNull()
-            if (backendGames != null) {
-                value = sortHomeGames(backendGames)
+        val backendGames = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.fetchTodayGamesCached(context.applicationContext, selectedTeam)
             }
-            delay(5000)
+        }.getOrNull()
+        if (backendGames != null) {
+            value = sortHomeGames(backendGames)
         }
     }
 

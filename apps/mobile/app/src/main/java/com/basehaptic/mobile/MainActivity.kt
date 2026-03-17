@@ -32,6 +32,7 @@ import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
@@ -171,102 +172,136 @@ fun BaseHapticApp(
         var localEvents: List<BackendGamesRepository.LiveEvent> = emptyList()
         var lastWatchSignature = ""
         var lastSentEventCursor = 0L
-        var realtimeWindowReady = false
+        val reconnectDelaysMs = listOf(1000L, 2000L, 5000L, 10000L)
+        var reconnectAttempt = 0
 
-        while (currentCoroutineContext().isActive) {
-            val fetchedState = runCatching {
+        suspend fun pushStateToWatch(state: BackendGamesRepository.LiveGameState) {
+            val latestEventType =
+                localEvents.firstNotNullOfOrNull { mapToWatchEventType(it.type) }
+                    ?: mapToWatchEventType(state.lastEventType)
+            val signature = listOf(
+                state.gameId,
+                state.status.name,
+                state.inning,
+                state.homeScore.toString(),
+                state.awayScore.toString(),
+                state.ball.toString(),
+                state.strike.toString(),
+                state.out.toString(),
+                state.baseFirst.toString(),
+                state.baseSecond.toString(),
+                state.baseThird.toString(),
+                latestEventType.orEmpty()
+            ).joinToString("|")
+
+            if (signature != lastWatchSignature) {
+                WearGameSyncManager.sendGameData(
+                    context = context,
+                    gameId = state.gameId,
+                    homeTeam = state.homeTeam,
+                    awayTeam = state.awayTeam,
+                    homeScore = state.homeScore,
+                    awayScore = state.awayScore,
+                    status = state.status.name,
+                    inning = state.inning,
+                    ball = state.ball,
+                    strike = state.strike,
+                    out = state.out,
+                    baseFirst = state.baseFirst,
+                    baseSecond = state.baseSecond,
+                    baseThird = state.baseThird,
+                    pitcher = state.pitcher,
+                    batter = state.batter,
+                    myTeam = resolveMyTeamName(selectedTeam, state),
+                    eventType = null
+                )
+                lastWatchSignature = signature
+            }
+        }
+
+        suspend fun applyIncomingEvents(
+            incoming: List<BackendGamesRepository.LiveEvent>,
+            sendHaptics: Boolean
+        ) {
+            if (incoming.isEmpty()) return
+
+            val sorted = incoming.sortedBy { it.cursor }
+            if (sendHaptics) {
+                sorted
+                    .filter { it.cursor > lastSentEventCursor }
+                    .forEach { event ->
+                        mapToWatchEventType(event.type)?.let { mapped ->
+                            WearGameSyncManager.sendHapticEvent(context, mapped, event.cursor)
+                        }
+                        lastSentEventCursor = max(lastSentEventCursor, event.cursor)
+                    }
+            } else {
+                lastSentEventCursor = max(lastSentEventCursor, sorted.maxOfOrNull { it.cursor } ?: 0L)
+            }
+
+            cursor = max(cursor, sorted.maxOfOrNull { it.cursor } ?: cursor)
+            localEvents = (sorted + localEvents)
+                .distinctBy { it.cursor }
+                .sortedByDescending { it.cursor }
+                .take(80)
+        }
+
+        suspend fun runRecoveryPull() {
+            val pulledState = runCatching {
                 withContext(Dispatchers.IO) {
                     BackendGamesRepository.fetchGameState(targetGameId)
                 }
             }.getOrNull()
+            if (pulledState != null) {
+                pushStateToWatch(pulledState)
+            }
 
-            val fetchedEvents = runCatching {
+            val pulledEvents = runCatching {
                 withContext(Dispatchers.IO) {
                     BackendGamesRepository.fetchGameEvents(gameId = targetGameId, after = cursor, limit = 200)
                 }
             }.getOrNull()
+            applyIncomingEvents(pulledEvents?.items.orEmpty(), sendHaptics = false)
+            if (pulledEvents != null) {
+                cursor = max(cursor, pulledEvents.nextCursor ?: cursor)
+            }
+        }
 
-            val newItems = fetchedEvents?.items.orEmpty()
-            if (newItems.isNotEmpty()) {
-                if (realtimeWindowReady) {
-                    newItems
-                        .sortedBy { it.cursor }
-                        .filter { it.cursor > lastSentEventCursor }
-                        .forEach { event ->
-                            mapToWatchEventType(event.type)?.let { mapped ->
-                                WearGameSyncManager.sendHapticEvent(context, mapped)
-                            }
-                            lastSentEventCursor = max(lastSentEventCursor, event.cursor)
+        while (currentCoroutineContext().isActive) {
+            runRecoveryPull()
+
+            runCatching {
+                BackendGamesRepository.streamGame(targetGameId).collect { message ->
+                    when (message) {
+                        BackendGamesRepository.LiveStreamMessage.Connected -> {
+                            reconnectAttempt = 0
                         }
-                }
 
-                localEvents = (newItems + localEvents)
-                    .distinctBy { it.cursor }
-                    .sortedByDescending { it.cursor }
-                    .take(80)
-            }
+                        BackendGamesRepository.LiveStreamMessage.Closed -> {
+                            throw IllegalStateException("game stream closed")
+                        }
 
-            if (fetchedEvents != null) {
-                val nextCursor = fetchedEvents.nextCursor
-                    ?: newItems.maxOfOrNull { it.cursor }
-                    ?: cursor
-                cursor = max(cursor, nextCursor)
+                        is BackendGamesRepository.LiveStreamMessage.Error -> {
+                            throw message.throwable
+                        }
 
-                if (!realtimeWindowReady && fetchedEvents.nextCursor == null) {
-                    realtimeWindowReady = true
-                    lastSentEventCursor = max(
-                        lastSentEventCursor,
-                        localEvents.maxOfOrNull { it.cursor } ?: 0L
-                    )
-                }
-            }
+                        is BackendGamesRepository.LiveStreamMessage.Events -> {
+                            applyIncomingEvents(message.items, sendHaptics = true)
+                        }
 
-            val state = fetchedState
-            if (state != null) {
-                val latestEventType =
-                    localEvents.firstNotNullOfOrNull { mapToWatchEventType(it.type) }
-                        ?: mapToWatchEventType(state.lastEventType)
-                val signature = listOf(
-                    state.gameId,
-                    state.status.name,
-                    state.inning,
-                    state.homeScore.toString(),
-                    state.awayScore.toString(),
-                    state.ball.toString(),
-                    state.strike.toString(),
-                    state.out.toString(),
-                    state.baseFirst.toString(),
-                    state.baseSecond.toString(),
-                    state.baseThird.toString(),
-                    latestEventType.orEmpty()
-                ).joinToString("|")
+                        is BackendGamesRepository.LiveStreamMessage.State -> {
+                            pushStateToWatch(message.state)
+                        }
 
-                if (signature != lastWatchSignature) {
-                    WearGameSyncManager.sendGameData(
-                        context = context,
-                        gameId = state.gameId,
-                        homeTeam = state.homeTeam,
-                        awayTeam = state.awayTeam,
-                        homeScore = state.homeScore,
-                        awayScore = state.awayScore,
-                        status = state.status.name,
-                        inning = state.inning,
-                        ball = state.ball,
-                        strike = state.strike,
-                        out = state.out,
-                        baseFirst = state.baseFirst,
-                        baseSecond = state.baseSecond,
-                        baseThird = state.baseThird,
-                        pitcher = state.pitcher,
-                        batter = state.batter,
-                        myTeam = resolveMyTeamName(selectedTeam, state),
-                        eventType = null
-                    )
-                    lastWatchSignature = signature
+                        is BackendGamesRepository.LiveStreamMessage.Pong -> Unit
+                    }
                 }
             }
 
-            delay(2500)
+            if (!currentCoroutineContext().isActive) break
+            val delayMs = reconnectDelaysMs[reconnectAttempt.coerceAtMost(reconnectDelaysMs.lastIndex)]
+            reconnectAttempt = (reconnectAttempt + 1).coerceAtMost(reconnectDelaysMs.lastIndex)
+            delay(delayMs)
         }
     }
 

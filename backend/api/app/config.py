@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     db_pool_timeout_sec: int = 30
     db_connect_timeout_sec: int = 10
     db_pool_recycle_sec: int = 1800
+    redis_url: str | None = None
+    redis_pubsub_channel: str = "basehaptic:live_events"
+    instance_id: str | None = None
     crawler_api_key: str = "dev-crawler-key"
     cors_allow_origins: str = "*"
 

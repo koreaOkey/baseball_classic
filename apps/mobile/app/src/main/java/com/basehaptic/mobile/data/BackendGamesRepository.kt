@@ -1,5 +1,6 @@
 package com.basehaptic.mobile.data
 
+import android.content.Context
 import com.basehaptic.mobile.BuildConfig
 import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
@@ -12,12 +13,32 @@ import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 
 object BackendGamesRepository {
     private const val TIMEOUT_MS = 5000
+    private const val CACHE_PREFS_NAME = "backend_games_cache"
+    private const val KEY_TODAY_GAMES_DATE = "today_games_date"
+    private const val KEY_TODAY_GAMES_PAYLOAD = "today_games_payload"
     private val hhmmFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+    private val webSocketClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .retryOnConnectionFailure(true)
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build()
+    }
 
     data class LiveGameState(
         val gameId: String,
@@ -65,8 +86,43 @@ object BackendGamesRepository {
         val game: Game
     )
 
+    sealed interface LiveStreamMessage {
+        data object Connected : LiveStreamMessage
+        data class State(val state: LiveGameState) : LiveStreamMessage
+        data class Events(val items: List<LiveEvent>) : LiveStreamMessage
+        data class Pong(val at: String?) : LiveStreamMessage
+        data class Error(val throwable: Throwable) : LiveStreamMessage
+        data object Closed : LiveStreamMessage
+    }
+
     fun fetchGames(selectedTeam: Team): List<Game>? {
         return fetchGamesByDate(selectedTeam = selectedTeam, targetDate = LocalDate.now())
+    }
+
+    fun fetchTodayGamesCached(context: Context, selectedTeam: Team): List<Game>? {
+        val today = LocalDate.now().toString()
+        val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedDate = prefs.getString(KEY_TODAY_GAMES_DATE, null)
+        val cachedPayload = prefs.getString(KEY_TODAY_GAMES_PAYLOAD, null)
+
+        if (cachedDate == today && !cachedPayload.isNullOrBlank()) {
+            return parseGamesPayload(cachedPayload, selectedTeam)
+        }
+
+        val freshPayload = fetchGamesByDateRaw(LocalDate.now())
+        if (!freshPayload.isNullOrBlank()) {
+            prefs.edit()
+                .putString(KEY_TODAY_GAMES_DATE, today)
+                .putString(KEY_TODAY_GAMES_PAYLOAD, freshPayload)
+                .apply()
+            return parseGamesPayload(freshPayload, selectedTeam)
+        }
+
+        if (!cachedPayload.isNullOrBlank()) {
+            return parseGamesPayload(cachedPayload, selectedTeam)
+        }
+
+        return null
     }
 
     fun fetchUpcomingMyTeamGames(
@@ -104,16 +160,25 @@ object BackendGamesRepository {
     }
 
     private fun fetchGamesByDate(selectedTeam: Team, targetDate: LocalDate): List<Game>? {
+        val payload = fetchGamesByDateRaw(targetDate) ?: return null
+        return parseGamesPayload(payload, selectedTeam)
+    }
+
+    private fun fetchGamesByDateRaw(targetDate: LocalDate): String? {
         val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games?date=${targetDate}&limit=100"
-        return getJson(endpoint) { body ->
-            val array = JSONArray(body)
+        return getJson(endpoint) { body -> body }
+    }
+
+    private fun parseGamesPayload(payload: String, selectedTeam: Team): List<Game>? {
+        return runCatching {
+            val array = JSONArray(payload)
             val items = ArrayList<Game>(array.length())
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
                 items.add(item.toGame(selectedTeam))
             }
             items
-        }
+        }.getOrNull()
     }
 
     fun fetchGameState(gameId: String): LiveGameState? {
@@ -139,6 +204,53 @@ object BackendGamesRepository {
                 null
             }
             LiveEventsPage(items = items, nextCursor = nextCursor)
+        }
+    }
+
+    fun streamGame(gameId: String): Flow<LiveStreamMessage> = callbackFlow {
+        val endpoint = buildWebSocketEndpoint(gameId)
+        val request = Request.Builder()
+            .url(endpoint)
+            .build()
+
+        var webSocket: WebSocket? = null
+        val listener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                this@callbackFlow.trySend(LiveStreamMessage.Connected)
+                webSocket.send("ping")
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                val parsed = parseLiveStreamMessage(text) ?: return
+                this@callbackFlow.trySend(parsed)
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                this@callbackFlow.trySend(LiveStreamMessage.Closed)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                this@callbackFlow.trySend(LiveStreamMessage.Closed)
+                this@callbackFlow.close()
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                this@callbackFlow.trySend(LiveStreamMessage.Error(t))
+                this@callbackFlow.close(t)
+            }
+        }
+
+        webSocket = webSocketClient.newWebSocket(request, listener)
+        val heartbeatJob = launch {
+            while (true) {
+                delay(15_000)
+                webSocket?.send("ping")
+            }
+        }
+
+        awaitClose {
+            heartbeatJob.cancel()
+            webSocket?.close(1000, "client closed")
         }
     }
 
@@ -171,6 +283,46 @@ object BackendGamesRepository {
             }
         }.getOrNull().also {
             connection.disconnect()
+        }
+    }
+
+    private fun buildWebSocketEndpoint(gameId: String): String {
+        val baseUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
+        val wsBase = when {
+            baseUrl.startsWith("https://") -> "wss://${baseUrl.removePrefix("https://")}"
+            baseUrl.startsWith("http://") -> "ws://${baseUrl.removePrefix("http://")}"
+            baseUrl.startsWith("ws://") || baseUrl.startsWith("wss://") -> baseUrl
+            else -> "ws://$baseUrl"
+        }
+        return "$wsBase/ws/games/$gameId"
+    }
+
+    private fun parseLiveStreamMessage(text: String): LiveStreamMessage? {
+        val root = runCatching { JSONObject(text) }.getOrNull() ?: return null
+        return when (root.optString("type")) {
+            "state" -> {
+                val payload = root.optJSONObject("payload") ?: return null
+                val state = runCatching { payload.toLiveGameState() }.getOrNull() ?: return null
+                LiveStreamMessage.State(state)
+            }
+
+            "events" -> {
+                val payload = root.optJSONObject("payload") ?: return null
+                val items = payload.optJSONArray("items") ?: JSONArray()
+                val parsed = ArrayList<LiveEvent>(items.length())
+                for (i in 0 until items.length()) {
+                    val event = items.optJSONObject(i) ?: continue
+                    runCatching { event.toLiveEvent() }.getOrNull()?.let(parsed::add)
+                }
+                LiveStreamMessage.Events(parsed)
+            }
+
+            "pong" -> {
+                val at = root.optJSONObject("payload")?.optString("at").orEmpty().ifBlank { null }
+                LiveStreamMessage.Pong(at)
+            }
+
+            else -> null
         }
     }
 

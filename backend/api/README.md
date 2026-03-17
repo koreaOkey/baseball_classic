@@ -60,6 +60,14 @@ uvicorn app.main:app --reload --port 8080
   - `BASEHAPTIC_DB_POOL_SIZE=1`
   - `BASEHAPTIC_DB_MAX_OVERFLOW=0`
 
+## Redis Pub/Sub (Multi-Instance Live Fanout)
+- Optional env vars (`BASEHAPTIC_` prefix):
+  - `REDIS_URL` (e.g. Railway Redis connection URL)
+  - `REDIS_PUBSUB_CHANNEL` (default: `basehaptic:live_events`)
+- Behavior:
+  - if `REDIS_URL` is empty, backend uses in-memory `event_bus` only (single-instance mode)
+  - if `REDIS_URL` is set, ingest broadcasts are also published to Redis and re-fanned out by all backend instances
+
 ## Incident Notes (2026-03-14)
 
 - Snapshot ingest lock contention (`/internal/crawler/games/{gameId}/snapshot`)

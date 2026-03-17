@@ -56,6 +56,7 @@ import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
@@ -78,8 +79,21 @@ fun LiveGameScreen(
 
         var cursor = 0L
         var localEvents: List<BackendGamesRepository.LiveEvent> = emptyList()
+        val reconnectDelaysMs = listOf(1000L, 2000L, 5000L, 10000L)
+        var reconnectAttempt = 0
 
-        while (currentCoroutineContext().isActive) {
+        suspend fun mergeEvents(incoming: List<BackendGamesRepository.LiveEvent>) {
+            if (incoming.isEmpty()) return
+            val sorted = incoming.sortedByDescending { it.cursor }
+            localEvents = (sorted + localEvents)
+                .distinctBy { it.cursor }
+                .sortedByDescending { it.cursor }
+                .take(80)
+            events = localEvents
+            cursor = max(cursor, incoming.maxOfOrNull { it.cursor } ?: cursor)
+        }
+
+        suspend fun runRecoveryPull() {
             val fetchedState = runCatching {
                 withContext(Dispatchers.IO) {
                     BackendGamesRepository.fetchGameState(gameId)
@@ -98,23 +112,53 @@ fun LiveGameScreen(
                 }
             }.getOrNull()
 
-            val newItems = fetchedEvents?.items.orEmpty()
-            if (newItems.isNotEmpty()) {
-                localEvents = (newItems + localEvents)
-                    .distinctBy { it.cursor }
-                    .sortedByDescending { it.cursor }
-                    .take(80)
-                events = localEvents
-            }
-
+            mergeEvents(fetchedEvents?.items.orEmpty())
             if (fetchedEvents != null) {
-                val nextCursor = fetchedEvents.nextCursor
-                    ?: newItems.maxOfOrNull { it.cursor }
-                    ?: cursor
-                cursor = max(cursor, nextCursor)
+                cursor = max(cursor, fetchedEvents.nextCursor ?: cursor)
+            }
+        }
+
+        while (currentCoroutineContext().isActive) {
+            runRecoveryPull()
+
+            runCatching {
+                BackendGamesRepository.streamGame(gameId).collect { message ->
+                    when (message) {
+                        BackendGamesRepository.LiveStreamMessage.Connected -> {
+                            reconnectAttempt = 0
+                            loadError = null
+                        }
+
+                        BackendGamesRepository.LiveStreamMessage.Closed -> {
+                            throw IllegalStateException("live stream closed")
+                        }
+
+                        is BackendGamesRepository.LiveStreamMessage.Error -> {
+                            throw message.throwable
+                        }
+
+                        is BackendGamesRepository.LiveStreamMessage.Events -> {
+                            mergeEvents(message.items)
+                        }
+
+                        is BackendGamesRepository.LiveStreamMessage.State -> {
+                            gameState = message.state
+                            loadError = null
+                        }
+
+                        is BackendGamesRepository.LiveStreamMessage.Pong -> Unit
+                    }
+                }
+            }.onFailure {
+                if (gameState == null) {
+                    loadError = "실시간 연결이 불안정합니다. 재연결 중..."
+                }
             }
 
-            delay(2500)
+            if (!currentCoroutineContext().isActive) break
+            val delayMs = reconnectDelaysMs[reconnectAttempt.coerceAtMost(reconnectDelaysMs.lastIndex)]
+            reconnectAttempt = (reconnectAttempt + 1).coerceAtMost(reconnectDelaysMs.lastIndex)
+            delay(delayMs)
         }
     }
 
@@ -414,4 +458,3 @@ private fun eventColor(type: String): Color {
         else -> Gray500
     }
 }
-

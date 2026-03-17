@@ -99,6 +99,9 @@ dependencies {
     // Lottie for animations
     implementation("com.airbnb.android:lottie-compose:6.6.2")
 
+    // WebSocket realtime stream
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
     

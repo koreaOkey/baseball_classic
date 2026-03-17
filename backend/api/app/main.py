@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
-from typing import Annotated
+from typing import Annotated, Any
 import asyncio
 import logging
 import secrets
@@ -15,6 +15,7 @@ from .config import get_settings
 from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
 from .models import Game, GameEvent
+from .redis_bus import RedisBroadcastRelay
 from .schemas import (
     CrawlerSnapshotRequest,
     CrawlerTeamRecordRequest,
@@ -44,6 +45,11 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS = (0.2, 0.5, 1.0)
+redis_relay = RedisBroadcastRelay(
+    redis_url=settings.redis_url,
+    channel=settings.redis_pubsub_channel,
+    source_instance_id=settings.instance_id,
+)
 
 
 def _is_snapshot_lock_timeout(exc: DBAPIError) -> bool:
@@ -77,10 +83,23 @@ def _rollback_session_safely(db: Session, *, game_id: str, attempt: int) -> bool
         return False
 
 
+async def _broadcast_live_message(game_id: str, message: dict[str, Any]) -> None:
+    await event_bus.broadcast(game_id, message)
+    await redis_relay.publish(game_id, message)
+
+
+async def _on_redis_live_message(game_id: str, message: dict[str, Any]) -> None:
+    await event_bus.broadcast(game_id, message)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    yield
+    await redis_relay.start(_on_redis_live_message)
+    try:
+        yield
+    finally:
+        await redis_relay.stop()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
@@ -244,14 +263,14 @@ async def ingest_crawler_snapshot(
     state = build_game_state(db, game)
 
     if inserted_events:
-        await event_bus.broadcast(
+        await _broadcast_live_message(
             game_id,
             {
                 "type": "events",
                 "payload": {"items": [to_event_out(item).model_dump(mode="json") for item in inserted_events]},
             },
         )
-    await event_bus.broadcast(
+    await _broadcast_live_message(
         game_id,
         {"type": "state", "payload": state.model_dump(mode="json")},
     )
