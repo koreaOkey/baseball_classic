@@ -11,10 +11,14 @@ from typing import Any
 
 try:
     from redis.asyncio import Redis
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    from redis.exceptions import TimeoutError as RedisTimeoutError
 
     _REDIS_AVAILABLE = True
 except ModuleNotFoundError:
     Redis = Any  # type: ignore[assignment,misc]
+    RedisConnectionError = ConnectionError  # type: ignore[assignment,misc]
+    RedisTimeoutError = TimeoutError  # type: ignore[assignment,misc]
     _REDIS_AVAILABLE = False
 
 
@@ -55,8 +59,8 @@ class RedisBroadcastRelay:
         if self._subscriber_task is not None:
             return
 
-        self._publisher = Redis.from_url(self._redis_url, decode_responses=True)
-        self._subscriber = Redis.from_url(self._redis_url, decode_responses=True)
+        self._publisher = self._create_client()
+        self._subscriber = self._create_client()
         is_connected, detail = await self.ping()
         if not is_connected:
             logger.warning("redis relay connection check failed: %s", detail)
@@ -83,7 +87,7 @@ class RedisBroadcastRelay:
         client = self._publisher
         close_after_check = False
         if client is None:
-            client = Redis.from_url(self._redis_url, decode_responses=True)
+            client = self._create_client()
             close_after_check = True
 
         try:
@@ -130,6 +134,13 @@ class RedisBroadcastRelay:
         )
         try:
             await self._publisher.publish(self._channel, payload)
+        except (RedisConnectionError, RedisTimeoutError) as exc:
+            logger.warning(
+                "redis relay publish connection issue: game_id=%s error=%s",
+                game_id,
+                exc,
+            )
+            await self._reset_publisher_client()
         except Exception:
             logger.exception("redis relay publish failed: game_id=%s", game_id)
 
@@ -157,13 +168,46 @@ class RedisBroadcastRelay:
                     await on_message(envelope["gameId"], envelope["message"])
             except asyncio.CancelledError:
                 break
+            except (RedisConnectionError, RedisTimeoutError) as exc:
+                logger.warning(
+                    "redis relay subscribe connection dropped: %s; reconnecting in %.1fs",
+                    exc,
+                    self._reconnect_delay_sec,
+                )
+                await self._reset_subscriber_client()
+                await asyncio.sleep(self._reconnect_delay_sec)
             except Exception:
                 logger.exception("redis relay subscribe loop failed; reconnecting shortly")
                 await asyncio.sleep(self._reconnect_delay_sec)
             finally:
                 if pubsub is not None:
                     with suppress(Exception):
-                        await pubsub.close()
+                        await pubsub.aclose()
+
+    def _create_client(self) -> Redis:
+        return Redis.from_url(
+            self._redis_url,
+            decode_responses=True,
+            socket_keepalive=True,
+            health_check_interval=30,
+            retry_on_timeout=True,
+        )
+
+    async def _reset_publisher_client(self) -> None:
+        if not self.enabled:
+            return
+        if self._publisher is not None:
+            with suppress(Exception):
+                await self._publisher.aclose()
+        self._publisher = self._create_client()
+
+    async def _reset_subscriber_client(self) -> None:
+        if not self.enabled:
+            return
+        if self._subscriber is not None:
+            with suppress(Exception):
+                await self._subscriber.aclose()
+        self._subscriber = self._create_client()
 
     def _decode_envelope(self, raw: Any) -> dict[str, Any] | None:
         if raw is None:
