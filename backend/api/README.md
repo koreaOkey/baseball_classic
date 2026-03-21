@@ -22,6 +22,11 @@ uvicorn app.main:app --reload --port 8080
 - API 문서: `http://localhost:8080/docs`
 - 상세 구조/연동 가이드는 `../README.md` 참고
 
+## Railway Deploy Note (Python/mise)
+- Pin Python version with `.python-version` to avoid unstable latest builds.
+- Recommended Railway service variable: `RAILPACK_PYTHON_VERSION=3.12.8`.
+- Do not install Python again via `RAILPACK_PACKAGES` (remove `python` if present).
+
 ## Supabase 전환
 - `BASEHAPTIC_DATABASE_URL`은 `postgresql+psycopg://...` 형식으로 설정해야 합니다.
 - Session Pooler 사용 예:
