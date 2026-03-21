@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from typing import Annotated, Any
-import asyncio
 import logging
 import secrets
+import time
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
@@ -113,7 +115,47 @@ app.add_middleware(
 
 
 @app.get("/health")
-async def health() -> dict[str, Any]:
+def health() -> dict[str, Any]:
+    # Keep /health lightweight for platform health checks.
+    return {
+        "status": "ok",
+        "service": "backend-api",
+        "environment": settings.environment,
+        "time": datetime.now(UTC),
+    }
+
+
+@app.get("/live")
+def live() -> dict[str, Any]:
+    return health()
+
+
+@app.get("/ready")
+async def ready() -> JSONResponse:
+    db_connected = True
+    db_detail: str = "connected"
+    try:
+        with SessionLocal() as db:
+            db.execute(select(1)).scalar_one()
+    except Exception as exc:
+        db_connected = False
+        db_detail = f"error:{exc.__class__.__name__}"
+
+    redis_connected, redis_detail = await redis_relay.ping()
+    is_ready = db_connected and redis_connected
+    payload = {
+        "status": "ok" if is_ready else "degraded",
+        "service": "backend-api",
+        "environment": settings.environment,
+        "db": db_detail,
+        "redis": redis_detail if not redis_connected else "connected",
+        "time": datetime.now(UTC),
+    }
+    return JSONResponse(status_code=200 if is_ready else 503, content=jsonable_encoder(payload))
+
+
+@app.get("/health/verbose")
+async def health_verbose() -> dict[str, Any]:
     redis_connected, redis_detail = await redis_relay.ping()
     return {
         "status": "ok",
@@ -212,7 +254,7 @@ def get_team_record_by_team(
 
 
 @app.post("/internal/crawler/games/{game_id}/snapshot", response_model=IngestResult)
-async def ingest_crawler_snapshot(
+def ingest_crawler_snapshot(
     game_id: str,
     payload: CrawlerSnapshotRequest,
     background_tasks: BackgroundTasks,
@@ -268,7 +310,7 @@ async def ingest_crawler_snapshot(
                 attempt + 1,
                 delay,
             )
-            await asyncio.sleep(delay)
+            time.sleep(delay)
 
     if game is None or state_payload is None or response_status is None or response_updated_at is None:
         raise HTTPException(status_code=500, detail="snapshot ingest failed")

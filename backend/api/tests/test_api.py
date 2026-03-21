@@ -1,7 +1,7 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
@@ -723,7 +723,7 @@ def test_snapshot_ingest_retries_on_lock_timeout_and_succeeds() -> None:
 
         with (
             patch.object(main_module, "upsert_game_from_snapshot", side_effect=flaky_upsert),
-            patch.object(main_module.asyncio, "sleep", new=AsyncMock(return_value=None)),
+            patch.object(main_module.time, "sleep", return_value=None),
         ):
             response = client.post(
                 f"/internal/crawler/games/{game_id}/snapshot",
@@ -745,7 +745,7 @@ def test_snapshot_ingest_returns_503_when_lock_timeout_persists() -> None:
 
         with (
             patch.object(main_module, "upsert_game_from_snapshot", side_effect=always_lock),
-            patch.object(main_module.asyncio, "sleep", new=AsyncMock(return_value=None)),
+            patch.object(main_module.time, "sleep", return_value=None),
         ):
             response = client.post(
                 f"/internal/crawler/games/{game_id}/snapshot",

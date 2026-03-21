@@ -211,8 +211,8 @@ def test_parser_schedule_import_days_default_and_override() -> None:
 def test_parser_crawler_backend_retry_options_default_and_override() -> None:
     parser = build_parser()
     args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
-    assert args_default.crawler_backend_timeout_sec == 15.0
-    assert args_default.crawler_backend_retries == 9
+    assert args_default.crawler_backend_timeout_sec == 8.0
+    assert args_default.crawler_backend_retries == 2
 
     args_custom = parser.parse_args(
         [

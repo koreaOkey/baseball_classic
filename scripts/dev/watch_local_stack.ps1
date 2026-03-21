@@ -7,6 +7,9 @@ param(
     [string]$SourceBaseUrl = "https://api-gw.sports.naver.com",
     [int]$ScheduleImportDays = 1,
     [int]$ScheduleRefreshIntervalSec = 300,
+    [int]$CrawlerIntervalSec = 15,
+    [double]$CrawlerBackendTimeoutSec = 8.0,
+    [int]$CrawlerBackendRetries = 2,
     [int]$CheckIntervalSec = 10,
     [int]$HealthTimeoutSec = 4,
     [switch]$EnablePreviewLineupPrecheck,
@@ -59,7 +62,7 @@ function Get-ApiKeyFromEnvFile {
 function Test-BackendHealthy {
     param([string]$Url, [int]$TimeoutSec)
     try {
-        $resp = Invoke-RestMethod -Uri "$Url/health" -TimeoutSec $TimeoutSec
+        $resp = Invoke-RestMethod -Uri "$Url/live" -TimeoutSec $TimeoutSec
         return ($resp.status -eq "ok")
     }
     catch {
@@ -194,7 +197,11 @@ function Start-DispatcherProcess {
         "--league", $League,
         "--source-base-url", $SourceBaseUrl,
         "--schedule-import-days", "$ScheduleImportDays",
-        "--schedule-refresh-interval-sec", "$ScheduleRefreshIntervalSec"
+        "--schedule-refresh-interval-sec", "$ScheduleRefreshIntervalSec",
+        "--crawler-interval-sec", "$CrawlerIntervalSec",
+        "--crawler-backend-timeout-sec", "$CrawlerBackendTimeoutSec",
+        "--crawler-backend-retries", "$CrawlerBackendRetries",
+        "--disable-team-record-sync"
     )
     if ($EnablePreviewLineupPrecheck) {
         $args += "--enable-preview-lineup-precheck"

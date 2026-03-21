@@ -1,4 +1,6 @@
 ﻿import argparse
+import hashlib
+import json
 import re
 import time
 from datetime import datetime
@@ -12,7 +14,21 @@ from backend_sender import build_snapshot_payload, post_snapshot_to_backend
 
 BASE_URL = "https://api-gw.sports.naver.com"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; BaseballClassicCrawler/1.0)"
-FINAL_STATUS = {"RESULT", "END", "FINAL"}
+FINAL_STATUS = {
+    "RESULT",
+    "END",
+    "FINAL",
+    "ENDED",
+    "FINISHED",
+    "CANCELED",
+    "CANCELLED",
+    "CANCEL",
+    "RAIN_CANCEL",
+    "NO_GAME",
+    "POSTPONED",
+    "PPD",
+    "SUSPENDED",
+}
 
 
 def fetch_json(url: str) -> Dict[str, Any]:
@@ -485,6 +501,34 @@ def crawl_once(game_id: str, base_url: str = BASE_URL) -> Tuple[Dict[str, Any], 
     return game_data, combined
 
 
+def _snapshot_state_signature(snapshot: Dict[str, Any]) -> str:
+    # Exclude volatile fields (e.g., observedAt) so we only detect meaningful state changes.
+    state_payload = {
+        "status": snapshot.get("status"),
+        "inning": snapshot.get("inning"),
+        "homeScore": snapshot.get("homeScore"),
+        "awayScore": snapshot.get("awayScore"),
+        "ball": snapshot.get("ball"),
+        "strike": snapshot.get("strike"),
+        "out": snapshot.get("out"),
+        "bases": snapshot.get("bases"),
+        "pitcher": snapshot.get("pitcher"),
+        "batter": snapshot.get("batter"),
+        "homeHits": snapshot.get("homeHits"),
+        "awayHits": snapshot.get("awayHits"),
+        "homeHomeRuns": snapshot.get("homeHomeRuns"),
+        "awayHomeRuns": snapshot.get("awayHomeRuns"),
+        "homeOutsTotal": snapshot.get("homeOutsTotal"),
+        "awayOutsTotal": snapshot.get("awayOutsTotal"),
+        "lineupSlots": snapshot.get("lineupSlots") or [],
+        "batterStats": snapshot.get("batterStats") or [],
+        "pitcherStats": snapshot.get("pitcherStats") or [],
+        "notes": snapshot.get("notes") or [],
+    }
+    encoded = json.dumps(state_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def run(
     game_id: str,
     output_path: Optional[str],
@@ -497,6 +541,7 @@ def run(
     backend_retries: int = 3,
 ) -> None:
     posted_source_event_ids: set[str] = set()
+    last_posted_state_signature: str | None = None
 
     while True:
         try:
@@ -541,6 +586,16 @@ def run(
                 f"events={len(delta_events)} totalEvents={len(all_events)}",
                 flush=True,
             )
+            state_signature = _snapshot_state_signature(snapshot)
+            if not delta_events and state_signature == last_posted_state_signature:
+                print(
+                    f"[backend] gameId={game_id} skipped reason=no-delta-no-state-change",
+                    flush=True,
+                )
+                if not watch or status in FINAL_STATUS:
+                    break
+                time.sleep(interval)
+                continue
             try:
                 last_error: requests.RequestException | None = None
                 result: Dict[str, Any] | None = None
@@ -578,6 +633,7 @@ def run(
                     for event in delta_events
                     if str(event.get("sourceEventId") or "").strip()
                 )
+                last_posted_state_signature = state_signature
             except requests.RequestException as exc:
                 print(f"[backend][error] gameId={game_id} ingest_failed error={exc}", flush=True)
                 if not watch:

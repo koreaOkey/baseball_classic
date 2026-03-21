@@ -1299,17 +1299,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--dispatch-interval-sec", type=int, default=15)
-    parser.add_argument("--crawler-interval-sec", type=int, default=10)
+    parser.add_argument("--crawler-interval-sec", type=int, default=15)
     parser.add_argument(
         "--crawler-backend-timeout-sec",
         type=float,
-        default=15.0,
+        default=8.0,
         help="Backend ingest timeout passed to crawler.py (--backend-timeout).",
     )
     parser.add_argument(
         "--crawler-backend-retries",
         type=int,
-        default=9,
+        default=2,
         help="Backend ingest retries passed to crawler.py (--backend-retries).",
     )
     parser.add_argument(
