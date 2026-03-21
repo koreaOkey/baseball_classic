@@ -20,6 +20,9 @@ import requests
 KST = ZoneInfo("Asia/Seoul")
 LIVE_STATUS_CODES = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
 FINAL_STATUS_CODES = {"RESULT", "FINAL", "END", "FINISHED"}
+CANCELED_STATUS_CODES = {"CANCELED", "CANCELLED", "CANCEL", "RAIN_CANCEL", "NO_GAME"}
+POSTPONED_STATUS_CODES = {"POSTPONED", "PPD", "SUSPENDED", "DELAYED"}
+TERMINAL_STATUS_CODES = FINAL_STATUS_CODES | CANCELED_STATUS_CODES | POSTPONED_STATUS_CODES
 RETRYABLE_HTTP_STATUS_CODES = {408, 425, 429, 500, 502, 503, 504}
 LOGGER = logging.getLogger("baseball_dispatcher")
 LEAGUE_PRESETS: dict[str, tuple[str, str]] = {
@@ -240,11 +243,13 @@ def _load_today_windows_from_backend(
     backend_base_url: str,
     target_date: date,
     timeout: float,
-) -> dict[str, RelayCheckWindow]:
+) -> dict[str, RelayCheckWindow] | None:
     endpoint = f"{backend_base_url.rstrip('/')}/games?date={target_date.isoformat()}&limit=100"
     payload = _safe_json_get(endpoint, timeout=timeout)
-    if payload is None or not isinstance(payload, list):
-        return {}
+    if payload is None:
+        return None
+    if not isinstance(payload, list):
+        return None
 
     windows: dict[str, RelayCheckWindow] = {}
     for item in payload:
@@ -311,7 +316,7 @@ def _relay_is_available(
     game = (game_payload.get("result") or {}).get("game") or {}
     relay_data = (relay_payload.get("result") or {}).get("textRelayData") or {}
     status_code = str(game.get("statusCode") or "").strip().upper()
-    if status_code in FINAL_STATUS_CODES:
+    if status_code in TERMINAL_STATUS_CODES:
         return False, True
 
     text_relays = relay_data.get("textRelays") or []
@@ -376,6 +381,10 @@ def _map_schedule_status(status_code: Any) -> str:
         return "LIVE"
     if raw in FINAL_STATUS_CODES:
         return "FINISHED"
+    if raw in CANCELED_STATUS_CODES:
+        return "CANCELED"
+    if raw in POSTPONED_STATUS_CODES:
+        return "POSTPONED"
     return "SCHEDULED"
 
 
@@ -837,13 +846,23 @@ def _run_schedule_import(
         section_id,
         category_id,
     )
-    games = _fetch_schedule_games(
-        source_base_url=source_base_url,
-        section_id=section_id,
-        category_id=category_id,
-        target_date=target_date,
-        timeout=fetch_timeout,
-    )
+    try:
+        games = _fetch_schedule_games(
+            source_base_url=source_base_url,
+            section_id=section_id,
+            category_id=category_id,
+            target_date=target_date,
+            timeout=fetch_timeout,
+        )
+    except Exception as exc:
+        LOGGER.warning(
+            "[import] fetch_failed date=%s section=%s category=%s error=%s",
+            target_date.isoformat(),
+            section_id,
+            category_id,
+            exc,
+        )
+        return False
     LOGGER.info("[import] fetched=%s date=%s", len(games), target_date.isoformat())
 
     success_count = 0
@@ -1031,6 +1050,13 @@ def run_dispatcher(args: argparse.Namespace) -> None:
             target_date=target_date,
             timeout=args.http_timeout_sec,
         )
+        if loaded is None:
+            LOGGER.warning(
+                "[dispatcher] windows_load_failed date=%s keep_existing=%s",
+                target_date.isoformat(),
+                len(windows),
+            )
+            return
         merged: dict[str, RelayCheckWindow] = {}
         for game_id, loaded_window in loaded.items():
             existing = windows.get(game_id)

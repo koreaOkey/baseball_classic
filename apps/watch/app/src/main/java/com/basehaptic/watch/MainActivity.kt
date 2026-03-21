@@ -15,10 +15,13 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
@@ -36,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
@@ -45,6 +50,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.wear.compose.material.Icon
+import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
@@ -55,6 +61,7 @@ import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.ui.components.LiveGameScreen
 import com.basehaptic.watch.ui.components.NoGameScreen
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
+import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -88,6 +95,7 @@ fun WatchApp() {
 
     var gameData by remember { mutableStateOf(readGameDataFromPrefs(context)) }
     var latestEvent by remember { mutableStateOf(readLatestEventFromPrefs(context)) }
+    var watchSyncPrompt by remember { mutableStateOf(readWatchSyncPromptFromPrefs(context)) }
     var isHomeRunTransitionVisible by remember { mutableStateOf(false) }
     var homeRunTransitionToken by remember { mutableStateOf<Long?>(null) }
 
@@ -95,6 +103,7 @@ fun WatchApp() {
         val filter = IntentFilter().apply {
             addAction(DataLayerListenerService.ACTION_THEME_UPDATED)
             addAction(DataLayerListenerService.ACTION_GAME_UPDATED)
+            addAction(DataLayerListenerService.ACTION_WATCH_SYNC_PROMPT)
         }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -111,6 +120,9 @@ fun WatchApp() {
                     DataLayerListenerService.ACTION_GAME_UPDATED -> {
                         gameData = readGameDataFromPrefs(context)
                         latestEvent = readLatestEventFromPrefs(context)
+                    }
+                    DataLayerListenerService.ACTION_WATCH_SYNC_PROMPT -> {
+                        watchSyncPrompt = readWatchSyncPromptFromPrefs(context)
                     }
                 }
             }
@@ -167,6 +179,31 @@ fun WatchApp() {
                     }
                 }
             }
+
+            val prompt = watchSyncPrompt
+            if (prompt != null) {
+                WatchSyncPromptDialog(
+                    prompt = prompt,
+                    onAccept = {
+                        WatchSyncResponseSender.send(
+                            context = context,
+                            gameId = prompt.gameId,
+                            accepted = true
+                        )
+                        clearWatchSyncPrompt(context)
+                        watchSyncPrompt = null
+                    },
+                    onDecline = {
+                        WatchSyncResponseSender.send(
+                            context = context,
+                            gameId = prompt.gameId,
+                            accepted = false
+                        )
+                        clearWatchSyncPrompt(context)
+                        watchSyncPrompt = null
+                    }
+                )
+            }
         }
     }
 }
@@ -180,7 +217,7 @@ private fun readGameDataFromPrefs(context: Context): GameData? {
     if (gameId.isBlank()) return null
     val inning = prefs.getString(DataLayerListenerService.KEY_INNING, "") ?: ""
     val status = prefs.getString(DataLayerListenerService.KEY_STATUS, "") ?: ""
-    val isFinished = status.equals("FINISHED", ignoreCase = true) || inning.contains("경기 종료")
+    val isFinished = status.equals("FINISHED", ignoreCase = true) || inning.contains("寃쎄린 醫낅즺")
 
     return GameData(
         gameId = gameId,
@@ -216,6 +253,12 @@ private data class WatchEventUi(
     val color: Color
 )
 
+private data class WatchSyncPrompt(
+    val gameId: String,
+    val homeTeam: String,
+    val awayTeam: String
+)
+
 private const val EVENT_OVERLAY_DURATION_MS = 2200L
 private const val EVENT_OVERLAY_FRESHNESS_MS = 5000L
 private const val HOMERUN_SCREEN_DURATION_MS = 4000L
@@ -231,8 +274,35 @@ private fun readLatestEventFromPrefs(context: Context): WatchEventInfo? {
     return WatchEventInfo(type = type, timestamp = timestamp)
 }
 
+private fun readWatchSyncPromptFromPrefs(context: Context): WatchSyncPrompt? {
+    val prefs = context.getSharedPreferences(
+        DataLayerListenerService.GAME_PREFS_NAME,
+        Context.MODE_PRIVATE
+    )
+    val gameId = prefs.getString(DataLayerListenerService.KEY_PENDING_SYNC_GAME_ID, "") ?: ""
+    if (gameId.isBlank()) return null
+    return WatchSyncPrompt(
+        gameId = gameId,
+        homeTeam = prefs.getString(DataLayerListenerService.KEY_PENDING_SYNC_HOME_TEAM, "") ?: "",
+        awayTeam = prefs.getString(DataLayerListenerService.KEY_PENDING_SYNC_AWAY_TEAM, "") ?: ""
+    )
+}
+
+private fun clearWatchSyncPrompt(context: Context) {
+    context.getSharedPreferences(
+        DataLayerListenerService.GAME_PREFS_NAME,
+        Context.MODE_PRIVATE
+    ).edit()
+        .remove(DataLayerListenerService.KEY_PENDING_SYNC_GAME_ID)
+        .remove(DataLayerListenerService.KEY_PENDING_SYNC_HOME_TEAM)
+        .remove(DataLayerListenerService.KEY_PENDING_SYNC_AWAY_TEAM)
+        .remove(DataLayerListenerService.KEY_PENDING_SYNC_MY_TEAM)
+        .apply()
+}
+
 @Composable
 private fun WatchEventOverlay(latestEvent: WatchEventInfo?) {
+    val uiProfile = rememberWatchUiProfile()
     var visibleEvent by remember { mutableStateOf<WatchEventInfo?>(null) }
 
     LaunchedEffect(latestEvent?.timestamp) {
@@ -258,9 +328,12 @@ private fun WatchEventOverlay(latestEvent: WatchEventInfo?) {
             modifier = Modifier
                 .background(
                     color = Color.Black.copy(alpha = 0.8f),
-                    shape = RoundedCornerShape(22.dp)
+                    shape = RoundedCornerShape(uiProfile.promptCardCornerDp.dp)
                 )
-                .padding(horizontal = 18.dp, vertical = 12.dp),
+                .padding(
+                    horizontal = (uiProfile.promptOuterHorizontalPaddingDp + 2).dp,
+                    vertical = 10.dp
+                ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
@@ -270,9 +343,121 @@ private fun WatchEventOverlay(latestEvent: WatchEventInfo?) {
             )
             Text(
                 text = eventUi.label,
-                color = Color.White
+                color = Color.White,
+                fontSize = uiProfile.promptQuestionSp.sp
             )
         }
+    }
+}
+
+@Composable
+private fun WatchSyncPromptDialog(
+    prompt: WatchSyncPrompt,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    val uiProfile = rememberWatchUiProfile()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.78f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = uiProfile.promptOuterHorizontalPaddingDp.dp)
+                .background(
+                    color = Color(0xFF1A1A1A),
+                    shape = RoundedCornerShape(uiProfile.promptCardCornerDp.dp)
+                )
+                .padding(horizontal = 12.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "경기를 관람하겠습니까?",
+                color = Color.White,
+                fontSize = uiProfile.promptQuestionSp.sp
+            )
+            val matchup = listOf(prompt.awayTeam, prompt.homeTeam)
+                .filter { it.isNotBlank() }
+                .joinToString(" vs ")
+            if (matchup.isNotBlank()) {
+                Text(
+                    text = matchup,
+                    color = Color.White.copy(alpha = 0.72f),
+                    fontSize = (uiProfile.promptQuestionSp - 1).sp
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("예")
+                }
+                Button(
+                    onClick = onDecline,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("아니오")
+                }
+            }
+        }
+    }
+}
+
+@Preview(name = "Prompt Small Round", device = "id:wearos_small_round")
+@Composable
+private fun WatchSyncPromptPreviewSmallRound() {
+    BaseHapticWatchTheme(teamName = "SSG") {
+        WatchSyncPromptDialog(
+            prompt = WatchSyncPrompt(
+                gameId = "20260321SSLG0001",
+                homeTeam = "LG",
+                awayTeam = "SSG"
+            ),
+            onAccept = {},
+            onDecline = {}
+        )
+    }
+}
+
+@Preview(name = "Prompt Large Round", device = "id:wearos_large_round")
+@Composable
+private fun WatchSyncPromptPreviewLargeRound() {
+    BaseHapticWatchTheme(teamName = "SSG") {
+        WatchSyncPromptDialog(
+            prompt = WatchSyncPrompt(
+                gameId = "20260321SSLG0001",
+                homeTeam = "LG",
+                awayTeam = "SSG"
+            ),
+            onAccept = {},
+            onDecline = {}
+        )
+    }
+}
+
+@Preview(name = "Prompt Square", device = "id:wearos_square")
+@Composable
+private fun WatchSyncPromptPreviewSquare() {
+    BaseHapticWatchTheme(teamName = "SSG") {
+        WatchSyncPromptDialog(
+            prompt = WatchSyncPrompt(
+                gameId = "20260321SSLG0001",
+                homeTeam = "LG",
+                awayTeam = "SSG"
+            ),
+            onAccept = {},
+            onDecline = {}
+        )
     }
 }
 
@@ -328,8 +513,9 @@ private fun eventUiFor(type: String): WatchEventUi? {
         "HIT" -> WatchEventUi("HIT", Icons.Default.Bolt, Color(0xFF22C55E))
         "SCORE" -> WatchEventUi("SCORE", Icons.Default.EmojiEvents, Color(0xFFEAB308))
         "OUT" -> WatchEventUi("OUT", Icons.Default.HighlightOff, Color(0xFFEF4444))
-        "DOUBLE_PLAY" -> WatchEventUi("병살", Icons.Default.HighlightOff, Color(0xFFF97316))
-        "TRIPLE_PLAY" -> WatchEventUi("삼중살", Icons.Default.HighlightOff, Color(0xFFDC2626))
+        "DOUBLE_PLAY" -> WatchEventUi("DOUBLE PLAY", Icons.Default.HighlightOff, Color(0xFFF97316))
+        "TRIPLE_PLAY" -> WatchEventUi("TRIPLE PLAY", Icons.Default.HighlightOff, Color(0xFFDC2626))
         else -> null
     }
 }
+

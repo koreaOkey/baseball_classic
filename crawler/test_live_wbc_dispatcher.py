@@ -4,6 +4,7 @@ from datetime import date
 from live_wbc_dispatcher import (
     _build_schedule_import_dates,
     _build_team_record_payload,
+    _map_schedule_status,
     _parse_schedule_url,
     _preview_has_lineup,
     _resolve_schedule_filters,
@@ -277,3 +278,12 @@ def test_should_skip_schedule_snapshot_for_live_status() -> None:
     assert _should_skip_schedule_snapshot({"statusCode": "LIVE"}) is True
     assert _should_skip_schedule_snapshot({"statusCode": "ING"}) is True
     assert _should_skip_schedule_snapshot({"statusCode": "SCHEDULED"}) is False
+
+
+def test_map_schedule_status_supports_canceled_and_postponed() -> None:
+    assert _map_schedule_status("CANCELED") == "CANCELED"
+    assert _map_schedule_status("cancelled") == "CANCELED"
+    assert _map_schedule_status("RAIN_CANCEL") == "CANCELED"
+    assert _map_schedule_status("POSTPONED") == "POSTPONED"
+    assert _map_schedule_status("ppd") == "POSTPONED"
+    assert _map_schedule_status("suspended") == "POSTPONED"

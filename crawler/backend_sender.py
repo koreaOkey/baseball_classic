@@ -6,6 +6,8 @@ import requests
 
 LIVE_STATUS = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
 FINISHED_STATUS = {"FINISHED", "FINAL", "END", "RESULT"}
+CANCELED_STATUS = {"CANCELED", "CANCELLED", "CANCEL", "RAIN_CANCEL", "NO_GAME"}
+POSTPONED_STATUS = {"POSTPONED", "PPD", "SUSPENDED", "DELAYED"}
 
 
 def _contains_any(value: str, terms: List[str]) -> bool:
@@ -122,6 +124,10 @@ def _normalize_status(raw: Any) -> str:
         return "LIVE"
     if value in FINISHED_STATUS:
         return "FINISHED"
+    if value in CANCELED_STATUS:
+        return "CANCELED"
+    if value in POSTPONED_STATUS:
+        return "POSTPONED"
     return "SCHEDULED"
 
 

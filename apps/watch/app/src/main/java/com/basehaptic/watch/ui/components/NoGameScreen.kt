@@ -1,6 +1,11 @@
 package com.basehaptic.watch.ui.components
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -13,46 +18,66 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
 import com.basehaptic.watch.ui.theme.Gray400
+import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
 
 @Composable
 fun NoGameScreen() {
+    val uiProfile = rememberWatchUiProfile()
+
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = if (uiProfile.isRound) 16.dp else 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Text(
             text = "⚾",
-            fontSize = 40.sp
+            fontSize = uiProfile.noGameIconSp.sp
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Text(
-            text = "진행 중인 경기가\n없습니다",
+            text = "진행 중인 경기가 없습니다",
             style = MaterialTheme.typography.body1,
             color = Color.White,
             textAlign = TextAlign.Center,
-            fontSize = 14.sp
+            fontSize = uiProfile.noGamePrimarySp.sp
         )
-        
+
         Spacer(modifier = Modifier.height(4.dp))
-        
+
         Text(
-            text = "휴대폰 앱에서\n경기를 선택해주세요",
+            text = "모바일 앱에서 경기를 선택해주세요",
             style = MaterialTheme.typography.caption1,
             color = Gray400,
             textAlign = TextAlign.Center,
-            fontSize = 11.sp
+            fontSize = uiProfile.noGameSecondarySp.sp
         )
     }
 }
 
-@Preview(device = "id:wearos_small_round")
+@Preview(name = "Small Round", device = "id:wearos_small_round")
 @Composable
-fun NoGameScreenPreview() {
+fun NoGameScreenPreviewSmallRound() {
     BaseHapticWatchTheme {
         NoGameScreen()
     }
 }
 
+@Preview(name = "Large Round", device = "id:wearos_large_round")
+@Composable
+fun NoGameScreenPreviewLargeRound() {
+    BaseHapticWatchTheme {
+        NoGameScreen()
+    }
+}
+
+@Preview(name = "Square", device = "id:wearos_square")
+@Composable
+fun NoGameScreenPreviewSquare() {
+    BaseHapticWatchTheme {
+        NoGameScreen()
+    }
+}

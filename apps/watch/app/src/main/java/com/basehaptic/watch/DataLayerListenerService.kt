@@ -24,10 +24,12 @@ class DataLayerListenerService : WearableListenerService() {
 
         const val GAME_PREFS_NAME = "watch_game_prefs"
         const val ACTION_GAME_UPDATED = "com.basehaptic.watch.ACTION_GAME_UPDATED"
+        const val ACTION_WATCH_SYNC_PROMPT = "com.basehaptic.watch.ACTION_WATCH_SYNC_PROMPT"
 
         const val PATH_GAME = "/game"
         const val PATH_THEME = "/theme"
         const val PATH_HAPTIC = "/haptic"
+        const val PATH_WATCH_PROMPT = "/watch/prompt"
         
         const val KEY_GAME_ID = "game_id"
         const val KEY_HOME_TEAM = "home_team"
@@ -50,6 +52,10 @@ class DataLayerListenerService : WearableListenerService() {
         const val KEY_LAST_EVENT_TYPE = "last_event_type"
         const val KEY_LAST_EVENT_AT = "last_event_at"
         const val KEY_LAST_EVENT_CURSOR = "last_event_cursor"
+        const val KEY_PENDING_SYNC_GAME_ID = "pending_sync_game_id"
+        const val KEY_PENDING_SYNC_HOME_TEAM = "pending_sync_home_team"
+        const val KEY_PENDING_SYNC_AWAY_TEAM = "pending_sync_away_team"
+        const val KEY_PENDING_SYNC_MY_TEAM = "pending_sync_my_team"
 
         private const val WAKE_LOCK_TIMEOUT_MS = 3_000L
     }
@@ -64,6 +70,7 @@ class DataLayerListenerService : WearableListenerService() {
                     path?.startsWith(PATH_GAME) == true -> handleGameData(item)
                     path?.startsWith(PATH_THEME) == true -> handleThemeData(item)
                     path?.startsWith(PATH_HAPTIC) == true -> handleHapticEvent(item)
+                    path?.startsWith(PATH_WATCH_PROMPT) == true -> handleWatchSyncPrompt(item)
                 }
             }
         }
@@ -165,6 +172,35 @@ class DataLayerListenerService : WearableListenerService() {
         sendBroadcast(Intent(ACTION_GAME_UPDATED))
     }
 
+    private fun handleWatchSyncPrompt(item: DataItem) {
+        val dataMap = DataMapItem.fromDataItem(item).dataMap
+        val gameId = dataMap.getString(KEY_GAME_ID, "")
+        if (gameId.isBlank()) return
+
+        val homeTeam = dataMap.getString(KEY_HOME_TEAM, "")
+        val awayTeam = dataMap.getString(KEY_AWAY_TEAM, "")
+        val myTeam = dataMap.getString(KEY_MY_TEAM, "")
+
+        getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_PENDING_SYNC_GAME_ID, gameId)
+            .putString(KEY_PENDING_SYNC_HOME_TEAM, homeTeam)
+            .putString(KEY_PENDING_SYNC_AWAY_TEAM, awayTeam)
+            .putString(KEY_PENDING_SYNC_MY_TEAM, myTeam)
+            .apply()
+
+        if (myTeam.isNotBlank()) {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(PREF_KEY_TEAM_NAME, myTeam)
+                .apply()
+            sendBroadcast(Intent(ACTION_THEME_UPDATED))
+        }
+
+        sendBroadcast(Intent(ACTION_WATCH_SYNC_PROMPT))
+        wakeScreenForPrompt(gameId)
+    }
+
     private fun saveLatestEvent(eventType: String, eventCursor: Long?) {
         getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -219,29 +255,48 @@ class DataLayerListenerService : WearableListenerService() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
         if (powerManager?.isInteractive == true) return
 
-        if (powerManager != null) {
-            @Suppress("DEPRECATION")
-            val wakeLock = powerManager.newWakeLock(
-                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
-                    PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                    PowerManager.ON_AFTER_RELEASE,
-                "$TAG:EventWakeLock"
-            )
-            wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+        acquireWakeLock(powerManager)
+        launchMainActivity(extraKey = "wake_event_type", extraValue = eventType) { error ->
+            Log.e(TAG, "Failed to open watch screen for event: $eventType", error)
         }
+    }
 
+    private fun wakeScreenForPrompt(gameId: String) {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (powerManager?.isInteractive != true) {
+            acquireWakeLock(powerManager)
+        }
+        launchMainActivity(extraKey = "sync_prompt_game_id", extraValue = gameId) { error ->
+            Log.e(TAG, "Failed to open watch screen for sync prompt: $gameId", error)
+        }
+    }
+
+    private fun acquireWakeLock(powerManager: PowerManager?) {
+        if (powerManager == null) return
+        @Suppress("DEPRECATION")
+        val wakeLock = powerManager.newWakeLock(
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                PowerManager.ON_AFTER_RELEASE,
+            "$TAG:EventWakeLock"
+        )
+        wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+    }
+
+    private fun launchMainActivity(
+        extraKey: String,
+        extraValue: String,
+        onFailure: (Throwable) -> Unit
+    ) {
         val wakeIntent = Intent(this, MainActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP
             )
-            putExtra("wake_event_type", eventType)
+            putExtra(extraKey, extraValue)
         }
-
         runCatching { startActivity(wakeIntent) }
-            .onFailure { error ->
-                Log.e(TAG, "Failed to open watch screen for event: $eventType", error)
-            }
+            .onFailure(onFailure)
     }
 }

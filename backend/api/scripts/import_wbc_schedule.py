@@ -24,6 +24,8 @@ from app.services import upsert_game_from_snapshot
 SCHEDULE_API_URL = "https://api-gw.sports.naver.com/schedule/games"
 LIVE_STATUS_CODES = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
 FINISHED_STATUS_CODES = {"RESULT", "FINAL", "END", "FINISHED"}
+CANCELED_STATUS_CODES = {"CANCELED", "CANCELLED", "CANCEL", "RAIN_CANCEL", "NO_GAME"}
+POSTPONED_STATUS_CODES = {"POSTPONED", "PPD", "SUSPENDED", "DELAYED"}
 LEAGUE_PRESETS: dict[str, tuple[str, str]] = {
     "wbc": ("wbaseball", "wbc"),
     "kbo": ("kbaseball", "kbo"),
@@ -36,6 +38,10 @@ def _map_status(status_code: Any) -> str:
         return "LIVE"
     if raw in FINISHED_STATUS_CODES:
         return "FINISHED"
+    if raw in CANCELED_STATUS_CODES:
+        return "CANCELED"
+    if raw in POSTPONED_STATUS_CODES:
+        return "POSTPONED"
     return "SCHEDULED"
 
 

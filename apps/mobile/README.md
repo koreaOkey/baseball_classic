@@ -231,3 +231,16 @@ app/src/main/res/
   - tapping unsynced LIVE card still opens the same sync confirm dialog
   - tapping synced LIVE card behavior is unchanged.
 - Added duplicate prompt guard per game in the app session.
+
+## Recent Changes (2026-03-21)
+
+- Added watch-first live sync consent flow for my-team games:
+  - when a my-team game changes to `LIVE`, mobile now sends a watch prompt via Data Layer (`/watch/prompt/current`)
+  - watch shows `경기를 관람하겠습니까?` with `예/아니오`
+  - watch response is sent back to mobile (`/watch/sync-response/<timestamp>`)
+  - mobile consumes the response and starts/stops live watch sync by updating `syncedGameId`
+- Added mobile-side wearable listener and bridge:
+  - `MobileDataLayerListenerService` receives watch responses
+  - `WearWatchSyncBridge` stores/consumes pending responses for Compose lifecycle safety
+- Updated watch prompt text consistency in mobile confirm dialog:
+  - `경기를 관람하겠습니까?`

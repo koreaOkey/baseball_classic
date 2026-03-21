@@ -31,6 +31,7 @@ data class PitcherRecord(
 enum class GameStatus {
     LIVE,
     SCHEDULED,
-    FINISHED
+    FINISHED,
+    CANCELED,
+    POSTPONED
 }
-

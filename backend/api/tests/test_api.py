@@ -23,7 +23,7 @@ from app.main import app  # noqa: E402
 from app import main as main_module  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, TeamRecord  # noqa: E402
-from app.services import _event_out_count, normalize_event_type  # noqa: E402
+from app.services import _event_out_count, normalize_event_type, normalize_status  # noqa: E402
 
 
 def sample_snapshot() -> dict:
@@ -377,6 +377,15 @@ def test_event_type_half_inning_change_mapping() -> None:
     assert _event_out_count(half_inning_change, "") == 0
 
 
+def test_status_mapping_includes_canceled_and_postponed() -> None:
+    assert normalize_status("CANCELED").value == "CANCELED"
+    assert normalize_status("cancelled").value == "CANCELED"
+    assert normalize_status("rain_cancel").value == "CANCELED"
+    assert normalize_status("POSTPONED").value == "POSTPONED"
+    assert normalize_status("ppd").value == "POSTPONED"
+    assert normalize_status("suspended").value == "POSTPONED"
+
+
 def test_game_state_resets_ball_strike_when_three_outs() -> None:
     with TestClient(app) as client:
         payload = sample_snapshot()
@@ -584,6 +593,42 @@ def test_list_games_filters_by_game_date_column() -> None:
         ids = [item["id"] for item in games.json()]
         assert "WBCGAMEA001" in ids
         assert "WBCGAMEB001" not in ids
+
+
+def test_list_games_filters_by_new_status_values() -> None:
+    with TestClient(app) as client:
+        canceled_payload = sample_snapshot()
+        canceled_payload["status"] = "RAIN_CANCEL"
+        postponed_payload = sample_snapshot()
+        postponed_payload["status"] = "POSTPONED"
+
+        canceled_ingest = client.post(
+            "/internal/crawler/games/20260220STAT0001/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=canceled_payload,
+        )
+        assert canceled_ingest.status_code == 200
+        assert canceled_ingest.json()["status"] == "CANCELED"
+
+        postponed_ingest = client.post(
+            "/internal/crawler/games/20260220STAT0002/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=postponed_payload,
+        )
+        assert postponed_ingest.status_code == 200
+        assert postponed_ingest.json()["status"] == "POSTPONED"
+
+        canceled_games = client.get("/games?status=CANCELED")
+        assert canceled_games.status_code == 200
+        canceled_ids = [item["id"] for item in canceled_games.json()]
+        assert "20260220STAT0001" in canceled_ids
+        assert "20260220STAT0002" not in canceled_ids
+
+        postponed_games = client.get("/games?status=POSTPONED")
+        assert postponed_games.status_code == 200
+        postponed_ids = [item["id"] for item in postponed_games.json()]
+        assert "20260220STAT0002" in postponed_ids
+        assert "20260220STAT0001" not in postponed_ids
 
 
 def test_ingest_team_record_upsert_flow() -> None:

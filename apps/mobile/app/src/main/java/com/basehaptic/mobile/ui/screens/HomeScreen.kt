@@ -186,7 +186,7 @@ fun HomeScreen(
                                 )
                             }
                             Text(
-                                text = "\uC624\uB298\uC758 \uACBD\uAE30 ${games.count { it.status != GameStatus.FINISHED }}\uAC1C",
+                                text = "\uC624\uB298\uC758 \uACBD\uAE30 ${games.count { isPlayableGameStatus(it.status) }}\uAC1C",
                                 fontSize = 14.sp,
                                 color = Color.White.copy(alpha = 0.8f),
                                 modifier = Modifier.padding(top = 4.dp)
@@ -530,6 +530,52 @@ private fun GameCard(
                                     color = Gray500
                                 )
                             }
+                            GameStatus.CANCELED -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Red500)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "경기 취소",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Red500
+                                )
+                                if (!game.time.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "예정 ${game.time}",
+                                        fontSize = 12.sp,
+                                        color = Gray500
+                                    )
+                                }
+                            }
+                            GameStatus.POSTPONED -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Orange500)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "경기 연기",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Orange500
+                                )
+                                if (!game.time.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "기존 예정 ${game.time}",
+                                        fontSize = 12.sp,
+                                        color = Gray500
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -571,7 +617,7 @@ private fun GameCard(
                         teamName = game.awayTeam,
                         score = game.awayScore,
                         pitcher = game.awayPitcher,
-                        isScheduled = game.status == GameStatus.SCHEDULED,
+                        isScheduled = isNotStartedStatus(game.status),
                         isWinner = game.status == GameStatus.FINISHED && game.awayScore > game.homeScore,
                         isMyTeam = game.isMyTeam
                     )
@@ -581,7 +627,7 @@ private fun GameCard(
                         teamName = game.homeTeam,
                         score = game.homeScore,
                         pitcher = game.homePitcher,
-                        isScheduled = game.status == GameStatus.SCHEDULED,
+                        isScheduled = isNotStartedStatus(game.status),
                         isWinner = game.status == GameStatus.FINISHED && game.homeScore > game.awayScore,
                         isMyTeam = game.isMyTeam
                     )
@@ -670,6 +716,28 @@ private fun statusPriority(status: GameStatus): Int {
         GameStatus.LIVE -> 0
         GameStatus.FINISHED -> 1
         GameStatus.SCHEDULED -> 2
+        GameStatus.POSTPONED -> 3
+        GameStatus.CANCELED -> 4
+    }
+}
+
+private fun isNotStartedStatus(status: GameStatus): Boolean {
+    return when (status) {
+        GameStatus.SCHEDULED,
+        GameStatus.POSTPONED,
+        GameStatus.CANCELED -> true
+        GameStatus.LIVE,
+        GameStatus.FINISHED -> false
+    }
+}
+
+private fun isPlayableGameStatus(status: GameStatus): Boolean {
+    return when (status) {
+        GameStatus.LIVE,
+        GameStatus.SCHEDULED -> true
+        GameStatus.FINISHED,
+        GameStatus.CANCELED,
+        GameStatus.POSTPONED -> false
     }
 }
 

@@ -52,9 +52,12 @@
                     android:scheme="wear"
                     android:host="*"
                     android:pathPrefix="/haptic" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/watch/prompt" />
             </intent-filter>
         </service>
     </application>
 
 </manifest>
-

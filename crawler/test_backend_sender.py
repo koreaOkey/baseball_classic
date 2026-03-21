@@ -5,7 +5,7 @@ CRAWLER_ROOT = Path(__file__).resolve().parent
 if str(CRAWLER_ROOT) not in sys.path:
     sys.path.insert(0, str(CRAWLER_ROOT))
 
-from backend_sender import _classify_event_type, build_snapshot_payload
+from backend_sender import _classify_event_type, _normalize_status, build_snapshot_payload
 
 
 def test_video_review_out_to_out_is_out() -> None:
@@ -102,3 +102,11 @@ def test_snapshot_payload_includes_offense_and_defense_team_metadata() -> None:
     assert metadata["half"] == "top"
     assert metadata["offenseTeam"] == "Japan"
     assert metadata["defenseTeam"] == "Korea"
+
+
+def test_normalize_status_supports_canceled_and_postponed() -> None:
+    assert _normalize_status("CANCELED") == "CANCELED"
+    assert _normalize_status("cancelled") == "CANCELED"
+    assert _normalize_status("RAIN_CANCEL") == "CANCELED"
+    assert _normalize_status("POSTPONED") == "POSTPONED"
+    assert _normalize_status("ppd") == "POSTPONED"

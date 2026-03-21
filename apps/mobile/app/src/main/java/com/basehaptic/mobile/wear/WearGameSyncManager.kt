@@ -8,8 +8,10 @@ import com.google.android.gms.wearable.Wearable
 
 object WearGameSyncManager {
     private const val TAG = "WearGameSync"
-    private const val PATH_GAME = "/game"
+    private const val PATH_GAME = "/game/current"
     private const val PATH_HAPTIC = "/haptic"
+    private const val PATH_WATCH_PROMPT = "/watch/prompt/current"
+    private const val KEY_UPDATED_AT = "updated_at"
 
     fun sendGameData(
         context: Context,
@@ -33,14 +35,8 @@ object WearGameSyncManager {
     ) {
         Thread {
             try {
-                val nodes = Tasks.await(Wearable.getNodeClient(context).connectedNodes)
-                if (nodes.isEmpty()) {
-                    Log.d(TAG, "No connected Wear nodes. Skip game sync.")
-                    return@Thread
-                }
-
                 val timestamp = System.currentTimeMillis()
-                val request = PutDataMapRequest.create("$PATH_GAME/$timestamp").apply {
+                val request = PutDataMapRequest.create(PATH_GAME).apply {
                     dataMap.putString("game_id", gameId)
                     dataMap.putString("home_team", homeTeam)
                     dataMap.putString("away_team", awayTeam)
@@ -57,6 +53,7 @@ object WearGameSyncManager {
                     dataMap.putString("pitcher", pitcher)
                     dataMap.putString("batter", batter)
                     dataMap.putString("my_team", myTeam)
+                    dataMap.putLong(KEY_UPDATED_AT, timestamp)
                     if (eventType != null) {
                         dataMap.putString("event_type", eventType)
                     }
@@ -77,12 +74,6 @@ object WearGameSyncManager {
     fun sendHapticEvent(context: Context, eventType: String, cursor: Long?) {
         Thread {
             try {
-                val nodes = Tasks.await(Wearable.getNodeClient(context).connectedNodes)
-                if (nodes.isEmpty()) {
-                    Log.d(TAG, "No connected Wear nodes. Skip haptic.")
-                    return@Thread
-                }
-
                 val timestamp = System.currentTimeMillis()
                 val request = PutDataMapRequest.create("$PATH_HAPTIC/$timestamp").apply {
                     dataMap.putString("event_type", eventType)
@@ -95,6 +86,32 @@ object WearGameSyncManager {
                 Log.d(TAG, "Haptic event sent: $eventType")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send haptic event", e)
+            }
+        }.start()
+    }
+
+    fun sendWatchSyncPrompt(
+        context: Context,
+        gameId: String,
+        homeTeam: String,
+        awayTeam: String,
+        myTeam: String
+    ) {
+        Thread {
+            try {
+                val timestamp = System.currentTimeMillis()
+                val request = PutDataMapRequest.create(PATH_WATCH_PROMPT).apply {
+                    dataMap.putString("game_id", gameId)
+                    dataMap.putString("home_team", homeTeam)
+                    dataMap.putString("away_team", awayTeam)
+                    dataMap.putString("my_team", myTeam)
+                    dataMap.putLong(KEY_UPDATED_AT, timestamp)
+                }.asPutDataRequest().setUrgent()
+
+                Tasks.await(Wearable.getDataClient(context).putDataItem(request))
+                Log.d(TAG, "Watch sync prompt sent for game: $gameId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send watch sync prompt", e)
             }
         }.start()
     }

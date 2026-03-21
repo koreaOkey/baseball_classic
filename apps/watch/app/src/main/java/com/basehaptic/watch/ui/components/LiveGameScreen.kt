@@ -1,7 +1,17 @@
 package com.basehaptic.watch.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,11 +29,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.constraintlayout.compose.Dimension
-import androidx.wear.compose.material.*
+import androidx.wear.compose.material.Icon
+import androidx.wear.compose.material.Text
 import com.basehaptic.watch.R
+import com.basehaptic.watch.data.BaseStatus
 import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.data.getMockGameData
-import com.basehaptic.watch.ui.theme.*
+import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
+import com.basehaptic.watch.ui.theme.Gray800
+import com.basehaptic.watch.ui.theme.Gray900
+import com.basehaptic.watch.ui.theme.Gray950
+import com.basehaptic.watch.ui.theme.Green500
+import com.basehaptic.watch.ui.theme.LocalWatchTeamTheme
+import com.basehaptic.watch.ui.theme.Orange500
+import com.basehaptic.watch.ui.theme.Red500
+import com.basehaptic.watch.ui.theme.WatchUiProfile
+import com.basehaptic.watch.ui.theme.Yellow400
+import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
 
 @Composable
 fun LiveGameScreen(
@@ -31,17 +53,15 @@ fun LiveGameScreen(
     modifier: Modifier = Modifier
 ) {
     val watchTheme = LocalWatchTeamTheme.current
+    val uiProfile = rememberWatchUiProfile()
 
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
-            .offset(y = (-30).dp)
+            .offset(y = uiProfile.contentOffsetYDp.dp)
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(
-                        Gray900,
-                        Gray950
-                    )
+                    colors = listOf(Gray900, Gray950)
                 )
             )
     ) {
@@ -49,51 +69,53 @@ fun LiveGameScreen(
         val scoreDiffRef = createRef()
         val myTeamDisplay = gameData.myTeamName.ifBlank { gameData.homeTeam }
 
-        // Top banner
         Box(
             modifier = Modifier
                 .constrainAs(topBanner) {
                     top.linkTo(parent.top)
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
-                    height = Dimension.percent(0.40f)
+                    height = Dimension.percent(uiProfile.bannerHeightPercent)
                     width = Dimension.fillToConstraints
                 }
-                .clip(RoundedCornerShape(bottomStart = 44.dp, bottomEnd = 44.dp))
+                .clip(
+                    RoundedCornerShape(
+                        bottomStart = uiProfile.bannerBottomCornerDp.dp,
+                        bottomEnd = uiProfile.bannerBottomCornerDp.dp
+                    )
+                )
                 .background(watchTheme.primary)
         )
 
         Column(
             modifier = Modifier.constrainAs(myTeam) {
-                top.linkTo(parent.top, margin = 28.dp)
+                top.linkTo(parent.top, margin = uiProfile.myTeamTopMarginDp.dp)
                 start.linkTo(parent.start)
                 end.linkTo(parent.end)
             },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "내 팀",
+                text = "MY TEAM",
                 color = Color.White.copy(alpha = 0.72f),
-                fontSize = 8.sp
+                fontSize = (uiProfile.teamNameSp - 2).sp
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = myTeamDisplay,
                     color = Color.White,
-                    fontSize = 12.sp,
+                    fontSize = (uiProfile.teamNameSp + 1).sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.width(2.dp))
                 Text(
-                    text = "▼",
+                    text = "LIVE",
                     color = Color.White.copy(alpha = 0.72f),
-                    fontSize = 8.sp
+                    fontSize = (uiProfile.teamNameSp - 2).sp
                 )
             }
         }
 
-
-        // Main score card
         Row(
             modifier = Modifier
                 .constrainAs(mainScoreCard) {
@@ -104,21 +126,27 @@ fun LiveGameScreen(
                 }
                 .clip(RoundedCornerShape(18.dp))
                 .background(Color(0xFF1A1A1A))
-                .padding(horizontal = 40.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = uiProfile.scoreCardHorizontalPaddingDp.dp,
+                    vertical = uiProfile.scoreCardVerticalPaddingDp.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             ScoreSide(
-                modifier = Modifier
-                    .weight(1f),
+                modifier = Modifier.weight(1f),
                 team = gameData.awayTeam,
                 score = gameData.awayScore,
-                alignEnd = false
+                alignEnd = false,
+                uiProfile = uiProfile
             )
+
             Column(
                 modifier = Modifier
                     .padding(horizontal = 6.dp)
-                    .height(38.dp)
-                    .widthIn(min = 32.dp)
+                    .size(
+                        width = uiProfile.inningBoxMinWidthDp.dp,
+                        height = uiProfile.inningBoxHeightDp.dp
+                    )
                     .clip(RoundedCornerShape(10.dp))
                     .background(Color.White.copy(alpha = 0.05f)),
                 verticalArrangement = Arrangement.Center,
@@ -127,74 +155,94 @@ fun LiveGameScreen(
                 Text(
                     text = gameData.inning,
                     color = Orange500,
-                    fontSize = 11.sp,
+                    fontSize = uiProfile.inningTextSp.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = inningHalfIcon(gameData.inning),
                     color = Orange500,
-                    fontSize = 8.sp
+                    fontSize = uiProfile.inningHalfSp.sp
                 )
             }
+
             ScoreSide(
-                modifier = Modifier
-                    .weight(1f),
+                modifier = Modifier.weight(1f),
                 team = gameData.homeTeam,
                 score = gameData.homeScore,
-                alignEnd = true
+                alignEnd = true,
+                uiProfile = uiProfile
             )
         }
 
-        // Base + BSO
         Row(
             modifier = Modifier
                 .constrainAs(baseBso) {
-                    top.linkTo(mainScoreCard.bottom, margin = 20.dp)
+                    top.linkTo(mainScoreCard.bottom, margin = uiProfile.baseBsoTopMarginDp.dp)
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
                 },
-            horizontalArrangement = Arrangement.spacedBy(25.dp),
+            horizontalArrangement = Arrangement.spacedBy(uiProfile.baseBsoSpacingDp.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            BaseDiamond(gameData.bases)
+            BaseDiamond(
+                bases = gameData.bases,
+                uiProfile = uiProfile
+            )
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                CountIndicator("B", gameData.ballCount, 3, Green500, Green500.copy(alpha = 0.2f))
-                CountIndicator("S", gameData.strikeCount, 2, Orange500, Orange500.copy(alpha = 0.2f))
-                CountIndicator("O", gameData.outCount, 2, Red500, Red500.copy(alpha = 0.2f))
+                CountIndicator(
+                    label = "B",
+                    current = gameData.ballCount,
+                    max = 3,
+                    activeColor = Green500,
+                    inactiveColor = Green500.copy(alpha = 0.2f),
+                    uiProfile = uiProfile
+                )
+                CountIndicator(
+                    label = "S",
+                    current = gameData.strikeCount,
+                    max = 2,
+                    activeColor = Orange500,
+                    inactiveColor = Orange500.copy(alpha = 0.2f),
+                    uiProfile = uiProfile
+                )
+                CountIndicator(
+                    label = "O",
+                    current = gameData.outCount,
+                    max = 2,
+                    activeColor = Red500,
+                    inactiveColor = Red500.copy(alpha = 0.2f),
+                    uiProfile = uiProfile
+                )
             }
         }
 
-        // Player info
         Text(
-            text = "P ${gameData.pitcher} • B ${gameData.batter}",
+            text = "P ${gameData.pitcher}  B ${gameData.batter}",
             modifier = Modifier
                 .constrainAs(playerInfo) {
                     bottom.linkTo(tapHint.top)
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
                 }
-                .offset(y = 35.dp),
+                .offset(y = uiProfile.playerInfoOffsetYDp.dp),
             color = Color.White.copy(alpha = 0.62f),
-            fontSize = 8.sp,
+            fontSize = uiProfile.playerInfoSp.sp,
             maxLines = 1
         )
 
-        // Tap hint
         Text(
             text = "TAP FOR DETAILS",
-            modifier = Modifier
-                .constrainAs(tapHint) {
-                    bottom.linkTo(parent.bottom, margin = 8.dp)
-                    start.linkTo(parent.start)
-                    end.linkTo(parent.end)
-                },
+            modifier = Modifier.constrainAs(tapHint) {
+                bottom.linkTo(parent.bottom, margin = uiProfile.tapHintBottomMarginDp.dp)
+                start.linkTo(parent.start)
+                end.linkTo(parent.end)
+            },
             color = Color.Transparent,
-            fontSize = 7.sp,
+            fontSize = uiProfile.tapHintSp.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 1.2.sp
         )
 
-        // scoreDiffRef placeholder (unused)
         Box(modifier = Modifier.constrainAs(scoreDiffRef) {
             top.linkTo(parent.top)
             start.linkTo(parent.start)
@@ -207,7 +255,8 @@ private fun ScoreSide(
     modifier: Modifier = Modifier,
     team: String,
     score: Int,
-    alignEnd: Boolean
+    alignEnd: Boolean,
+    uiProfile: WatchUiProfile
 ) {
     Column(
         modifier = modifier,
@@ -217,7 +266,7 @@ private fun ScoreSide(
             text = score.toString(),
             modifier = Modifier.offset(x = 2.dp),
             color = Color.White,
-            fontSize = 34.sp,
+            fontSize = uiProfile.scoreValueSp.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = (-1).sp,
             textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
@@ -231,7 +280,7 @@ private fun ScoreSide(
                 Icon(
                     painter = painterResource(id = logoRes),
                     contentDescription = "$team logo",
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(uiProfile.logoSizeDp.dp),
                     tint = Color.Unspecified
                 )
                 Spacer(modifier = Modifier.width(3.dp))
@@ -239,7 +288,7 @@ private fun ScoreSide(
             Text(
                 text = team.uppercase(),
                 color = Color.White.copy(alpha = 0.76f),
-                fontSize = 11.sp,
+                fontSize = uiProfile.teamNameSp.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
@@ -249,7 +298,7 @@ private fun ScoreSide(
                 Icon(
                     painter = painterResource(id = logoRes),
                     contentDescription = "$team logo",
-                    modifier = Modifier.size(14.dp),
+                    modifier = Modifier.size(uiProfile.logoSizeDp.dp),
                     tint = Color.Unspecified
                 )
             }
@@ -263,14 +312,15 @@ private fun CountIndicator(
     current: Int,
     max: Int,
     activeColor: Color,
-    inactiveColor: Color
+    inactiveColor: Color,
+    uiProfile: WatchUiProfile
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,
-            modifier = Modifier.width(12.dp),
+            modifier = Modifier.width(uiProfile.countLabelWidthDp.dp),
             color = Color.White.copy(alpha = 0.35f),
-            fontSize = 9.sp,
+            fontSize = uiProfile.countLabelSp.sp,
             fontWeight = FontWeight.Black,
             textAlign = TextAlign.Center
         )
@@ -278,11 +328,9 @@ private fun CountIndicator(
             repeat(max) { index ->
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(uiProfile.countDotSizeDp.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(
-                            if (index < current) activeColor else inactiveColor
-                        )
+                        .background(if (index < current) activeColor else inactiveColor)
                 )
             }
         }
@@ -291,27 +339,28 @@ private fun CountIndicator(
 
 @Composable
 private fun BaseDiamond(
-    bases: com.basehaptic.watch.data.BaseStatus,
-    accentColor: Color = Yellow400
+    bases: BaseStatus,
+    accentColor: Color = Yellow400,
+    uiProfile: WatchUiProfile
 ) {
     Box(
         modifier = Modifier
-            .size(46.dp)
+            .size(uiProfile.baseDiamondSizeDp.dp)
             .graphicsLayer(rotationZ = 45f),
         contentAlignment = Alignment.Center
     ) {
-        // 회전 후: 왼쪽 위→12시(2루), 오른쪽 위→3시(1루), 왼쪽 아래→9시(3루), 오른쪽 아래→6시(홈)
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                BaseCell(isOccupied = bases.second, accentColor = accentColor)
-                BaseCell(isOccupied = bases.first, accentColor = accentColor)
+                BaseCell(isOccupied = bases.second, accentColor = accentColor, uiProfile = uiProfile)
+                BaseCell(isOccupied = bases.first, accentColor = accentColor, uiProfile = uiProfile)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                BaseCell(isOccupied = bases.third, accentColor = accentColor)
+                BaseCell(isOccupied = bases.third, accentColor = accentColor, uiProfile = uiProfile)
                 BaseCell(
                     isOccupied = false,
                     accentColor = Color.White.copy(alpha = 0.18f),
-                    isHome = true
+                    isHome = true,
+                    uiProfile = uiProfile
                 )
             }
         }
@@ -322,11 +371,12 @@ private fun BaseDiamond(
 private fun BaseCell(
     isOccupied: Boolean,
     accentColor: Color,
-    isHome: Boolean = false
+    isHome: Boolean = false,
+    uiProfile: WatchUiProfile
 ) {
     Box(
         modifier = Modifier
-            .size(22.dp)
+            .size(uiProfile.baseCellSizeDp.dp)
             .clip(RoundedCornerShape(2.dp))
             .background(
                 if (isOccupied) accentColor else if (isHome) Color.White.copy(alpha = 0.08f) else Gray800,
@@ -335,18 +385,10 @@ private fun BaseCell(
     )
 }
 
-private fun inningHalfLabel(inning: String): String {
-    return when {
-        inning.contains("초") -> "초"
-        inning.contains("말") -> "말"
-        else -> "-"
-    }
-}
-
 private fun inningHalfIcon(inning: String): String {
     return when {
-        inning.contains("초") -> "◀"
-        inning.contains("말") -> "▶"
+        inning.contains("TOP", ignoreCase = true) || inning.contains("초") -> "▲"
+        inning.contains("BOT", ignoreCase = true) || inning.contains("말") -> "▼"
         else -> ""
     }
 }
@@ -365,9 +407,25 @@ private fun getTeamLogoRes(team: String): Int? = when (team.uppercase()) {
     else -> null
 }
 
-@Preview(device = "id:wearos_small_round")
+@Preview(name = "Small Round", device = "id:wearos_small_round")
 @Composable
-fun LiveGameScreenPreview() {
+fun LiveGameScreenPreviewSmallRound() {
+    BaseHapticWatchTheme(teamName = "SSG") {
+        LiveGameScreen(gameData = getMockGameData())
+    }
+}
+
+@Preview(name = "Large Round", device = "id:wearos_large_round")
+@Composable
+fun LiveGameScreenPreviewLargeRound() {
+    BaseHapticWatchTheme(teamName = "SSG") {
+        LiveGameScreen(gameData = getMockGameData())
+    }
+}
+
+@Preview(name = "Square", device = "id:wearos_square")
+@Composable
+fun LiveGameScreenPreviewSquare() {
     BaseHapticWatchTheme(teamName = "SSG") {
         LiveGameScreen(gameData = getMockGameData())
     }

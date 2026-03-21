@@ -422,6 +422,8 @@ object BackendGamesRepository {
         return when (raw.uppercase()) {
             "LIVE" -> GameStatus.LIVE
             "FINISHED" -> GameStatus.FINISHED
+            "CANCELED", "CANCELLED", "CANCEL", "RAIN_CANCEL", "NO_GAME" -> GameStatus.CANCELED
+            "POSTPONED", "PPD", "SUSPENDED", "DELAYED" -> GameStatus.POSTPONED
             else -> GameStatus.SCHEDULED
         }
     }
@@ -431,6 +433,8 @@ object BackendGamesRepository {
             GameStatus.LIVE -> "LIVE"
             GameStatus.FINISHED -> "FINAL"
             GameStatus.SCHEDULED -> "SCHEDULED"
+            GameStatus.CANCELED -> "CANCELED"
+            GameStatus.POSTPONED -> "POSTPONED"
         }
     }
 

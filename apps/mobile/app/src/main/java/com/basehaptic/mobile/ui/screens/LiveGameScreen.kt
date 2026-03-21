@@ -284,7 +284,7 @@ private fun ScoreboardCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "${statusText(state.status)} 쨌 ${state.inning}",
+                    text = statusLine(status = state.status, inning = state.inning),
                     color = Color.White,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
@@ -440,11 +440,16 @@ private fun baseText(state: BackendGamesRepository.LiveGameState): String {
     return if (bases.isEmpty()) "없음" else bases.joinToString(",")
 }
 
-private fun statusText(status: GameStatus): String {
+private fun statusLine(status: GameStatus, inning: String): String {
     return when (status) {
-        GameStatus.LIVE -> "LIVE"
-        GameStatus.SCHEDULED -> "SCHEDULED"
-        GameStatus.FINISHED -> "FINISHED"
+        GameStatus.LIVE -> {
+            val inningText = inning.ifBlank { "진행 중" }
+            "경기 중 · $inningText"
+        }
+        GameStatus.SCHEDULED -> "경기 전"
+        GameStatus.FINISHED -> "경기 종료"
+        GameStatus.CANCELED -> "우천 취소"
+        GameStatus.POSTPONED -> "경기 연기"
     }
 }
 

@@ -170,3 +170,23 @@ app/src/main/res/
 - Added half-inning boundary normalization:
   - when `out >= 3`, ball/strike are normalized to `0` immediately.
 - `MainActivity` now treats `game finished` inning/status as non-live state for screen rendering.
+
+## Recent Changes (2026-03-21)
+
+- Added bidirectional watch sync consent pipeline:
+  - watch receives prompt payload on `/watch/prompt/*`
+  - watch displays confirmation popup (`경기를 관람하겠습니까?`)
+  - watch sends user response back to mobile on `/watch/sync-response/<timestamp>`
+- `DataLayerListenerService` enhancements:
+  - added `ACTION_WATCH_SYNC_PROMPT`
+  - added pending sync prompt persistence keys in watch prefs
+  - added prompt-triggered wake behavior for immediate visibility
+- Added responsive UI profile system for Wear OS screen sizes:
+  - new `WatchUiProfile` + `rememberWatchUiProfile()`
+  - small/medium/large + round-device adjustments applied to live/no-game/prompt UI
+- Added 3-device Compose previews for faster QA:
+  - `wearos_small_round`
+  - `wearos_large_round`
+  - `wearos_square`
+- Added runtime/UI QA guide:
+  - `apps/watch/SCREEN_QA.md`

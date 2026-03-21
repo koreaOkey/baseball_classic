@@ -1,5 +1,8 @@
 ﻿package com.basehaptic.mobile
 
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -18,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -32,6 +36,7 @@ import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.wear.WearGameSyncManager
 import com.basehaptic.mobile.wear.WearThemeSyncManager
+import com.basehaptic.mobile.wear.WearWatchSyncBridge
 import java.time.LocalDate
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
@@ -43,23 +48,50 @@ import kotlinx.coroutines.withContext
 
 private const val SHOW_COMMUNITY_TAB = false
 private const val SHOW_STORE_TAB = false
+private const val USER_PREFS_NAME = "basehaptic_user_prefs"
+private const val KEY_SELECTED_TEAM = "selected_team"
 
 class MainActivity : ComponentActivity() {
+    private fun loadSavedTeamOrNull(): Team? {
+        val savedTeamName = getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_SELECTED_TEAM, null)
+            .orEmpty()
+        if (savedTeamName.isBlank()) return null
+
+        val parsed = Team.fromString(savedTeamName)
+        return parsed.takeIf { it != Team.NONE }
+    }
+
+    private fun persistSelectedTeam(team: Team) {
+        if (team == Team.NONE) return
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(KEY_SELECTED_TEAM, team.name)
+            .apply()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+        val savedTeam = loadSavedTeamOrNull()
+        val initialTeam = savedTeam ?: Team.NONE
+        val initialShowOnboarding = savedTeam == null
+
         setContent {
             // ??猷⑦듃?먯꽌 ?좏깮 ? ?곹깭瑜?愿由ы븯怨??섏쐞 ?붾㈃?쇰줈 ?꾨떖
-            var selectedTeam by remember { mutableStateOf(Team.DOOSAN) }
-            var showOnboarding by remember { mutableStateOf(false) }
+            var selectedTeam by remember { mutableStateOf(initialTeam) }
+            var showOnboarding by remember { mutableStateOf(initialShowOnboarding) }
             
             BaseHapticTheme(selectedTeam = selectedTeam) {
                 BaseHapticApp(
                     selectedTeam = selectedTeam,
-                    onTeamChanged = { selectedTeam = it },
+                    onTeamChanged = { team ->
+                        selectedTeam = team
+                        persistSelectedTeam(team)
+                    },
                     showOnboarding = showOnboarding,
                     onOnboardingComplete = { team ->
                         selectedTeam = team
+                        persistSelectedTeam(team)
                         showOnboarding = false
                     }
                 )
@@ -114,6 +146,31 @@ fun BaseHapticApp(
         pendingWatchSyncNavigateToLive = false
     }
 
+    fun applyWatchSyncResponse(gameId: String, accepted: Boolean) {
+        if (gameId.isBlank()) return
+
+        if (accepted) {
+            selectedGameId = gameId
+            syncedGameId = gameId
+        }
+
+        if (pendingWatchSyncGameId == gameId) {
+            showWatchSyncDialog = false
+            pendingWatchSyncGameId = null
+            pendingWatchSyncNavigateToLive = false
+        }
+    }
+
+    fun consumePendingWatchSyncResponse() {
+        while (true) {
+            val response = WearWatchSyncBridge.consumePendingResponse(context) ?: break
+            applyWatchSyncResponse(
+                gameId = response.gameId,
+                accepted = response.accepted
+            )
+        }
+    }
+
     fun navigateBack(): Boolean {
         if (showWatchSyncDialog) {
             closeWatchSyncDialog()
@@ -134,6 +191,23 @@ fun BaseHapticApp(
         showWatchSyncDialog || navigationHistory.isNotEmpty() || currentView != Screen.Home
     BackHandler(enabled = canHandleBack) {
         navigateBack()
+    }
+
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context?, intent: Intent?) {
+                if (intent?.action == WearWatchSyncBridge.ACTION_WATCH_SYNC_RESPONSE) {
+                    consumePendingWatchSyncResponse()
+                }
+            }
+        }
+        val filter = IntentFilter(WearWatchSyncBridge.ACTION_WATCH_SYNC_RESPONSE)
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        consumePendingWatchSyncResponse()
+
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
     }
 
     LaunchedEffect(selectedTeam) {
@@ -195,11 +269,18 @@ fun BaseHapticApp(
         autoPromptedLiveGames.clear()
 
         while (currentCoroutineContext().isActive) {
-            val games = runCatching {
+            val fetchedGames = runCatching {
                 withContext(Dispatchers.IO) {
                     BackendGamesRepository.fetchGames(selectedTeam)
                 }
-            }.getOrNull().orEmpty()
+            }.getOrNull()
+
+            // Keep home feed in sync with backend game state updates (score/status/inning).
+            if (fetchedGames != null) {
+                todayGamesSnapshot = fetchedGames
+                todayGamesLoadedDate = LocalDate.now()
+            }
+            val games = fetchedGames.orEmpty()
 
             val myTeamGames = games.filter { it.isMyTeam }
             for (game in myTeamGames) {
@@ -209,14 +290,25 @@ fun BaseHapticApp(
                 val becameLive = game.status == GameStatus.LIVE && previous != GameStatus.LIVE
                 val alreadyPrompted = autoPromptedLiveGames[game.id] == true
                 val isSynced = syncedGameId == game.id
-                if (becameLive && !alreadyPrompted && !isSynced && !showWatchSyncDialog) {
+                if (becameLive && !alreadyPrompted && !isSynced) {
                     autoPromptedLiveGames[game.id] = true
                     selectedGameId = game.id
-                    requestWatchSyncPrompt(gameId = game.id, navigateToLive = false)
+                    WearGameSyncManager.sendWatchSyncPrompt(
+                        context = context,
+                        gameId = game.id,
+                        homeTeam = game.homeTeam,
+                        awayTeam = game.awayTeam,
+                        myTeam = selectedTeam.name
+                    )
                 }
             }
 
-            delay(5000)
+            val pollDelayMs = when {
+                fetchedGames == null -> 10_000L
+                games.any { it.status == GameStatus.LIVE } -> 5_000L
+                else -> 30_000L
+            }
+            delay(pollDelayMs)
         }
     }
 
@@ -302,30 +394,7 @@ fun BaseHapticApp(
                 .take(80)
         }
 
-        suspend fun runRecoveryPull() {
-            val pulledState = runCatching {
-                withContext(Dispatchers.IO) {
-                    BackendGamesRepository.fetchGameState(targetGameId)
-                }
-            }.getOrNull()
-            if (pulledState != null) {
-                pushStateToWatch(pulledState)
-            }
-
-            val pulledEvents = runCatching {
-                withContext(Dispatchers.IO) {
-                    BackendGamesRepository.fetchGameEvents(gameId = targetGameId, after = cursor, limit = 200)
-                }
-            }.getOrNull()
-            applyIncomingEvents(pulledEvents?.items.orEmpty(), sendHaptics = false)
-            if (pulledEvents != null) {
-                cursor = max(cursor, pulledEvents.nextCursor ?: cursor)
-            }
-        }
-
         while (currentCoroutineContext().isActive) {
-            runRecoveryPull()
-
             runCatching {
                 BackendGamesRepository.streamGame(targetGameId).collect { message ->
                     when (message) {
@@ -439,7 +508,7 @@ fun BaseHapticApp(
             AlertDialog(
                 onDismissRequest = { closeWatchSyncDialog() },
                 title = { Text(text = "워치 동기화") },
-                text = { Text(text = "워치로 경기 관람하시겠습니까?") },
+                text = { Text(text = "경기를 관람하겠습니까?") },
                 confirmButton = {
                     TextButton(
                         onClick = {
