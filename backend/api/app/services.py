@@ -95,6 +95,22 @@ def normalize_status(raw: str) -> GameStatus:
     return STATUS_MAP.get(raw.strip().upper(), GameStatus.SCHEDULED)
 
 
+STATUS_PROGRESS = {
+    GameStatus.SCHEDULED: 0,
+    GameStatus.LIVE: 1,
+    GameStatus.POSTPONED: 2,
+    GameStatus.CANCELED: 2,
+    GameStatus.FINISHED: 3,
+}
+
+
+def _resolve_next_game_status(existing_raw: str | None, incoming: GameStatus) -> GameStatus:
+    existing = normalize_status(existing_raw or "")
+    if STATUS_PROGRESS[incoming] >= STATUS_PROGRESS[existing]:
+        return incoming
+    return existing
+
+
 def normalize_event_type(raw: str) -> EventType:
     return EVENT_MAP.get(raw.strip().upper(), EventType.OTHER)
 
@@ -222,9 +238,12 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
         game = Game(id=game_id, home_team=payload.homeTeam, away_team=payload.awayTeam)
         db.add(game)
 
+    incoming_status = normalize_status(payload.status)
+    next_status = _resolve_next_game_status(game.status, incoming_status)
+
     game.home_team = payload.homeTeam
     game.away_team = payload.awayTeam
-    game.status = normalize_status(payload.status).value
+    game.status = next_status.value
     game.inning = payload.inning
     game.home_score = payload.homeScore
     game.away_score = payload.awayScore
@@ -242,7 +261,7 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
     if normalized_game_date is not None:
         game.game_date = normalized_game_date
     start_time = _normalize_start_time(payload.startTime)
-    if start_time is None and normalize_status(payload.status) == GameStatus.SCHEDULED:
+    if start_time is None and next_status == GameStatus.SCHEDULED:
         start_time = _normalize_start_time(payload.inning)
     if start_time is not None:
         game.start_time = start_time

@@ -801,6 +801,23 @@ def _schedule_game_to_snapshot(game: dict[str, Any], target_date: date) -> dict[
     }
 
 
+def _is_live_inning_text(inning_text: str) -> bool:
+    normalized = str(inning_text or "").strip()
+    if not normalized:
+        return False
+
+    upper = normalized.upper()
+    compact = re.sub(r"\s+", "", normalized)
+    if "TOP" in upper or "BOTTOM" in upper:
+        return True
+    if re.fullmatch(r"\d{1,2}[TB]", upper):
+        return True
+    if re.search(r"\d+\s*", compact) and ("\uD68C\uCD08" in compact or "\uD68C\uB9D0" in compact):
+        return True
+
+    return False
+
+
 def _should_skip_schedule_snapshot(game: dict[str, Any]) -> bool:
     # Live games are ingested by crawler.py in near real-time.
     # Skipping schedule-level snapshot for LIVE avoids DB row-lock contention.
@@ -808,18 +825,12 @@ def _should_skip_schedule_snapshot(game: dict[str, Any]) -> bool:
     if status == "LIVE":
         return True
 
-    inning_text = _extract_schedule_inning(game)
-    inning_upper = inning_text.upper()
-    if re.search(r"\d+\s*회", inning_text):
-        return True
-    if "초" in inning_text or "말" in inning_text:
-        return True
-    if "TOP" in inning_upper or "BOTTOM" in inning_upper:
-        return True
-    if re.fullmatch(r"\d{1,2}[TB]", inning_upper):
-        return True
+    # Terminal states must be synced so final status/score is not missed.
+    if status in {"FINISHED", "CANCELED", "POSTPONED"}:
+        return False
 
-    return False
+    # Some schedule rows are mislabeled as SCHEDULED while inning text is live.
+    return _is_live_inning_text(_extract_schedule_inning(game))
 
 
 def _post_schedule_snapshot_to_backend(
@@ -840,6 +851,64 @@ def _post_schedule_snapshot_to_backend(
         retries=retries,
         log_prefix=f"[import] backend_post gameId={game_id}",
     )
+
+
+def _force_sync_schedule_snapshot_for_game_id(
+    *,
+    source_base_url: str,
+    backend_base_url: str,
+    backend_api_key: str,
+    game_id: str,
+    fallback_date: date,
+    fetch_timeout: float,
+    backend_timeout: float,
+    backend_retries: int,
+    reason: str,
+) -> bool:
+    endpoint = f"{source_base_url.rstrip('/')}/schedule/games/{game_id}"
+    game_payload = _safe_json_get(endpoint, timeout=fetch_timeout)
+    if not isinstance(game_payload, dict):
+        LOGGER.warning("[import] forced_sync_failed gameId=%s reason=%s error=game-fetch-failed", game_id, reason)
+        return False
+
+    game = (game_payload.get("result") or {}).get("game") or {}
+    if not isinstance(game, dict) or not game:
+        LOGGER.warning("[import] forced_sync_failed gameId=%s reason=%s error=game-empty", game_id, reason)
+        return False
+
+    schedule_date = _extract_schedule_game_date(game)
+    target_date = fallback_date
+    if schedule_date:
+        try:
+            target_date = datetime.strptime(schedule_date, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = fallback_date
+
+    snapshot = _schedule_game_to_snapshot(game, target_date)
+    try:
+        result = _post_schedule_snapshot_to_backend(
+            backend_base_url=backend_base_url,
+            backend_api_key=backend_api_key,
+            game_id=game_id,
+            payload=snapshot,
+            timeout=backend_timeout,
+            retries=backend_retries,
+        )
+        LOGGER.info(
+            "[import] forced_synced gameId=%s reason=%s status=%s inning=%s score=%s:%s inserted=%s duplicates=%s",
+            game_id,
+            reason,
+            snapshot["status"],
+            snapshot["inning"],
+            snapshot["awayScore"],
+            snapshot["homeScore"],
+            result.get("insertedEvents"),
+            result.get("duplicateEvents"),
+        )
+        return True
+    except Exception as exc:
+        LOGGER.warning("[import] forced_sync_failed gameId=%s reason=%s error=%s", game_id, reason, exc)
+        return False
 
 
 def _run_schedule_import(
@@ -991,7 +1060,8 @@ def _start_crawler(
     )
 
 
-def _cleanup_finished_processes(running: dict[str, RunningCrawler]) -> None:
+def _cleanup_finished_processes(running: dict[str, RunningCrawler]) -> list[tuple[str, int]]:
+    stopped: list[tuple[str, int]] = []
     for game_id, running_crawler in list(running.items()):
         code = running_crawler.process.poll()
         if code is None:
@@ -999,6 +1069,8 @@ def _cleanup_finished_processes(running: dict[str, RunningCrawler]) -> None:
         running_crawler.log_handle.close()
         LOGGER.info("[crawler] stopped gameId=%s exit=%s log=%s", game_id, code, running_crawler.log_path)
         del running[game_id]
+        stopped.append((game_id, code))
+    return stopped
 
 
 def run_dispatcher(args: argparse.Namespace) -> None:
@@ -1099,7 +1171,25 @@ def run_dispatcher(args: argparse.Namespace) -> None:
 
         while True:
             now = datetime.now(KST)
-            _cleanup_finished_processes(running)
+            stopped_crawlers = _cleanup_finished_processes(running)
+            for game_id, exit_code in stopped_crawlers:
+                forced_synced = _force_sync_schedule_snapshot_for_game_id(
+                    source_base_url=args.source_base_url,
+                    backend_base_url=args.backend_base_url,
+                    backend_api_key=args.backend_api_key,
+                    game_id=game_id,
+                    fallback_date=now.date(),
+                    fetch_timeout=args.http_timeout_sec,
+                    backend_timeout=backend_sync_timeout,
+                    backend_retries=backend_sync_retries,
+                    reason="crawler-stopped",
+                )
+                LOGGER.info(
+                    "[crawler] post_stop_sync gameId=%s exit=%s synced=%s",
+                    game_id,
+                    exit_code,
+                    forced_synced,
+                )
 
             import_trigger = datetime.combine(
                 now.date(),
@@ -1171,10 +1261,11 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                                 backend_retries=backend_sync_retries,
                             )
 
-                    if all_success:
-                        imported_date = now.date()
-                        last_import_success_at = now
-                        refresh_windows(now.date())
+                    imported_date = now.date()
+                    last_import_success_at = now
+                    refresh_windows(now.date())
+                    if not all_success:
+                        LOGGER.warning("[import] partial_failure date=%s", now.date().isoformat())
 
             max_check_window = timedelta(minutes=args.relay_check_minutes) if args.relay_check_minutes > 0 else None
             precheck_window = timedelta(minutes=max(0, args.precheck_minutes))
@@ -1235,7 +1326,23 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                 else:
                     if is_final:
                         window.exhausted = True
-                        LOGGER.info("[relay] finalized gameId=%s checks=%s", game_id, window.checks_done)
+                        forced_synced = _force_sync_schedule_snapshot_for_game_id(
+                            source_base_url=args.source_base_url,
+                            backend_base_url=args.backend_base_url,
+                            backend_api_key=args.backend_api_key,
+                            game_id=game_id,
+                            fallback_date=now.date(),
+                            fetch_timeout=args.http_timeout_sec,
+                            backend_timeout=backend_sync_timeout,
+                            backend_retries=backend_sync_retries,
+                            reason="relay-finalized",
+                        )
+                        LOGGER.info(
+                            "[relay] finalized gameId=%s checks=%s forced_sync=%s",
+                            game_id,
+                            window.checks_done,
+                            forced_synced,
+                        )
                         continue
 
                     if max_check_window is not None and now >= window.start_at + max_check_window:

@@ -631,6 +631,64 @@ def test_list_games_filters_by_new_status_values() -> None:
         assert "20260220STAT0001" not in postponed_ids
 
 
+def test_ingest_snapshot_does_not_regress_status_to_scheduled() -> None:
+    with TestClient(app) as client:
+        game_live = "20260221STAT0001"
+        game_finished = "20260221STAT0002"
+
+        live_payload = sample_snapshot()
+        live_payload["status"] = "LIVE"
+        live_payload["inning"] = "7회말"
+        live_payload["events"] = []
+        live_first = client.post(
+            f"/internal/crawler/games/{game_live}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=live_payload,
+        )
+        assert live_first.status_code == 200
+        assert live_first.json()["status"] == "LIVE"
+
+        stale_scheduled_payload = sample_snapshot()
+        stale_scheduled_payload["status"] = "SCHEDULED"
+        stale_scheduled_payload["inning"] = "13:00"
+        stale_scheduled_payload["events"] = []
+        live_second = client.post(
+            f"/internal/crawler/games/{game_live}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=stale_scheduled_payload,
+        )
+        assert live_second.status_code == 200
+        assert live_second.json()["status"] == "LIVE"
+
+        finished_payload = sample_snapshot()
+        finished_payload["status"] = "RESULT"
+        finished_payload["inning"] = "9회말"
+        finished_payload["events"] = []
+        finished_first = client.post(
+            f"/internal/crawler/games/{game_finished}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=finished_payload,
+        )
+        assert finished_first.status_code == 200
+        assert finished_first.json()["status"] == "FINISHED"
+
+        finished_second = client.post(
+            f"/internal/crawler/games/{game_finished}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=stale_scheduled_payload,
+        )
+        assert finished_second.status_code == 200
+        assert finished_second.json()["status"] == "FINISHED"
+
+        live_game = client.get(f"/games/{game_live}")
+        assert live_game.status_code == 200
+        assert live_game.json()["status"] == "LIVE"
+
+        finished_game = client.get(f"/games/{game_finished}")
+        assert finished_game.status_code == 200
+        assert finished_game.json()["status"] == "FINISHED"
+
+
 def test_ingest_team_record_upsert_flow() -> None:
     with TestClient(app) as client:
         first_payload = sample_team_records_payload()
