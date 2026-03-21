@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from .models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, TeamRecord
@@ -316,6 +316,55 @@ def _metadata_player_name(metadata: dict[str, Any] | None, keys: tuple[str, ...]
     return None
 
 
+_INSERT_EVENTS_CHUNK_SIZE = 100
+
+
+def _chunked_count(db: Session, game_id: str, source_ids: list[str]) -> int:
+    total = 0
+    for i in range(0, len(source_ids), _INSERT_EVENTS_CHUNK_SIZE):
+        chunk = source_ids[i : i + _INSERT_EVENTS_CHUNK_SIZE]
+        total += db.execute(
+            select(func.count())
+            .select_from(GameEvent)
+            .where(GameEvent.game_id == game_id, GameEvent.source_event_id.in_(chunk))
+        ).scalar_one()
+    return total
+
+
+def _chunked_needs_merge(db: Session, game_id: str, source_ids: list[str]) -> bool:
+    """Check if any matching events need backfill (null pitcher/batter or OTHER type)."""
+    for i in range(0, len(source_ids), _INSERT_EVENTS_CHUNK_SIZE):
+        chunk = source_ids[i : i + _INSERT_EVENTS_CHUNK_SIZE]
+        count = db.execute(
+            select(func.count())
+            .select_from(GameEvent)
+            .where(
+                GameEvent.game_id == game_id,
+                GameEvent.source_event_id.in_(chunk),
+                or_(
+                    GameEvent.pitcher.is_(None),
+                    GameEvent.batter.is_(None),
+                    GameEvent.event_type == EventType.OTHER.value,
+                ),
+            )
+        ).scalar_one()
+        if count > 0:
+            return True
+    return False
+
+
+def _chunked_load(db: Session, game_id: str, source_ids: list[str]) -> dict[str, GameEvent]:
+    result: dict[str, GameEvent] = {}
+    for i in range(0, len(source_ids), _INSERT_EVENTS_CHUNK_SIZE):
+        chunk = source_ids[i : i + _INSERT_EVENTS_CHUNK_SIZE]
+        rows = db.execute(
+            select(GameEvent).where(GameEvent.game_id == game_id, GameEvent.source_event_id.in_(chunk))
+        ).scalars().all()
+        for row in rows:
+            result[row.source_event_id] = row
+    return result
+
+
 def insert_events(
     db: Session,
     game_id: str,
@@ -327,13 +376,17 @@ def insert_events(
         return [], 0
 
     source_ids = [item.sourceEventId for item in events]
-    existing_events = db.execute(
-        select(GameEvent).where(
-            GameEvent.game_id == game_id,
-            GameEvent.source_event_id.in_(source_ids),
-        )
-    ).scalars().all()
-    existing_by_source = {event.source_event_id: event for event in existing_events}
+    unique_source_ids = list(dict.fromkeys(source_ids))
+
+    # Fast path: chunked COUNT to detect all-duplicate case without loading full objects
+    existing_count = _chunked_count(db, game_id, unique_source_ids)
+    if existing_count >= len(unique_source_ids):
+        # All events exist. Only skip full load if no backfill is needed.
+        if not _chunked_needs_merge(db, game_id, unique_source_ids):
+            return [], len(events)
+
+    # Slow path: chunked full load for partial-duplicate / new-events case
+    existing_by_source = _chunked_load(db, game_id, unique_source_ids)
 
     inserted: list[GameEvent] = []
     duplicate_count = 0

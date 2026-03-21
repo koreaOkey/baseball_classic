@@ -1,0 +1,45 @@
+schema: spec-driven
+context: |
+  BaseHaptic — 실시간 야구 중계 햅틱 피드백 서비스
+
+  Tech stack:
+    - Backend: FastAPI (Python), SQLAlchemy, WebSocket
+    - Database: Supabase (PostgreSQL) with RLS
+    - Crawler: Python (Naver Sports API scraping)
+    - Mobile Android: Jetpack Compose (Kotlin)
+    - Mobile iOS: SwiftUI (Swift) — planned
+    - Watch Android: Wear OS Jetpack Compose (Kotlin)
+    - Watch iOS: watchOS SwiftUI (Swift) — planned
+    - Web: React 18, TypeScript, Vite, Tailwind CSS, Radix UI
+    - Infra: Railway, Redis Pub/Sub
+
+  Monorepo structure:
+    - /apps/mobile — Android phone app
+    - /apps/watch — Wear OS watch app
+    - /apps/ios-mobile — iOS phone app (planned)
+    - /apps/ios-watch — watchOS app (planned)
+    - /backend/api — FastAPI backend
+    - /crawler — Data collection service
+    - /db/migrations — PostgreSQL schema
+    - /Real-time Baseball Broadcast — Web prototype
+
+  Platform strategy:
+    - Android (mobile + Wear OS): 현재 운영 중
+    - iOS (iPhone + Apple Watch): 확장 예정
+    - 공통 백엔드 API를 양 플랫폼이 공유
+
+  Core value: "보지 않아도 손목으로 느끼는 현장감"
+  Target: KBO 10개 구단 팬
+
+rules:
+  specs:
+    - Given/When/Then 시나리오 형식 사용
+    - 구현 디테일(클래스명, 라이브러리명)은 스펙에 포함하지 않음
+    - 한국어로 작성
+  tasks:
+    - Android/iOS 양 플랫폼 영향 확인 필수
+    - 모바일/워치 양쪽 영향 확인 필수
+    - DB 마이그레이션 필요 시 별도 태스크로 분리
+  design:
+    - 플랫폼별(워치/모바일/웹) 차이점 문서화
+    - 배터리/네트워크 제약사항 고려

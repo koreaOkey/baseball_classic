@@ -1,8 +1,11 @@
 # Docs
 
-프로젝트 문서 모음입니다.
-
-## 파일/폴더
-- `craw.md`: 크롤러 개발 기록 및 실행 방법
-- `architecture/`: 아키텍처 문서(예정)
+> **이 폴더의 문서는 `openspec/specs/`로 이전되었습니다.**
+>
+> | 기존 파일 | 이전 위치 |
+> |-----------|----------|
+> | `craw.md` | `openspec/specs/crawling/spec.md` |
+> | `cloudflare_tunnel.md` | `openspec/specs/infra/spec.md` |
+> | `local_watchdog.md` | `openspec/specs/infra/spec.md` |
+> | `ENCODING.md` | `openspec/specs/infra/spec.md` |
 
