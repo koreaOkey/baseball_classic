@@ -50,10 +50,6 @@ class Game(Base):
     pitcher: Mapped[str | None] = mapped_column(String(128), nullable=True)
     batter: Mapped[str | None] = mapped_column(String(128), nullable=True)
     start_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
-    lineup_slots_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    batter_stats_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    pitcher_stats_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    notes_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     home_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

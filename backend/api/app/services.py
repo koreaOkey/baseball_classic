@@ -548,9 +548,27 @@ def _snapshot_block_hash(items: list[dict[str, Any]]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _lineup_slots_hash(items: list[CrawlerLineupSlotIn]) -> str:
+def _lineup_slots_payload_hash(db: Session, game_id: str, items: list[CrawlerLineupSlotIn]) -> str:
+    source_ids: set[str] = set()
+    for slot in items:
+        if slot.enteredAtSourceEventId:
+            source_ids.add(slot.enteredAtSourceEventId)
+        if slot.exitedAtSourceEventId:
+            source_ids.add(slot.exitedAtSourceEventId)
+    source_map = _source_event_cursor_map(db, game_id, source_ids)
     normalized = [
-        slot.model_dump(mode="json", exclude_none=True)
+        {
+            "team_side": slot.teamSide,
+            "batting_order": slot.battingOrder,
+            "player_id": slot.playerId,
+            "player_name": slot.playerName,
+            "position_code": slot.positionCode,
+            "position_name": slot.positionName,
+            "is_starter": slot.isStarter,
+            "is_active": slot.isActive,
+            "entered_at_event_cursor": source_map.get(slot.enteredAtSourceEventId or ""),
+            "exited_at_event_cursor": source_map.get(slot.exitedAtSourceEventId or ""),
+        }
         for slot in sorted(
             items,
             key=lambda slot: (
@@ -564,9 +582,60 @@ def _lineup_slots_hash(items: list[CrawlerLineupSlotIn]) -> str:
     return _snapshot_block_hash(normalized)
 
 
-def _batter_stats_hash(items: list[CrawlerBatterStatIn]) -> str:
+def _lineup_slots_current_hash(db: Session, game_id: str) -> str:
+    rows = db.execute(select(GameLineupSlot).where(GameLineupSlot.game_id == game_id)).scalars().all()
     normalized = [
-        stat.model_dump(mode="json", exclude_none=True)
+        {
+            "team_side": row.team_side,
+            "batting_order": row.batting_order,
+            "player_id": row.player_id,
+            "player_name": row.player_name,
+            "position_code": row.position_code,
+            "position_name": row.position_name,
+            "is_starter": row.is_starter,
+            "is_active": row.is_active,
+            "entered_at_event_cursor": row.entered_at_event_cursor,
+            "exited_at_event_cursor": row.exited_at_event_cursor,
+        }
+        for row in sorted(
+            rows,
+            key=lambda row: (
+                row.team_side,
+                row.batting_order,
+                row.player_id or "",
+                row.player_name,
+            ),
+        )
+    ]
+    return _snapshot_block_hash(normalized)
+
+
+def _batter_stats_payload_hash(items: list[CrawlerBatterStatIn]) -> str:
+    normalized = [
+        {
+            "team_side": stat.teamSide,
+            "player_id": stat.playerId,
+            "player_name": stat.playerName,
+            "batting_order": stat.battingOrder,
+            "primary_position": stat.primaryPosition,
+            "is_starter": stat.isStarter,
+            "plate_appearances": stat.plateAppearances,
+            "at_bats": stat.atBats,
+            "runs": stat.runs,
+            "hits": stat.hits,
+            "rbi": stat.rbi,
+            "doubles": stat.doubles,
+            "triples": stat.triples,
+            "home_runs": stat.homeRuns,
+            "walks": stat.walks,
+            "strikeouts": stat.strikeouts,
+            "stolen_bases": stat.stolenBases,
+            "caught_stealing": stat.caughtStealing,
+            "hit_by_pitch": stat.hitByPitch,
+            "sac_bunts": stat.sacBunts,
+            "sac_flies": stat.sacFlies,
+            "left_on_base": stat.leftOnBase,
+        }
         for stat in sorted(
             items,
             key=lambda stat: (
@@ -580,9 +649,65 @@ def _batter_stats_hash(items: list[CrawlerBatterStatIn]) -> str:
     return _snapshot_block_hash(normalized)
 
 
-def _pitcher_stats_hash(items: list[CrawlerPitcherStatIn]) -> str:
+def _batter_stats_current_hash(db: Session, game_id: str) -> str:
+    rows = db.execute(select(GameBatterStat).where(GameBatterStat.game_id == game_id)).scalars().all()
     normalized = [
-        stat.model_dump(mode="json", exclude_none=True)
+        {
+            "team_side": row.team_side,
+            "player_id": row.player_id,
+            "player_name": row.player_name,
+            "batting_order": row.batting_order,
+            "primary_position": row.primary_position,
+            "is_starter": row.is_starter,
+            "plate_appearances": row.plate_appearances,
+            "at_bats": row.at_bats,
+            "runs": row.runs,
+            "hits": row.hits,
+            "rbi": row.rbi,
+            "doubles": row.doubles,
+            "triples": row.triples,
+            "home_runs": row.home_runs,
+            "walks": row.walks,
+            "strikeouts": row.strikeouts,
+            "stolen_bases": row.stolen_bases,
+            "caught_stealing": row.caught_stealing,
+            "hit_by_pitch": row.hit_by_pitch,
+            "sac_bunts": row.sac_bunts,
+            "sac_flies": row.sac_flies,
+            "left_on_base": row.left_on_base,
+        }
+        for row in sorted(
+            rows,
+            key=lambda row: (
+                row.team_side,
+                row.player_id or "",
+                row.player_name,
+                row.batting_order or 0,
+            ),
+        )
+    ]
+    return _snapshot_block_hash(normalized)
+
+
+def _pitcher_stats_payload_hash(items: list[CrawlerPitcherStatIn]) -> str:
+    normalized = [
+        {
+            "team_side": stat.teamSide,
+            "appearance_order": stat.appearanceOrder,
+            "player_id": stat.playerId,
+            "player_name": stat.playerName,
+            "is_starter": stat.isStarter,
+            "outs_recorded": stat.outsRecorded,
+            "hits_allowed": stat.hitsAllowed,
+            "runs_allowed": stat.runsAllowed,
+            "earned_runs": stat.earnedRuns,
+            "walks_allowed": stat.walksAllowed,
+            "strikeouts": stat.strikeouts,
+            "home_runs_allowed": stat.homeRunsAllowed,
+            "batters_faced": stat.battersFaced,
+            "at_bats_against": stat.atBatsAgainst,
+            "pitches_thrown": stat.pitchesThrown,
+        }
         for stat in sorted(
             items,
             key=lambda stat: (
@@ -596,9 +721,51 @@ def _pitcher_stats_hash(items: list[CrawlerPitcherStatIn]) -> str:
     return _snapshot_block_hash(normalized)
 
 
-def _notes_hash(items: list[CrawlerGameNoteIn]) -> str:
+def _pitcher_stats_current_hash(db: Session, game_id: str) -> str:
+    rows = db.execute(select(GamePitcherStat).where(GamePitcherStat.game_id == game_id)).scalars().all()
     normalized = [
-        note.model_dump(mode="json", exclude_none=True)
+        {
+            "team_side": row.team_side,
+            "appearance_order": row.appearance_order,
+            "player_id": row.player_id,
+            "player_name": row.player_name,
+            "is_starter": row.is_starter,
+            "outs_recorded": row.outs_recorded,
+            "hits_allowed": row.hits_allowed,
+            "runs_allowed": row.runs_allowed,
+            "earned_runs": row.earned_runs,
+            "walks_allowed": row.walks_allowed,
+            "strikeouts": row.strikeouts,
+            "home_runs_allowed": row.home_runs_allowed,
+            "batters_faced": row.batters_faced,
+            "at_bats_against": row.at_bats_against,
+            "pitches_thrown": row.pitches_thrown,
+        }
+        for row in sorted(
+            rows,
+            key=lambda row: (
+                row.team_side,
+                row.player_id or "",
+                row.player_name,
+                row.appearance_order or 0,
+            ),
+        )
+    ]
+    return _snapshot_block_hash(normalized)
+
+
+def _notes_payload_hash(db: Session, game_id: str, items: list[CrawlerGameNoteIn]) -> str:
+    source_ids = {note.sourceEventId for note in items if note.sourceEventId}
+    source_map = _source_event_cursor_map(db, game_id, source_ids)
+    normalized = [
+        {
+            "team_side": note.teamSide,
+            "note_type": note.noteType,
+            "note_title": note.noteTitle,
+            "note_body": note.noteBody,
+            "inning": note.inning,
+            "event_cursor": source_map.get(note.sourceEventId or ""),
+        }
         for note in sorted(
             items,
             key=lambda note: (
@@ -613,43 +780,67 @@ def _notes_hash(items: list[CrawlerGameNoteIn]) -> str:
     return _snapshot_block_hash(normalized)
 
 
+def _notes_current_hash(db: Session, game_id: str) -> str:
+    rows = db.execute(select(GameNote).where(GameNote.game_id == game_id)).scalars().all()
+    normalized = [
+        {
+            "team_side": row.team_side,
+            "note_type": row.note_type,
+            "note_title": row.note_title,
+            "note_body": row.note_body,
+            "inning": row.inning,
+            "event_cursor": row.event_cursor,
+        }
+        for row in sorted(
+            rows,
+            key=lambda row: (
+                row.team_side or "",
+                row.note_type,
+                row.note_title,
+                row.inning or "",
+                row.event_cursor or 0,
+            ),
+        )
+    ]
+    return _snapshot_block_hash(normalized)
+
+
 def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> None:
-    game = db.get(Game, game_id)
-    if game is None:
+    if db.get(Game, game_id) is None:
         return
 
     changed = False
 
     if payload.lineupSlots:
-        next_hash = _lineup_slots_hash(payload.lineupSlots)
-        if game.lineup_slots_hash != next_hash:
+        next_hash = _lineup_slots_payload_hash(db, game_id, payload.lineupSlots)
+        current_hash = _lineup_slots_current_hash(db, game_id)
+        if next_hash != current_hash:
             # Break FK dependency first: batter stats reference lineup slots by (game_id, team_side, batting_order).
             db.execute(delete(GameBatterStat).where(GameBatterStat.game_id == game_id))
             _lineup_from_snapshot(db, game_id, payload.lineupSlots)
             # Ensure lineup rows exist before inserting batter stats that reference them.
             db.flush()
-            game.lineup_slots_hash = next_hash
             changed = True
 
     if payload.batterStats:
-        next_hash = _batter_stats_hash(payload.batterStats)
-        if game.batter_stats_hash != next_hash:
+        next_hash = _batter_stats_payload_hash(payload.batterStats)
+        current_hash = _batter_stats_current_hash(db, game_id)
+        if next_hash != current_hash:
             _batter_stats_from_snapshot(db, game_id, payload.batterStats)
-            game.batter_stats_hash = next_hash
             changed = True
 
     if payload.pitcherStats:
-        next_hash = _pitcher_stats_hash(payload.pitcherStats)
-        if game.pitcher_stats_hash != next_hash:
+        next_hash = _pitcher_stats_payload_hash(payload.pitcherStats)
+        current_hash = _pitcher_stats_current_hash(db, game_id)
+        if next_hash != current_hash:
             _pitcher_stats_from_snapshot(db, game_id, payload.pitcherStats)
-            game.pitcher_stats_hash = next_hash
             changed = True
 
     if payload.notes:
-        next_hash = _notes_hash(payload.notes)
-        if game.notes_hash != next_hash:
+        next_hash = _notes_payload_hash(db, game_id, payload.notes)
+        current_hash = _notes_current_hash(db, game_id)
+        if next_hash != current_hash:
             _notes_from_snapshot(db, game_id, payload.notes)
-            game.notes_hash = next_hash
             changed = True
 
     if changed:

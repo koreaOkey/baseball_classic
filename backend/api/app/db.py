@@ -80,15 +80,6 @@ def _ensure_game_columns() -> None:
         ddl_statements.append("ALTER TABLE games ADD COLUMN start_time VARCHAR(5)")
     if "game_date" not in columns:
         ddl_statements.append("ALTER TABLE games ADD COLUMN game_date VARCHAR(10)")
-    if "lineup_slots_hash" not in columns:
-        ddl_statements.append("ALTER TABLE games ADD COLUMN lineup_slots_hash VARCHAR(64)")
-    if "batter_stats_hash" not in columns:
-        ddl_statements.append("ALTER TABLE games ADD COLUMN batter_stats_hash VARCHAR(64)")
-    if "pitcher_stats_hash" not in columns:
-        ddl_statements.append("ALTER TABLE games ADD COLUMN pitcher_stats_hash VARCHAR(64)")
-    if "notes_hash" not in columns:
-        ddl_statements.append("ALTER TABLE games ADD COLUMN notes_hash VARCHAR(64)")
-
     if not ddl_statements:
         return
 
