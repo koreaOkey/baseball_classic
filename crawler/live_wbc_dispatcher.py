@@ -805,7 +805,21 @@ def _should_skip_schedule_snapshot(game: dict[str, Any]) -> bool:
     # Live games are ingested by crawler.py in near real-time.
     # Skipping schedule-level snapshot for LIVE avoids DB row-lock contention.
     status = _map_schedule_status(game.get("statusCode"))
-    return status == "LIVE"
+    if status == "LIVE":
+        return True
+
+    inning_text = _extract_schedule_inning(game)
+    inning_upper = inning_text.upper()
+    if re.search(r"\d+\s*회", inning_text):
+        return True
+    if "초" in inning_text or "말" in inning_text:
+        return True
+    if "TOP" in inning_upper or "BOTTOM" in inning_upper:
+        return True
+    if re.fullmatch(r"\d{1,2}[TB]", inning_upper):
+        return True
+
+    return False
 
 
 def _post_schedule_snapshot_to_backend(

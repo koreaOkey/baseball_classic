@@ -280,6 +280,12 @@ def test_should_skip_schedule_snapshot_for_live_status() -> None:
     assert _should_skip_schedule_snapshot({"statusCode": "SCHEDULED"}) is False
 
 
+def test_should_skip_schedule_snapshot_for_live_inning_text_even_if_status_is_not_live() -> None:
+    assert _should_skip_schedule_snapshot({"statusCode": "SCHEDULED", "statusInfo": "9회초"}) is True
+    assert _should_skip_schedule_snapshot({"statusCode": "SCHEDULED", "statusInfo": "9회말"}) is True
+    assert _should_skip_schedule_snapshot({"statusCode": "SCHEDULED", "statusInfo": "9T"}) is True
+
+
 def test_map_schedule_status_supports_canceled_and_postponed() -> None:
     assert _map_schedule_status("CANCELED") == "CANCELED"
     assert _map_schedule_status("cancelled") == "CANCELED"

@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
+from collections import defaultdict
 from datetime import UTC, date, datetime
 from typing import Annotated, Any
 import logging
 import secrets
 import time
+import threading
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
@@ -45,6 +47,7 @@ from .services import (
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+_snapshot_ingest_locks: dict[str, threading.Lock] = defaultdict(threading.Lock)
 
 SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS = (0.2, 0.5, 1.0)
 redis_relay = RedisBroadcastRelay(
@@ -264,6 +267,18 @@ def ingest_crawler_snapshot(
     if x_api_key is None or not secrets.compare_digest(x_api_key, settings.crawler_api_key):
         raise HTTPException(status_code=401, detail="invalid crawler api key")
 
+    game_lock = _snapshot_ingest_locks[game_id]
+    with game_lock:
+        return _ingest_crawler_snapshot_locked(game_id=game_id, payload=payload, background_tasks=background_tasks, db=db)
+
+
+def _ingest_crawler_snapshot_locked(
+    *,
+    game_id: str,
+    payload: CrawlerSnapshotRequest,
+    background_tasks: BackgroundTasks,
+    db: Session,
+) -> IngestResult:
     game: Game | None = None
     inserted_events: list[GameEvent] = []
     duplicate_count = 0
