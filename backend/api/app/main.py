@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from collections import defaultdict
 from datetime import UTC, date, datetime
 from typing import Annotated, Any
+import asyncio
 import logging
 import secrets
 import time
@@ -400,22 +401,29 @@ def ingest_crawler_team_records(
     )
 
 
+def _load_game_initial_data(game_id: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Sync DB work for WS on-connect, intended to run via asyncio.to_thread."""
+    with SessionLocal() as db:
+        game = db.get(Game, game_id)
+        if game is None:
+            return None, []
+        state_payload = build_game_state(db, game).model_dump(mode="json")
+        recent_events = db.execute(
+            select(GameEvent).where(GameEvent.game_id == game_id).order_by(GameEvent.cursor.desc()).limit(20)
+        ).scalars().all()
+        events_payload = [to_event_out(event).model_dump(mode="json") for event in reversed(recent_events)]
+    return state_payload, events_payload
+
+
 @app.websocket("/ws/games/{game_id}")
 async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
     await event_bus.connect(game_id, websocket)
 
-    with SessionLocal() as db:
-        game = db.get(Game, game_id)
-        if game is not None:
-            state = build_game_state(db, game)
-            await websocket.send_json({"type": "state", "payload": state.model_dump(mode="json")})
-
-            recent_events = db.execute(
-                select(GameEvent).where(GameEvent.game_id == game_id).order_by(GameEvent.cursor.desc()).limit(20)
-            ).scalars().all()
-            if recent_events:
-                payload = [to_event_out(event).model_dump(mode="json") for event in reversed(recent_events)]
-                await websocket.send_json({"type": "events", "payload": {"items": payload}})
+    state_payload, events_payload = await asyncio.to_thread(_load_game_initial_data, game_id)
+    if state_payload is not None:
+        await websocket.send_json({"type": "state", "payload": state_payload})
+    if events_payload:
+        await websocket.send_json({"type": "events", "payload": {"items": events_payload}})
 
     try:
         while True:
@@ -423,6 +431,17 @@ async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
             await websocket.send_json({"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}})
     except WebSocketDisconnect:
         await event_bus.disconnect(game_id, websocket)
+
+
+def _load_team_record_initial_data(
+    category_id: str, season_code: str, team_id: str,
+) -> dict[str, Any] | None:
+    """Sync DB work for team-record WS on-connect, intended to run via asyncio.to_thread."""
+    with SessionLocal() as db:
+        row = get_team_record(db, category_id=category_id, season_code=season_code, team_id=team_id)
+        if row is None:
+            return None
+        return _team_record_message(row=to_team_record_out(row))
 
 
 @app.websocket("/ws/team-records/{team_id}")
@@ -442,15 +461,11 @@ async def websocket_team_record_stream(
     )
     await event_bus.connect(channel, websocket)
 
-    with SessionLocal() as db:
-        row = get_team_record(
-            db,
-            category_id=normalized_category_id,
-            season_code=normalized_season_code,
-            team_id=normalized_team_id,
-        )
-        if row is not None:
-            await websocket.send_json(_team_record_message(row=to_team_record_out(row)))
+    message = await asyncio.to_thread(
+        _load_team_record_initial_data, normalized_category_id, normalized_season_code, normalized_team_id,
+    )
+    if message is not None:
+        await websocket.send_json(message)
 
     try:
         while True:
