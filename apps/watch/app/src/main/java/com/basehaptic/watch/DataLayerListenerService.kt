@@ -226,6 +226,10 @@ class DataLayerListenerService : WearableListenerService() {
                     intArrayOf(0, 255, 0, 255, 0, 255)
             "HIT" -> longArrayOf(0, 150, 100, 150) to
                     intArrayOf(0, 180, 0, 180)
+            "WALK" -> longArrayOf(0, 90, 80, 90) to
+                    intArrayOf(0, 110, 0, 110)
+            "STEAL" -> longArrayOf(0, 70, 50, 70) to
+                    intArrayOf(0, 165, 0, 165)
             "OUT" -> longArrayOf(0, 100) to
                     intArrayOf(0, 150)
             "DOUBLE_PLAY" -> longArrayOf(0, 120, 80, 120) to

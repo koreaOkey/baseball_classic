@@ -97,6 +97,20 @@ async def _on_redis_live_message(game_id: str, message: dict[str, Any]) -> None:
     await event_bus.broadcast(game_id, message)
 
 
+def _team_record_channel(*, category_id: str, season_code: str, team_id: str) -> str:
+    normalized_category = category_id.strip().lower()
+    normalized_season = season_code.strip()
+    normalized_team = team_id.strip().upper()
+    return f"team-record:{normalized_category}:{normalized_season}:{normalized_team}"
+
+
+def _team_record_message(*, row: TeamRecordOut) -> dict[str, Any]:
+    return {
+        "type": "team_record",
+        "payload": row.model_dump(mode="json"),
+    }
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
@@ -358,19 +372,30 @@ def _ingest_crawler_snapshot_locked(
 @app.post("/internal/crawler/team-records", response_model=TeamRecordIngestResult)
 def ingest_crawler_team_records(
     payload: CrawlerTeamRecordRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> TeamRecordIngestResult:
     if x_api_key is None or not secrets.compare_digest(x_api_key, settings.crawler_api_key):
         raise HTTPException(status_code=401, detail="invalid crawler api key")
 
-    upserted_records = upsert_team_records(db, payload)
+    upsert_result = upsert_team_records(db, payload)
     db.commit()
+
+    for row in upsert_result.changed_records:
+        channel = _team_record_channel(
+            category_id=row.category_id,
+            season_code=row.season_code,
+            team_id=row.team_id,
+        )
+        message = _team_record_message(row=to_team_record_out(row))
+        background_tasks.add_task(_broadcast_live_message, channel, message)
+
     return TeamRecordIngestResult(
         categoryId=payload.categoryId,
         seasonCode=payload.seasonCode,
         receivedRecords=len(payload.records),
-        upsertedRecords=upserted_records,
+        upsertedRecords=upsert_result.upserted_records,
         updatedAt=datetime.now(UTC),
     )
 
@@ -398,3 +423,38 @@ async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
             await websocket.send_json({"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}})
     except WebSocketDisconnect:
         await event_bus.disconnect(game_id, websocket)
+
+
+@app.websocket("/ws/team-records/{team_id}")
+async def websocket_team_record_stream(
+    websocket: WebSocket,
+    team_id: str,
+    category_id: str = Query(default="kbo", alias="categoryId"),
+    season_code: str | None = Query(default=None, alias="seasonCode"),
+) -> None:
+    normalized_category_id = category_id.strip().lower()
+    normalized_season_code = (season_code or str(datetime.now(UTC).year)).strip()
+    normalized_team_id = team_id.strip().upper()
+    channel = _team_record_channel(
+        category_id=normalized_category_id,
+        season_code=normalized_season_code,
+        team_id=normalized_team_id,
+    )
+    await event_bus.connect(channel, websocket)
+
+    with SessionLocal() as db:
+        row = get_team_record(
+            db,
+            category_id=normalized_category_id,
+            season_code=normalized_season_code,
+            team_id=normalized_team_id,
+        )
+        if row is not None:
+            await websocket.send_json(_team_record_message(row=to_team_record_out(row)))
+
+    try:
+        while True:
+            await websocket.receive_text()
+            await websocket.send_json({"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}})
+    except WebSocketDisconnect:
+        await event_bus.disconnect(channel, websocket)

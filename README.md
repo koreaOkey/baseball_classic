@@ -322,3 +322,30 @@ graph LR
     - recommendation for Railway + Supabase Session Pooler:
       - set `BASEHAPTIC_DB_POOL_SIZE=1`
       - set `BASEHAPTIC_DB_MAX_OVERFLOW=0`
+
+## Recent Changes (2026-03-21)
+
+- Reliability hardening for live-game ingest mismatch (`crawler -> backend`):
+  - fixed schedule-import skip logic to avoid dropping terminal game sync:
+    - schedule snapshot skip now applies to `LIVE` only
+    - terminal states (`FINISHED`, `CANCELED`, `POSTPONED`) are always synced
+    - added live-inning text detector for mislabeled `SCHEDULED` rows (`9회초/9회말`, `9T/9B`, `TOP/BOTTOM`)
+  - added forced single-game schedule sync on both dispatcher terminal points:
+    - when relay check returns finalized
+    - when a per-game crawler process stops
+    - purpose: recover final status/score even if live crawler POST failed with `502`/timeout
+  - reduced repeated import pressure after partial failures:
+    - daily import now marks the date as attempted even when some games fail
+    - re-sync continues via refresh cycle instead of immediate repeated daily loops
+- Backend state-regression guard:
+  - snapshot ingest no longer regresses game status backward
+  - example: `LIVE/FINISHED` game will not be overwritten by stale `SCHEDULED` snapshot
+  - implemented status progression guard in `upsert_game_from_snapshot`
+- Added regression tests:
+  - dispatcher tests for terminal-status no-skip behavior
+  - backend API test to verify status does not regress to `SCHEDULED`
+- Current live operation values in use:
+  - `--crawler-interval-sec 15`
+  - `--crawler-backend-timeout-sec 8`
+  - `--crawler-backend-retries 2`
+  - `--disable-team-record-sync` during live windows

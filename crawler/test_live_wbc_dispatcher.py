@@ -293,6 +293,7 @@ def test_should_not_skip_schedule_snapshot_for_terminal_status_even_with_live_li
 
 
 def test_map_schedule_status_supports_canceled_and_postponed() -> None:
+    assert _map_schedule_status("ENDED") == "FINISHED"
     assert _map_schedule_status("CANCELED") == "CANCELED"
     assert _map_schedule_status("cancelled") == "CANCELED"
     assert _map_schedule_status("RAIN_CANCEL") == "CANCELED"

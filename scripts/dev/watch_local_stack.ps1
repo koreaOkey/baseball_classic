@@ -13,6 +13,7 @@ param(
     [int]$CheckIntervalSec = 10,
     [int]$HealthTimeoutSec = 4,
     [switch]$EnablePreviewLineupPrecheck,
+    [switch]$DisableTeamRecordSync,
     [switch]$NoDispatcher,
     [switch]$RunOnce,
     [string]$BackendApiKey
@@ -200,11 +201,13 @@ function Start-DispatcherProcess {
         "--schedule-refresh-interval-sec", "$ScheduleRefreshIntervalSec",
         "--crawler-interval-sec", "$CrawlerIntervalSec",
         "--crawler-backend-timeout-sec", "$CrawlerBackendTimeoutSec",
-        "--crawler-backend-retries", "$CrawlerBackendRetries",
-        "--disable-team-record-sync"
+        "--crawler-backend-retries", "$CrawlerBackendRetries"
     )
     if ($EnablePreviewLineupPrecheck) {
         $args += "--enable-preview-lineup-precheck"
+    }
+    if ($DisableTeamRecordSync) {
+        $args += "--disable-team-record-sync"
     }
 
     $proc = Start-Process `

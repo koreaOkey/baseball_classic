@@ -511,6 +511,8 @@ private fun HomeRunTransitionScreen() {
 private fun eventUiFor(type: String): WatchEventUi? {
     return when (type.uppercase()) {
         "HIT" -> WatchEventUi("HIT", Icons.Default.Bolt, Color(0xFF22C55E))
+        "WALK" -> WatchEventUi("WALK", Icons.Default.Bolt, Color(0xFF4ADE80))
+        "STEAL" -> WatchEventUi("STEAL", Icons.Default.Bolt, Color(0xFF06B6D4))
         "SCORE" -> WatchEventUi("SCORE", Icons.Default.EmojiEvents, Color(0xFFEAB308))
         "OUT" -> WatchEventUi("OUT", Icons.Default.HighlightOff, Color(0xFFEF4444))
         "DOUBLE_PLAY" -> WatchEventUi("DOUBLE PLAY", Icons.Default.HighlightOff, Color(0xFFF97316))

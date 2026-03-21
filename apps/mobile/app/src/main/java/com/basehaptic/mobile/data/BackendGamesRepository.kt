@@ -32,6 +32,14 @@ object BackendGamesRepository {
     private const val CACHE_PREFS_NAME = "backend_games_cache"
     private const val KEY_TODAY_GAMES_DATE = "today_games_date"
     private const val KEY_TODAY_GAMES_PAYLOAD = "today_games_payload"
+    private const val KEY_TEAM_RECORD_DATE = "team_record_date"
+    private const val KEY_TEAM_RECORD_TEAM = "team_record_team"
+    private const val KEY_TEAM_RECORD_PAYLOAD = "team_record_payload"
+    private const val KEY_UPCOMING_GAMES_DATE = "upcoming_games_date"
+    private const val KEY_UPCOMING_GAMES_TEAM = "upcoming_games_team"
+    private const val KEY_UPCOMING_GAMES_MAX_ITEMS = "upcoming_games_max_items"
+    private const val KEY_UPCOMING_GAMES_DAYS_AHEAD = "upcoming_games_days_ahead"
+    private const val KEY_UPCOMING_GAMES_PAYLOAD = "upcoming_games_payload"
     private val hhmmFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     private val webSocketClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -95,6 +103,14 @@ object BackendGamesRepository {
         data object Closed : LiveStreamMessage
     }
 
+    sealed interface TeamRecordStreamMessage {
+        data object Connected : TeamRecordStreamMessage
+        data class TeamRecord(val value: TeamRecordStats) : TeamRecordStreamMessage
+        data class Pong(val at: String?) : TeamRecordStreamMessage
+        data class Error(val throwable: Throwable) : TeamRecordStreamMessage
+        data object Closed : TeamRecordStreamMessage
+    }
+
     fun fetchGames(selectedTeam: Team): List<Game>? {
         return fetchGamesByDate(selectedTeam = selectedTeam, targetDate = LocalDate.now())
     }
@@ -108,13 +124,17 @@ object BackendGamesRepository {
         return parseGamesPayload(cachedPayload, selectedTeam)
     }
 
-    fun fetchTodayGamesCached(context: Context, selectedTeam: Team): List<Game>? {
+    fun fetchTodayGamesCached(
+        context: Context,
+        selectedTeam: Team,
+        forceRefresh: Boolean = false
+    ): List<Game>? {
         val today = LocalDate.now().toString()
         val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
         val cachedDate = prefs.getString(KEY_TODAY_GAMES_DATE, null)
         val cachedPayload = prefs.getString(KEY_TODAY_GAMES_PAYLOAD, null)
 
-        if (cachedDate == today && !cachedPayload.isNullOrBlank()) {
+        if (!forceRefresh && cachedDate == today && !cachedPayload.isNullOrBlank()) {
             val cachedGames = parseGamesPayload(cachedPayload, selectedTeam)
             if (!cachedGames.isNullOrEmpty()) {
                 return cachedGames
@@ -137,6 +157,120 @@ object BackendGamesRepository {
 
         if (!cachedPayload.isNullOrBlank()) {
             return parseGamesPayload(cachedPayload, selectedTeam)
+        }
+
+        return null
+    }
+
+    fun peekTodayTeamRecordCache(context: Context, selectedTeam: Team): TeamRecordStats? {
+        if (selectedTeam == Team.NONE) return null
+        val today = LocalDate.now().toString()
+        val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedDate = prefs.getString(KEY_TEAM_RECORD_DATE, null)
+        val cachedTeam = prefs.getString(KEY_TEAM_RECORD_TEAM, null)
+        val cachedPayload = prefs.getString(KEY_TEAM_RECORD_PAYLOAD, null)
+        if (cachedDate != today || cachedTeam != selectedTeam.name || cachedPayload.isNullOrBlank()) {
+            return null
+        }
+        return parseTeamRecordPayload(cachedPayload)
+    }
+
+    fun fetchTodayTeamRecordCached(
+        context: Context,
+        selectedTeam: Team,
+        forceRefresh: Boolean = false
+    ): TeamRecordStats? {
+        if (selectedTeam == Team.NONE) return null
+
+        val today = LocalDate.now().toString()
+        val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedDate = prefs.getString(KEY_TEAM_RECORD_DATE, null)
+        val cachedTeam = prefs.getString(KEY_TEAM_RECORD_TEAM, null)
+        val cachedPayload = prefs.getString(KEY_TEAM_RECORD_PAYLOAD, null)
+
+        if (!forceRefresh && cachedDate == today && cachedTeam == selectedTeam.name && !cachedPayload.isNullOrBlank()) {
+            parseTeamRecordPayload(cachedPayload)?.let { return it }
+        }
+
+        val fresh = fetchTeamRecord(selectedTeam)
+        if (fresh != null) {
+            prefs.edit()
+                .putString(KEY_TEAM_RECORD_DATE, today)
+                .putString(KEY_TEAM_RECORD_TEAM, selectedTeam.name)
+                .putString(KEY_TEAM_RECORD_PAYLOAD, toTeamRecordPayload(fresh))
+                .apply()
+            return fresh
+        }
+
+        if (!cachedPayload.isNullOrBlank()) {
+            return parseTeamRecordPayload(cachedPayload)
+        }
+
+        return null
+    }
+
+    fun cacheTodayTeamRecord(
+        context: Context,
+        selectedTeam: Team,
+        value: TeamRecordStats
+    ) {
+        if (selectedTeam == Team.NONE) return
+        val today = LocalDate.now().toString()
+        context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_TEAM_RECORD_DATE, today)
+            .putString(KEY_TEAM_RECORD_TEAM, selectedTeam.name)
+            .putString(KEY_TEAM_RECORD_PAYLOAD, toTeamRecordPayload(value))
+            .apply()
+    }
+
+    fun fetchTodayUpcomingGamesCached(
+        context: Context,
+        selectedTeam: Team,
+        maxItems: Int = 3,
+        daysAhead: Int = 30,
+        forceRefresh: Boolean = false
+    ): List<UpcomingGameSchedule>? {
+        if (selectedTeam == Team.NONE) return emptyList()
+
+        val normalizedMaxItems = maxItems.coerceAtLeast(1)
+        val normalizedDaysAhead = daysAhead.coerceAtLeast(1)
+        val today = LocalDate.now().toString()
+        val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedDate = prefs.getString(KEY_UPCOMING_GAMES_DATE, null)
+        val cachedTeam = prefs.getString(KEY_UPCOMING_GAMES_TEAM, null)
+        val cachedMaxItems = prefs.getInt(KEY_UPCOMING_GAMES_MAX_ITEMS, -1)
+        val cachedDaysAhead = prefs.getInt(KEY_UPCOMING_GAMES_DAYS_AHEAD, -1)
+        val cachedPayload = prefs.getString(KEY_UPCOMING_GAMES_PAYLOAD, null)
+
+        val cacheMatches =
+            cachedDate == today &&
+                cachedTeam == selectedTeam.name &&
+                cachedMaxItems == normalizedMaxItems &&
+                cachedDaysAhead == normalizedDaysAhead
+
+        if (!forceRefresh && cacheMatches && !cachedPayload.isNullOrBlank()) {
+            parseUpcomingGamesPayload(cachedPayload)?.let { return it }
+        }
+
+        val fresh = fetchUpcomingMyTeamGames(
+            selectedTeam = selectedTeam,
+            maxItems = normalizedMaxItems,
+            daysAhead = normalizedDaysAhead
+        )
+        if (fresh != null) {
+            prefs.edit()
+                .putString(KEY_UPCOMING_GAMES_DATE, today)
+                .putString(KEY_UPCOMING_GAMES_TEAM, selectedTeam.name)
+                .putInt(KEY_UPCOMING_GAMES_MAX_ITEMS, normalizedMaxItems)
+                .putInt(KEY_UPCOMING_GAMES_DAYS_AHEAD, normalizedDaysAhead)
+                .putString(KEY_UPCOMING_GAMES_PAYLOAD, toUpcomingGamesPayload(fresh))
+                .apply()
+            return fresh
+        }
+
+        if (cacheMatches && !cachedPayload.isNullOrBlank()) {
+            return parseUpcomingGamesPayload(cachedPayload)
         }
 
         return null
@@ -271,6 +405,57 @@ object BackendGamesRepository {
         }
     }
 
+    fun streamTeamRecord(selectedTeam: Team): Flow<TeamRecordStreamMessage> = callbackFlow {
+        val endpoint = buildTeamRecordWebSocketEndpoint(selectedTeam)
+        if (endpoint == null) {
+            close(IllegalArgumentException("team record stream unavailable for Team.NONE"))
+            return@callbackFlow
+        }
+        val request = Request.Builder()
+            .url(endpoint)
+            .build()
+
+        var webSocket: WebSocket? = null
+        val listener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                this@callbackFlow.trySend(TeamRecordStreamMessage.Connected)
+                webSocket.send("ping")
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                val parsed = parseTeamRecordStreamMessage(text) ?: return
+                this@callbackFlow.trySend(parsed)
+            }
+
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                this@callbackFlow.trySend(TeamRecordStreamMessage.Closed)
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                this@callbackFlow.trySend(TeamRecordStreamMessage.Closed)
+                this@callbackFlow.close()
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                this@callbackFlow.trySend(TeamRecordStreamMessage.Error(t))
+                this@callbackFlow.close(t)
+            }
+        }
+
+        webSocket = webSocketClient.newWebSocket(request, listener)
+        val heartbeatJob = launch {
+            while (true) {
+                delay(15_000)
+                webSocket?.send("ping")
+            }
+        }
+
+        awaitClose {
+            heartbeatJob.cancel()
+            webSocket?.close(1000, "client closed")
+        }
+    }
+
     fun fetchTeamRecord(selectedTeam: Team): TeamRecordStats? {
         val teamId = selectedTeam.toKboTeamId() ?: return null
         val seasonCode = LocalDate.now().year.toString()
@@ -314,6 +499,19 @@ object BackendGamesRepository {
         return "$wsBase/ws/games/$gameId"
     }
 
+    private fun buildTeamRecordWebSocketEndpoint(selectedTeam: Team): String? {
+        val teamId = selectedTeam.toKboTeamId() ?: return null
+        val seasonCode = LocalDate.now().year.toString()
+        val baseUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
+        val wsBase = when {
+            baseUrl.startsWith("https://") -> "wss://${baseUrl.removePrefix("https://")}"
+            baseUrl.startsWith("http://") -> "ws://${baseUrl.removePrefix("http://")}"
+            baseUrl.startsWith("ws://") || baseUrl.startsWith("wss://") -> baseUrl
+            else -> "ws://$baseUrl"
+        }
+        return "$wsBase/ws/team-records/$teamId?categoryId=kbo&seasonCode=$seasonCode"
+    }
+
     private fun parseLiveStreamMessage(text: String): LiveStreamMessage? {
         val root = runCatching { JSONObject(text) }.getOrNull() ?: return null
         return when (root.optString("type")) {
@@ -337,6 +535,24 @@ object BackendGamesRepository {
             "pong" -> {
                 val at = root.optJSONObject("payload")?.optString("at").orEmpty().ifBlank { null }
                 LiveStreamMessage.Pong(at)
+            }
+
+            else -> null
+        }
+    }
+
+    private fun parseTeamRecordStreamMessage(text: String): TeamRecordStreamMessage? {
+        val root = runCatching { JSONObject(text) }.getOrNull() ?: return null
+        return when (root.optString("type")) {
+            "team_record" -> {
+                val payload = root.optJSONObject("payload") ?: return null
+                val value = runCatching { payload.toTeamRecordStats() }.getOrNull() ?: return null
+                TeamRecordStreamMessage.TeamRecord(value)
+            }
+
+            "pong" -> {
+                val at = root.optJSONObject("payload")?.optString("at").orEmpty().ifBlank { null }
+                TeamRecordStreamMessage.Pong(at)
             }
 
             else -> null
@@ -416,6 +632,78 @@ object BackendGamesRepository {
             wra = optNullableDouble("wra"),
             updatedAt = optString("updatedAt").ifBlank { null }
         )
+    }
+
+    private fun toTeamRecordPayload(value: TeamRecordStats): String {
+        return JSONObject().apply {
+            put("teamId", value.teamId)
+            put("ranking", value.ranking ?: JSONObject.NULL)
+            put("wra", value.wra ?: JSONObject.NULL)
+            put("updatedAt", value.updatedAt ?: JSONObject.NULL)
+        }.toString()
+    }
+
+    private fun parseTeamRecordPayload(payload: String): TeamRecordStats? {
+        return runCatching {
+            JSONObject(payload).toTeamRecordStats()
+        }.getOrNull()
+    }
+
+    private fun toUpcomingGamesPayload(items: List<UpcomingGameSchedule>): String {
+        return JSONArray().apply {
+            items.forEach { schedule ->
+                val game = schedule.game
+                put(
+                    JSONObject().apply {
+                        put("gameDate", schedule.gameDate.toString())
+                        put("id", game.id)
+                        put("homeTeam", game.homeTeam)
+                        put("awayTeam", game.awayTeam)
+                        put("homeTeamId", game.homeTeamId.name)
+                        put("awayTeamId", game.awayTeamId.name)
+                        put("homeScore", game.homeScore)
+                        put("awayScore", game.awayScore)
+                        put("inning", game.inning)
+                        put("status", game.status.name)
+                        put("time", game.time ?: JSONObject.NULL)
+                        put("isMyTeam", game.isMyTeam)
+                    }
+                )
+            }
+        }.toString()
+    }
+
+    private fun parseUpcomingGamesPayload(payload: String): List<UpcomingGameSchedule>? {
+        return runCatching {
+            val array = JSONArray(payload)
+            val items = ArrayList<UpcomingGameSchedule>(array.length())
+            for (i in 0 until array.length()) {
+                val row = array.optJSONObject(i) ?: continue
+                val gameDate = runCatching { LocalDate.parse(row.optString("gameDate")) }.getOrNull() ?: continue
+                val status = runCatching { GameStatus.valueOf(row.optString("status")) }.getOrDefault(GameStatus.SCHEDULED)
+                val game = Game(
+                    id = row.optString("id"),
+                    homeTeam = row.optString("homeTeam"),
+                    awayTeam = row.optString("awayTeam"),
+                    homeTeamId = parseTeamEnum(row.optString("homeTeamId")),
+                    awayTeamId = parseTeamEnum(row.optString("awayTeamId")),
+                    homeScore = row.optInt("homeScore", 0),
+                    awayScore = row.optInt("awayScore", 0),
+                    inning = row.optString("inning"),
+                    status = status,
+                    time = row.optString("time").ifBlank { null },
+                    isMyTeam = row.optBoolean("isMyTeam", false),
+                    homePitcher = null,
+                    awayPitcher = null
+                )
+                items.add(UpcomingGameSchedule(gameDate = gameDate, game = game))
+            }
+            items
+        }.getOrNull()
+    }
+
+    private fun parseTeamEnum(raw: String): Team {
+        return runCatching { Team.valueOf(raw) }.getOrDefault(Team.NONE)
     }
 
     private fun statusFromBackend(raw: String): GameStatus {

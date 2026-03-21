@@ -55,7 +55,7 @@ fun LiveGameScreen(
 ) {
     val watchTheme = LocalWatchTeamTheme.current
     val uiProfile = rememberWatchUiProfile()
-    val globalContentShiftDownDp = 10
+    val globalContentShiftDownDp = -10
     val isGameFinished = gameData.inning.contains("경기 종료") ||
         gameData.inning.contains("finished", ignoreCase = true)
 

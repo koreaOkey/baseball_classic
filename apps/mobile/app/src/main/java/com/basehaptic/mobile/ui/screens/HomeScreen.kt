@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,12 +29,12 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import androidx.compose.material3.MaterialTheme as M3Theme
 
 @Composable
 fun HomeScreen(
@@ -44,26 +45,83 @@ fun HomeScreen(
     onSelectGame: (Game) -> Unit
 ) {
     val games = remember(todayGames) { sortHomeGames(todayGames) }
+    val context = LocalContext.current
+    var teamRecordStats by remember(selectedTeam) {
+        mutableStateOf<BackendGamesRepository.TeamRecordStats?>(null)
+    }
 
-    val teamRecordStats by produceState<BackendGamesRepository.TeamRecordStats?>(
-        initialValue = null,
-        selectedTeam
-    ) {
+    LaunchedEffect(selectedTeam) {
         if (selectedTeam == Team.NONE) {
-            value = null
-            return@produceState
+            teamRecordStats = null
+            return@LaunchedEffect
         }
 
-        while (currentCoroutineContext().isActive) {
-            val backendTeamRecord = runCatching {
-                withContext(Dispatchers.IO) {
-                    BackendGamesRepository.fetchTeamRecord(selectedTeam)
-                }
-            }.getOrNull()
-            if (backendTeamRecord != null) {
-                value = backendTeamRecord
+        val cachedTeamRecord = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.peekTodayTeamRecordCache(
+                    context = context.applicationContext,
+                    selectedTeam = selectedTeam
+                )
             }
-            delay(30000)
+        }.getOrNull()
+        if (cachedTeamRecord != null) {
+            teamRecordStats = cachedTeamRecord
+        }
+
+        val loadedTeamRecord = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.fetchTodayTeamRecordCached(
+                    context = context.applicationContext,
+                    selectedTeam = selectedTeam
+                )
+            }
+        }.getOrNull()
+        if (loadedTeamRecord != null) {
+            teamRecordStats = loadedTeamRecord
+        }
+    }
+
+    LaunchedEffect(selectedTeam) {
+        if (selectedTeam == Team.NONE) return@LaunchedEffect
+
+        val reconnectDelaysMs = listOf(1_000L, 2_000L, 5_000L, 10_000L)
+        var reconnectAttempt = 0
+        while (currentCoroutineContext().isActive) {
+            runCatching {
+                BackendGamesRepository.streamTeamRecord(selectedTeam).collect { message ->
+                    when (message) {
+                        BackendGamesRepository.TeamRecordStreamMessage.Connected -> {
+                            reconnectAttempt = 0
+                        }
+
+                        BackendGamesRepository.TeamRecordStreamMessage.Closed -> {
+                            throw IllegalStateException("team record stream closed")
+                        }
+
+                        is BackendGamesRepository.TeamRecordStreamMessage.Error -> {
+                            throw message.throwable
+                        }
+
+                        is BackendGamesRepository.TeamRecordStreamMessage.TeamRecord -> {
+                            teamRecordStats = message.value
+                            withContext(Dispatchers.IO) {
+                                BackendGamesRepository.cacheTodayTeamRecord(
+                                    context = context.applicationContext,
+                                    selectedTeam = selectedTeam,
+                                    value = message.value
+                                )
+                            }
+                        }
+
+                        is BackendGamesRepository.TeamRecordStreamMessage.Pong -> Unit
+                    }
+                }
+            }
+
+            if (!currentCoroutineContext().isActive) break
+            val delayMs = reconnectDelaysMs[reconnectAttempt.coerceAtMost(reconnectDelaysMs.lastIndex)]
+            reconnectAttempt = (reconnectAttempt + 1).coerceAtMost(reconnectDelaysMs.lastIndex)
+            delay(delayMs)
         }
     }
 
@@ -78,7 +136,8 @@ fun HomeScreen(
 
         val backendUpcomingGames = runCatching {
             withContext(Dispatchers.IO) {
-                BackendGamesRepository.fetchUpcomingMyTeamGames(
+                BackendGamesRepository.fetchTodayUpcomingGamesCached(
+                    context = context.applicationContext,
                     selectedTeam = selectedTeam,
                     maxItems = 3,
                     daysAhead = 30
@@ -233,7 +292,6 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -242,13 +300,6 @@ fun HomeScreen(
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                TextButton(onClick = { }) {
-                    Text(
-                        text = "\uC804\uCCB4\uBCF4\uAE30",
-                        fontSize = 14.sp,
-                        color = teamTheme.primary
-                    )
-                }
             }
         }
 
@@ -285,8 +336,7 @@ fun HomeScreen(
             ) { upcoming ->
                 UpcomingGameCard(
                     selectedTeam = selectedTeam,
-                    upcoming = upcoming,
-                    primaryColor = teamTheme.primary
+                    upcoming = upcoming
                 )
             }
         }
@@ -333,8 +383,7 @@ private fun StatCard(
 @Composable
 private fun UpcomingGameCard(
     selectedTeam: Team,
-    upcoming: BackendGamesRepository.UpcomingGameSchedule,
-    primaryColor: Color
+    upcoming: BackendGamesRepository.UpcomingGameSchedule
 ) {
     val game = upcoming.game
     val isMyTeamHome = game.homeTeamId == selectedTeam
@@ -361,7 +410,6 @@ private fun UpcomingGameCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -369,13 +417,6 @@ private fun UpcomingGameCard(
                     fontSize = 14.sp,
                     color = Gray400
                 )
-                TextButton(onClick = { }) {
-                    Text(
-                        text = "응원 메시지 보내기",
-                        fontSize = 14.sp,
-                        color = primaryColor
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -405,12 +446,6 @@ private fun UpcomingGameCard(
                         color = Color.White
                     )
                 }
-                Icon(
-                    imageVector = Icons.Default.TrendingUp,
-                    contentDescription = null,
-                    tint = Green500,
-                    modifier = Modifier.size(20.dp)
-                )
             }
 
             Text(
@@ -523,9 +558,8 @@ private fun GameCard(
                                 )
                             }
                             GameStatus.FINISHED -> {
-                                val startTimeText = game.time ?: "--:--"
                                 Text(
-                                    text = "\uACBD\uAE30 \uC2DC\uC791 \uC2DC\uAC04 $startTimeText \uACBD\uAE30 \uC885\uB8CC",
+                                    text = "\uACBD\uAE30 \uC885\uB8CC",
                                     fontSize = 14.sp,
                                     color = Gray500
                                 )
@@ -738,6 +772,16 @@ private fun isPlayableGameStatus(status: GameStatus): Boolean {
         GameStatus.FINISHED,
         GameStatus.CANCELED,
         GameStatus.POSTPONED -> false
+    }
+}
+
+private fun isTerminalStatus(status: GameStatus): Boolean {
+    return when (status) {
+        GameStatus.FINISHED,
+        GameStatus.CANCELED,
+        GameStatus.POSTPONED -> true
+        GameStatus.LIVE,
+        GameStatus.SCHEDULED -> false
     }
 }
 

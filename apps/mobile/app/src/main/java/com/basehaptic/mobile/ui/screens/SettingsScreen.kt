@@ -16,10 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Vibration
@@ -176,20 +174,9 @@ fun SettingsScreen(
             SettingsItemWithSwitch(
                 icon = Icons.Default.Vibration,
                 title = "햅틱 피드백",
-                subtitle = "주요 이벤트 발생 시 진동으로 알림",
+                subtitle = "실시간 경기 내용을 진동으로 알림 받기",
                 checked = hapticEnabled,
                 onCheckedChange = { hapticEnabled = it }
-            )
-        }
-
-        item {
-            var calendarSync by remember { mutableStateOf(true) }
-            SettingsItemWithSwitch(
-                icon = Icons.Default.CalendarToday,
-                title = "일정 자동 동기화",
-                subtitle = "경기 일정을 캘린더에 자동 등록",
-                checked = calendarSync,
-                onCheckedChange = { calendarSync = it }
             )
         }
 
@@ -228,15 +215,6 @@ fun SettingsScreen(
                 icon = Icons.Default.Info,
                 title = "버전",
                 subtitle = "1.0.0",
-                onClick = {}
-            )
-        }
-
-        item {
-            SettingsItem(
-                icon = Icons.Default.Description,
-                title = "오픈소스 라이선스",
-                subtitle = "",
                 onClick = {}
             )
         }
@@ -323,7 +301,8 @@ private fun SettingsItemWithSwitch(
     title: String,
     subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     val teamTheme = LocalTeamTheme.current
     Surface(
@@ -341,7 +320,7 @@ private fun SettingsItemWithSwitch(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = teamTheme.primary,
+                tint = if (enabled) teamTheme.primary else Gray500,
                 modifier = Modifier.size(24.dp)
             )
 
@@ -352,13 +331,13 @@ private fun SettingsItemWithSwitch(
                     text = title,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color.White
+                    color = if (enabled) Color.White else Gray500
                 )
                 if (subtitle.isNotEmpty()) {
                     Text(
                         text = subtitle,
                         fontSize = 14.sp,
-                        color = Gray400,
+                        color = if (enabled) Gray400 else Gray500,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
@@ -367,11 +346,14 @@ private fun SettingsItemWithSwitch(
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
+                enabled = enabled,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
                     checkedTrackColor = teamTheme.primary,
                     uncheckedThumbColor = Gray500,
-                    uncheckedTrackColor = Gray700
+                    uncheckedTrackColor = Gray700,
+                    disabledUncheckedThumbColor = Gray500,
+                    disabledUncheckedTrackColor = Gray700
                 )
             )
         }

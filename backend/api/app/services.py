@@ -1,5 +1,6 @@
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -35,6 +36,7 @@ STATUS_MAP = {
     "PREGAME": GameStatus.SCHEDULED,
     "PRE_GAME": GameStatus.SCHEDULED,
     "END": GameStatus.FINISHED,
+    "ENDED": GameStatus.FINISHED,
     "FINAL": GameStatus.FINISHED,
     "RESULT": GameStatus.FINISHED,
     "FINISHED": GameStatus.FINISHED,
@@ -866,9 +868,15 @@ def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotReq
         db.flush()
 
 
-def upsert_team_records(db: Session, payload: CrawlerTeamRecordRequest) -> int:
+@dataclass
+class TeamRecordUpsertResult:
+    upserted_records: int
+    changed_records: list[TeamRecord]
+
+
+def upsert_team_records(db: Session, payload: CrawlerTeamRecordRequest) -> TeamRecordUpsertResult:
     if not payload.records:
-        return 0
+        return TeamRecordUpsertResult(upserted_records=0, changed_records=[])
 
     dedup: dict[str, Any] = {}
     for record in payload.records:
@@ -885,8 +893,16 @@ def upsert_team_records(db: Session, payload: CrawlerTeamRecordRequest) -> int:
     existing_by_team_id = {row.team_id: row for row in existing_rows}
 
     upserted = 0
+    changed_records: list[TeamRecord] = []
     default_observed_at = ensure_utc(payload.observedAt) if payload.observedAt else now_utc()
     for record in dedup.values():
+        next_payload_json = (
+            record.raw
+            if record.raw is not None
+            else record.model_dump(mode="json", exclude={"raw"}, exclude_none=True)
+        )
+        next_observed_at = ensure_utc(record.observedAt) if record.observedAt else default_observed_at
+
         row = existing_by_team_id.get(record.teamId)
         if row is None:
             row = TeamRecord(
@@ -895,6 +911,30 @@ def upsert_team_records(db: Session, payload: CrawlerTeamRecordRequest) -> int:
                 team_id=record.teamId,
             )
             db.add(row)
+        else:
+            has_meaningful_change = any(
+                (
+                    row.upper_category_id != (record.upperCategoryId or payload.upperCategoryId),
+                    row.team_name != record.teamName,
+                    row.team_short_name != record.teamShortName,
+                    row.ranking != record.ranking,
+                    row.order_no != record.orderNo,
+                    row.game_type != record.gameType,
+                    row.wra != record.wra,
+                    row.game_count != record.gameCount,
+                    row.win_game_count != record.winGameCount,
+                    row.drawn_game_count != record.drawnGameCount,
+                    row.lose_game_count != record.loseGameCount,
+                    row.game_behind != record.gameBehind,
+                    row.continuous_game_result != record.continuousGameResult,
+                    row.last_five_games != record.lastFiveGames,
+                    row.offense_hra != record.offenseHra,
+                    row.defense_era != record.defenseEra,
+                    row.payload_json != next_payload_json,
+                )
+            )
+            if not has_meaningful_change:
+                continue
 
         row.upper_category_id = record.upperCategoryId or payload.upperCategoryId
         row.team_name = record.teamName
@@ -912,17 +952,14 @@ def upsert_team_records(db: Session, payload: CrawlerTeamRecordRequest) -> int:
         row.last_five_games = record.lastFiveGames
         row.offense_hra = record.offenseHra
         row.defense_era = record.defenseEra
-        row.payload_json = (
-            record.raw
-            if record.raw is not None
-            else record.model_dump(mode="json", exclude={"raw"}, exclude_none=True)
-        )
-        row.observed_at = ensure_utc(record.observedAt) if record.observedAt else default_observed_at
+        row.payload_json = next_payload_json
+        row.observed_at = next_observed_at
         row.updated_at = now_utc()
         upserted += 1
+        changed_records.append(row)
 
     db.flush()
-    return upserted
+    return TeamRecordUpsertResult(upserted_records=upserted, changed_records=changed_records)
 
 
 def get_team_record(

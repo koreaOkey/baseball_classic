@@ -105,6 +105,7 @@ def test_snapshot_payload_includes_offense_and_defense_team_metadata() -> None:
 
 
 def test_normalize_status_supports_canceled_and_postponed() -> None:
+    assert _normalize_status("ENDED") == "FINISHED"
     assert _normalize_status("CANCELED") == "CANCELED"
     assert _normalize_status("cancelled") == "CANCELED"
     assert _normalize_status("RAIN_CANCEL") == "CANCELED"

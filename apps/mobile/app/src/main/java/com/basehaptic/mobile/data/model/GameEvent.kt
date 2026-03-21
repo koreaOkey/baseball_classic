@@ -11,9 +11,11 @@ data class GameEvent(
 enum class EventType {
     BALL,
     STRIKE,
+    WALK,
     OUT,
     DOUBLE_PLAY,
     TRIPLE_PLAY,
+    STEAL,
     HIT,
     HOMERUN,
     SCORE;
@@ -23,9 +25,11 @@ enum class EventType {
             return when (type) {
                 BALL -> "tap"
                 STRIKE -> "tap-tap"
+                WALK -> "tap-soft-tap"
                 OUT -> "tap-tap-tap"
                 DOUBLE_PLAY -> "tap-pause-tap"
                 TRIPLE_PLAY -> "tap-pause-tap-pause-tap"
+                STEAL -> "quick-double-tap"
                 HIT -> "double-tap"
                 HOMERUN -> "triple-tap"
                 SCORE -> "tap-long"

@@ -369,6 +369,8 @@ fun WatchTestScreen(
                         val events = listOf(
                             Triple(EventType.HOMERUN, "홈런", teamTheme.primary),
                             Triple(EventType.HIT, "안타", Green500),
+                            Triple(EventType.WALK, "볼넷", Green400),
+                            Triple(EventType.STEAL, "도루", Blue500),
                             Triple(EventType.SCORE, "득점", Yellow500),
                             Triple(EventType.DOUBLE_PLAY, "병살", Orange500),
                             Triple(EventType.TRIPLE_PLAY, "삼중살", Red400),

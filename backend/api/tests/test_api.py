@@ -378,6 +378,7 @@ def test_event_type_half_inning_change_mapping() -> None:
 
 
 def test_status_mapping_includes_canceled_and_postponed() -> None:
+    assert normalize_status("ENDED").value == "FINISHED"
     assert normalize_status("CANCELED").value == "CANCELED"
     assert normalize_status("cancelled").value == "CANCELED"
     assert normalize_status("rain_cancel").value == "CANCELED"
@@ -714,7 +715,17 @@ def test_ingest_team_record_upsert_flow() -> None:
         assert second.status_code == 200
         second_body = second.json()
         assert second_body["receivedRecords"] == 2
-        assert second_body["upsertedRecords"] == 2
+        assert second_body["upsertedRecords"] == 1
+
+        third = client.post(
+            "/internal/crawler/team-records",
+            headers={"X-API-Key": "test-key"},
+            json=second_payload,
+        )
+        assert third.status_code == 200
+        third_body = third.json()
+        assert third_body["receivedRecords"] == 2
+        assert third_body["upsertedRecords"] == 0
 
         with SessionLocal() as db:
             all_rows = db.query(TeamRecord).filter(TeamRecord.category_id == "kbo", TeamRecord.season_code == "2026").all()
@@ -731,6 +742,40 @@ def test_ingest_team_record_upsert_flow() -> None:
             assert lg is not None
             assert lg.ranking == 3
             assert lg.wra == 0.333
+
+
+def test_team_record_websocket_receives_initial_and_changed_push() -> None:
+    with TestClient(app) as client:
+        ingest = client.post(
+            "/internal/crawler/team-records",
+            headers={"X-API-Key": "test-key"},
+            json=sample_team_records_payload(),
+        )
+        assert ingest.status_code == 200
+
+        with client.websocket_connect("/ws/team-records/LG?categoryId=kbo&seasonCode=2026") as ws:
+            initial = ws.receive_json()
+            assert initial["type"] == "team_record"
+            assert initial["payload"]["teamId"] == "LG"
+            assert initial["payload"]["ranking"] == 1
+
+            changed_payload = sample_team_records_payload()
+            changed_payload["records"][0]["ranking"] = 2
+            changed_payload["records"][0]["wra"] = 0.667
+            changed_payload["records"][0]["raw"] = {"teamId": "LG", "ranking": 2}
+            changed = client.post(
+                "/internal/crawler/team-records",
+                headers={"X-API-Key": "test-key"},
+                json=changed_payload,
+            )
+            assert changed.status_code == 200
+            assert changed.json()["upsertedRecords"] == 1
+
+            pushed = ws.receive_json()
+            assert pushed["type"] == "team_record"
+            assert pushed["payload"]["teamId"] == "LG"
+            assert pushed["payload"]["ranking"] == 2
+            assert pushed["payload"]["wra"] == 0.667
 
 
 def test_ingest_team_record_requires_valid_api_key() -> None:

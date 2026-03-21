@@ -269,16 +269,32 @@ fun BaseHapticApp(
         autoPromptedLiveGames.clear()
 
         while (currentCoroutineContext().isActive) {
+            val today = LocalDate.now()
+            val shouldFreezePolling =
+                shouldFreezeTodayGames(
+                    games = todayGamesSnapshot,
+                    loadedDate = todayGamesLoadedDate,
+                    today = today
+                )
+            if (shouldFreezePolling) {
+                delay(60_000L)
+                continue
+            }
+
             val fetchedGames = runCatching {
                 withContext(Dispatchers.IO) {
-                    BackendGamesRepository.fetchGames(selectedTeam)
+                    BackendGamesRepository.fetchTodayGamesCached(
+                        context = context.applicationContext,
+                        selectedTeam = selectedTeam,
+                        forceRefresh = true
+                    )
                 }
             }.getOrNull()
 
             // Keep home feed in sync with backend game state updates (score/status/inning).
             if (fetchedGames != null) {
                 todayGamesSnapshot = fetchedGames
-                todayGamesLoadedDate = LocalDate.now()
+                todayGamesLoadedDate = today
             }
             val games = fetchedGames.orEmpty()
 
@@ -306,6 +322,7 @@ fun BaseHapticApp(
             val pollDelayMs = when {
                 fetchedGames == null -> 10_000L
                 games.any { it.status == GameStatus.LIVE } -> 5_000L
+                games.isNotEmpty() && games.all { isTerminalStatus(it.status) } -> 60_000L
                 else -> 30_000L
             }
             delay(pollDelayMs)
@@ -633,7 +650,9 @@ private fun mapToWatchEventType(type: String?): String? {
         "TRIPLE_PLAY",
         "HIT",
         "HOMERUN",
-        "SCORE" -> normalized
+        "SCORE",
+        "WALK",
+        "STEAL" -> normalized
         "SAC_FLY_SCORE" -> "SCORE"
         "TAG_UP_ADVANCE" -> "OUT"
         else -> null
@@ -649,5 +668,25 @@ private fun resolveMyTeamName(
         state.homeTeamId != Team.NONE -> state.homeTeamId.name
         state.awayTeamId != Team.NONE -> state.awayTeamId.name
         else -> "DEFAULT"
+    }
+}
+
+private fun shouldFreezeTodayGames(
+    games: List<Game>,
+    loadedDate: LocalDate?,
+    today: LocalDate
+): Boolean {
+    if (loadedDate != today) return false
+    if (games.isEmpty()) return false
+    return games.all { isTerminalStatus(it.status) }
+}
+
+private fun isTerminalStatus(status: GameStatus): Boolean {
+    return when (status) {
+        GameStatus.FINISHED,
+        GameStatus.CANCELED,
+        GameStatus.POSTPONED -> true
+        GameStatus.LIVE,
+        GameStatus.SCHEDULED -> false
     }
 }
