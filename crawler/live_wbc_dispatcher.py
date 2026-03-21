@@ -1136,7 +1136,14 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                                 backend_retries=backend_sync_retries,
                             ):
                                 all_success = False
-                        if not args.disable_team_record_sync:
+                        if args.disable_team_record_sync:
+                            LOGGER.info("[team-record] skipped reason=disabled-by-flag")
+                        elif running:
+                            LOGGER.info(
+                                "[team-record] skipped reason=live-crawlers-running running=%s",
+                                len(running),
+                            )
+                        else:
                             season_code = str(args.team_record_season_code or now.date().year).strip()
                             _run_team_record_import(
                                 source_base_url=args.source_base_url,
@@ -1327,10 +1334,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--schedule-import-days",
         type=int,
-        default=30,
+        default=1,
         help=(
             "Number of days to import from the current date during daily import "
-            "(default: 30). Refresh import keeps using only today's date."
+            "(default: 1). Refresh import keeps using only today's date."
         ),
     )
     parser.add_argument(

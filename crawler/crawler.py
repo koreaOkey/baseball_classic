@@ -496,6 +496,8 @@ def run(
     backend_timeout: float = 10.0,
     backend_retries: int = 3,
 ) -> None:
+    posted_source_event_ids: set[str] = set()
+
     while True:
         try:
             game_data, relays_by_inning, combined = crawl_once_detailed(game_id=game_id, base_url=base_url)
@@ -526,9 +528,17 @@ def run(
             if not backend_api_key:
                 raise ValueError("--backend-api-key is required when --backend-base-url is set")
             snapshot = build_snapshot_payload(game_data=game_data, relays_by_inning=relays_by_inning)
+            all_events = snapshot.get("events") or []
+            delta_events = [
+                event
+                for event in all_events
+                if str(event.get("sourceEventId") or "").strip()
+                and str(event.get("sourceEventId") or "").strip() not in posted_source_event_ids
+            ]
+            snapshot["events"] = delta_events
             print(
                 f"[snapshot] gameDate={snapshot.get('gameDate')} startTime={snapshot.get('startTime')} "
-                f"events={len(snapshot.get('events') or [])}",
+                f"events={len(delta_events)} totalEvents={len(all_events)}",
                 flush=True,
             )
             try:
@@ -562,6 +572,11 @@ def run(
                     f"inserted={result.get('insertedEvents')} "
                     f"duplicates={result.get('duplicateEvents')}",
                     flush=True,
+                )
+                posted_source_event_ids.update(
+                    str(event.get("sourceEventId")).strip()
+                    for event in delta_events
+                    if str(event.get("sourceEventId") or "").strip()
                 )
             except requests.RequestException as exc:
                 print(f"[backend][error] gameId={game_id} ingest_failed error={exc}", flush=True)

@@ -5,7 +5,7 @@ param(
     [string]$BackendBaseUrl = "http://localhost:8080",
     [string]$League = "kbo",
     [string]$SourceBaseUrl = "https://api-gw.sports.naver.com",
-    [int]$ScheduleImportDays = 30,
+    [int]$ScheduleImportDays = 1,
     [int]$ScheduleRefreshIntervalSec = 300,
     [int]$CheckIntervalSec = 10,
     [int]$HealthTimeoutSec = 4,

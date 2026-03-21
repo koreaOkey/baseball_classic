@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -541,20 +543,117 @@ def _notes_from_snapshot(db: Session, game_id: str, notes: list[CrawlerGameNoteI
         )
 
 
+def _snapshot_block_hash(items: list[dict[str, Any]]) -> str:
+    encoded = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _lineup_slots_hash(items: list[CrawlerLineupSlotIn]) -> str:
+    normalized = [
+        slot.model_dump(mode="json", exclude_none=True)
+        for slot in sorted(
+            items,
+            key=lambda slot: (
+                slot.teamSide,
+                slot.battingOrder,
+                slot.playerId or "",
+                slot.playerName,
+            ),
+        )
+    ]
+    return _snapshot_block_hash(normalized)
+
+
+def _batter_stats_hash(items: list[CrawlerBatterStatIn]) -> str:
+    normalized = [
+        stat.model_dump(mode="json", exclude_none=True)
+        for stat in sorted(
+            items,
+            key=lambda stat: (
+                stat.teamSide,
+                stat.playerId or "",
+                stat.playerName,
+                stat.battingOrder or 0,
+            ),
+        )
+    ]
+    return _snapshot_block_hash(normalized)
+
+
+def _pitcher_stats_hash(items: list[CrawlerPitcherStatIn]) -> str:
+    normalized = [
+        stat.model_dump(mode="json", exclude_none=True)
+        for stat in sorted(
+            items,
+            key=lambda stat: (
+                stat.teamSide,
+                stat.playerId or "",
+                stat.playerName,
+                stat.appearanceOrder or 0,
+            ),
+        )
+    ]
+    return _snapshot_block_hash(normalized)
+
+
+def _notes_hash(items: list[CrawlerGameNoteIn]) -> str:
+    normalized = [
+        note.model_dump(mode="json", exclude_none=True)
+        for note in sorted(
+            items,
+            key=lambda note: (
+                note.teamSide or "",
+                note.noteType,
+                note.noteTitle,
+                note.inning or "",
+                note.sourceEventId or "",
+            ),
+        )
+    ]
+    return _snapshot_block_hash(normalized)
+
+
 def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> None:
+    game = db.get(Game, game_id)
+    if game is None:
+        return
+
+    changed = False
+
     if payload.lineupSlots:
-        # Break FK dependency first: batter stats reference lineup slots by (game_id, team_side, batting_order).
-        db.execute(delete(GameBatterStat).where(GameBatterStat.game_id == game_id))
-        _lineup_from_snapshot(db, game_id, payload.lineupSlots)
-        # Ensure lineup rows exist before inserting batter stats that reference them.
-        db.flush()
+        next_hash = _lineup_slots_hash(payload.lineupSlots)
+        if game.lineup_slots_hash != next_hash:
+            # Break FK dependency first: batter stats reference lineup slots by (game_id, team_side, batting_order).
+            db.execute(delete(GameBatterStat).where(GameBatterStat.game_id == game_id))
+            _lineup_from_snapshot(db, game_id, payload.lineupSlots)
+            # Ensure lineup rows exist before inserting batter stats that reference them.
+            db.flush()
+            game.lineup_slots_hash = next_hash
+            changed = True
+
     if payload.batterStats:
-        _batter_stats_from_snapshot(db, game_id, payload.batterStats)
+        next_hash = _batter_stats_hash(payload.batterStats)
+        if game.batter_stats_hash != next_hash:
+            _batter_stats_from_snapshot(db, game_id, payload.batterStats)
+            game.batter_stats_hash = next_hash
+            changed = True
+
     if payload.pitcherStats:
-        _pitcher_stats_from_snapshot(db, game_id, payload.pitcherStats)
+        next_hash = _pitcher_stats_hash(payload.pitcherStats)
+        if game.pitcher_stats_hash != next_hash:
+            _pitcher_stats_from_snapshot(db, game_id, payload.pitcherStats)
+            game.pitcher_stats_hash = next_hash
+            changed = True
+
     if payload.notes:
-        _notes_from_snapshot(db, game_id, payload.notes)
-    db.flush()
+        next_hash = _notes_hash(payload.notes)
+        if game.notes_hash != next_hash:
+            _notes_from_snapshot(db, game_id, payload.notes)
+            game.notes_hash = next_hash
+            changed = True
+
+    if changed:
+        db.flush()
 
 
 def upsert_team_records(db: Session, payload: CrawlerTeamRecordRequest) -> int:

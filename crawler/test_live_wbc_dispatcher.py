@@ -193,7 +193,7 @@ def test_build_schedule_import_dates_builds_range() -> None:
 def test_parser_schedule_import_days_default_and_override() -> None:
     parser = build_parser()
     args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
-    assert args_default.schedule_import_days == 30
+    assert args_default.schedule_import_days == 1
 
     args_custom = parser.parse_args(
         [

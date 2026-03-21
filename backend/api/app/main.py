@@ -5,7 +5,7 @@ import asyncio
 import logging
 import secrets
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import DBAPIError
@@ -215,6 +215,7 @@ def get_team_record_by_team(
 async def ingest_crawler_snapshot(
     game_id: str,
     payload: CrawlerSnapshotRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> IngestResult:
@@ -224,6 +225,10 @@ async def ingest_crawler_snapshot(
     game: Game | None = None
     inserted_events: list[GameEvent] = []
     duplicate_count = 0
+    state_payload: dict[str, Any] | None = None
+    inserted_event_payload: list[dict[str, Any]] = []
+    response_status: GameStatus | None = None
+    response_updated_at: datetime | None = None
 
     for attempt in range(len(SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS) + 1):
         try:
@@ -236,8 +241,14 @@ async def ingest_crawler_snapshot(
                 fallback_batter=payload.batter,
             )
             sync_snapshot_details(db, game_id=game_id, payload=payload)
+            current_state = build_game_state(db, game)
+            current_state_payload = current_state.model_dump(mode="json")
+            current_event_payload = [to_event_out(item).model_dump(mode="json") for item in inserted_events]
+            response_status = normalize_status(game.status)
+            response_updated_at = game.updated_at
             db.commit()
-            db.refresh(game)
+            state_payload = current_state_payload
+            inserted_event_payload = current_event_payload
             break
         except DBAPIError as exc:
             rollback_ok = _rollback_session_safely(db, game_id=game_id, attempt=attempt + 1)
@@ -259,31 +270,31 @@ async def ingest_crawler_snapshot(
             )
             await asyncio.sleep(delay)
 
-    if game is None:
+    if game is None or state_payload is None or response_status is None or response_updated_at is None:
         raise HTTPException(status_code=500, detail="snapshot ingest failed")
 
-    state = build_game_state(db, game)
-
-    if inserted_events:
-        await _broadcast_live_message(
+    if inserted_event_payload:
+        background_tasks.add_task(
+            _broadcast_live_message,
             game_id,
             {
                 "type": "events",
-                "payload": {"items": [to_event_out(item).model_dump(mode="json") for item in inserted_events]},
+                "payload": {"items": inserted_event_payload},
             },
         )
-    await _broadcast_live_message(
+    background_tasks.add_task(
+        _broadcast_live_message,
         game_id,
-        {"type": "state", "payload": state.model_dump(mode="json")},
+        {"type": "state", "payload": state_payload},
     )
 
     return IngestResult(
         gameId=game.id,
         receivedEvents=len(payload.events),
-        insertedEvents=len(inserted_events),
+        insertedEvents=len(inserted_event_payload),
         duplicateEvents=duplicate_count,
-        status=normalize_status(game.status),
-        updatedAt=game.updated_at,
+        status=response_status,
+        updatedAt=response_updated_at,
     )
 
 
