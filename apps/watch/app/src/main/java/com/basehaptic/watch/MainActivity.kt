@@ -54,13 +54,12 @@ import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
-import androidx.wear.compose.material.Vignette
-import androidx.wear.compose.material.VignettePosition
 import com.basehaptic.watch.data.BaseStatus
 import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.ui.components.LiveGameScreen
 import com.basehaptic.watch.ui.components.NoGameScreen
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
+import com.basehaptic.watch.ui.theme.Gray950
 import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
 import kotlinx.coroutines.delay
 
@@ -153,29 +152,32 @@ fun WatchApp() {
         Scaffold(
             timeText = {
                 TimeText()
-            },
-            vignette = {
-                Vignette(vignettePosition = VignettePosition.TopAndBottom)
             }
         ) {
-            AnimatedContent(
-                targetState = isHomeRunTransitionVisible,
-                transitionSpec = {
-                    (fadeIn() + scaleIn(initialScale = 0.92f)) togetherWith
-                            (fadeOut() + scaleOut(targetScale = 1.04f))
-                },
-                label = "home_run_transition"
-            ) { showHomeRun ->
-                if (showHomeRun) {
-                    HomeRunTransitionScreen()
-                } else {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        if (gameData != null) {
-                            LiveGameScreen(gameData = gameData!!)
-                        } else {
-                            NoGameScreen()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Gray950)
+            ) {
+                AnimatedContent(
+                    targetState = isHomeRunTransitionVisible,
+                    transitionSpec = {
+                        (fadeIn() + scaleIn(initialScale = 0.92f)) togetherWith
+                                (fadeOut() + scaleOut(targetScale = 1.04f))
+                    },
+                    label = "home_run_transition"
+                ) { showHomeRun ->
+                    if (showHomeRun) {
+                        HomeRunTransitionScreen()
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (gameData != null) {
+                                LiveGameScreen(gameData = gameData!!)
+                            } else {
+                                NoGameScreen()
+                            }
+                            WatchEventOverlay(latestEvent = latestEvent)
                         }
-                        WatchEventOverlay(latestEvent = latestEvent)
                     }
                 }
             }

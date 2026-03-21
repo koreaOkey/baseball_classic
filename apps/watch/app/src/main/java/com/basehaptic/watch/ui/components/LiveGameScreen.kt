@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -18,11 +17,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -30,9 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.constraintlayout.compose.Dimension
-import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.Text
-import com.basehaptic.watch.R
 import com.basehaptic.watch.data.BaseStatus
 import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.data.getMockGameData
@@ -41,7 +36,6 @@ import com.basehaptic.watch.ui.theme.Gray800
 import com.basehaptic.watch.ui.theme.Gray900
 import com.basehaptic.watch.ui.theme.Gray950
 import com.basehaptic.watch.ui.theme.Green500
-import com.basehaptic.watch.ui.theme.LocalWatchTeamTheme
 import com.basehaptic.watch.ui.theme.Orange500
 import com.basehaptic.watch.ui.theme.Red500
 import com.basehaptic.watch.ui.theme.WatchUiProfile
@@ -53,9 +47,8 @@ fun LiveGameScreen(
     gameData: GameData,
     modifier: Modifier = Modifier
 ) {
-    val watchTheme = LocalWatchTeamTheme.current
     val uiProfile = rememberWatchUiProfile()
-    val globalContentShiftDownDp = -10
+    val globalContentShiftDownDp = -16
     val isGameFinished = gameData.inning.contains("경기 종료") ||
         gameData.inning.contains("finished", ignoreCase = true)
 
@@ -63,11 +56,7 @@ fun LiveGameScreen(
         modifier = modifier
             .fillMaxSize()
             .offset(y = (uiProfile.contentOffsetYDp + globalContentShiftDownDp).dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Gray900, Gray950)
-                )
-            )
+            .background(Gray950)
     ) {
         val (topBanner, mainScoreCard, baseBso, playerInfo, tapHint) = createRefs()
         val scoreDiffRef = createRef()
@@ -87,7 +76,7 @@ fun LiveGameScreen(
                         bottomEnd = uiProfile.bannerBottomCornerDp.dp
                     )
                 )
-                .background(watchTheme.primary)
+                .background(Gray950)
         )
 
         Row(
@@ -98,8 +87,9 @@ fun LiveGameScreen(
                     end.linkTo(parent.end)
                     width = Dimension.fillToConstraints
                 }
+                .offset(y = (-4).dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(Color(0xFF1A1A1A))
+                .background(Gray950)
                 .padding(
                     horizontal = uiProfile.scoreCardHorizontalPaddingDp.dp,
                     vertical = uiProfile.scoreCardVerticalPaddingDp.dp
@@ -110,7 +100,6 @@ fun LiveGameScreen(
                 modifier = Modifier.weight(1f),
                 team = gameData.awayTeam,
                 score = gameData.awayScore,
-                alignEnd = false,
                 uiProfile = uiProfile
             )
 
@@ -154,7 +143,6 @@ fun LiveGameScreen(
                 modifier = Modifier.weight(1f),
                 team = gameData.homeTeam,
                 score = gameData.homeScore,
-                alignEnd = true,
                 uiProfile = uiProfile
             )
         }
@@ -240,54 +228,30 @@ private fun ScoreSide(
     modifier: Modifier = Modifier,
     team: String,
     score: Int,
-    alignEnd: Boolean,
     uiProfile: WatchUiProfile
 ) {
     Column(
         modifier = modifier,
-        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = score.toString(),
-            modifier = Modifier.offset(x = 2.dp),
+            modifier = Modifier.fillMaxWidth(),
             color = Color.White,
             fontSize = uiProfile.scoreValueSp.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = (-1).sp,
-            textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
+            textAlign = TextAlign.Center
         )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start
-        ) {
-            val logoRes = getTeamLogoRes(team)
-            if (alignEnd && logoRes != null) {
-                Icon(
-                    painter = painterResource(id = logoRes),
-                    contentDescription = "$team logo",
-                    modifier = Modifier.size(uiProfile.logoSizeDp.dp),
-                    tint = Color.Unspecified
-                )
-                Spacer(modifier = Modifier.width(3.dp))
-            }
-            Text(
-                text = team.uppercase(),
-                color = Color.White.copy(alpha = 0.76f),
-                fontSize = uiProfile.teamNameSp.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
-            )
-            if (!alignEnd && logoRes != null) {
-                Spacer(modifier = Modifier.width(3.dp))
-                Icon(
-                    painter = painterResource(id = logoRes),
-                    contentDescription = "$team logo",
-                    modifier = Modifier.size(uiProfile.logoSizeDp.dp),
-                    tint = Color.Unspecified
-                )
-            }
-        }
+        Text(
+            text = team.uppercase(),
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White.copy(alpha = 0.76f),
+            fontSize = uiProfile.teamNameSp.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -376,20 +340,6 @@ private fun inningHalfIcon(inning: String): String {
         inning.contains("BOT", ignoreCase = true) || inning.contains("말") -> "▼"
         else -> ""
     }
-}
-
-private fun getTeamLogoRes(team: String): Int? = when (team.uppercase()) {
-    "DOOSAN" -> R.drawable.dosan
-    "LG" -> R.drawable.lg
-    "KIWOOM" -> R.drawable.kiwoom
-    "SAMSUNG" -> R.drawable.samsung
-    "LOTTE" -> R.drawable.lotte
-    "SSG" -> R.drawable.ssg
-    "KT" -> R.drawable.kt
-    "HANWHA" -> R.drawable.hanwha
-    "KIA" -> R.drawable.kia
-    "NC" -> R.drawable.nc
-    else -> null
 }
 
 @Preview(name = "Small Round", device = "id:wearos_small_round")
