@@ -1,12 +1,16 @@
+import logging
 from collections.abc import Generator
 
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import Connection
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import get_settings
 
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 GAME_EVENT_TYPE_VALUES = (
     "BALL",
@@ -85,7 +89,7 @@ def _ensure_game_columns() -> None:
 
     with engine.begin() as conn:
         for ddl in ddl_statements:
-            conn.execute(text(ddl))
+            _execute_ddl_best_effort(conn, ddl)
 
 
 def _ensure_game_event_columns() -> None:
@@ -106,7 +110,7 @@ def _ensure_game_event_columns() -> None:
 
     with engine.begin() as conn:
         for ddl in ddl_statements:
-            conn.execute(text(ddl))
+            _execute_ddl_best_effort(conn, ddl)
 
 
 def _ensure_boxscore_context_columns() -> None:
@@ -133,7 +137,7 @@ def _ensure_boxscore_context_columns() -> None:
 
         with engine.begin() as conn:
             for ddl in ddl_statements:
-                conn.execute(text(ddl))
+                _execute_ddl_best_effort(conn, ddl)
 
 
 def _ensure_game_event_type_check_constraint() -> None:
@@ -167,16 +171,22 @@ def _ensure_game_event_type_check_constraint() -> None:
 
     values = ", ".join(f"'{event_type}'" for event_type in GAME_EVENT_TYPE_VALUES)
     with engine.begin() as conn:
-        conn.execute(text("alter table public.game_events drop constraint if exists game_events_event_type_check"))
-        conn.execute(
-            text(
-                f"""
-                alter table public.game_events
-                add constraint game_events_event_type_check
-                check (event_type in ({values}))
-                """
-            )
+        _execute_ddl_best_effort(conn, "alter table public.game_events drop constraint if exists game_events_event_type_check")
+        _execute_ddl_best_effort(
+            conn,
+            f"""
+            alter table public.game_events
+            add constraint game_events_event_type_check
+            check (event_type in ({values}))
+            """,
         )
+
+
+def _execute_ddl_best_effort(conn: Connection, ddl: str) -> None:
+    try:
+        conn.execute(text(ddl))
+    except SQLAlchemyError as exc:
+        logger.warning("ddl skipped during startup sql=%s error=%s", ddl, exc)
 
 
 def get_db() -> Generator[Session, None, None]:
