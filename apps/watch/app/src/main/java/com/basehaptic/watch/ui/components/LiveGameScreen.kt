@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,20 +55,22 @@ fun LiveGameScreen(
 ) {
     val watchTheme = LocalWatchTeamTheme.current
     val uiProfile = rememberWatchUiProfile()
+    val globalContentShiftDownDp = 10
+    val isGameFinished = gameData.inning.contains("경기 종료") ||
+        gameData.inning.contains("finished", ignoreCase = true)
 
     ConstraintLayout(
         modifier = modifier
             .fillMaxSize()
-            .offset(y = uiProfile.contentOffsetYDp.dp)
+            .offset(y = (uiProfile.contentOffsetYDp + globalContentShiftDownDp).dp)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(Gray900, Gray950)
                 )
             )
     ) {
-        val (topBanner, myTeam, mainScoreCard, baseBso, playerInfo, tapHint) = createRefs()
+        val (topBanner, mainScoreCard, baseBso, playerInfo, tapHint) = createRefs()
         val scoreDiffRef = createRef()
-        val myTeamDisplay = gameData.myTeamName.ifBlank { gameData.homeTeam }
 
         Box(
             modifier = Modifier
@@ -87,39 +90,10 @@ fun LiveGameScreen(
                 .background(watchTheme.primary)
         )
 
-        Column(
-            modifier = Modifier.constrainAs(myTeam) {
-                top.linkTo(parent.top, margin = uiProfile.myTeamTopMarginDp.dp)
-                start.linkTo(parent.start)
-                end.linkTo(parent.end)
-            },
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "MY TEAM",
-                color = Color.White.copy(alpha = 0.72f),
-                fontSize = (uiProfile.teamNameSp - 2).sp
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = myTeamDisplay,
-                    color = Color.White,
-                    fontSize = (uiProfile.teamNameSp + 1).sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(2.dp))
-                Text(
-                    text = "LIVE",
-                    color = Color.White.copy(alpha = 0.72f),
-                    fontSize = (uiProfile.teamNameSp - 2).sp
-                )
-            }
-        }
-
         Row(
             modifier = Modifier
                 .constrainAs(mainScoreCard) {
-                    top.linkTo(myTeam.bottom, margin = 4.dp)
+                    top.linkTo(topBanner.bottom, margin = 4.dp)
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
                     width = Dimension.fillToConstraints
@@ -152,17 +126,28 @@ fun LiveGameScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = gameData.inning,
-                    color = Orange500,
-                    fontSize = uiProfile.inningTextSp.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = inningHalfIcon(gameData.inning),
-                    color = Orange500,
-                    fontSize = uiProfile.inningHalfSp.sp
-                )
+                if (isGameFinished) {
+                    Text(
+                        text = gameData.inning,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Orange500,
+                        fontSize = uiProfile.inningTextSp.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    Text(
+                        text = gameData.inning,
+                        color = Orange500,
+                        fontSize = uiProfile.inningTextSp.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = inningHalfIcon(gameData.inning),
+                        color = Orange500,
+                        fontSize = uiProfile.inningHalfSp.sp
+                    )
+                }
             }
 
             ScoreSide(
@@ -224,7 +209,7 @@ fun LiveGameScreen(
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
                 }
-                .offset(y = uiProfile.playerInfoOffsetYDp.dp),
+                .offset(y = (uiProfile.playerInfoOffsetYDp - globalContentShiftDownDp).dp),
             color = Color.White.copy(alpha = 0.62f),
             fontSize = uiProfile.playerInfoSp.sp,
             maxLines = 1
