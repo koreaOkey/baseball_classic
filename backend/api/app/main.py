@@ -98,6 +98,20 @@ async def _on_redis_live_message(game_id: str, message: dict[str, Any]) -> None:
     await event_bus.broadcast(game_id, message)
 
 
+async def _cache_game_data(
+    game_id: str,
+    state_payload: dict[str, Any],
+    new_events_payload: list[dict[str, Any]],
+) -> None:
+    await redis_relay.set_cache(f"game:state:{game_id}", state_payload)
+    if new_events_payload:
+        # Merge new events into existing cache (keep latest 20)
+        existing = await redis_relay.get_cache(f"game:events:{game_id}")
+        existing_items = (existing.get("items") if existing else None) or []
+        merged = existing_items + new_events_payload
+        await redis_relay.set_cache(f"game:events:{game_id}", {"items": merged[-20:]})
+
+
 def _team_record_channel(*, category_id: str, season_code: str, team_id: str) -> str:
     normalized_category = category_id.strip().lower()
     normalized_season = season_code.strip()
@@ -360,6 +374,11 @@ def _ingest_crawler_snapshot_locked(
         {"type": "state", "payload": state_payload},
     )
 
+    # Cache state and recent events in Redis for fast WS on-connect
+    background_tasks.add_task(
+        _cache_game_data, game_id, state_payload, inserted_event_payload,
+    )
+
     return IngestResult(
         gameId=game.id,
         receivedEvents=len(payload.events),
@@ -415,11 +434,22 @@ def _load_game_initial_data(game_id: str) -> tuple[dict[str, Any] | None, list[d
     return state_payload, events_payload
 
 
+async def _load_game_initial_data_cached(game_id: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """Try Redis cache first, fall back to DB."""
+    state = await redis_relay.get_cache(f"game:state:{game_id}")
+    events_data = await redis_relay.get_cache(f"game:events:{game_id}")
+    if state is not None:
+        events = (events_data.get("items") if events_data else None) or []
+        return state, events
+    # Cache miss → fall back to DB
+    return await asyncio.to_thread(_load_game_initial_data, game_id)
+
+
 @app.websocket("/ws/games/{game_id}")
 async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
     await event_bus.connect(game_id, websocket)
 
-    state_payload, events_payload = await asyncio.to_thread(_load_game_initial_data, game_id)
+    state_payload, events_payload = await _load_game_initial_data_cached(game_id)
     if state_payload is not None:
         await websocket.send_json({"type": "state", "payload": state_payload})
     if events_payload:
@@ -444,6 +474,19 @@ def _load_team_record_initial_data(
         return _team_record_message(row=to_team_record_out(row))
 
 
+async def _load_team_record_initial_data_cached(
+    category_id: str, season_code: str, team_id: str,
+) -> dict[str, Any] | None:
+    """Try Redis cache first, fall back to DB."""
+    cache_key = f"team-record:{category_id}:{season_code}:{team_id}"
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None:
+        return cached
+    return await asyncio.to_thread(
+        _load_team_record_initial_data, category_id, season_code, team_id,
+    )
+
+
 @app.websocket("/ws/team-records/{team_id}")
 async def websocket_team_record_stream(
     websocket: WebSocket,
@@ -461,8 +504,8 @@ async def websocket_team_record_stream(
     )
     await event_bus.connect(channel, websocket)
 
-    message = await asyncio.to_thread(
-        _load_team_record_initial_data, normalized_category_id, normalized_season_code, normalized_team_id,
+    message = await _load_team_record_initial_data_cached(
+        normalized_category_id, normalized_season_code, normalized_team_id,
     )
     if message is not None:
         await websocket.send_json(message)

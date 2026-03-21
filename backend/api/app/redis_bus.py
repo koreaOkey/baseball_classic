@@ -119,6 +119,27 @@ class RedisBroadcastRelay:
                 await self._subscriber.aclose()
             self._subscriber = None
 
+    async def set_cache(self, key: str, value: dict[str, Any], ttl_sec: int = 300) -> None:
+        if not self.enabled or self._publisher is None:
+            return
+        try:
+            payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+            await self._publisher.set(key, payload, ex=ttl_sec)
+        except Exception:
+            logger.debug("redis cache set failed: key=%s", key)
+
+    async def get_cache(self, key: str) -> dict[str, Any] | None:
+        if not self.enabled or self._publisher is None:
+            return None
+        try:
+            raw = await self._publisher.get(key)
+            if raw is None:
+                return None
+            return json.loads(raw)
+        except Exception:
+            logger.debug("redis cache get failed: key=%s", key)
+            return None
+
     async def publish(self, game_id: str, message: dict[str, Any]) -> None:
         if not self.enabled or self._publisher is None:
             return
