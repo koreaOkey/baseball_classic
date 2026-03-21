@@ -27,12 +27,18 @@ class GameEventBus:
         async with self._lock:
             targets = list(self._connections.get(game_id, set()))
 
-        stale: list[WebSocket] = []
-        for ws in targets:
+        if not targets:
+            return
+
+        async def _send(ws: WebSocket) -> WebSocket | None:
             try:
                 await ws.send_json(message)
+                return None
             except Exception:
-                stale.append(ws)
+                return ws
+
+        results = await asyncio.gather(*[_send(ws) for ws in targets])
+        stale = [ws for ws in results if ws is not None]
 
         if stale:
             async with self._lock:
