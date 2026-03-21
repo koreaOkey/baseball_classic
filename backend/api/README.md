@@ -96,3 +96,17 @@ uvicorn app.main:app --reload --port 8080
   - Mitigation:
     - tightened SQLAlchemy pool defaults and env-driven tuning (see section above).
     - operational recommendation: keep backend replicas/workers conservative during high-ingest windows.
+
+## Recent Changes (2026-03-21)
+
+- Team-record ingest behavior was changed from unconditional overwrite to change-aware upsert:
+  - unchanged rows are skipped (no-op re-ingest does not increase `upsertedRecords`)
+  - only rows with meaningful field changes are updated
+- Added team-record realtime stream endpoint:
+  - `WS /ws/team-records/{teamId}?categoryId=kbo&seasonCode=YYYY`
+  - sends current team-record snapshot on connect
+  - pushes update messages only when that team row changes
+- Team-record ingest now broadcasts changed team rows only (reduced unnecessary push/load).
+- Added/updated tests for:
+  - no-op re-ingest (`upsertedRecords=0`)
+  - websocket initial snapshot + changed-row push delivery

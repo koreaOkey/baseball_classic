@@ -348,4 +348,24 @@ graph LR
   - `--crawler-interval-sec 15`
   - `--crawler-backend-timeout-sec 8`
   - `--crawler-backend-retries 2`
-  - `--disable-team-record-sync` during live windows
+  - team-record sync is now enabled by default; use `--disable-team-record-sync` only when explicitly needed
+- Team-record sync strategy update (`crawler -> backend -> mobile`):
+  - backend team-record ingest now applies change detection per team row
+  - unchanged rows are skipped (`upsertedRecords` does not increase for no-op re-ingest)
+  - changed rows are broadcast only, reducing unnecessary write/load noise
+  - added team-record websocket stream endpoint:
+    - `GET WS /ws/team-records/{teamId}?categoryId=kbo&seasonCode=YYYY`
+    - sends current snapshot on connect, then pushes update on change
+- Mobile home team-rank/win-rate update flow change:
+  - replaced periodic/terminal-triggered force refresh with websocket push subscription
+  - keeps cached team-record fixed until server push arrives
+  - cache is updated immediately when push message is received
+- Dispatcher/watchdog operation update:
+  - local watchdog script no longer hardcodes `--disable-team-record-sync`
+  - disable flag is now optional (`-DisableTeamRecordSync`) for temporary operations
+- Watch live UI adjustments (scoreboard readability):
+  - removed team logo rendering on watch live scoreboard; team text only
+  - team names are centered under each team score
+  - score card position moved upward (`y = -4dp`)
+  - unified live-screen background to single `Gray950`
+  - removed top/bottom vignette layer in watch scaffold to avoid perceived dual-tone background

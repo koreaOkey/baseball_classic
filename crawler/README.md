@@ -214,3 +214,15 @@ type log\\live_crawler_<gameId>.log
 - Added/updated tests:
   - `crawler/test_live_wbc_dispatcher.py` for preview-lineup availability and CLI flag
   - `crawler/test_crawler_preview_lineup.py` for preview-to-relay lineup mapping
+
+## Recent Changes (2026-03-21)
+
+- Team-record sync operation policy was updated:
+  - team-record sync is enabled by default in dispatcher cycles
+  - use `--disable-team-record-sync` only when explicitly needed for temporary operations
+- Dispatcher -> backend team-record sync now works with backend change-aware upsert:
+  - repeated same payloads may return `upsertedRecords=0`
+  - changed payload rows are reflected and pushed to clients via backend websocket
+- Local watchdog script behavior was aligned:
+  - no longer hardcodes `--disable-team-record-sync`
+  - optional disable is exposed as `-DisableTeamRecordSync`
