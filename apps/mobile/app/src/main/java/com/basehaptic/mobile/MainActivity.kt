@@ -30,20 +30,16 @@ import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeData
+import com.basehaptic.mobile.service.GameSyncForegroundService
+import com.basehaptic.mobile.service.GameSyncState
 import com.basehaptic.mobile.ui.screens.*
 import com.basehaptic.mobile.ui.theme.BaseHapticTheme
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
-import com.basehaptic.mobile.wear.WearGameSyncManager
 import com.basehaptic.mobile.wear.WearThemeSyncManager
 import com.basehaptic.mobile.wear.WearWatchSyncBridge
 import java.time.LocalDate
-import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 private const val SHOW_COMMUNITY_TAB = false
@@ -263,188 +259,55 @@ fun BaseHapticApp(
         }
     }
 
+    // Start/stop the foreground service for background polling
     LaunchedEffect(selectedTeam) {
-        if (selectedTeam == Team.NONE) return@LaunchedEffect
-        observedMyTeamGameStatus.clear()
-        autoPromptedLiveGames.clear()
-
-        while (currentCoroutineContext().isActive) {
-            val today = LocalDate.now()
-            val shouldFreezePolling =
-                shouldFreezeTodayGames(
-                    games = todayGamesSnapshot,
-                    loadedDate = todayGamesLoadedDate,
-                    today = today
-                )
-            if (shouldFreezePolling) {
-                delay(60_000L)
-                continue
+        if (selectedTeam != Team.NONE) {
+            val intent = Intent(context, GameSyncForegroundService::class.java).apply {
+                action = GameSyncForegroundService.ACTION_START_POLLING
+                putExtra(GameSyncForegroundService.EXTRA_SELECTED_TEAM, selectedTeam.name)
             }
-
-            val fetchedGames = runCatching {
-                withContext(Dispatchers.IO) {
-                    BackendGamesRepository.fetchTodayGamesCached(
-                        context = context.applicationContext,
-                        selectedTeam = selectedTeam,
-                        forceRefresh = true
-                    )
-                }
-            }.getOrNull()
-
-            // Keep home feed in sync with backend game state updates (score/status/inning).
-            if (fetchedGames != null) {
-                todayGamesSnapshot = fetchedGames
-                todayGamesLoadedDate = today
+            ContextCompat.startForegroundService(context, intent)
+        } else {
+            val intent = Intent(context, GameSyncForegroundService::class.java).apply {
+                action = GameSyncForegroundService.ACTION_STOP_SERVICE
             }
-            val games = fetchedGames.orEmpty()
-
-            val myTeamGames = games.filter { it.isMyTeam }
-            for (game in myTeamGames) {
-                val previous = observedMyTeamGameStatus[game.id]
-                observedMyTeamGameStatus[game.id] = game.status
-
-                val becameLive = game.status == GameStatus.LIVE && previous != GameStatus.LIVE
-                val alreadyPrompted = autoPromptedLiveGames[game.id] == true
-                val isSynced = syncedGameId == game.id
-                if (becameLive && !alreadyPrompted && !isSynced) {
-                    autoPromptedLiveGames[game.id] = true
-                    selectedGameId = game.id
-                    WearGameSyncManager.sendWatchSyncPrompt(
-                        context = context,
-                        gameId = game.id,
-                        homeTeam = game.homeTeam,
-                        awayTeam = game.awayTeam,
-                        myTeam = selectedTeam.name
-                    )
-                }
-            }
-
-            val pollDelayMs = when {
-                fetchedGames == null -> 10_000L
-                games.any { it.status == GameStatus.LIVE } -> 5_000L
-                games.isNotEmpty() && games.all { isTerminalStatus(it.status) } -> 60_000L
-                else -> 30_000L
-            }
-            delay(pollDelayMs)
+            context.startService(intent)
         }
     }
 
+    // Start/stop streaming via service when syncedGameId changes
     LaunchedEffect(syncedGameId, selectedTeam) {
-        val targetGameId = syncedGameId
-        if (targetGameId.isNullOrBlank()) return@LaunchedEffect
-
-        var cursor = 0L
-        var localEvents: List<BackendGamesRepository.LiveEvent> = emptyList()
-        var lastWatchSignature = ""
-        var lastSentEventCursor = 0L
-        val reconnectDelaysMs = listOf(1000L, 2000L, 5000L, 10000L)
-        var reconnectAttempt = 0
-
-        suspend fun pushStateToWatch(state: BackendGamesRepository.LiveGameState) {
-            val latestEventType =
-                localEvents.firstNotNullOfOrNull { mapToWatchEventType(it.type) }
-                    ?: mapToWatchEventType(state.lastEventType)
-            val signature = listOf(
-                state.gameId,
-                state.status.name,
-                state.inning,
-                state.homeScore.toString(),
-                state.awayScore.toString(),
-                state.ball.toString(),
-                state.strike.toString(),
-                state.out.toString(),
-                state.baseFirst.toString(),
-                state.baseSecond.toString(),
-                state.baseThird.toString(),
-                latestEventType.orEmpty()
-            ).joinToString("|")
-
-            if (signature != lastWatchSignature) {
-                WearGameSyncManager.sendGameData(
-                    context = context,
-                    gameId = state.gameId,
-                    homeTeam = state.homeTeam,
-                    awayTeam = state.awayTeam,
-                    homeScore = state.homeScore,
-                    awayScore = state.awayScore,
-                    status = state.status.name,
-                    inning = state.inning,
-                    ball = state.ball,
-                    strike = state.strike,
-                    out = state.out,
-                    baseFirst = state.baseFirst,
-                    baseSecond = state.baseSecond,
-                    baseThird = state.baseThird,
-                    pitcher = state.pitcher,
-                    batter = state.batter,
-                    myTeam = resolveMyTeamName(selectedTeam, state),
-                    eventType = null
-                )
-                lastWatchSignature = signature
+        val gameId = syncedGameId
+        if (!gameId.isNullOrBlank()) {
+            val intent = Intent(context, GameSyncForegroundService::class.java).apply {
+                action = GameSyncForegroundService.ACTION_START_STREAMING
+                putExtra(GameSyncForegroundService.EXTRA_GAME_ID, gameId)
+                putExtra(GameSyncForegroundService.EXTRA_SELECTED_TEAM, selectedTeam.name)
             }
-        }
-
-        suspend fun applyIncomingEvents(
-            incoming: List<BackendGamesRepository.LiveEvent>,
-            sendHaptics: Boolean
-        ) {
-            if (incoming.isEmpty()) return
-
-            val sorted = incoming.sortedBy { it.cursor }
-            if (sendHaptics) {
-                sorted
-                    .filter { it.cursor > lastSentEventCursor }
-                    .forEach { event ->
-                        mapToWatchEventType(event.type)?.let { mapped ->
-                            WearGameSyncManager.sendHapticEvent(context, mapped, event.cursor)
-                        }
-                        lastSentEventCursor = max(lastSentEventCursor, event.cursor)
-                    }
-            } else {
-                lastSentEventCursor = max(lastSentEventCursor, sorted.maxOfOrNull { it.cursor } ?: 0L)
+            context.startService(intent)
+        } else {
+            val intent = Intent(context, GameSyncForegroundService::class.java).apply {
+                action = GameSyncForegroundService.ACTION_STOP_STREAMING
             }
-
-            cursor = max(cursor, sorted.maxOfOrNull { it.cursor } ?: cursor)
-            localEvents = (sorted + localEvents)
-                .distinctBy { it.cursor }
-                .sortedByDescending { it.cursor }
-                .take(80)
+            context.startService(intent)
         }
+    }
 
-        while (currentCoroutineContext().isActive) {
-            runCatching {
-                BackendGamesRepository.streamGame(targetGameId).collect { message ->
-                    when (message) {
-                        BackendGamesRepository.LiveStreamMessage.Connected -> {
-                            reconnectAttempt = 0
-                        }
-
-                        BackendGamesRepository.LiveStreamMessage.Closed -> {
-                            throw IllegalStateException("game stream closed")
-                        }
-
-                        is BackendGamesRepository.LiveStreamMessage.Error -> {
-                            throw message.throwable
-                        }
-
-                        is BackendGamesRepository.LiveStreamMessage.Events -> {
-                            applyIncomingEvents(message.items, sendHaptics = true)
-                        }
-
-                        is BackendGamesRepository.LiveStreamMessage.State -> {
-                            pushStateToWatch(message.state)
-                        }
-
-                        is BackendGamesRepository.LiveStreamMessage.Pong -> Unit
-                    }
-                }
-            }
-
-            if (!currentCoroutineContext().isActive) break
-            val delayMs = reconnectDelaysMs[reconnectAttempt.coerceAtMost(reconnectDelaysMs.lastIndex)]
-            reconnectAttempt = (reconnectAttempt + 1).coerceAtMost(reconnectDelaysMs.lastIndex)
-            delay(delayMs)
+    // Collect today games updates from the service
+    val serviceGames by GameSyncState.todayGames.collectAsState()
+    LaunchedEffect(serviceGames) {
+        if (serviceGames.isNotEmpty()) {
+            todayGamesSnapshot = serviceGames
+            todayGamesLoadedDate = LocalDate.now()
         }
+    }
+
+    // React to game-went-live events from the service
+    val gameWentLiveEvent by GameSyncState.gameWentLive.collectAsState()
+    LaunchedEffect(gameWentLiveEvent) {
+        val event = gameWentLiveEvent ?: return@LaunchedEffect
+        selectedGameId = event.gameId
+        GameSyncState.consumeGameWentLive()
     }
 
     if (showOnboarding) {
@@ -640,53 +503,3 @@ sealed class Screen {
     object WatchTest : Screen()
 }
 
-private fun mapToWatchEventType(type: String?): String? {
-    val normalized = type?.uppercase() ?: return null
-    return when (normalized) {
-        "BALL",
-        "STRIKE",
-        "OUT",
-        "DOUBLE_PLAY",
-        "TRIPLE_PLAY",
-        "HIT",
-        "HOMERUN",
-        "SCORE",
-        "WALK",
-        "STEAL" -> normalized
-        "SAC_FLY_SCORE" -> "SCORE"
-        "TAG_UP_ADVANCE" -> "OUT"
-        else -> null
-    }
-}
-
-private fun resolveMyTeamName(
-    selectedTeam: Team,
-    state: BackendGamesRepository.LiveGameState
-): String {
-    return when {
-        selectedTeam != Team.NONE -> selectedTeam.name
-        state.homeTeamId != Team.NONE -> state.homeTeamId.name
-        state.awayTeamId != Team.NONE -> state.awayTeamId.name
-        else -> "DEFAULT"
-    }
-}
-
-private fun shouldFreezeTodayGames(
-    games: List<Game>,
-    loadedDate: LocalDate?,
-    today: LocalDate
-): Boolean {
-    if (loadedDate != today) return false
-    if (games.isEmpty()) return false
-    return games.all { isTerminalStatus(it.status) }
-}
-
-private fun isTerminalStatus(status: GameStatus): Boolean {
-    return when (status) {
-        GameStatus.FINISHED,
-        GameStatus.CANCELED,
-        GameStatus.POSTPONED -> true
-        GameStatus.LIVE,
-        GameStatus.SCHEDULED -> false
-    }
-}

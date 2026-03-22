@@ -1,0 +1,575 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A2EE9240C436B71C1B1997C /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE96A677E34F2CC49DE538E /* Game.swift */; };
+		15887FB643D106BB387CDCB9 /* BaseHapticApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */; };
+		15AE36C23A5E7E394F13C981 /* PhoneConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCEDEF5F6EAC1E19BA575A /* PhoneConnectivityManager.swift */; };
+		17EDDCE4B419ECA41B8F9FD6 /* TeamTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */; };
+		1E120905C9B17E2723F00E1F /* TeamLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E721EEBEAA513CB8E3DAEF00 /* TeamLogo.swift */; };
+		2E75C724CD95802AA0187E81 /* WatchColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6341FE954BB080F791122E81 /* WatchColors.swift */; };
+		3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */; };
+		3DE65F4E9A3DB6A352F7A80E /* WatchGameSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */; };
+		5149C6E8A8F4998C32890151 /* LiveGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7DA9E7CF2523E80A298664E /* LiveGameScreen.swift */; };
+		62E56EC524620B79ECF0BA61 /* WatchThemeSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F152131C406034E1B3EF86E9 /* WatchThemeSyncManager.swift */; };
+		667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */; };
+		7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */; };
+		80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */; };
+		835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E499DB66D4A9838EB01A1F3B /* WatchTeamTheme.swift */; };
+		8C41D8D0834F7A17B0316920 /* ThemeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */; };
+		90A9C96810B6F8C5485AB262 /* BaseHapticWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9FB7676A5E7D8C388D1C59AC /* BaseHapticWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */; };
+		A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C0734BB3B091847ABD41DA /* Colors.swift */; };
+		A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */; };
+		A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF14835688DCF81CAB8F7F1 /* GameData.swift */; };
+		BB4BE01B4AC16AC208AF0A97 /* Team.swift in Sources */ = {isa = PBXBuildFile; fileRef = D59061C8B8CAB2114F761D19 /* Team.swift */; };
+		C68C35184F116A2F2B5B7498 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */; };
+		D8BA20E9208A4DEA2D40597A /* WatchNoGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */; };
+		FF04F10F375D614182ACC91E /* HomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34253CBAC793835241B2ED99 /* HomeScreen.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E0D1FC77F04CA730EEBBF2AC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 270764106F76866AC34EF641 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A9E26B7E0ABACE5F59264B0A;
+			remoteInfo = "BaseHapticWatch Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		6101063AFBBC2A6DD1825A77 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				90A9C96810B6F8C5485AB262 /* BaseHapticWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticWatchApp.swift; sourceTree = "<group>"; };
+		0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeData.swift; sourceTree = "<group>"; };
+		0DE96A677E34F2CC49DE538E /* Game.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Game.swift; sourceTree = "<group>"; };
+		2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNoGameScreen.swift; sourceTree = "<group>"; };
+		34253CBAC793835241B2ED99 /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
+		355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BaseHapticWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingScreen.swift; sourceTree = "<group>"; };
+		45C0734BB3B091847ABD41DA /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEvent.swift; sourceTree = "<group>"; };
+		56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
+		6341FE954BB080F791122E81 /* WatchColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchColors.swift; sourceTree = "<group>"; };
+		725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGameSyncManager.swift; sourceTree = "<group>"; };
+		745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveGameScreen.swift; sourceTree = "<group>"; };
+		87621A22EC5F286B844C8BF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9FF14835688DCF81CAB8F7F1 /* GameData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameData.swift; sourceTree = "<group>"; };
+		A8B319F21D1FF9D25A280185 /* BaseHaptic.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BaseHaptic.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7DA9E7CF2523E80A298664E /* LiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveGameScreen.swift; sourceTree = "<group>"; };
+		C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamTheme.swift; sourceTree = "<group>"; };
+		D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
+		D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticApp.swift; sourceTree = "<group>"; };
+		D59061C8B8CAB2114F761D19 /* Team.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Team.swift; sourceTree = "<group>"; };
+		E33FC438234BE3E181D2293C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E499DB66D4A9838EB01A1F3B /* WatchTeamTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTeamTheme.swift; sourceTree = "<group>"; };
+		E721EEBEAA513CB8E3DAEF00 /* TeamLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamLogo.swift; sourceTree = "<group>"; };
+		EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendGamesRepository.swift; sourceTree = "<group>"; };
+		F152131C406034E1B3EF86E9 /* WatchThemeSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchThemeSyncManager.swift; sourceTree = "<group>"; };
+		F8BCEDEF5F6EAC1E19BA575A /* PhoneConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneConnectivityManager.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		097D61D492C9F37250B9C7D6 /* WatchSync */ = {
+			isa = PBXGroup;
+			children = (
+				F8BCEDEF5F6EAC1E19BA575A /* PhoneConnectivityManager.swift */,
+				725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */,
+				F152131C406034E1B3EF86E9 /* WatchThemeSyncManager.swift */,
+			);
+			path = WatchSync;
+			sourceTree = "<group>";
+		};
+		11B86BF42559886147131BB6 /* Data */ = {
+			isa = PBXGroup;
+			children = (
+				EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */,
+			);
+			path = Data;
+			sourceTree = "<group>";
+		};
+		20915E22D05CA394389242BE /* BaseHapticWatch */ = {
+			isa = PBXGroup;
+			children = (
+				0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */,
+				87621A22EC5F286B844C8BF8 /* Info.plist */,
+				BB880C3C558A6C2B56770CFF /* Models */,
+				894EEEC31BF0A5B9E4A165D4 /* Screens */,
+				70C2F968A384BCA87AD58FBE /* Theme */,
+				7F40EA56D0A268E88603F078 /* WatchSync */,
+			);
+			name = BaseHapticWatch;
+			path = watch/BaseHapticWatch;
+			sourceTree = "<group>";
+		};
+		21888E54F84B3869253B319D /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				34253CBAC793835241B2ED99 /* HomeScreen.swift */,
+				B7DA9E7CF2523E80A298664E /* LiveGameScreen.swift */,
+				40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */,
+				56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+		578BF075E2FD9C2A4821192E /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				45C0734BB3B091847ABD41DA /* Colors.swift */,
+				C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		70C2F968A384BCA87AD58FBE /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				6341FE954BB080F791122E81 /* WatchColors.swift */,
+				E499DB66D4A9838EB01A1F3B /* WatchTeamTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		7F40EA56D0A268E88603F078 /* WatchSync */ = {
+			isa = PBXGroup;
+			children = (
+				D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */,
+			);
+			path = WatchSync;
+			sourceTree = "<group>";
+		};
+		894EEEC31BF0A5B9E4A165D4 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */,
+				2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+		8D5799526ED6A138B7CA8433 /* BaseHaptic */ = {
+			isa = PBXGroup;
+			children = (
+				D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */,
+				E33FC438234BE3E181D2293C /* Info.plist */,
+				DA08182291A96AFA1F3FB480 /* Components */,
+				11B86BF42559886147131BB6 /* Data */,
+				F16734B8C9AFD3F0B9610A70 /* Models */,
+				21888E54F84B3869253B319D /* Screens */,
+				578BF075E2FD9C2A4821192E /* Theme */,
+				097D61D492C9F37250B9C7D6 /* WatchSync */,
+			);
+			name = BaseHaptic;
+			path = mobile/BaseHaptic;
+			sourceTree = "<group>";
+		};
+		956AFB35DA99A531C890EC99 = {
+			isa = PBXGroup;
+			children = (
+				8D5799526ED6A138B7CA8433 /* BaseHaptic */,
+				20915E22D05CA394389242BE /* BaseHapticWatch */,
+				A7D6830F8E7FB5E160EC44F1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A7D6830F8E7FB5E160EC44F1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A8B319F21D1FF9D25A280185 /* BaseHaptic.app */,
+				355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BB880C3C558A6C2B56770CFF /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				9FF14835688DCF81CAB8F7F1 /* GameData.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		DA08182291A96AFA1F3FB480 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				E721EEBEAA513CB8E3DAEF00 /* TeamLogo.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		F16734B8C9AFD3F0B9610A70 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				0DE96A677E34F2CC49DE538E /* Game.swift */,
+				47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */,
+				D59061C8B8CAB2114F761D19 /* Team.swift */,
+				0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		291A37AA0F9CF64C9461E128 /* BaseHaptic */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 07F7388188A914BCD1A66F94 /* Build configuration list for PBXNativeTarget "BaseHaptic" */;
+			buildPhases = (
+				B40679712F6B1FE9C20428EA /* Sources */,
+				6101063AFBBC2A6DD1825A77 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				CC2BB45EB571C9C0AA77829B /* PBXTargetDependency */,
+			);
+			name = BaseHaptic;
+			packageProductDependencies = (
+			);
+			productName = BaseHaptic;
+			productReference = A8B319F21D1FF9D25A280185 /* BaseHaptic.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A9E26B7E0ABACE5F59264B0A /* BaseHapticWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6FB7A4134E842AC3ADFE43FD /* Build configuration list for PBXNativeTarget "BaseHapticWatch Watch App" */;
+			buildPhases = (
+				D4972683EDE342C7C6896987 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "BaseHapticWatch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "BaseHapticWatch Watch App";
+			productReference = 355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		270764106F76866AC34EF641 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					291A37AA0F9CF64C9461E128 = {
+						DevelopmentTeam = "";
+					};
+					A9E26B7E0ABACE5F59264B0A = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = A409800D1015E53060B73626 /* Build configuration list for PBXProject "BaseHaptic" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 956AFB35DA99A531C890EC99;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A7D6830F8E7FB5E160EC44F1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				291A37AA0F9CF64C9461E128 /* BaseHaptic */,
+				A9E26B7E0ABACE5F59264B0A /* BaseHapticWatch Watch App */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B40679712F6B1FE9C20428EA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */,
+				15887FB643D106BB387CDCB9 /* BaseHapticApp.swift in Sources */,
+				A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */,
+				0A2EE9240C436B71C1B1997C /* Game.swift in Sources */,
+				7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */,
+				FF04F10F375D614182ACC91E /* HomeScreen.swift in Sources */,
+				5149C6E8A8F4998C32890151 /* LiveGameScreen.swift in Sources */,
+				3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */,
+				15AE36C23A5E7E394F13C981 /* PhoneConnectivityManager.swift in Sources */,
+				C68C35184F116A2F2B5B7498 /* SettingsScreen.swift in Sources */,
+				BB4BE01B4AC16AC208AF0A97 /* Team.swift in Sources */,
+				1E120905C9B17E2723F00E1F /* TeamLogo.swift in Sources */,
+				17EDDCE4B419ECA41B8F9FD6 /* TeamTheme.swift in Sources */,
+				8C41D8D0834F7A17B0316920 /* ThemeData.swift in Sources */,
+				3DE65F4E9A3DB6A352F7A80E /* WatchGameSyncManager.swift in Sources */,
+				62E56EC524620B79ECF0BA61 /* WatchThemeSyncManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D4972683EDE342C7C6896987 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9FB7676A5E7D8C388D1C59AC /* BaseHapticWatchApp.swift in Sources */,
+				A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */,
+				2E75C724CD95802AA0187E81 /* WatchColors.swift in Sources */,
+				667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */,
+				80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */,
+				D8BA20E9208A4DEA2D40597A /* WatchNoGameScreen.swift in Sources */,
+				835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		CC2BB45EB571C9C0AA77829B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A9E26B7E0ABACE5F59264B0A /* BaseHapticWatch Watch App */;
+			targetProxy = E0D1FC77F04CA730EEBBF2AC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		11F741EF75BDBA0CFB803EDD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		62E7FCD6610F24D90E0E23C4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		6CE32204F0A4855071D550FB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = mobile/BaseHaptic/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C89BBCB0FECE899C20F7A75E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = mobile/BaseHaptic/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		E74F9C294721266B4A7D0BA3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_WATCH_COMPANION = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Debug;
+		};
+		F4C8C73C2A828C2CFBB47409 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_WATCH_COMPANION = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		07F7388188A914BCD1A66F94 /* Build configuration list for PBXNativeTarget "BaseHaptic" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6CE32204F0A4855071D550FB /* Debug */,
+				C89BBCB0FECE899C20F7A75E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6FB7A4134E842AC3ADFE43FD /* Build configuration list for PBXNativeTarget "BaseHapticWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E74F9C294721266B4A7D0BA3 /* Debug */,
+				F4C8C73C2A828C2CFBB47409 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A409800D1015E53060B73626 /* Build configuration list for PBXProject "BaseHaptic" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				11F741EF75BDBA0CFB803EDD /* Debug */,
+				62E7FCD6610F24D90E0E23C4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 270764106F76866AC34EF641 /* Project object */;
+}
