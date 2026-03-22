@@ -6,6 +6,8 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
+import androidx.wear.tiles.TileService
+import com.basehaptic.watch.tile.GameTileService
 import com.google.android.gms.wearable.*
 
 /**
@@ -129,6 +131,7 @@ class DataLayerListenerService : WearableListenerService() {
         }
 
         sendBroadcast(Intent(ACTION_GAME_UPDATED))
+        TileService.getUpdater(this).requestUpdate(GameTileService::class.java)
     }
     
     /**

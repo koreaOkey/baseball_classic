@@ -30,7 +30,10 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
         myTeam: String,
         eventType: String? = nil
     ) {
-        guard WCSession.default.isReachable else { return }
+        guard WCSession.default.activationState == .activated else {
+            print("[WatchGameSync] Session not activated")
+            return
+        }
 
         var message: [String: Any] = [
             "type": "game_data",
@@ -57,14 +60,29 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
             message["event_type"] = eventType
         }
 
-        WCSession.default.sendMessage(message, replyHandler: nil) { error in
-            print("[WatchGameSync] Failed to send game data: \(error.localizedDescription)")
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("[WatchGameSync] sendMessage failed: \(error.localizedDescription)")
+                // sendMessage 실패 시 applicationContext로 폴백
+                self.updateApplicationContextWithGameData(message)
+            }
+        } else {
+            print("[WatchGameSync] Watch not reachable, using applicationContext fallback")
+            updateApplicationContextWithGameData(message)
+        }
+    }
+
+    private func updateApplicationContextWithGameData(_ message: [String: Any]) {
+        do {
+            try WCSession.default.updateApplicationContext(message)
+        } catch {
+            print("[WatchGameSync] applicationContext update failed: \(error.localizedDescription)")
         }
     }
 
     // MARK: - Send Haptic Event
     func sendHapticEvent(eventType: String, cursor: Int64? = nil) {
-        guard WCSession.default.isReachable else { return }
+        guard WCSession.default.activationState == .activated else { return }
 
         var message: [String: Any] = [
             "type": "haptic_event",
@@ -75,14 +93,19 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
             message["event_cursor"] = cursor
         }
 
-        WCSession.default.sendMessage(message, replyHandler: nil) { error in
-            print("[WatchGameSync] Failed to send haptic event: \(error.localizedDescription)")
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("[WatchGameSync] Failed to send haptic event: \(error.localizedDescription)")
+            }
+        } else {
+            // 햅틱은 실시간이 아니면 의미 없으므로 transferUserInfo로 큐잉
+            WCSession.default.transferUserInfo(message)
         }
     }
 
     // MARK: - Send Watch Sync Prompt
     func sendWatchSyncPrompt(gameId: String, homeTeam: String, awayTeam: String, myTeam: String) {
-        guard WCSession.default.isReachable else { return }
+        guard WCSession.default.activationState == .activated else { return }
 
         let message: [String: Any] = [
             "type": "watch_sync_prompt",
@@ -93,8 +116,13 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
             "updated_at": Date().timeIntervalSince1970
         ]
 
-        WCSession.default.sendMessage(message, replyHandler: nil) { error in
-            print("[WatchGameSync] Failed to send watch sync prompt: \(error.localizedDescription)")
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("[WatchGameSync] Failed to send watch sync prompt: \(error.localizedDescription)")
+            }
+        } else {
+            // 워치가 비활성 상태여도 프롬프트 전달
+            WCSession.default.transferUserInfo(message)
         }
     }
 }

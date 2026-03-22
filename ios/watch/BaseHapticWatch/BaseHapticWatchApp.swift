@@ -25,52 +25,72 @@ struct WatchContentView: View {
     @State private var isEventOverlayVisible = false
     @State private var visibleEventType: String?
     @State private var visibleEventTimestamp: Date?
+    @State private var isHomeRunVisible = false
 
     private let eventOverlayDuration: TimeInterval = 2.2
     private let eventFreshness: TimeInterval = 5.0
+    private let homeRunDuration: TimeInterval = 4.0
 
     var body: some View {
         ZStack {
-            // Main content
-            if let gameData = connectivity.gameData {
-                WatchLiveGameScreen(gameData: gameData)
-            } else {
-                WatchNoGameScreen()
-            }
-
-            // Event overlay
-            if let eventType = visibleEventType, isEventOverlayVisible {
-                WatchEventOverlay(eventType: eventType)
-            }
-
-            // Watch sync prompt
-            if let prompt = connectivity.watchSyncPrompt {
-                WatchSyncPromptView(
-                    prompt: prompt,
-                    onAccept: {
-                        connectivity.sendSyncResponse(gameId: prompt.gameId, accepted: true)
-                        connectivity.clearSyncPrompt()
-                    },
-                    onDecline: {
-                        connectivity.sendSyncResponse(gameId: prompt.gameId, accepted: false)
-                        connectivity.clearSyncPrompt()
+            if isHomeRunVisible {
+                // 홈런 비디오 전체 화면
+                HomeRunTransitionScreen(onFinished: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isHomeRunVisible = false
                     }
-                )
+                })
+                .transition(.opacity)
+            } else {
+                // Main content
+                if let gameData = connectivity.gameData {
+                    WatchLiveGameScreen(gameData: gameData)
+                } else {
+                    WatchNoGameScreen()
+                }
+
+                // Event overlay (홈런 제외)
+                if let eventType = visibleEventType, isEventOverlayVisible, eventType.uppercased() != "HOMERUN" {
+                    WatchEventOverlay(eventType: eventType)
+                }
+
+                // Watch sync prompt
+                if let prompt = connectivity.watchSyncPrompt {
+                    WatchSyncPromptView(
+                        prompt: prompt,
+                        onAccept: {
+                            connectivity.sendSyncResponse(gameId: prompt.gameId, accepted: true)
+                            connectivity.clearSyncPrompt()
+                        },
+                        onDecline: {
+                            connectivity.sendSyncResponse(gameId: prompt.gameId, accepted: false)
+                            connectivity.clearSyncPrompt()
+                        }
+                    )
+                }
             }
         }
-        .onChange(of: connectivity.latestEventTimestamp) { timestamp in
+        .onChange(of: connectivity.latestEventTimestamp) { _, timestamp in
             guard let timestamp = timestamp,
                   let eventType = connectivity.latestEventType,
                   Date().timeIntervalSince(timestamp) < eventFreshness else { return }
 
-            visibleEventType = eventType
-            visibleEventTimestamp = timestamp
-            isEventOverlayVisible = true
+            if eventType.uppercased() == "HOMERUN" {
+                // 홈런: 비디오 전환
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isHomeRunVisible = true
+                }
+            } else {
+                // 기타 이벤트: 오버레이
+                visibleEventType = eventType
+                visibleEventTimestamp = timestamp
+                isEventOverlayVisible = true
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + eventOverlayDuration) {
-                if visibleEventTimestamp == timestamp {
-                    isEventOverlayVisible = false
-                    visibleEventType = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + eventOverlayDuration) {
+                    if visibleEventTimestamp == timestamp {
+                        isEventOverlayVisible = false
+                        visibleEventType = nil
+                    }
                 }
             }
         }

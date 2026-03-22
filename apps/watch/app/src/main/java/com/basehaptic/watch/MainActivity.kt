@@ -1,5 +1,8 @@
 package com.basehaptic.watch
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -43,17 +46,21 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.wear.ambient.AmbientLifecycleObserver
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
+import androidx.wear.ongoing.OngoingActivity
+import androidx.wear.ongoing.Status
 import com.basehaptic.watch.data.BaseStatus
 import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.ui.components.LiveGameScreen
@@ -64,20 +71,103 @@ import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        private const val ONGOING_CHANNEL_ID = "game_ongoing_channel"
+        private const val ONGOING_NOTIFICATION_ID = 2001
+    }
+
+    private val ambientCallback = object : AmbientLifecycleObserver.AmbientLifecycleCallback {
+        override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
+            isAmbient = true
+        }
+        override fun onExitAmbient() {
+            isAmbient = false
+        }
+    }
+
+    private val ambientObserver = AmbientLifecycleObserver(this, ambientCallback)
+
+    // Exposed to Compose via mutableStateOf
+    private var isAmbient by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setShowWhenLocked(true)
         setTurnScreenOn(true)
-        
+
+        // Ambient Mode: keeps app in foreground when screen dims
+        lifecycle.addObserver(ambientObserver)
+
+        // Ongoing Activity: prevents system kill + shows on watch face
+        createOngoingNotificationChannel()
+        startOngoingActivity()
+
         setContent {
-            WatchApp()
+            WatchApp(isAmbient = isAmbient)
         }
+    }
+
+    override fun onDestroy() {
+        stopOngoingActivity()
+        super.onDestroy()
+    }
+
+    private fun createOngoingNotificationChannel() {
+        val channel = NotificationChannel(
+            ONGOING_CHANNEL_ID,
+            "경기 진행 중",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "경기 실시간 동기화 알림"
+        }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+    }
+
+    private fun startOngoingActivity() {
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, ONGOING_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("BaseHaptic")
+            .setContentText("경기 관람 중")
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        val ongoingActivity = OngoingActivity.Builder(this, ONGOING_NOTIFICATION_ID, notification)
+            .setStaticIcon(R.mipmap.ic_launcher)
+            .setTouchIntent(pendingIntent)
+            .setStatus(
+                Status.Builder()
+                    .addTemplate("경기 관람 중")
+                    .build()
+            )
+            .build()
+
+        ongoingActivity.apply(this)
+
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(ONGOING_NOTIFICATION_ID, notification)
+    }
+
+    private fun stopOngoingActivity() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.cancel(ONGOING_NOTIFICATION_ID)
     }
 }
 
 @Composable
-fun WatchApp() {
+fun WatchApp(isAmbient: Boolean = false) {
     val context = LocalContext.current
 
     var syncedTeamName by remember {
@@ -157,54 +247,61 @@ fun WatchApp() {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Gray950)
+                    .background(Color.Black)
             ) {
-                AnimatedContent(
-                    targetState = isHomeRunTransitionVisible,
-                    transitionSpec = {
-                        (fadeIn() + scaleIn(initialScale = 0.92f)) togetherWith
-                                (fadeOut() + scaleOut(targetScale = 1.04f))
-                    },
-                    label = "home_run_transition"
-                ) { showHomeRun ->
-                    if (showHomeRun) {
-                        HomeRunTransitionScreen()
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            if (gameData != null) {
-                                LiveGameScreen(gameData = gameData!!)
-                            } else {
-                                NoGameScreen()
+                if (isAmbient) {
+                    // Ambient mode: simplified low-power screen
+                    AmbientGameScreen(gameData = gameData)
+                } else {
+                    AnimatedContent(
+                        targetState = isHomeRunTransitionVisible,
+                        transitionSpec = {
+                            (fadeIn() + scaleIn(initialScale = 0.92f)) togetherWith
+                                    (fadeOut() + scaleOut(targetScale = 1.04f))
+                        },
+                        label = "home_run_transition"
+                    ) { showHomeRun ->
+                        if (showHomeRun) {
+                            HomeRunTransitionScreen()
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                if (gameData != null) {
+                                    LiveGameScreen(gameData = gameData!!)
+                                } else {
+                                    NoGameScreen()
+                                }
+                                WatchEventOverlay(latestEvent = latestEvent)
                             }
-                            WatchEventOverlay(latestEvent = latestEvent)
                         }
                     }
                 }
             }
 
-            val prompt = watchSyncPrompt
-            if (prompt != null) {
-                WatchSyncPromptDialog(
-                    prompt = prompt,
-                    onAccept = {
-                        WatchSyncResponseSender.send(
-                            context = context,
-                            gameId = prompt.gameId,
-                            accepted = true
-                        )
-                        clearWatchSyncPrompt(context)
-                        watchSyncPrompt = null
-                    },
-                    onDecline = {
-                        WatchSyncResponseSender.send(
-                            context = context,
-                            gameId = prompt.gameId,
-                            accepted = false
-                        )
-                        clearWatchSyncPrompt(context)
-                        watchSyncPrompt = null
-                    }
-                )
+            if (!isAmbient) {
+                val prompt = watchSyncPrompt
+                if (prompt != null) {
+                    WatchSyncPromptDialog(
+                        prompt = prompt,
+                        onAccept = {
+                            WatchSyncResponseSender.send(
+                                context = context,
+                                gameId = prompt.gameId,
+                                accepted = true
+                            )
+                            clearWatchSyncPrompt(context)
+                            watchSyncPrompt = null
+                        },
+                        onDecline = {
+                            WatchSyncResponseSender.send(
+                                context = context,
+                                gameId = prompt.gameId,
+                                accepted = false
+                            )
+                            clearWatchSyncPrompt(context)
+                            watchSyncPrompt = null
+                        }
+                    )
+                }
             }
         }
     }
@@ -463,6 +560,43 @@ private fun WatchSyncPromptPreviewSquare() {
     }
 }
 
+
+@Composable
+private fun AmbientGameScreen(gameData: GameData?) {
+    val uiProfile = rememberWatchUiProfile()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        if (gameData != null) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Score: "AWAY 4 - 5 HOME"
+                Text(
+                    text = "${gameData.awayTeam} ${gameData.awayScore} - ${gameData.homeScore} ${gameData.homeTeam}",
+                    color = Color.White,
+                    fontSize = uiProfile.scoreValueSp.sp
+                )
+                // Inning
+                Text(
+                    text = gameData.inning,
+                    color = Color.Gray,
+                    fontSize = uiProfile.inningTextSp.sp
+                )
+            }
+        } else {
+            Text(
+                text = "BaseHaptic",
+                color = Color.Gray,
+                fontSize = 14.sp
+            )
+        }
+    }
+}
 
 @Composable
 private fun HomeRunTransitionScreen() {

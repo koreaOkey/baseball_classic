@@ -34,10 +34,19 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         if let error = error {
             print("[WatchConnectivity] Activation failed: \(error.localizedDescription)")
+        } else {
+            print("[WatchConnectivity] Activated: \(activationState.rawValue)")
+        }
+
+        let ctx = session.receivedApplicationContext
+
+        // applicationContext에서 게임 데이터 복원
+        if let type = ctx["type"] as? String, type == "game_data" {
+            handleMessage(ctx)
         }
 
         // applicationContext에서 테마 복원
-        if let teamName = session.receivedApplicationContext["my_team"] as? String, !teamName.isEmpty {
+        if let teamName = ctx["my_team"] as? String, !teamName.isEmpty {
             DispatchQueue.main.async {
                 self.syncedTeamName = teamName
             }
@@ -54,13 +63,21 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         replyHandler(["status": "ok"])
     }
 
-    /// applicationContext 업데이트 수신
+    /// applicationContext 업데이트 수신 (테마 + 게임 데이터 폴백)
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        if let teamName = applicationContext["my_team"] as? String, !teamName.isEmpty {
+        if let type = applicationContext["type"] as? String {
+            // game_data가 applicationContext로 온 경우 (폴백)
+            handleMessage(applicationContext)
+        } else if let teamName = applicationContext["my_team"] as? String, !teamName.isEmpty {
             DispatchQueue.main.async {
                 self.syncedTeamName = teamName
             }
         }
+    }
+
+    /// transferUserInfo로 수신된 메시지 처리
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        handleMessage(userInfo)
     }
 
     // MARK: - Message Handler

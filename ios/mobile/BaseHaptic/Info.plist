@@ -12,6 +12,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>LSRequiresIPhoneOS</key>
@@ -23,8 +25,8 @@
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 	<key>BACKEND_BASE_URL</key>
-	<string>https://api.basehaptic.com</string>
+	<string>https://baseballclassic-production.up.railway.app</string>
 	<key>BACKEND_WS_URL</key>
-	<string>wss://api.basehaptic.com</string>
+	<string>wss://baseballclassic-production.up.railway.app</string>
 </dict>
 </plist>

@@ -74,10 +74,26 @@ dependencies {
     implementation("com.google.android.horologist:horologist-compose-layout:0.6.20")
     implementation("com.google.android.horologist:horologist-compose-material:0.6.20")
 
+    // Ambient Mode
+    implementation("androidx.wear.ambient:ambient:1.0.0-alpha01")
+
+    // Ongoing Activity (prevents system kill, shows on watch face)
+    implementation("androidx.wear:wear-ongoing:1.1.0")
+
+    // Tiles (swipe-left panel)
+    implementation("androidx.wear.tiles:tiles:1.4.1")
+    implementation("androidx.wear.tiles:tiles-material:1.4.1")
+    implementation("androidx.wear.protolayout:protolayout:1.2.1")
+    implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
+    implementation("androidx.wear.protolayout:protolayout-expression:1.2.1")
+
+    // Guava (required by Tiles ListenableFuture)
+    implementation("com.google.guava:guava:33.0.0-android")
+
     // Video playback for home-run transition clip
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
-    
+
     // Testing
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

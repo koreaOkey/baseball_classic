@@ -80,7 +80,7 @@ struct ContentView: View {
                 mainContent
             }
         }
-        .onChange(of: connectivity.watchSyncResponse?.gameId) { _ in
+        .onChange(of: connectivity.watchSyncResponse?.gameId) {
             consumePendingWatchSyncResponse()
         }
         .task(id: selectedTeam) {
@@ -120,6 +120,11 @@ struct ContentView: View {
                         activeTheme: activeTheme,
                         gameId: selectedGameId,
                         syncedGameId: syncedGameId,
+                        onBack: { navigateBack() }
+                    )
+                case .watchTest:
+                    WatchTestScreen(
+                        selectedTeam: selectedTeam,
                         onBack: { navigateBack() }
                     )
                 case .settings:
