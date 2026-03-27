@@ -187,6 +187,10 @@ fun WatchApp(isAmbient: Boolean = false) {
     var watchSyncPrompt by remember { mutableStateOf(readWatchSyncPromptFromPrefs(context)) }
     var isHomeRunTransitionVisible by remember { mutableStateOf(false) }
     var homeRunTransitionToken by remember { mutableStateOf<Long?>(null) }
+    var isHitTransitionVisible by remember { mutableStateOf(false) }
+    var hitTransitionToken by remember { mutableStateOf<Long?>(null) }
+    var isDoublePlayTransitionVisible by remember { mutableStateOf(false) }
+    var doublePlayTransitionToken by remember { mutableStateOf<Long?>(null) }
 
     DisposableEffect(context) {
         val filter = IntentFilter().apply {
@@ -224,9 +228,12 @@ fun WatchApp(isAmbient: Boolean = false) {
 
     LaunchedEffect(latestEvent?.timestamp) {
         val event = latestEvent ?: return@LaunchedEffect
-        if (event.type.uppercase() != "HOMERUN") return@LaunchedEffect
         if (System.currentTimeMillis() - event.timestamp > EVENT_OVERLAY_FRESHNESS_MS) return@LaunchedEffect
-        homeRunTransitionToken = event.timestamp
+        when (event.type.uppercase()) {
+            "HOMERUN" -> homeRunTransitionToken = event.timestamp
+            "HIT" -> hitTransitionToken = event.timestamp
+            "DOUBLE_PLAY" -> doublePlayTransitionToken = event.timestamp
+        }
     }
 
     LaunchedEffect(homeRunTransitionToken) {
@@ -235,6 +242,24 @@ fun WatchApp(isAmbient: Boolean = false) {
         delay(HOMERUN_SCREEN_DURATION_MS)
         if (homeRunTransitionToken == token) {
             isHomeRunTransitionVisible = false
+        }
+    }
+
+    LaunchedEffect(hitTransitionToken) {
+        val token = hitTransitionToken ?: return@LaunchedEffect
+        isHitTransitionVisible = true
+        delay(HIT_SCREEN_DURATION_MS)
+        if (hitTransitionToken == token) {
+            isHitTransitionVisible = false
+        }
+    }
+
+    LaunchedEffect(doublePlayTransitionToken) {
+        val token = doublePlayTransitionToken ?: return@LaunchedEffect
+        isDoublePlayTransitionVisible = true
+        delay(DOUBLE_PLAY_SCREEN_DURATION_MS)
+        if (doublePlayTransitionToken == token) {
+            isDoublePlayTransitionVisible = false
         }
     }
 
@@ -253,24 +278,33 @@ fun WatchApp(isAmbient: Boolean = false) {
                     // Ambient mode: simplified low-power screen
                     AmbientGameScreen(gameData = gameData)
                 } else {
+                    val transitionState = when {
+                        isHomeRunTransitionVisible -> "homerun"
+                        isDoublePlayTransitionVisible -> "double_play"
+                        isHitTransitionVisible -> "hit"
+                        else -> "game"
+                    }
                     AnimatedContent(
-                        targetState = isHomeRunTransitionVisible,
+                        targetState = transitionState,
                         transitionSpec = {
                             (fadeIn() + scaleIn(initialScale = 0.92f)) togetherWith
                                     (fadeOut() + scaleOut(targetScale = 1.04f))
                         },
-                        label = "home_run_transition"
-                    ) { showHomeRun ->
-                        if (showHomeRun) {
-                            HomeRunTransitionScreen()
-                        } else {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                if (gameData != null) {
-                                    LiveGameScreen(gameData = gameData!!)
-                                } else {
-                                    NoGameScreen()
+                        label = "event_transition"
+                    ) { state ->
+                        when (state) {
+                            "homerun" -> HomeRunTransitionScreen()
+                            "double_play" -> DoublePlayTransitionScreen()
+                            "hit" -> HitTransitionScreen()
+                            else -> {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    if (gameData != null) {
+                                        LiveGameScreen(gameData = gameData!!)
+                                    } else {
+                                        NoGameScreen()
+                                    }
+                                    WatchEventOverlay(latestEvent = latestEvent)
                                 }
-                                WatchEventOverlay(latestEvent = latestEvent)
                             }
                         }
                     }
@@ -360,7 +394,9 @@ private data class WatchSyncPrompt(
 
 private const val EVENT_OVERLAY_DURATION_MS = 2200L
 private const val EVENT_OVERLAY_FRESHNESS_MS = 5000L
-private const val HOMERUN_SCREEN_DURATION_MS = 4000L
+private const val HOMERUN_SCREEN_DURATION_MS = 2400L
+private const val HIT_SCREEN_DURATION_MS = 2000L
+private const val DOUBLE_PLAY_SCREEN_DURATION_MS = 2400L
 
 private fun readLatestEventFromPrefs(context: Context): WatchEventInfo? {
     val prefs = context.getSharedPreferences(
@@ -644,14 +680,104 @@ private fun HomeRunTransitionScreen() {
     }
 }
 
+@Composable
+private fun HitTransitionScreen() {
+    val context = LocalContext.current
+    val clipUri = remember(context) {
+        Uri.parse("android.resource://${context.packageName}/${R.raw.hit_clip}")
+    }
+    val player = remember(context, clipUri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(clipUri))
+            repeatMode = Player.REPEAT_MODE_OFF
+            volume = 0f
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    DisposableEffect(player) {
+        onDispose {
+            player.release()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { viewContext ->
+                PlayerView(viewContext).apply {
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    this.player = player
+                }
+            },
+            update = { view ->
+                view.player = player
+                if (!player.isPlaying) player.play()
+            }
+        )
+    }
+}
+
+@Composable
+private fun DoublePlayTransitionScreen() {
+    val context = LocalContext.current
+    val clipUri = remember(context) {
+        Uri.parse("android.resource://${context.packageName}/${R.raw.double_play_clip}")
+    }
+    val player = remember(context, clipUri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(clipUri))
+            repeatMode = Player.REPEAT_MODE_OFF
+            volume = 0f
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    DisposableEffect(player) {
+        onDispose {
+            player.release()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { viewContext ->
+                PlayerView(viewContext).apply {
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    this.player = player
+                }
+            },
+            update = { view ->
+                view.player = player
+                if (!player.isPlaying) player.play()
+            }
+        )
+    }
+}
+
 private fun eventUiFor(type: String): WatchEventUi? {
     return when (type.uppercase()) {
-        "HIT" -> WatchEventUi("HIT", Icons.Default.Bolt, Color(0xFF22C55E))
         "WALK" -> WatchEventUi("WALK", Icons.Default.Bolt, Color(0xFF4ADE80))
         "STEAL" -> WatchEventUi("STEAL", Icons.Default.Bolt, Color(0xFF06B6D4))
         "SCORE" -> WatchEventUi("SCORE", Icons.Default.EmojiEvents, Color(0xFFEAB308))
         "OUT" -> WatchEventUi("OUT", Icons.Default.HighlightOff, Color(0xFFEF4444))
-        "DOUBLE_PLAY" -> WatchEventUi("DOUBLE PLAY", Icons.Default.HighlightOff, Color(0xFFF97316))
         "TRIPLE_PLAY" -> WatchEventUi("TRIPLE PLAY", Icons.Default.HighlightOff, Color(0xFFDC2626))
         else -> null
     }
