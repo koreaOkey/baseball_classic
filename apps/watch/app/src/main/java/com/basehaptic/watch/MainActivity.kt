@@ -207,6 +207,22 @@ fun WatchApp(isAmbient: Boolean = false) {
     var victoryTransitionToken by remember { mutableStateOf<Long?>(null) }
     var previousGameIsLive by remember { mutableStateOf<Boolean?>(null) }
 
+    // 안타 영상 ExoPlayer 미리 초기화
+    val hitPlayer = remember(context) {
+        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.hit_clip}")
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(clipUri))
+            repeatMode = Player.REPEAT_MODE_OFF
+            volume = 0f
+            playWhenReady = false
+            prepare()
+        }
+    }
+
+    DisposableEffect(hitPlayer) {
+        onDispose { hitPlayer.release() }
+    }
+
     DisposableEffect(context) {
         val filter = IntentFilter().apply {
             addAction(DataLayerListenerService.ACTION_THEME_UPDATED)
@@ -272,10 +288,13 @@ fun WatchApp(isAmbient: Boolean = false) {
 
     LaunchedEffect(hitTransitionToken) {
         val token = hitTransitionToken ?: return@LaunchedEffect
+        hitPlayer.seekTo(0)
+        hitPlayer.play()
         isHitTransitionVisible = true
         delay(HIT_SCREEN_DURATION_MS)
         if (hitTransitionToken == token) {
             isHitTransitionVisible = false
+            hitPlayer.pause()
         }
     }
 
@@ -349,7 +368,7 @@ fun WatchApp(isAmbient: Boolean = false) {
                             "victory" -> VictoryTransitionScreen()
                             "homerun" -> HomeRunTransitionScreen()
                             "double_play" -> DoublePlayTransitionScreen()
-                            "hit" -> HitTransitionScreen()
+                            "hit" -> HitTransitionScreen(hitPlayer)
                             else -> {
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     if (gameData != null) {
@@ -798,27 +817,7 @@ private fun HomeRunTransitionScreen() {
 }
 
 @Composable
-private fun HitTransitionScreen() {
-    val context = LocalContext.current
-    val clipUri = remember(context) {
-        Uri.parse("android.resource://${context.packageName}/${R.raw.hit_clip}")
-    }
-    val player = remember(context, clipUri) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(clipUri))
-            repeatMode = Player.REPEAT_MODE_OFF
-            volume = 0f
-            playWhenReady = true
-            prepare()
-        }
-    }
-
-    DisposableEffect(player) {
-        onDispose {
-            player.release()
-        }
-    }
-
+private fun HitTransitionScreen(player: ExoPlayer) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -837,7 +836,6 @@ private fun HitTransitionScreen() {
             },
             update = { view ->
                 view.player = player
-                if (!player.isPlaying) player.play()
             }
         )
     }

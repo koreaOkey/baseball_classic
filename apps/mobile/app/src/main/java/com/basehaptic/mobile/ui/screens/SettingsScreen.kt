@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Icon
@@ -32,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -177,6 +179,26 @@ fun SettingsScreen(
                 subtitle = "실시간 경기 내용을 진동으로 알림 받기",
                 checked = hapticEnabled,
                 onCheckedChange = { hapticEnabled = it }
+            )
+        }
+
+        item {
+            val context = LocalContext.current
+            val prefs = remember {
+                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+            }
+            var ballStrikeEnabled by remember {
+                mutableStateOf(prefs.getBoolean("ball_strike_haptic_enabled", true))
+            }
+            SettingsItemWithSwitch(
+                icon = Icons.Default.SportsBaseball,
+                title = "스트라이크 · 볼 알림",
+                subtitle = "볼, 스트라이크 이벤트를 워치에서 진동으로 받기",
+                checked = ballStrikeEnabled,
+                onCheckedChange = {
+                    ballStrikeEnabled = it
+                    prefs.edit().putBoolean("ball_strike_haptic_enabled", it).apply()
+                }
             )
         }
 

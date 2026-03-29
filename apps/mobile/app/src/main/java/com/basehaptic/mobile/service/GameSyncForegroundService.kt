@@ -289,15 +289,20 @@ class GameSyncForegroundService : Service() {
 
                 val sorted = incoming.sortedBy { it.cursor }
                 if (sendHaptics) {
+                    val ballStrikeEnabled = getSharedPreferences("basehaptic_user_prefs", MODE_PRIVATE)
+                        .getBoolean("ball_strike_haptic_enabled", true)
                     sorted
                         .filter { it.cursor > lastSentEventCursor }
                         .forEach { event ->
                             mapToWatchEventType(event.type)?.let { mapped ->
-                                WearGameSyncManager.sendHapticEvent(
-                                    applicationContext,
-                                    mapped,
-                                    event.cursor
-                                )
+                                val isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
+                                if (!isBallOrStrike || ballStrikeEnabled) {
+                                    WearGameSyncManager.sendHapticEvent(
+                                        applicationContext,
+                                        mapped,
+                                        event.cursor
+                                    )
+                                }
                             }
                             lastSentEventCursor = max(lastSentEventCursor, event.cursor)
                         }

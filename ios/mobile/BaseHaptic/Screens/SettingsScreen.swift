@@ -12,6 +12,7 @@ struct SettingsScreen: View {
     @State private var showTeamPicker = false
     @State private var hapticEnabled = true
     @State private var highFiveEnabled = true
+    @AppStorage("ball_strike_haptic_enabled") private var ballStrikeHapticEnabled = true
 
     var body: some View {
         ScrollView {
@@ -67,6 +68,13 @@ struct SettingsScreen: View {
                     title: "햅틱 피드백",
                     subtitle: "실시간 경기 내용을 진동으로 알림 받기",
                     isOn: $hapticEnabled
+                )
+
+                SettingsItemWithToggle(
+                    icon: "baseball",
+                    title: "스트라이크 · 볼 알림",
+                    subtitle: "볼, 스트라이크 이벤트를 워치에서 진동으로 받기",
+                    isOn: $ballStrikeHapticEnabled
                 )
 
                 SettingsItemWithToggle(

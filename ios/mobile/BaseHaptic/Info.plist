@@ -24,6 +24,11 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 	<key>BACKEND_BASE_URL</key>
 	<string>https://baseballclassic-production.up.railway.app</string>
 	<key>BACKEND_WS_URL</key>

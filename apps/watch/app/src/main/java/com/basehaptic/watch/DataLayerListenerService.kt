@@ -244,20 +244,20 @@ class DataLayerListenerService : WearableListenerService() {
                     intArrayOf(0, 255, 0, 255, 0, 255)
             "HIT" -> longArrayOf(0, 150, 100, 150) to
                     intArrayOf(0, 180, 0, 180)
-            "WALK" -> longArrayOf(0, 90, 80, 90) to
-                    intArrayOf(0, 110, 0, 110)
-            "STEAL" -> longArrayOf(0, 70, 50, 70) to
-                    intArrayOf(0, 165, 0, 165)
+            "WALK" -> longArrayOf(0, 150, 100, 150) to
+                    intArrayOf(0, 180, 0, 180)
+            "STEAL" -> longArrayOf(0, 150, 100, 150) to
+                    intArrayOf(0, 180, 0, 180)
             "OUT" -> longArrayOf(0, 100) to
-                    intArrayOf(0, 150)
-            "DOUBLE_PLAY" -> longArrayOf(0, 120, 80, 120) to
-                    intArrayOf(0, 210, 0, 210)
-            "TRIPLE_PLAY" -> longArrayOf(0, 120, 80, 120, 80, 120) to
-                    intArrayOf(0, 230, 0, 230, 0, 230)
-            "SCORE" -> longArrayOf(0, 200, 200, 200) to
-                    intArrayOf(0, 255, 0, 255)
-            "STRIKE" -> longArrayOf(0, 80, 80, 80) to
-                    intArrayOf(0, 120, 0, 120)
+                    intArrayOf(0, 210)
+            "DOUBLE_PLAY" -> longArrayOf(0, 100) to
+                    intArrayOf(0, 210)
+            "TRIPLE_PLAY" -> longArrayOf(0, 100) to
+                    intArrayOf(0, 210)
+            "SCORE" -> longArrayOf(0, 200, 150, 200, 150, 200) to
+                    intArrayOf(0, 255, 0, 255, 0, 255)
+            "STRIKE" -> longArrayOf(0, 50) to
+                    intArrayOf(0, 80)
             "BALL" -> longArrayOf(0, 50) to
                     intArrayOf(0, 80)
             else -> {

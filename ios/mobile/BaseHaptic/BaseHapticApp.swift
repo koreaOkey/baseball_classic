@@ -1,14 +1,17 @@
 import SwiftUI
+import UIKit
 
 @main
 struct BaseHapticApp: App {
     @StateObject private var connectivityManager = PhoneConnectivityManager.shared
     @AppStorage("selected_team") private var selectedTeamRaw: String = Team.none.rawValue
     @State private var showOnboarding: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         let savedTeam = UserDefaults.standard.string(forKey: "selected_team") ?? Team.none.rawValue
         _showOnboarding = State(initialValue: savedTeam == Team.none.rawValue)
+        UserDefaults.standard.register(defaults: ["ball_strike_haptic_enabled": true])
     }
 
     private var selectedTeam: Team {
@@ -34,6 +37,16 @@ struct BaseHapticApp: App {
             .preferredColorScheme(.dark)
             .onAppear {
                 connectivityManager.activate()
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .background:
+                BackgroundStreamManager.shared.beginBackgroundStreaming()
+            case .active:
+                BackgroundStreamManager.shared.endBackgroundStreaming()
+            default:
+                break
             }
         }
     }
@@ -68,6 +81,7 @@ struct ContentView: View {
     @State private var purchasedThemes: [ThemeData] = []
     @State private var observedMyTeamGameStatus: [String: GameStatus] = [:]
     @State private var autoPromptedLiveGames: [String: Bool] = [:]
+    @State private var gameStreamTask: Task<Void, Never>?
 
     @ObservedObject private var connectivity = PhoneConnectivityManager.shared
     @Environment(\.teamTheme) private var teamTheme
@@ -89,8 +103,16 @@ struct ContentView: View {
         .task(id: selectedTeam) {
             await pollGames()
         }
-        .task(id: syncedGameId) {
-            await streamSyncedGame()
+        .onChange(of: syncedGameId) { _, newId in
+            // 기존 스트림 취소 후 새 스트림 시작 (별도 Task로 실행하여 백그라운드에서도 유지)
+            gameStreamTask?.cancel()
+            guard let gameId = newId, !gameId.isEmpty else {
+                gameStreamTask = nil
+                return
+            }
+            gameStreamTask = Task {
+                await streamSyncedGame()
+            }
         }
     }
 
@@ -316,10 +338,14 @@ struct ContentView: View {
                         lastWatchSignature = signature
                     }
                 case .events(let items):
+                    let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
                     for event in items.sorted(by: { $0.cursor < $1.cursor }) {
                         if event.cursor > lastSentEventCursor {
                             if let mapped = mapToWatchEventType(event.type) {
-                                WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
+                                let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
+                                if !isBallOrStrike || ballStrikeEnabled {
+                                    WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
+                                }
                             }
                             lastSentEventCursor = max(lastSentEventCursor, event.cursor)
                         }

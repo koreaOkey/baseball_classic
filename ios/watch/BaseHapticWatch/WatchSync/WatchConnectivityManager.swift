@@ -19,6 +19,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         let awayTeam: String
     }
 
+    /// 백그라운드에서도 햅틱 및 UI 업데이트를 유지하기 위한 Extended Runtime Session
+    private var extendedSession: WKExtendedRuntimeSession?
+
     private override init() {
         super.init()
     }
@@ -151,6 +154,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             latestEventTimestamp = Date()
             triggerHaptic(eventType: eventType)
         }
+
+        // 경기가 LIVE이면 Extended Session 시작, 종료되면 정지
+        if !isFinished {
+            startExtendedSession()
+        } else {
+            stopExtendedSession()
+        }
     }
 
     private func handleThemeUpdate(_ message: [String: Any]) {
@@ -201,6 +211,29 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         watchSyncPrompt = nil
     }
 
+    // MARK: - Extended Runtime Session (백그라운드 햅틱 유지)
+
+    /// 경기 동기화가 시작되면 Extended Runtime Session을 시작하여 백그라운드에서도 햅틱이 동작하도록 합니다.
+    func startExtendedSession() {
+        guard extendedSession == nil || extendedSession?.state == .invalid else { return }
+        let session = WKExtendedRuntimeSession()
+        session.delegate = self
+        session.start()
+        extendedSession = session
+        print("[WatchConnectivity] Extended runtime session started")
+    }
+
+    /// 경기 동기화가 종료되면 Extended Runtime Session을 종료합니다.
+    func stopExtendedSession() {
+        guard let session = extendedSession, session.state == .running else {
+            extendedSession = nil
+            return
+        }
+        session.invalidate()
+        extendedSession = nil
+        print("[WatchConnectivity] Extended runtime session stopped")
+    }
+
     // MARK: - Haptic Feedback (Apple Watch Taptic Engine)
     private func triggerHaptic(eventType: String) {
         let device = WKInterfaceDevice.current()
@@ -221,44 +254,62 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 device.play(.click)
             }
         case "WALK":
-            device.play(.directionUp)
+            device.play(.click)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                device.play(.directionUp)
+                device.play(.click)
             }
         case "STEAL":
-            device.play(.start)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                device.play(.start)
+            device.play(.click)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                device.play(.click)
             }
         case "OUT":
             device.play(.directionDown)
         case "DOUBLE_PLAY":
-            device.play(.failure)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                device.play(.failure)
-            }
+            device.play(.directionDown)
         case "TRIPLE_PLAY":
-            device.play(.failure)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                device.play(.failure)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                device.play(.failure)
-            }
+            device.play(.directionDown)
         case "SCORE":
-            device.play(.success)
+            device.play(.notification)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                device.play(.success)
+                device.play(.notification)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                device.play(.notification)
             }
         case "STRIKE":
-            device.play(.retry)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                device.play(.retry)
-            }
+            device.play(.click)
         case "BALL":
             device.play(.click)
         default:
             break
+        }
+    }
+}
+
+// MARK: - WKExtendedRuntimeSessionDelegate
+extension WatchConnectivityManager: WKExtendedRuntimeSessionDelegate {
+    func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        print("[WatchConnectivity] Extended session running")
+    }
+
+    func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
+        // 세션 만료 임박 시 새 세션 시작
+        print("[WatchConnectivity] Extended session expiring, restarting...")
+        extendedSession = nil
+        if gameData?.isLive == true {
+            startExtendedSession()
+        }
+    }
+
+    func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession, didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: (any Error)?) {
+        print("[WatchConnectivity] Extended session invalidated: \(reason.rawValue)")
+        extendedSession = nil
+        // 경기가 진행 중이면 세션 재시작
+        if gameData?.isLive == true {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                self?.startExtendedSession()
+            }
         }
     }
 }
