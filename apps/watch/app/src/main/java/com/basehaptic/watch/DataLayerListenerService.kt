@@ -145,6 +145,12 @@ class DataLayerListenerService : WearableListenerService() {
             triggerHapticFeedback(eventType)
         }
 
+        if (isFinished) {
+            GameForegroundService.stop(this)
+        } else {
+            GameForegroundService.start(this)
+        }
+
         sendBroadcast(Intent(ACTION_GAME_UPDATED))
         TileService.getUpdater(this).requestUpdate(GameTileService::class.java)
     }

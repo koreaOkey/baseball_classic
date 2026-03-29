@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">BaseHaptic</string>
+    <string name="app_name">야구봄</string>
     <string name="onboarding_title">보지 않아도 손목으로 느끼는 현장감</string>
     <string name="select_team">응원하는 팀을 선택하세요</string>
     <string name="continue_button">계속하기</string>

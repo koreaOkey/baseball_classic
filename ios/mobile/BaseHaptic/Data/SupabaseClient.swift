@@ -7,8 +7,7 @@ enum SupabaseClientProvider {
         let key = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_ANON_KEY") as? String ?? ""
         return SupabaseClient(
             supabaseURL: URL(string: url)!,
-            supabaseKey: key,
-            options: .init(auth: .init(emitLocalSessionAsInitialSession: true))
+            supabaseKey: key
         )
     }()
 }

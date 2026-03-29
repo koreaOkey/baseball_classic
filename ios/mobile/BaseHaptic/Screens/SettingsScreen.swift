@@ -152,6 +152,14 @@ struct SettingsScreen: View {
                 //     isOn: $highFiveEnabled
                 // )
 
+                // 개발자 섹션
+                Spacer().frame(height: 16)
+                SettingsSection(title: "개발자")
+
+                SettingsItem(icon: "applewatch", title: "워치 테스트", subtitle: "워치 데이터 전송 테스트") {
+                    onOpenWatchTest()
+                }
+
                 // 정보 섹션
                 Spacer().frame(height: 16)
                 SettingsSection(title: "정보")

@@ -9,6 +9,8 @@
     <uses-permission android:name="com.google.android.permission.PROVIDE_BACKGROUND" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:allowBackup="true"
@@ -61,9 +63,14 @@
         </service>
 
         <service
+            android:name=".GameForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <service
             android:name=".tile.GameTileService"
             android:exported="true"
-            android:label="BaseHaptic 경기"
+            android:label="야구봄 경기"
             android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
             <intent-filter>
                 <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />

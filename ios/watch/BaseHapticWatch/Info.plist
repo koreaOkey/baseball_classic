@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>BaseHapticWatch</string>
+	<string>야구봄 Watch</string>
 	<key>CFBundleDisplayName</key>
-	<string>BaseHaptic</string>
+	<string>야구봄</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleVersion</key>

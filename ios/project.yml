@@ -11,6 +11,11 @@ settings:
     SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: ""
 
+packages:
+  supabase-swift:
+    url: https://github.com/supabase/supabase-swift
+    minorVersion: 2.5.1
+
 targets:
   BaseHaptic:
     type: application
@@ -26,6 +31,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
     dependencies:
       - target: BaseHapticWatch Watch App
+      - package: supabase-swift
+        product: Supabase
 
   BaseHapticWatch Watch App:
     type: application

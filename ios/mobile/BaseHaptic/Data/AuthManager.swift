@@ -1,6 +1,7 @@
 import Foundation
 import Supabase
 import AuthenticationServices
+import UIKit
 
 enum AuthState: Equatable {
     case loading
@@ -24,23 +25,38 @@ class AuthManager: ObservableObject {
             authState = .loggedOut
         }
 
-        // Listen for auth state changes
-        for await (event, session) in client.auth.authStateChanges {
-            switch event {
-            case .signedIn:
-                if let session {
-                    authState = makeLoggedInState(from: session)
+        // Listen for auth state changes (actor isolation 우회: await로 stream 먼저 획득)
+        let authClient = client.auth
+        Task.detached { [weak self] in
+            let stream = await authClient.authStateChanges
+            for await (event, session) in stream {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    switch event {
+                    case .signedIn:
+                        if let session {
+                            self.authState = self.makeLoggedInState(from: session)
+                        }
+                    case .signedOut:
+                        self.authState = .loggedOut
+                    default:
+                        break
+                    }
                 }
-            case .signedOut:
-                authState = .loggedOut
-            default:
-                break
             }
         }
     }
 
     func signInWithKakao() async throws {
-        try await client.auth.signInWithOAuth(provider: .kakao, redirectTo: URL(string: "com.basehaptic.app://login-callback"))
+        // Supabase 2.5.1: Provider enum에 kakao 없음 → URL 직접 구성
+        let baseURL = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String
+            ?? "https://snrafqoqpmtoannnnwdq.supabase.co"
+        let redirectTo = "com.basehaptic.app://login-callback"
+        let encodedRedirect = redirectTo.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        guard let url = URL(string: "\(baseURL)/auth/v1/authorize?provider=kakao&redirect_to=\(encodedRedirect)") else {
+            throw URLError(.badURL)
+        }
+        await UIApplication.shared.open(url)
     }
 
     func signInWithApple() async throws {
