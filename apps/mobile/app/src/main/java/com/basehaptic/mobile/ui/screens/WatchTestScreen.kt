@@ -65,8 +65,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 data class SimGameState(
-    val homeTeam: String = "SSG",
-    val awayTeam: String = "KIA",
+    val homeTeam: String = "KIA",
+    val awayTeam: String = "SSG",
     val homeScore: Int = 0,
     val awayScore: Int = 0,
     val inning: String = "1회초",
@@ -103,7 +103,7 @@ private val simulationScenario = listOf(
         "김재환 투런 홈런",
         {
             it.copy(
-                homeScore = it.homeScore + 2,
+                awayScore = it.awayScore + 2,
                 ball = 0,
                 strike = 0,
                 baseFirst = false,
@@ -140,14 +140,11 @@ private val simulationScenario = listOf(
                 out = 0,
                 baseFirst = false,
                 baseSecond = false,
-                baseThird = false,
-                inning = "1회말",
-                pitcher = "김건우",
-                batter = "나성범"
+                baseThird = false
             )
         }
     ),
-    SimEvent(EventType.STRIKE, "나성범에게 스트라이크", { it.copy(strike = 1) }),
+    SimEvent(EventType.STRIKE, "나성범에게 스트라이크", { it.copy(strike = 1, inning = "1회말", pitcher = "김건우", batter = "나성범") }),
     SimEvent(EventType.BALL, "볼", { it.copy(ball = 1) }),
     SimEvent(
         EventType.HIT,
@@ -159,7 +156,7 @@ private val simulationScenario = listOf(
         "김선빈 역전 투런 홈런",
         {
             it.copy(
-                awayScore = it.awayScore + 2,
+                homeScore = it.homeScore + 2,
                 ball = 0,
                 strike = 0,
                 baseFirst = false,
@@ -389,7 +386,7 @@ fun WatchTestScreen(
                                     Button(
                                         onClick = {
                                             addLog("[$type] 수동 전송")
-                                            WearGameSyncManager.sendHapticEvent(context, type.name)
+                                            sendCurrentState(type.name)
                                         },
                                         modifier = Modifier
                                             .weight(1f)

@@ -144,7 +144,19 @@ class MainActivity : ComponentActivity() {
             .setContentIntent(pendingIntent)
             .build()
 
-        val ongoingActivity = OngoingActivity.Builder(this, ONGOING_NOTIFICATION_ID, notification)
+        val ongoingNotificationBuilder = NotificationCompat.Builder(this, ONGOING_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("BaseHaptic")
+            .setContentText("Game tracking in progress")
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setContentIntent(pendingIntent)
+
+        val ongoingActivity = OngoingActivity.Builder(
+            this,
+            ONGOING_NOTIFICATION_ID,
+            ongoingNotificationBuilder
+        )
             .setStaticIcon(R.mipmap.ic_launcher)
             .setTouchIntent(pendingIntent)
             .setStatus(
@@ -238,8 +250,8 @@ fun WatchApp(isAmbient: Boolean = false) {
         val myTeam = game.myTeamName.uppercase()
         val isMyTeamHome = myTeam == game.homeTeam.uppercase()
         val isMyTeamAway = myTeam == game.awayTeam.uppercase()
-        val isMyTeamBatting = (isMyTeamHome && game.inning.contains("말")) ||
-                              (isMyTeamAway && game.inning.contains("초"))
+        val isMyTeamBatting = (isMyTeamHome && isBottomInning(game.inning)) ||
+                              (isMyTeamAway && isTopInning(game.inning))
         val isMyTeamFielding = !isMyTeamBatting && (isMyTeamHome || isMyTeamAway)
         when (event.type.uppercase()) {
             "HOMERUN" -> if (isMyTeamBatting) homeRunTransitionToken = event.timestamp
@@ -392,7 +404,7 @@ private fun readGameDataFromPrefs(context: Context): GameData? {
     if (gameId.isBlank()) return null
     val inning = prefs.getString(DataLayerListenerService.KEY_INNING, "") ?: ""
     val status = prefs.getString(DataLayerListenerService.KEY_STATUS, "") ?: ""
-    val isFinished = status.equals("FINISHED", ignoreCase = true) || inning.contains("寃쎄린 醫낅즺")
+    val isFinished = status.equals("FINISHED", ignoreCase = true) || isFinishedInning(inning)
 
     return GameData(
         gameId = gameId,
@@ -441,6 +453,22 @@ private const val HIT_SCREEN_DURATION_MS = 2000L
 private const val DOUBLE_PLAY_SCREEN_DURATION_MS = 2400L
 private const val VICTORY_SCREEN_DURATION_MS = 4100L
 
+private fun isTopInning(inning: String): Boolean {
+    val normalized = inning.trim()
+    val upper = normalized.uppercase()
+    return normalized.contains("\uCD08") || upper.startsWith("TOP") || Regex("^T\\d+").containsMatchIn(upper)
+}
+
+private fun isBottomInning(inning: String): Boolean {
+    val normalized = inning.trim()
+    val upper = normalized.uppercase()
+    return normalized.contains("\uB9D0") || upper.startsWith("BOT") || Regex("^B\\d+").containsMatchIn(upper)
+}
+
+private fun isFinishedInning(inning: String): Boolean {
+    val upper = inning.uppercase()
+    return inning.contains("\uACBD\uAE30 \uC885\uB8CC") || upper.contains("FINAL") || upper.contains("GAME OVER")
+}
 private fun readLatestEventFromPrefs(context: Context): WatchEventInfo? {
     val prefs = context.getSharedPreferences(
         DataLayerListenerService.GAME_PREFS_NAME,
@@ -871,4 +899,3 @@ private fun eventUiFor(type: String): WatchEventUi? {
         else -> null
     }
 }
-

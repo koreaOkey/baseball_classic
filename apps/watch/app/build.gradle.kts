@@ -74,9 +74,6 @@ dependencies {
     implementation("com.google.android.horologist:horologist-compose-layout:0.6.20")
     implementation("com.google.android.horologist:horologist-compose-material:0.6.20")
 
-    // Ambient Mode
-    implementation("androidx.wear.ambient:ambient:1.0.0-alpha01")
-
     // Ongoing Activity (prevents system kill, shows on watch face)
     implementation("androidx.wear:wear-ongoing:1.1.0")
 

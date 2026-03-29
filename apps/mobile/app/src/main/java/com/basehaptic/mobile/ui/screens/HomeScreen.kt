@@ -525,14 +525,6 @@ private fun GameCard(
                                     fontSize = 14.sp,
                                     color = if (game.isMyTeam) Color.White.copy(alpha = 0.9f) else Gray400
                                 )
-                                if (!game.time.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "경기 시작 시간 ${game.time}",
-                                        fontSize = 12.sp,
-                                        color = Gray400
-                                    )
-                                }
                                 if (isWatchSynced) {
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(

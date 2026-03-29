@@ -260,11 +260,6 @@ private struct GameCard: View {
                 Text(game.inning)
                     .font(.system(size: 14))
                     .foregroundColor(game.isMyTeam ? .white.opacity(0.9) : AppColors.gray400)
-                if let time = game.time, !time.isEmpty {
-                    Text("경기 시작 시간 \(time)")
-                        .font(.system(size: 12))
-                        .foregroundColor(AppColors.gray400)
-                }
                 if isWatchSynced {
                     Text("(워치에서 중계중)")
                         .font(.system(size: 12, weight: .medium))
