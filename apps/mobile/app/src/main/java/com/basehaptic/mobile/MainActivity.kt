@@ -336,6 +336,10 @@ fun BaseHapticApp(
         OnboardingScreen(
             onComplete = { team ->
                 onOnboardingComplete(team)
+            },
+            authState = authState,
+            onSignInWithKakao = {
+                coroutineScope.launch { AuthManager.signInWithKakao() }
             }
         )
     } else {

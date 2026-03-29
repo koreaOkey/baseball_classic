@@ -153,6 +153,10 @@ fun HomeScreen(
     val primaryColor = activeTheme?.colors?.primary ?: teamTheme.primary
     val rankingText = teamRecordStats?.ranking?.let { "${it}위" } ?: "-"
     val wraText = teamRecordStats?.wra?.let { String.format(Locale.US, "%.3f", it) } ?: "-.--"
+    val recentWinsText = teamRecordStats?.lastFiveGames?.let { games ->
+        val wins = games.count { it == 'W' }
+        "${wins}승"
+    } ?: "-"
 
     LazyColumn(
         modifier = Modifier
@@ -267,8 +271,8 @@ fun HomeScreen(
             ) {
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    value = "5\uC2B9",
-                    label = "\uCD5C\uADFC 10\uACBD\uAE30",
+                    value = recentWinsText,
+                    label = "\uCD5C\uADFC 5\uACBD\uAE30",
                     valueColor = Green500
                 )
                 StatCard(

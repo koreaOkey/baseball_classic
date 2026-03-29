@@ -98,7 +98,16 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             if showOnboarding {
-                OnboardingScreen(onComplete: onOnboardingComplete)
+                OnboardingScreen(
+                    onComplete: onOnboardingComplete,
+                    authState: authManager.authState,
+                    onSignInWithKakao: {
+                        Task { try? await authManager.signInWithKakao() }
+                    },
+                    onSignInWithApple: {
+                        Task { try? await authManager.signInWithApple() }
+                    }
+                )
             } else {
                 mainContent
             }

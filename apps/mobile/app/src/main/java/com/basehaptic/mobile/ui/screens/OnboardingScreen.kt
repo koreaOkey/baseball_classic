@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -23,6 +24,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,8 +37,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.Blue600
@@ -47,7 +51,9 @@ import com.basehaptic.mobile.ui.theme.Gray950
 
 @Composable
 fun OnboardingScreen(
-    onComplete: (Team) -> Unit
+    onComplete: (Team) -> Unit,
+    authState: AuthState = AuthState.LoggedOut,
+    onSignInWithKakao: () -> Unit = {},
 ) {
     var selectedTeam by remember { mutableStateOf(Team.NONE) }
     var step by remember { mutableIntStateOf(1) }
@@ -85,129 +91,224 @@ fun OnboardingScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (step == 1) {
-                Text(
-                    text = "⚾",
-                    fontSize = 64.sp,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+            when (step) {
+                1 -> {
+                    Text(
+                        text = "⚾",
+                        fontSize = 64.sp,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
 
-                Text(
-                    text = "BaseHaptic",
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                    Text(
+                        text = "야구봄",
+                        fontSize = 36.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
 
-                Text(
-                    text = "응원 팀을 선택하고 워치 실시간 햅틱을 시작해보세요.",
-                    fontSize = 14.sp,
-                    color = Gray400,
-                    modifier = Modifier.padding(bottom = 32.dp)
-                )
+                    Text(
+                        text = "응원 팀을 선택하고 워치로 실시간 중계를 확인하세요.",
+                        fontSize = 14.sp,
+                        color = Gray400,
+                        modifier = Modifier.padding(bottom = 32.dp)
+                    )
 
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Gray900.copy(alpha = 0.5f)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp)
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Gray900.copy(alpha = 0.5f)
                     ) {
-                        Text(
-                            text = "응원하는 팀을 선택하세요",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 400.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        Column(
+                            modifier = Modifier.padding(24.dp)
                         ) {
-                            items(teams) { team ->
-                                TeamSelectionItem(
-                                    team = team,
-                                    isSelected = selectedTeam == team,
-                                    onClick = { selectedTeam = team }
+                            Text(
+                                text = "응원하는 팀을 선택하세요",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            )
+
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 400.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(teams) { team ->
+                                    TeamSelectionItem(
+                                        team = team,
+                                        isSelected = selectedTeam == team,
+                                        onClick = { selectedTeam = team }
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = { step = 2 },
+                                enabled = selectedTeam != Team.NONE,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 24.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Blue600,
+                                    disabledContainerColor = Gray800
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "계속하기",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
-
-                        Button(
-                            onClick = { step = 2 },
-                            enabled = selectedTeam != Team.NONE,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 24.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Blue600,
-                                disabledContainerColor = Gray800
-                            ),
-                            shape = RoundedCornerShape(12.dp)
+                    }
+                }
+                2 -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Gray900.copy(alpha = 0.5f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp)
                         ) {
                             Text(
-                                text = "계속하기",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium
+                                text = "기능 설명",
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 24.dp)
                             )
+
+                            FeatureCard(
+                                emoji = "⌚",
+                                title = "워치로 라이브 경기 보기",
+                                description = "득점, 홈런 등 주요 이벤트 발생 시 스마트워치로 진동 알림을 보냅니다."
+                            )
+
+                            // 경기 일정 자동 동기화 - 추후 공개
+                            // FeatureCard(
+                            //     emoji = "🗓",
+                            //     title = "경기 일정 자동 동기화",
+                            //     description = "응원 팀 경기 일정을 캘린더에 자동으로 등록합니다.",
+                            //     modifier = Modifier.padding(top = 16.dp)
+                            // )
+
+                            Button(
+                                onClick = { step = 3 },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 24.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Blue600),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    text = "계속하기",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
                 }
-            } else {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Gray900.copy(alpha = 0.5f)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp)
+                3 -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Gray900.copy(alpha = 0.5f)
                     ) {
-                        Text(
-                            text = "알림 설정",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(bottom = 24.dp)
-                        )
-
-                        FeatureCard(
-                            emoji = "⌚",
-                            title = "워치 햅틱 피드백",
-                            description = "득점, 홈런 등 주요 이벤트 발생 시 스마트워치로 진동 알림을 보냅니다."
-                        )
-
-                        FeatureCard(
-                            emoji = "🗓",
-                            title = "경기 일정 자동 동기화",
-                            description = "응원 팀 경기 일정을 캘린더에 자동으로 등록합니다.",
-                            modifier = Modifier.padding(top = 16.dp)
-                        )
-
-                        FeatureCard(
-                            emoji = "🤝",
-                            title = "원격 하이파이브",
-                            description = "친구와 득점 순간의 감정을 함께 공유합니다. (블루투스 사용)",
-                            modifier = Modifier.padding(top = 16.dp)
-                        )
-
-                        Button(
-                            onClick = { onComplete(selectedTeam) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 24.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Blue600),
-                            shape = RoundedCornerShape(12.dp)
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "시작하기",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium
+                                text = "로그인",
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(bottom = 8.dp)
                             )
+
+                            Text(
+                                text = "로그인하면 데이터를 안전하게 저장하고\n다른 기기에서도 이용할 수 있어요.",
+                                fontSize = 14.sp,
+                                color = Gray400,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(bottom = 24.dp)
+                            )
+
+                            when (authState) {
+                                is AuthState.LoggedIn -> {
+                                    Text(
+                                        text = "로그인 완료!",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF4CAF50),
+                                        modifier = Modifier.padding(bottom = 16.dp)
+                                    )
+
+                                    Button(
+                                        onClick = { onComplete(selectedTeam) },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Blue600),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "시작하기",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                                else -> {
+                                    // 카카오 로그인 버튼
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable { onSignInWithKakao() },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color(0xFFFEE500)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "\uD83D\uDCAC",
+                                                fontSize = 20.sp
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "카카오로 로그인",
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF191919)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    // 건너뛰기 버튼
+                                    TextButton(
+                                        onClick = { onComplete(selectedTeam) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "건너뛰기",
+                                            fontSize = 14.sp,
+                                            color = Gray400
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

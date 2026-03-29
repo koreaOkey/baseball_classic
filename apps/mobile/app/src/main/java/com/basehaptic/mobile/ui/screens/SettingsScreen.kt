@@ -89,10 +89,6 @@ fun SettingsScreen(
         }
 
         item {
-            SettingsSection(title = "계정")
-        }
-
-        item {
             SettingsItem(
                 icon = Icons.Default.Group,
                 title = "응원 팀",
@@ -168,6 +164,10 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+
+        item {
+            SettingsSection(title = "계정")
         }
 
         item {
@@ -272,8 +272,8 @@ fun SettingsScreen(
             var hapticEnabled by remember { mutableStateOf(true) }
             SettingsItemWithSwitch(
                 icon = Icons.Default.Vibration,
-                title = "햅틱 피드백",
-                subtitle = "실시간 경기 내용을 진동으로 알림 받기",
+                title = "경기 라이브 알림",
+                subtitle = "실시간 경기 내용을 워치로 알림 받기",
                 checked = hapticEnabled,
                 onCheckedChange = { hapticEnabled = it }
             )
@@ -299,30 +299,17 @@ fun SettingsScreen(
             )
         }
 
-        item {
-            var highFive by remember { mutableStateOf(true) }
-            SettingsItemWithSwitch(
-                icon = Icons.Default.Bluetooth,
-                title = "원격 하이파이브",
-                subtitle = "친구와 득점 순간을 함께 공유",
-                checked = highFive,
-                onCheckedChange = { highFive = it }
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-            SettingsSection(title = "개발자")
-        }
-
-        item {
-            SettingsItem(
-                icon = Icons.Default.Watch,
-                title = "Watch Test",
-                subtitle = "앱-워치 동기화 및 햅틱 이벤트 테스트",
-                onClick = onOpenWatchTest
-            )
-        }
+        // 원격 하이파이브 - 추후 공개
+        // item {
+        //     var highFive by remember { mutableStateOf(true) }
+        //     SettingsItemWithSwitch(
+        //         icon = Icons.Default.Bluetooth,
+        //         title = "원격 하이파이브",
+        //         subtitle = "친구와 득점 순간을 함께 공유",
+        //         checked = highFive,
+        //         onCheckedChange = { highFive = it }
+        //     )
+        // }
 
         item {
             Spacer(modifier = Modifier.height(16.dp))

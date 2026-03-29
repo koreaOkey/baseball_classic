@@ -60,6 +60,7 @@ struct TeamRecordStats {
     let teamId: String
     let ranking: Int?
     let wra: Double?
+    let lastFiveGames: String?
     let updatedAt: String?
 }
 
@@ -344,6 +345,7 @@ final class BackendGamesRepository {
             teamId: json["teamId"] as? String ?? "",
             ranking: json["ranking"] as? Int,
             wra: json["wra"] as? Double,
+            lastFiveGames: json["lastFiveGames"] as? String,
             updatedAt: json["updatedAt"] as? String
         )
     }
@@ -392,6 +394,7 @@ final class BackendGamesRepository {
         var dict: [String: Any] = ["teamId": stats.teamId]
         if let ranking = stats.ranking { dict["ranking"] = ranking }
         if let wra = stats.wra { dict["wra"] = wra }
+        if let lastFiveGames = stats.lastFiveGames { dict["lastFiveGames"] = lastFiveGames }
         if let updatedAt = stats.updatedAt { dict["updatedAt"] = updatedAt }
         guard let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
         return String(data: data, encoding: .utf8)

@@ -86,6 +86,7 @@ object BackendGamesRepository {
         val teamId: String,
         val ranking: Int?,
         val wra: Double?,
+        val lastFiveGames: String?,
         val updatedAt: String?
     )
 
@@ -630,6 +631,7 @@ object BackendGamesRepository {
             teamId = optString("teamId"),
             ranking = optNullableInt("ranking"),
             wra = optNullableDouble("wra"),
+            lastFiveGames = optString("lastFiveGames").ifBlank { null },
             updatedAt = optString("updatedAt").ifBlank { null }
         )
     }
@@ -639,6 +641,7 @@ object BackendGamesRepository {
             put("teamId", value.teamId)
             put("ranking", value.ranking ?: JSONObject.NULL)
             put("wra", value.wra ?: JSONObject.NULL)
+            put("lastFiveGames", value.lastFiveGames ?: JSONObject.NULL)
             put("updatedAt", value.updatedAt ?: JSONObject.NULL)
         }.toString()
     }

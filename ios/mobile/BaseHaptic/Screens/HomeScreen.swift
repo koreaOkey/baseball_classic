@@ -96,7 +96,7 @@ struct HomeScreen: View {
     // MARK: - Quick Stats
     private var quickStatsSection: some View {
         HStack(spacing: 12) {
-            StatCard(value: "5승", label: "최근 10경기", valueColor: AppColors.green500)
+            StatCard(value: recentWinsText, label: "최근 5경기", valueColor: AppColors.green500)
             StatCard(value: rankingText, label: "현재 순위", valueColor: AppColors.yellow500)
             StatCard(value: wraText, label: "승률", valueColor: AppColors.blue500)
         }
@@ -150,6 +150,12 @@ struct HomeScreen: View {
 
     private var wraText: String {
         teamRecordStats?.wra.map { String(format: "%.3f", $0) } ?? "-.--"
+    }
+
+    private var recentWinsText: String {
+        guard let games = teamRecordStats?.lastFiveGames else { return "-" }
+        let wins = games.filter { $0 == "W" }.count
+        return "\(wins)승"
     }
 
     private var todayDateString: String {

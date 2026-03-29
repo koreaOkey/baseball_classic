@@ -27,9 +27,6 @@ struct SettingsScreen: View {
                     .foregroundColor(.white)
                     .padding(.bottom, 16)
 
-                // 계정 섹션
-                SettingsSection(title: "계정")
-
                 SettingsItem(icon: "person.2.fill", title: "응원 팀", subtitle: selectedTeam.teamName) {
                     showTeamPicker.toggle()
                 }
@@ -64,7 +61,9 @@ struct SettingsScreen: View {
                     .cornerRadius(12)
                 }
 
-                // 로그인 섹션
+                // 계정 섹션
+                SettingsSection(title: "계정")
+
                 switch authState {
                 case .loggedIn(_, let email, _):
                     VStack(spacing: 8) {
@@ -133,8 +132,8 @@ struct SettingsScreen: View {
 
                 SettingsItemWithToggle(
                     icon: "waveform",
-                    title: "햅틱 피드백",
-                    subtitle: "실시간 경기 내용을 진동으로 알림 받기",
+                    title: "경기 라이브 알림",
+                    subtitle: "실시간 경기 내용을 워치로 알림 받기",
                     isOn: $hapticEnabled
                 )
 
@@ -145,21 +144,13 @@ struct SettingsScreen: View {
                     isOn: $ballStrikeHapticEnabled
                 )
 
-                SettingsItemWithToggle(
-                    icon: "antenna.radiowaves.left.and.right",
-                    title: "원격 하이파이브",
-                    subtitle: "친구와 득점 순간을 함께 공유",
-                    isOn: $highFiveEnabled
-                )
-
-                // 개발자 섹션
-                Spacer().frame(height: 16)
-                SettingsSection(title: "개발자")
-
-                SettingsItem(icon: "applewatch", title: "Watch Test",
-                             subtitle: "앱-워치 동기화 및 햅틱 이벤트 테스트") {
-                    onOpenWatchTest()
-                }
+                // 원격 하이파이브 - 추후 공개
+                // SettingsItemWithToggle(
+                //     icon: "antenna.radiowaves.left.and.right",
+                //     title: "원격 하이파이브",
+                //     subtitle: "친구와 득점 순간을 함께 공유",
+                //     isOn: $highFiveEnabled
+                // )
 
                 // 정보 섹션
                 Spacer().frame(height: 16)
