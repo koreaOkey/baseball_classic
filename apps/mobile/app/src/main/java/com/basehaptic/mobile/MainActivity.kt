@@ -28,6 +28,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.basehaptic.mobile.auth.AuthManager
 import com.basehaptic.mobile.auth.AuthState
+import com.basehaptic.mobile.auth.SupabaseClientProvider
+import io.github.jan.supabase.auth.handleDeeplinks
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
@@ -69,9 +71,23 @@ class MainActivity : ComponentActivity() {
             .apply()
     }
 
+    private fun handleAuthDeeplink(intent: Intent) {
+        try {
+            SupabaseClientProvider.client.handleDeeplinks(intent) {}
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleAuthDeeplink(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AuthManager.initialize()
+        handleAuthDeeplink(intent)
         val savedTeam = loadSavedTeamOrNull()
         val initialTeam = savedTeam ?: Team.NONE
         val initialShowOnboarding = savedTeam == null
