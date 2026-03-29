@@ -213,7 +213,8 @@ struct WatchTestScreen: View {
             ("TRIPLE_PLAY", "삼중살", Color(hex: 0xF87171)),
             ("OUT", "아웃", Color(hex: 0xEF4444)),
             ("STRIKE", "스트라이크", Color(hex: 0xF97316)),
-            ("BALL", "볼", Color(hex: 0x3B82F6))
+            ("BALL", "볼", Color(hex: 0x3B82F6)),
+            ("VICTORY", "승리", Color(hex: 0xEAB308))
         ]
 
         return VStack(alignment: .leading, spacing: 8) {

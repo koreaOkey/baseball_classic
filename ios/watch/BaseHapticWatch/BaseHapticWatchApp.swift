@@ -26,6 +26,9 @@ struct WatchContentView: View {
     @State private var visibleEventType: String?
     @State private var visibleEventTimestamp: Date?
     @State private var isHomeRunVisible = false
+    @State private var isHitVisible = false
+    @State private var isDoublePlayVisible = false
+    @State private var isVictoryVisible = false
 
     private let eventOverlayDuration: TimeInterval = 2.2
     private let eventFreshness: TimeInterval = 5.0
@@ -33,11 +36,35 @@ struct WatchContentView: View {
 
     var body: some View {
         ZStack {
-            if isHomeRunVisible {
+            if isVictoryVisible {
+                // 승리 애니메이션 전체 화면
+                VictoryTransitionScreen(onFinished: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isVictoryVisible = false
+                    }
+                })
+                .transition(.opacity)
+            } else if isHomeRunVisible {
                 // 홈런 비디오 전체 화면
                 HomeRunTransitionScreen(onFinished: {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isHomeRunVisible = false
+                    }
+                })
+                .transition(.opacity)
+            } else if isHitVisible {
+                // 안타 애니메이션 전체 화면
+                HitTransitionScreen(onFinished: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isHitVisible = false
+                    }
+                })
+                .transition(.opacity)
+            } else if isDoublePlayVisible {
+                // 병살 애니메이션 전체 화면
+                DoublePlayTransitionScreen(onFinished: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isDoublePlayVisible = false
                     }
                 })
                 .transition(.opacity)
@@ -50,7 +77,8 @@ struct WatchContentView: View {
                 }
 
                 // Event overlay (홈런 제외)
-                if let eventType = visibleEventType, isEventOverlayVisible, eventType.uppercased() != "HOMERUN" {
+                if let eventType = visibleEventType, isEventOverlayVisible,
+                   !["HOMERUN", "HIT", "DOUBLE_PLAY", "VICTORY"].contains(eventType.uppercased()) {
                     WatchEventOverlay(eventType: eventType)
                 }
 
@@ -70,18 +98,55 @@ struct WatchContentView: View {
                 }
             }
         }
+        .onChange(of: connectivity.gameData?.isLive) { oldValue, newValue in
+            // 경기가 live → finished로 전환될 때 내 팀 승리 확인
+            if oldValue == true, newValue == false,
+               let game = connectivity.gameData {
+                let myTeam = game.myTeamName.uppercased()
+                let isMyTeamHome = myTeam == game.homeTeam.uppercased()
+                let isMyTeamAway = myTeam == game.awayTeam.uppercased()
+                let myTeamWon = (isMyTeamHome && game.homeScore > game.awayScore) ||
+                                (isMyTeamAway && game.awayScore > game.homeScore)
+                if myTeamWon {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isVictoryVisible = true
+                    }
+                }
+            }
+        }
         .onChange(of: connectivity.latestEventTimestamp) { _, timestamp in
             guard let timestamp = timestamp,
                   let eventType = connectivity.latestEventType,
                   Date().timeIntervalSince(timestamp) < eventFreshness else { return }
 
-            if eventType.uppercased() == "HOMERUN" {
-                // 홈런: 비디오 전환
+            let upper = eventType.uppercased()
+            let game = connectivity.gameData
+            let myTeam = game?.myTeamName.uppercased() ?? ""
+            let isMyTeamHome = myTeam == game?.homeTeam.uppercased()
+            let isMyTeamAway = myTeam == game?.awayTeam.uppercased()
+            let inning = game?.inning ?? ""
+            let isMyTeamBatting = (isMyTeamHome && inning.contains("말")) ||
+                                  (isMyTeamAway && inning.contains("초"))
+            let isMyTeamFielding = !isMyTeamBatting && (isMyTeamHome || isMyTeamAway)
+
+            if upper == "VICTORY" {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isVictoryVisible = true
+                }
+            } else if upper == "HOMERUN", isMyTeamBatting {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     isHomeRunVisible = true
                 }
+            } else if upper == "HIT", isMyTeamBatting {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isHitVisible = true
+                }
+            } else if upper == "DOUBLE_PLAY", isMyTeamFielding {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isDoublePlayVisible = true
+                }
             } else {
-                // 기타 이벤트: 오버레이
+                // 기타 이벤트 또는 상대팀 이벤트: 오버레이
                 visibleEventType = eventType
                 visibleEventTimestamp = timestamp
                 isEventOverlayVisible = true

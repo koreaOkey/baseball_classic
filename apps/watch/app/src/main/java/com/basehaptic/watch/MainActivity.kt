@@ -191,6 +191,9 @@ fun WatchApp(isAmbient: Boolean = false) {
     var hitTransitionToken by remember { mutableStateOf<Long?>(null) }
     var isDoublePlayTransitionVisible by remember { mutableStateOf(false) }
     var doublePlayTransitionToken by remember { mutableStateOf<Long?>(null) }
+    var isVictoryTransitionVisible by remember { mutableStateOf(false) }
+    var victoryTransitionToken by remember { mutableStateOf<Long?>(null) }
+    var previousGameIsLive by remember { mutableStateOf<Boolean?>(null) }
 
     DisposableEffect(context) {
         val filter = IntentFilter().apply {
@@ -213,6 +216,8 @@ fun WatchApp(isAmbient: Boolean = false) {
                     DataLayerListenerService.ACTION_GAME_UPDATED -> {
                         gameData = readGameDataFromPrefs(context)
                         latestEvent = readLatestEventFromPrefs(context)
+                        // 모바일에서 경기 관람 시작 시 팝업이 자동 수락되었을 수 있으므로 갱신
+                        watchSyncPrompt = readWatchSyncPromptFromPrefs(context)
                     }
                     DataLayerListenerService.ACTION_WATCH_SYNC_PROMPT -> {
                         watchSyncPrompt = readWatchSyncPromptFromPrefs(context)
@@ -229,10 +234,18 @@ fun WatchApp(isAmbient: Boolean = false) {
     LaunchedEffect(latestEvent?.timestamp) {
         val event = latestEvent ?: return@LaunchedEffect
         if (System.currentTimeMillis() - event.timestamp > EVENT_OVERLAY_FRESHNESS_MS) return@LaunchedEffect
+        val game = gameData ?: return@LaunchedEffect
+        val myTeam = game.myTeamName.uppercase()
+        val isMyTeamHome = myTeam == game.homeTeam.uppercase()
+        val isMyTeamAway = myTeam == game.awayTeam.uppercase()
+        val isMyTeamBatting = (isMyTeamHome && game.inning.contains("말")) ||
+                              (isMyTeamAway && game.inning.contains("초"))
+        val isMyTeamFielding = !isMyTeamBatting && (isMyTeamHome || isMyTeamAway)
         when (event.type.uppercase()) {
-            "HOMERUN" -> homeRunTransitionToken = event.timestamp
-            "HIT" -> hitTransitionToken = event.timestamp
-            "DOUBLE_PLAY" -> doublePlayTransitionToken = event.timestamp
+            "HOMERUN" -> if (isMyTeamBatting) homeRunTransitionToken = event.timestamp
+            "HIT" -> if (isMyTeamBatting) hitTransitionToken = event.timestamp
+            "DOUBLE_PLAY" -> if (isMyTeamFielding) doublePlayTransitionToken = event.timestamp
+            "VICTORY" -> victoryTransitionToken = event.timestamp
         }
     }
 
@@ -263,6 +276,33 @@ fun WatchApp(isAmbient: Boolean = false) {
         }
     }
 
+    LaunchedEffect(victoryTransitionToken) {
+        val token = victoryTransitionToken ?: return@LaunchedEffect
+        isVictoryTransitionVisible = true
+        delay(VICTORY_SCREEN_DURATION_MS)
+        if (victoryTransitionToken == token) {
+            isVictoryTransitionVisible = false
+        }
+    }
+
+    // 경기 종료 + 내 팀 승리 감지
+    LaunchedEffect(gameData?.isLive) {
+        val game = gameData ?: return@LaunchedEffect
+        if (previousGameIsLive == true && !game.isLive) {
+            val myTeam = game.myTeamName.uppercase()
+            val isMyTeamHome = myTeam == game.homeTeam.uppercase()
+            val isMyTeamAway = myTeam == game.awayTeam.uppercase()
+            val myTeamWon = (isMyTeamHome && game.homeScore > game.awayScore) ||
+                            (isMyTeamAway && game.awayScore > game.homeScore)
+            if (myTeamWon) {
+                isVictoryTransitionVisible = true
+                delay(VICTORY_SCREEN_DURATION_MS)
+                isVictoryTransitionVisible = false
+            }
+        }
+        previousGameIsLive = game.isLive
+    }
+
     BaseHapticWatchTheme(teamName = teamName) {
         Scaffold(
             timeText = {
@@ -279,6 +319,7 @@ fun WatchApp(isAmbient: Boolean = false) {
                     AmbientGameScreen(gameData = gameData)
                 } else {
                     val transitionState = when {
+                        isVictoryTransitionVisible -> "victory"
                         isHomeRunTransitionVisible -> "homerun"
                         isDoublePlayTransitionVisible -> "double_play"
                         isHitTransitionVisible -> "hit"
@@ -293,6 +334,7 @@ fun WatchApp(isAmbient: Boolean = false) {
                         label = "event_transition"
                     ) { state ->
                         when (state) {
+                            "victory" -> VictoryTransitionScreen()
                             "homerun" -> HomeRunTransitionScreen()
                             "double_play" -> DoublePlayTransitionScreen()
                             "hit" -> HitTransitionScreen()
@@ -397,6 +439,7 @@ private const val EVENT_OVERLAY_FRESHNESS_MS = 5000L
 private const val HOMERUN_SCREEN_DURATION_MS = 2400L
 private const val HIT_SCREEN_DURATION_MS = 2000L
 private const val DOUBLE_PLAY_SCREEN_DURATION_MS = 2400L
+private const val VICTORY_SCREEN_DURATION_MS = 4100L
 
 private fun readLatestEventFromPrefs(context: Context): WatchEventInfo? {
     val prefs = context.getSharedPreferences(
@@ -631,6 +674,52 @@ private fun AmbientGameScreen(gameData: GameData?) {
                 fontSize = 14.sp
             )
         }
+    }
+}
+
+@Composable
+private fun VictoryTransitionScreen() {
+    val context = LocalContext.current
+    val clipUri = remember(context) {
+        Uri.parse("android.resource://${context.packageName}/${R.raw.victory_clip}")
+    }
+    val player = remember(context, clipUri) {
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(clipUri))
+            repeatMode = Player.REPEAT_MODE_OFF
+            volume = 0f
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    DisposableEffect(player) {
+        onDispose {
+            player.release()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { viewContext ->
+                PlayerView(viewContext).apply {
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    this.player = player
+                }
+            },
+            update = { view ->
+                view.player = player
+                if (!player.isPlaying) player.play()
+            }
+        )
     }
 }
 

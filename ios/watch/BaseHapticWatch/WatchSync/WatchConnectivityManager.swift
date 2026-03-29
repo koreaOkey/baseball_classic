@@ -133,6 +133,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             myTeamName: message["my_team"] as? String ?? ""
         )
 
+        // 모바일에서 이미 경기 관람을 시작한 경우 → 워치 팝업 자동 수락
+        if let prompt = watchSyncPrompt,
+           prompt.gameId == (message["game_id"] as? String ?? "") {
+            sendSyncResponse(gameId: prompt.gameId, accepted: true)
+            watchSyncPrompt = nil
+        }
+
         // 테마 동기화
         if let myTeam = message["my_team"] as? String, !myTeam.isEmpty {
             syncedTeamName = myTeam

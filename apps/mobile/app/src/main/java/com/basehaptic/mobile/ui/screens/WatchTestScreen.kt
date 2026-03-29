@@ -376,7 +376,8 @@ fun WatchTestScreen(
                             Triple(EventType.TRIPLE_PLAY, "삼중살", Red400),
                             Triple(EventType.OUT, "아웃", Red500),
                             Triple(EventType.STRIKE, "스트라이크", Orange500),
-                            Triple(EventType.BALL, "볼", Blue500)
+                            Triple(EventType.BALL, "볼", Blue500),
+                            Triple(EventType.VICTORY, "승리", Yellow500)
                         )
 
                         events.chunked(2).forEach { row ->

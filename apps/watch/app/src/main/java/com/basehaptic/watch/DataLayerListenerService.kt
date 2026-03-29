@@ -124,6 +124,21 @@ class DataLayerListenerService : WearableListenerService() {
             sendBroadcast(Intent(ACTION_THEME_UPDATED))
         }
 
+        // 모바일에서 이미 경기 관람을 시작한 경우 → 워치 팝업 자동 수락
+        val gameId = dataMap.getString(KEY_GAME_ID, "")
+        val pendingPromptGameId = getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_PENDING_SYNC_GAME_ID, "")
+        if (!gameId.isNullOrBlank() && gameId == pendingPromptGameId) {
+            WatchSyncResponseSender.send(this, gameId, accepted = true)
+            getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove(KEY_PENDING_SYNC_GAME_ID)
+                .remove(KEY_PENDING_SYNC_HOME_TEAM)
+                .remove(KEY_PENDING_SYNC_AWAY_TEAM)
+                .remove(KEY_PENDING_SYNC_MY_TEAM)
+                .apply()
+        }
+
         val eventType = dataMap.getString(KEY_EVENT_TYPE, "")
         if (eventType.isNotBlank()) {
             saveLatestEvent(eventType, null)

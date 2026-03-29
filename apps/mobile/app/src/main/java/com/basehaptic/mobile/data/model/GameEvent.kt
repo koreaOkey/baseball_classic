@@ -18,7 +18,8 @@ enum class EventType {
     STEAL,
     HIT,
     HOMERUN,
-    SCORE;
+    SCORE,
+    VICTORY;
 
     companion object {
         fun getHapticPattern(type: EventType): String {
@@ -33,6 +34,7 @@ enum class EventType {
                 HIT -> "double-tap"
                 HOMERUN -> "triple-tap"
                 SCORE -> "tap-long"
+                VICTORY -> "long-tap-long"
             }
         }
     }
