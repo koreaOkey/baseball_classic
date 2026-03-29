@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 val localProperties = Properties().apply {
@@ -20,6 +21,18 @@ val backendBaseUrl = (
         ?: "http://10.0.2.2:8080"
     ).replace("\"", "\\\"")
 
+val supabaseUrl = (
+    localProperties.getProperty("supabaseUrl")
+        ?: System.getenv("SUPABASE_URL")
+        ?: "https://snrafqoqpmtoannnnwdq.supabase.co"
+    ).replace("\"", "\\\"")
+
+val supabaseAnonKey = (
+    localProperties.getProperty("supabaseAnonKey")
+        ?: System.getenv("SUPABASE_ANON_KEY")
+        ?: ""
+    ).replace("\"", "\\\"")
+
 android {
     namespace = "com.basehaptic.mobile"
     compileSdk = 34
@@ -31,6 +44,8 @@ android {
         versionCode = 1
         versionName = "1.0"
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -101,6 +116,11 @@ dependencies {
 
     // WebSocket realtime stream
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Supabase Auth
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.1.1"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+    implementation("io.ktor:ktor-client-okhttp:3.0.3")
 
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.2.0")

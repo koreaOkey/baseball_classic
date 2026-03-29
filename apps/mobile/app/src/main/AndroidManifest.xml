@@ -31,6 +31,20 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".auth.OAuthCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="com.basehaptic.mobile"
+                    android:host="login-callback" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.GameSyncForegroundService"
             android:exported="false"

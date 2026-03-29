@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.ui.components.TeamLogo
@@ -62,7 +63,10 @@ fun SettingsScreen(
     purchasedThemes: List<ThemeData>,
     activeTheme: ThemeData?,
     onSelectTheme: (ThemeData?) -> Unit,
-    onOpenWatchTest: () -> Unit
+    onOpenWatchTest: () -> Unit,
+    authState: AuthState = AuthState.LoggedOut,
+    onSignInWithKakao: () -> Unit = {},
+    onSignOut: () -> Unit = {}
 ) {
     val teamTheme = LocalTeamTheme.current
     var showTeamPicker by remember { mutableStateOf(false) }
@@ -160,6 +164,99 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            when (authState) {
+                is AuthState.LoggedIn -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Gray900,
+                        tonalElevation = 1.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "로그인됨",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = authState.email ?: "카카오 계정",
+                                fontSize = 16.sp,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onSignOut() },
+                                shape = RoundedCornerShape(8.dp),
+                                color = Gray800
+                            ) {
+                                Text(
+                                    text = "로그아웃",
+                                    fontSize = 14.sp,
+                                    color = Gray400,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+                is AuthState.Loading -> {
+                    // Show nothing while loading
+                }
+                is AuthState.LoggedOut -> {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onSignInWithKakao() },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFFEE500)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "\uD83D\uDCAC",
+                                fontSize = 20.sp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "카카오로 로그인",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF191919)
+                            )
                         }
                     }
                 }

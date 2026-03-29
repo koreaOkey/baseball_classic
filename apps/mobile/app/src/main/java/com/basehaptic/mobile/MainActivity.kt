@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +26,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.basehaptic.mobile.auth.AuthManager
+import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
@@ -68,6 +71,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AuthManager.initialize()
         val savedTeam = loadSavedTeamOrNull()
         val initialTeam = savedTeam ?: Team.NONE
         val initialShowOnboarding = savedTeam == null
@@ -103,6 +107,8 @@ fun BaseHapticApp(
     showOnboarding: Boolean,
     onOnboardingComplete: (Team) -> Unit
 ) {
+    val authState by AuthManager.authState.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
     var currentView by remember { mutableStateOf<Screen>(Screen.Home) }
     val navigationHistory = remember { mutableStateListOf<Screen>() }
     var activeTheme by remember { mutableStateOf<ThemeData?>(null) }
@@ -374,7 +380,14 @@ fun BaseHapticApp(
                         purchasedThemes = purchasedThemes,
                         activeTheme = activeTheme,
                         onSelectTheme = { activeTheme = it },
-                        onOpenWatchTest = { navigateTo(Screen.WatchTest) }
+                        onOpenWatchTest = { navigateTo(Screen.WatchTest) },
+                        authState = authState,
+                        onSignInWithKakao = {
+                            coroutineScope.launch { AuthManager.signInWithKakao() }
+                        },
+                        onSignOut = {
+                            coroutineScope.launch { AuthManager.signOut() }
+                        }
                     )
                     Screen.WatchTest -> WatchTestScreen(
                         selectedTeam = selectedTeam,

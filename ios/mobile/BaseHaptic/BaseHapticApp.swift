@@ -4,6 +4,7 @@ import UIKit
 @main
 struct BaseHapticApp: App {
     @StateObject private var connectivityManager = PhoneConnectivityManager.shared
+    @StateObject private var authManager = AuthManager.shared
     @AppStorage("selected_team") private var selectedTeamRaw: String = Team.none.rawValue
     @State private var showOnboarding: Bool
     @Environment(\.scenePhase) private var scenePhase
@@ -31,12 +32,19 @@ struct BaseHapticApp: App {
                     selectedTeamRaw = team.rawValue
                     showOnboarding = false
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
-                }
+                },
+                authManager: authManager
             )
             .environment(\.teamTheme, TeamThemes.theme(for: selectedTeam))
             .preferredColorScheme(.dark)
             .onAppear {
                 connectivityManager.activate()
+            }
+            .task {
+                await authManager.initialize()
+            }
+            .onOpenURL { url in
+                authManager.handleOpenURL(url)
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -68,6 +76,7 @@ struct ContentView: View {
     let onTeamChanged: (Team) -> Void
     let showOnboarding: Bool
     let onOnboardingComplete: (Team) -> Void
+    @ObservedObject var authManager: AuthManager
 
     @State private var currentView: Screen = .home
     @State private var navigationHistory: [Screen] = []
@@ -156,7 +165,17 @@ struct ContentView: View {
                         purchasedThemes: purchasedThemes,
                         activeTheme: activeTheme,
                         onSelectTheme: { activeTheme = $0 },
-                        onOpenWatchTest: { navigateTo(.watchTest) }
+                        onOpenWatchTest: { navigateTo(.watchTest) },
+                        authState: authManager.authState,
+                        onSignInWithKakao: {
+                            Task { try? await authManager.signInWithKakao() }
+                        },
+                        onSignInWithApple: {
+                            Task { try? await authManager.signInWithApple() }
+                        },
+                        onSignOut: {
+                            Task { try? await authManager.signOut() }
+                        }
                     )
                 default:
                     Text("준비 중")

@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 struct SettingsScreen: View {
     let selectedTeam: Team
@@ -7,6 +8,10 @@ struct SettingsScreen: View {
     let activeTheme: ThemeData?
     let onSelectTheme: (ThemeData?) -> Void
     let onOpenWatchTest: () -> Void
+    var authState: AuthState = .loggedOut
+    var onSignInWithKakao: () -> Void = {}
+    var onSignInWithApple: () -> Void = {}
+    var onSignOut: () -> Void = {}
 
     @Environment(\.teamTheme) private var teamTheme
     @State private var showTeamPicker = false
@@ -57,6 +62,69 @@ struct SettingsScreen: View {
                     .padding(12)
                     .background(AppColors.gray800)
                     .cornerRadius(12)
+                }
+
+                // 로그인 섹션
+                switch authState {
+                case .loggedIn(_, let email, _):
+                    VStack(spacing: 8) {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.system(size: 20))
+                            Text("로그인됨")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.green)
+                            Spacer()
+                        }
+                        Text(email ?? "카카오 계정")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Button(action: onSignOut) {
+                            Text("로그아웃")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppColors.gray400)
+                                .frame(maxWidth: .infinity)
+                                .padding(12)
+                                .background(AppColors.gray800)
+                                .cornerRadius(8)
+                        }
+                    }
+                    .padding(16)
+                    .background(AppColors.gray900)
+                    .cornerRadius(12)
+
+                case .loggedOut:
+                    VStack(spacing: 8) {
+                        // 카카오 로그인
+                        Button(action: onSignInWithKakao) {
+                            HStack(spacing: 8) {
+                                Text("\u{1F4AC}")
+                                    .font(.system(size: 20))
+                                Text("카카오로 로그인")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(16)
+                            .background(Color(red: 254/255, green: 229/255, blue: 0))
+                            .cornerRadius(12)
+                        }
+
+                        // Apple 로그인
+                        SignInWithAppleButton(.signIn) { _ in
+                        } onCompletion: { _ in
+                            onSignInWithApple()
+                        }
+                        .signInWithAppleButtonStyle(.white)
+                        .frame(height: 50)
+                        .cornerRadius(12)
+                    }
+
+                case .loading:
+                    EmptyView()
                 }
 
                 // 알림 섹션

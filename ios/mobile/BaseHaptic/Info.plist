@@ -29,6 +29,19 @@
 		<string>fetch</string>
 		<string>processing</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.basehaptic.app</string>
+			</array>
+		</dict>
+	</array>
+	<key>SUPABASE_URL</key>
+	<string>https://snrafqoqpmtoannnnwdq.supabase.co</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNucmFmcW9xcG10b2Fubm5ud2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMjQ5MjQsImV4cCI6MjA4NjkwMDkyNH0.ufw8jQw9K8vhn9lS_9JA7Yetdi_D_9_ZNpJeukx53bY</string>
 	<key>BACKEND_BASE_URL</key>
 	<string>https://baseballclassic-production.up.railway.app</string>
 	<key>BACKEND_WS_URL</key>
