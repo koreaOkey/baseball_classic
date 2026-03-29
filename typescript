@@ -1,0 +1,87 @@
+Script started on 2026-03-22 00:24:28+09:00 [COMMAND="openclaw" <not executed on terminal>]
+
+[1m[38;5;209m🦞 OpenClaw[39m[22m [38;5;216m2026.3.8[39m [38;5;138m(e9d51d8)[39m
+   [38;5;167mYour terminal just grew claws—type something and let the bot pinch the busywork.[39m
+
+[1m[38;5;209mUsage:[39m[22m openclaw [options] [command]
+
+[1m[38;5;209mOptions:[39m[22m
+  [38;5;215m--dev[39m                Dev profile: isolate state under ~/.openclaw-dev, default gateway port 19001, and shift derived ports (browser/canvas)
+  [38;5;215m-h, --help[39m           Display help for command
+  [38;5;215m--log-level <level>[39m  Global log level override for file + console (silent|fatal|error|warn|info|debug|trace)
+  [38;5;215m--no-color[39m           Disable ANSI colors
+  [38;5;215m--profile <name>[39m     Use a named profile (isolates OPENCLAW_STATE_DIR/OPENCLAW_CONFIG_PATH under ~/.openclaw-<name>)
+  [38;5;215m-V, --version[39m        output the version number
+
+[1m[38;5;209mCommands:[39m[22m
+  [38;5;138mHint: commands suffixed with * have subcommands. Run <command> --help for details.[39m
+  [38;5;209macp *[39m                Agent Control Protocol tools
+  [38;5;209magent[39m                Run one agent turn via the Gateway
+  [38;5;209magents *[39m             Manage isolated agents (workspaces, auth, routing)
+  [38;5;209mapprovals *[39m          Manage exec approvals (gateway or node host)
+  [38;5;209mbrowser *[39m            Manage OpenClaw's dedicated browser (Chrome/Chromium)
+  [38;5;209mchannels *[39m           Manage connected chat channels (Telegram, Discord, etc.)
+  [38;5;209mclawbot *[39m            Legacy clawbot command aliases
+  [38;5;209mcompletion[39m           Generate shell completion script
+  [38;5;209mconfig *[39m             Non-interactive config helpers (get/set/unset/file/validate). Default: starts setup wizard.
+  [38;5;209mconfigure[39m            Interactive setup wizard for credentials, channels, gateway, and agent defaults
+  [38;5;209mcron *[39m               Manage cron jobs via the Gateway scheduler
+  [38;5;209mdaemon *[39m             Gateway service (legacy alias)
+  [38;5;209mdashboard[39m            Open the Control UI with your current token
+  [38;5;209mdevices *[39m            Device pairing + token management
+  [38;5;209mdirectory *[39m          Lookup contact and group IDs (self, peers, groups) for supported chat channels
+  [38;5;209mdns *[39m                DNS helpers for wide-area discovery (Tailscale + CoreDNS)
+  [38;5;209mdocs[39m                 Search the live OpenClaw docs
+  [38;5;209mdoctor[39m               Health checks + quick fixes for the gateway and channels
+  [38;5;209mgateway *[39m            Run, inspect, and query the WebSocket Gateway
+  [38;5;209mhealth[39m               Fetch health from the running gateway
+  [38;5;209mhelp[39m                 Display help for command
+  [38;5;209mhooks *[39m              Manage internal agent hooks
+  [38;5;209mlogs[39m                 Tail gateway file logs via RPC
+  [38;5;209mmemory *[39m             Search and reindex memory files
+  [38;5;209mmessage *[39m            Send, read, and manage messages
+  [38;5;209mmodels *[39m             Discover, scan, and configure models
+  [38;5;209mnode *[39m               Run and manage the headless node host service
+  [38;5;209mnodes *[39m              Manage gateway-owned node pairing and node commands
+  [38;5;209monboard[39m              Interactive onboarding wizard for gateway, workspace, and skills
+  [38;5;209mpairing *[39m            Secure DM pairing (approve inbound requests)
+  [38;5;209mplugins *[39m            Manage OpenClaw plugins and extensions
+  [38;5;209mqr[39m                   Generate iOS pairing QR/setup code
+  [38;5;209mreset[39m                Reset local config/state (keeps the CLI installed)
+  [38;5;209msandbox *[39m            Manage sandbox containers for agent isolation
+  [38;5;209msecrets *[39m            Secrets runtime reload controls
+  [38;5;209msecurity *[39m           Security tools and local config audits
+  [38;5;209msessions *[39m           List stored conversation sessions
+  [38;5;209msetup[39m                Initialize local config and agent workspace
+  [38;5;209mskills *[39m             List and inspect available skills
+  [38;5;209mstatus[39m               Show channel health and recent session recipients
+  [38;5;209msystem *[39m             System events, heartbeat, and presence
+  [38;5;209mtui[39m                  Open a terminal UI connected to the Gateway
+  [38;5;209muninstall[39m            Uninstall the gateway service + local data (CLI remains)
+  [38;5;209mupdate *[39m             Update OpenClaw and inspect update channel status
+  [38;5;209mwebhooks *[39m           Webhook helpers and integrations
+
+[1m[38;5;209mExamples:[39m[22m
+  [38;5;209mopenclaw models --help[39m
+    [38;5;138mShow detailed help for the models command.[39m
+  [38;5;209mopenclaw channels login --verbose[39m
+    [38;5;138mLink personal WhatsApp Web and show QR + connection logs.[39m
+  [38;5;209mopenclaw message send --target +15555550123 --message "Hi" --json[39m
+    [38;5;138mSend via your web session and print JSON result.[39m
+  [38;5;209mopenclaw gateway --port 18789[39m
+    [38;5;138mRun the WebSocket Gateway locally.[39m
+  [38;5;209mopenclaw --dev gateway[39m
+    [38;5;138mRun a dev Gateway (isolated state/config) on ws://127.0.0.1:19001.[39m
+  [38;5;209mopenclaw gateway --force[39m
+    [38;5;138mKill anything bound to the default gateway port, then start it.[39m
+  [38;5;209mopenclaw gateway ...[39m
+    [38;5;138mGateway control via WebSocket.[39m
+  [38;5;209mopenclaw agent --to +15555550123 --message "Run summary" --deliver[39m
+    [38;5;138mTalk directly to the agent using the Gateway; optionally send the WhatsApp reply.[39m
+  [38;5;209mopenclaw message send --channel telegram --target @mychat --message "Hi"[39m
+    [38;5;138mSend via your Telegram bot.[39m
+
+[38;5;138mDocs:[39m ]8;;https://docs.openclaw.ai/clidocs.openclaw.ai/cli]8;;
+
+
+Script done on 2026-03-22 00:24:33+09:00 [COMMAND_EXIT_CODE="1"]
