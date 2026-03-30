@@ -32,8 +32,9 @@ struct HomeScreen: View {
         }
         .background(AppColors.gray950)
         .task(id: selectedTeam) {
-            await loadTeamRecord()
-            await loadUpcomingGames()
+            async let record: () = loadTeamRecord()
+            async let upcoming: () = loadUpcomingGames()
+            _ = await (record, upcoming)
         }
     }
 
