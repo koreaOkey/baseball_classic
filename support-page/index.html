@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>야구봄 - 지원</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e5e5e5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      text-align: center;
+      padding: 80px 24px 48px;
+      background: linear-gradient(180deg, #1a1a2e 0%, #0a0a0a 100%);
+    }
+
+    .app-icon {
+      width: 96px;
+      height: 96px;
+      background: linear-gradient(135deg, #e63946, #ff6b6b);
+      border-radius: 22px;
+      margin: 0 auto 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+    }
+
+    header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      font-size: 16px;
+      color: #999;
+    }
+
+    main {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 48px 24px;
+      flex: 1;
+      width: 100%;
+    }
+
+    section {
+      margin-bottom: 48px;
+    }
+
+    section h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #222;
+    }
+
+    section p {
+      font-size: 15px;
+      line-height: 1.7;
+      color: #bbb;
+    }
+
+    .contact-card {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+    }
+
+    .contact-item + .contact-item {
+      border-top: 1px solid #222;
+    }
+
+    .contact-item .icon {
+      width: 40px;
+      height: 40px;
+      background: #1a1a2e;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .contact-item .label {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .contact-item .value {
+      font-size: 15px;
+      color: #e5e5e5;
+    }
+
+    .contact-item a {
+      color: #ff6b6b;
+      text-decoration: none;
+    }
+
+    .contact-item a:hover {
+      text-decoration: underline;
+    }
+
+    .faq-item {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 12px;
+    }
+
+    .faq-item h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .faq-item p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #999;
+    }
+
+    footer {
+      text-align: center;
+      padding: 32px 24px;
+      font-size: 13px;
+      color: #555;
+      border-top: 1px solid #1a1a1a;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="app-icon">&#9918;</div>
+    <h1>야구봄</h1>
+    <p>보지 않아도 손목으로 느끼는 현장감</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>앱 소개</h2>
+      <p>
+        야구봄은 KBO 프로야구 경기의 주요 순간을 스마트워치 햅틱 진동으로 전달하는
+        실시간 야구 관전 서비스입니다. 홈런, 안타, 득점 등 이벤트별로 차별화된 진동 패턴으로
+        화면을 보지 않아도 경기 흐름을 손목으로 느낄 수 있습니다.
+      </p>
+    </section>
+
+    <section>
+      <h2>고객 지원</h2>
+      <div class="contact-card">
+        <div class="contact-item">
+          <div class="icon">&#9993;</div>
+          <div>
+            <div class="label">이메일</div>
+            <div class="value"><a href="mailto:leeyoungje@naver.com">leeyoungje@naver.com</a></div>
+          </div>
+        </div>
+        <div class="contact-item">
+          <div class="icon">&#128172;</div>
+          <div>
+            <div class="label">응답 시간</div>
+            <div class="value">영업일 기준 1~2일 이내 답변</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>자주 묻는 질문</h2>
+      <div class="faq-item">
+        <h3>어떤 스마트워치를 지원하나요?</h3>
+        <p>현재 Wear OS 3.0 이상을 탑재한 Android 스마트워치를 지원합니다. Apple Watch 지원은 준비 중입니다.</p>
+      </div>
+      <div class="faq-item">
+        <h3>배터리 소모가 심한가요?</h3>
+        <p>백그라운드 최적화를 통해 일반 알림 수준의 배터리만 소모합니다. 경기 중 워치 화면을 꺼두면 더욱 절약됩니다.</p>
+      </div>
+      <div class="faq-item">
+        <h3>실시간 데이터는 어떻게 제공되나요?</h3>
+        <p>WebSocket 기반의 실시간 연결로 경기 이벤트를 즉시 전달합니다. 네트워크 연결이 필요합니다.</p>
+      </div>
+      <div class="faq-item">
+        <h3>문제가 발생했어요.</h3>
+        <p>위 이메일로 기기 모델명, OS 버전과 함께 문제 상황을 보내주시면 빠르게 도움드리겠습니다.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>개인정보 처리방침</h2>
+      <p>
+        야구봄은 서비스 제공에 필요한 최소한의 정보만을 수집합니다.
+      </p>
+      <br />
+      <p><strong>수집 항목:</strong> 응원 팀 설정, 기기 식별자(알림 전송용)</p>
+      <p><strong>수집 목적:</strong> 맞춤형 경기 알림 및 햅틱 피드백 제공</p>
+      <p><strong>보관 기간:</strong> 회원 탈퇴 또는 앱 삭제 시 즉시 파기</p>
+      <p><strong>제3자 제공:</strong> 수집된 개인정보는 제3자에게 제공하지 않습니다</p>
+      <br />
+      <p>
+        개인정보 관련 문의는 위 고객 지원 이메일로 연락해 주세요.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    &copy; 2026 야구봄. All rights reserved.
+  </footer>
+</body>
+</html>

@@ -27,7 +27,6 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
-		<string>processing</string>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -46,5 +45,7 @@
 	<string>https://baseballclassic-production.up.railway.app</string>
 	<key>BACKEND_WS_URL</key>
 	<string>wss://baseballclassic-production.up.railway.app</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

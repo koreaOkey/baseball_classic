@@ -31,3 +31,6 @@ Thumbs.db
 *.err
 *.pid
 log/
+
+# Node modules
+**/node_modules/
