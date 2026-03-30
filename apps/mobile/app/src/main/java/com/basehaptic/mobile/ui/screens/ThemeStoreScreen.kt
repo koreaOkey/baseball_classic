@@ -98,7 +98,7 @@ fun ThemeStoreScreen(
             }
         }
 
-        items(storeItems) { item ->
+        items(storeItems, key = { it.theme.id }) { item ->
             val isPurchased = item.theme.id in purchasedIds
             val isApplied = activeTheme?.id == item.theme.id
             ThemeStoreItemCard(

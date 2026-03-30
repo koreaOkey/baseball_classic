@@ -136,7 +136,7 @@ fun OnboardingScreen(
                                     .heightIn(max = 400.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(teams) { team ->
+                                items(teams, key = { it.name }) { team ->
                                     TeamSelectionItem(
                                         team = team,
                                         isSelected = selectedTeam == team,

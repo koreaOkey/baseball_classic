@@ -27,3 +27,19 @@
 -keep class androidx.compose.** { *; }
 -keepclassmembers class androidx.compose.** { *; }
 
+# OkHttp / WebSocket
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.** { *; }
+
+# Supabase / Ktor
+-dontwarn io.ktor.**
+-keep class io.github.jan.supabase.** { *; }
+
+# Wearable Data Layer
+-keep class com.google.android.gms.wearable.** { *; }
+
+# Keep line numbers for crash reports
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+

@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import okhttp3.OkHttpClient
@@ -28,6 +29,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 
 object BackendGamesRepository {
+    private const val TAG = "BackendGamesRepo"
     private const val TIMEOUT_MS = 5000
     private const val CACHE_PREFS_NAME = "backend_games_cache"
     private const val KEY_TODAY_GAMES_DATE = "today_games_date"
@@ -330,6 +332,8 @@ object BackendGamesRepository {
                 items.add(item.toGame(selectedTeam))
             }
             items
+        }.onFailure { e ->
+            Log.w(TAG, "parseGamesPayload failed", e)
         }.getOrNull()
     }
 
@@ -476,6 +480,7 @@ object BackendGamesRepository {
 
         val responseCode = runCatching { connection.responseCode }.getOrNull()
         if (responseCode == null || responseCode !in 200..299) {
+            Log.w(TAG, "getJson $endpoint returned $responseCode")
             connection.disconnect()
             return null
         }
@@ -484,6 +489,8 @@ object BackendGamesRepository {
             connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { reader ->
                 parser(reader.readText())
             }
+        }.onFailure { e ->
+            Log.w(TAG, "getJson parse failed for $endpoint", e)
         }.getOrNull().also {
             connection.disconnect()
         }
@@ -649,6 +656,8 @@ object BackendGamesRepository {
     private fun parseTeamRecordPayload(payload: String): TeamRecordStats? {
         return runCatching {
             JSONObject(payload).toTeamRecordStats()
+        }.onFailure { e ->
+            Log.w(TAG, "parseTeamRecordPayload failed", e)
         }.getOrNull()
     }
 
@@ -702,6 +711,8 @@ object BackendGamesRepository {
                 items.add(UpcomingGameSchedule(gameDate = gameDate, game = game))
             }
             items
+        }.onFailure { e ->
+            Log.w(TAG, "parseUpcomingGamesPayload failed", e)
         }.getOrNull()
     }
 

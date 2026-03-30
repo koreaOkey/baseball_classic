@@ -258,7 +258,7 @@ fun LiveGameScreen(
                     )
                 }
             } else {
-                items(events) { event ->
+                items(events, key = { it.cursor }) { event ->
                     EventCard(event = event)
                 }
             }
