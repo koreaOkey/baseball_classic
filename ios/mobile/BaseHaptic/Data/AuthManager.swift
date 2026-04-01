@@ -2,6 +2,7 @@ import Foundation
 import Supabase
 import AuthenticationServices
 import UIKit
+import SafariServices
 
 enum AuthState: Equatable {
     case loading
@@ -56,7 +57,26 @@ class AuthManager: ObservableObject {
         guard let url = URL(string: "\(baseURL)/auth/v1/authorize?provider=kakao&redirect_to=\(encodedRedirect)") else {
             throw URLError(.badURL)
         }
-        await UIApplication.shared.open(url)
+
+        let callbackURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+            let session = ASWebAuthenticationSession(
+                url: url,
+                callbackURLScheme: "com.basehaptic.app"
+            ) { callbackURL, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let callbackURL {
+                    continuation.resume(returning: callbackURL)
+                } else {
+                    continuation.resume(throwing: URLError(.cancelled))
+                }
+            }
+            session.prefersEphemeralWebBrowserSession = false
+            session.presentationContextProvider = WebAuthContextProvider.shared
+            session.start()
+        }
+
+        try await client.auth.session(from: callbackURL)
     }
 
     func signInWithApple() async throws {
@@ -94,6 +114,19 @@ class AuthManager: ObservableObject {
                 print("[Auth] handleOpenURL error: \(error)")
             }
         }
+    }
+}
+
+// MARK: - ASWebAuthenticationSession Context Provider
+private class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    static let shared = WebAuthContextProvider()
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        guard let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              let window = scene.windows.first(where: { $0.isKeyWindow }) else {
+            return ASPresentationAnchor()
+        }
+        return window
     }
 }
 

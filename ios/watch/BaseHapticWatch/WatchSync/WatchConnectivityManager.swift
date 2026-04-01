@@ -68,7 +68,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     /// applicationContext 업데이트 수신 (테마 + 게임 데이터 폴백)
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        if let type = applicationContext["type"] as? String {
+        if applicationContext["type"] is String {
             // game_data가 applicationContext로 온 경우 (폴백)
             handleMessage(applicationContext)
         } else if let teamName = applicationContext["my_team"] as? String, !teamName.isEmpty {

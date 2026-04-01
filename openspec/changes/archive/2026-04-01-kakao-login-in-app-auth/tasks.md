@@ -1,0 +1,4 @@
+- [x] signInWithKakao()에서 UIApplication.shared.open() → ASWebAuthenticationSession으로 변경
+- [x] WebAuthContextProvider 클래스 추가 (presentationContextProvider)
+- [x] ASWebAuthenticationSession 콜백에서 Supabase session 처리
+- [x] prefersEphemeralWebBrowserSession = false 설정 (기존 쿠키 유지)

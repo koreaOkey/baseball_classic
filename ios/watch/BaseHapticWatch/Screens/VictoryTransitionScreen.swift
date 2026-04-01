@@ -8,7 +8,7 @@ struct VictoryTransitionScreen: View {
 
     private static let frameCount = 81
     private static let frameInterval: UInt64 = 50_000_000 // 50ms = 20fps
-    private static let frameNames: [String] = (1...frameCount).map { String(format: "victory_frame_%03d", $0) }
+    private static let frameNames: [String] = (1...frameCount).map { String(format: "penguin_victory_frame_%03d", $0) }
     private static let prefetchAhead = 3
 
     @State private var currentFrame = 0

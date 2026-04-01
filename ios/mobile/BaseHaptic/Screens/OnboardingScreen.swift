@@ -39,8 +39,9 @@ struct OnboardingScreen: View {
     // MARK: - Step 1: Team Selection
     private var teamSelectionStep: some View {
         VStack(spacing: 0) {
-            Text("⚾")
-                .font(.system(size: 64))
+            Image(systemName: "baseball.fill")
+                .font(.system(size: 56))
+                .foregroundColor(.white)
                 .padding(.bottom, 16)
 
             Text("야구봄")
@@ -98,7 +99,7 @@ struct OnboardingScreen: View {
                 .foregroundColor(.white)
                 .padding(.bottom, 24)
 
-            FeatureCard(emoji: "⌚", title: "워치로 라이브 경기 보기",
+            FeatureCard(systemImage: "applewatch.radiowaves.left.and.right", title: "워치로 라이브 경기 보기",
                         description: "득점, 홈런 등 주요 이벤트 발생 시 스마트워치로 진동 알림을 보냅니다.")
 
             // 경기 일정 자동 동기화 - 추후 공개
@@ -162,8 +163,9 @@ struct OnboardingScreen: View {
                 // 카카오 로그인
                 Button(action: onSignInWithKakao) {
                     HStack(spacing: 8) {
-                        Text("\u{1F4AC}")
+                        Image(systemName: "message.fill")
                             .font(.system(size: 20))
+                            .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
                         Text("카카오로 로그인")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
@@ -232,14 +234,16 @@ private struct TeamSelectionItem: View {
 }
 
 private struct FeatureCard: View {
-    let emoji: String
+    let systemImage: String
     let title: String
     let description: String
 
     var body: some View {
         HStack(alignment: .top) {
-            Text(emoji)
+            Image(systemName: systemImage)
                 .font(.system(size: 24))
+                .foregroundColor(.white)
+                .frame(width: 32)
                 .padding(.trailing, 12)
 
             VStack(alignment: .leading, spacing: 4) {

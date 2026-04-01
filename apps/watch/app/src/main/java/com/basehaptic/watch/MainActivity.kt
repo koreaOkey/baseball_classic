@@ -209,7 +209,7 @@ fun WatchApp(isAmbient: Boolean = false) {
 
     // 영상 ExoPlayer 미리 초기화
     val hitPlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.hit_clip}")
+        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_hit_clip}")
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(clipUri))
             repeatMode = Player.REPEAT_MODE_OFF
@@ -219,7 +219,7 @@ fun WatchApp(isAmbient: Boolean = false) {
         }
     }
     val homeRunPlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.homerun_minion_clip}")
+        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_homerun_clip}")
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(clipUri))
             repeatMode = Player.REPEAT_MODE_OFF
@@ -229,7 +229,7 @@ fun WatchApp(isAmbient: Boolean = false) {
         }
     }
     val doublePlayPlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.double_play_clip}")
+        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_double_play_clip}")
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(clipUri))
             repeatMode = Player.REPEAT_MODE_OFF
@@ -239,7 +239,7 @@ fun WatchApp(isAmbient: Boolean = false) {
         }
     }
     val victoryPlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.victory_clip}")
+        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_victory_clip}")
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(clipUri))
             repeatMode = Player.REPEAT_MODE_OFF
@@ -514,9 +514,9 @@ private data class WatchSyncPrompt(
 
 private const val EVENT_OVERLAY_DURATION_MS = 2200L
 private const val EVENT_OVERLAY_FRESHNESS_MS = 5000L
-private const val HOMERUN_SCREEN_DURATION_MS = 2400L
-private const val HIT_SCREEN_DURATION_MS = 2000L
-private const val DOUBLE_PLAY_SCREEN_DURATION_MS = 2400L
+private const val HOMERUN_SCREEN_DURATION_MS = 5100L
+private const val HIT_SCREEN_DURATION_MS = 4100L
+private const val DOUBLE_PLAY_SCREEN_DURATION_MS = 4100L
 private const val VICTORY_SCREEN_DURATION_MS = 4100L
 
 private fun isTopInning(inning: String): Boolean {

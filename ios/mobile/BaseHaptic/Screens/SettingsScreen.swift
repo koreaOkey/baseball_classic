@@ -100,8 +100,9 @@ struct SettingsScreen: View {
                         // 카카오 로그인
                         Button(action: onSignInWithKakao) {
                             HStack(spacing: 8) {
-                                Text("\u{1F4AC}")
+                                Image(systemName: "message.fill")
                                     .font(.system(size: 20))
+                                    .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
                                 Text("카카오로 로그인")
                                     .font(.system(size: 16, weight: .bold))
                                     .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))

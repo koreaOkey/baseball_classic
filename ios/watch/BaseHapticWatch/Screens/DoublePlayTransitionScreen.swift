@@ -2,13 +2,13 @@ import SwiftUI
 import WatchKit
 
 /// 병살 시 전체 화면 이미지 시퀀스 애니메이션
-/// 398x398 JPEG, 20fps, 47프레임 (~2.35초)
+/// 398x398 JPEG, 20fps, 81프레임 (4.05초)
 struct DoublePlayTransitionScreen: View {
     let onFinished: () -> Void
 
-    private static let frameCount = 47
+    private static let frameCount = 81
     private static let frameInterval: UInt64 = 50_000_000 // 50ms = 20fps
-    private static let frameNames: [String] = (1...frameCount).map { String(format: "dp_frame_%03d", $0) }
+    private static let frameNames: [String] = (1...frameCount).map { String(format: "penguin_dp_frame_%03d", $0) }
     private static let prefetchAhead = 3
 
     @State private var currentFrame = 0

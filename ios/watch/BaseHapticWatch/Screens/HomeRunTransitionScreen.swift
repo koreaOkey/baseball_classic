@@ -2,13 +2,13 @@ import SwiftUI
 import WatchKit
 
 /// 홈런 시 전체 화면 이미지 시퀀스 애니메이션 (Android의 HomeRunTransitionScreen에 대응)
-/// 398x398 HEIC, 20fps, 80프레임 (4초)
+/// 398x398 JPEG, 20fps, 101프레임 (5.05초)
 struct HomeRunTransitionScreen: View {
     let onFinished: () -> Void
 
-    private static let frameCount = 80
+    private static let frameCount = 101
     private static let frameInterval: UInt64 = 50_000_000 // 50ms = 20fps
-    private static let frameNames: [String] = (1...frameCount).map { String(format: "hr_frame_%03d", $0) }
+    private static let frameNames: [String] = (1...frameCount).map { String(format: "penguin_hr_frame_%03d", $0) }
     private static let prefetchAhead = 3
 
     @State private var currentFrame = 0

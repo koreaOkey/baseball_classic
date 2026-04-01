@@ -2,13 +2,13 @@ import SwiftUI
 import WatchKit
 
 /// 안타 시 전체 화면 이미지 시퀀스 애니메이션
-/// 398x398 JPEG, 20fps, 40프레임 (2초)
+/// 398x398 JPEG, 20fps, 81프레임 (4.05초)
 struct HitTransitionScreen: View {
     let onFinished: () -> Void
 
-    private static let frameCount = 40
+    private static let frameCount = 81
     private static let frameInterval: UInt64 = 50_000_000 // 50ms = 20fps
-    private static let frameNames: [String] = (1...frameCount).map { String(format: "hit_frame_%03d", $0) }
+    private static let frameNames: [String] = (1...frameCount).map { String(format: "penguin_hit_frame_%03d", $0) }
     private static let prefetchAhead = 3
 
     @State private var currentFrame = 0
