@@ -79,11 +79,9 @@ class AuthManager: ObservableObject {
         try await client.auth.session(from: callbackURL)
     }
 
-    func signInWithApple() async throws {
-        let helper = AppleSignInHelper()
-        let credential = try await helper.performSignIn()
-
-        guard let idTokenData = credential.identityToken,
+    func signInWithApple(authorization: ASAuthorization) async throws {
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let idTokenData = credential.identityToken,
               let idToken = String(data: idTokenData, encoding: .utf8) else {
             throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Apple ID token missing"])
         }
@@ -130,35 +128,3 @@ private class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationC
     }
 }
 
-// MARK: - Apple Sign In Helper
-private class AppleSignInHelper: NSObject, ASAuthorizationControllerDelegate {
-    private var continuation: CheckedContinuation<ASAuthorizationAppleIDCredential, Error>?
-
-    func performSignIn() async throws -> ASAuthorizationAppleIDCredential {
-        try await withCheckedThrowingContinuation { continuation in
-            self.continuation = continuation
-
-            let provider = ASAuthorizationAppleIDProvider()
-            let request = provider.createRequest()
-            request.requestedScopes = [.email]
-
-            let controller = ASAuthorizationController(authorizationRequests: [request])
-            controller.delegate = self
-            controller.performRequests()
-        }
-    }
-
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
-        if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
-            continuation?.resume(returning: credential)
-        } else {
-            continuation?.resume(throwing: NSError(domain: "AppleSignIn", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid credential type"]))
-        }
-        continuation = nil
-    }
-
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        continuation?.resume(throwing: error)
-        continuation = nil
-    }
-}

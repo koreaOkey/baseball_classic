@@ -5,10 +5,11 @@ struct OnboardingScreen: View {
     let onComplete: (Team) -> Void
     var authState: AuthState = .loggedOut
     var onSignInWithKakao: () -> Void = {}
-    var onSignInWithApple: () -> Void = {}
+    var onSignInWithApple: (ASAuthorization) -> Void = { _ in }
 
     @State private var selectedTeam: Team = .none
     @State private var step = 1
+    @State private var didAutoComplete = false
 
     var body: some View {
         ZStack {
@@ -33,6 +34,12 @@ struct OnboardingScreen: View {
                 Spacer()
             }
             .padding(.horizontal, 24)
+        }
+        .onChange(of: authState) { _, newState in
+            if case .loggedIn = newState, step == 3, !didAutoComplete {
+                didAutoComplete = true
+                onComplete(selectedTeam)
+            }
         }
     }
 
@@ -177,9 +184,12 @@ struct OnboardingScreen: View {
                 }
 
                 // Apple 로그인
-                SignInWithAppleButton(.signIn) { _ in
-                } onCompletion: { _ in
-                    onSignInWithApple()
+                SignInWithAppleButton(.signIn) { request in
+                    request.requestedScopes = [.email]
+                } onCompletion: { result in
+                    if case .success(let authorization) = result {
+                        onSignInWithApple(authorization)
+                    }
                 }
                 .signInWithAppleButtonStyle(.white)
                 .frame(height: 50)

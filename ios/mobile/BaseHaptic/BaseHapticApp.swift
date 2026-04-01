@@ -104,8 +104,8 @@ struct ContentView: View {
                     onSignInWithKakao: {
                         Task { try? await authManager.signInWithKakao() }
                     },
-                    onSignInWithApple: {
-                        Task { try? await authManager.signInWithApple() }
+                    onSignInWithApple: { authorization in
+                        Task { try? await authManager.signInWithApple(authorization: authorization) }
                     }
                 )
             } else {
@@ -179,8 +179,8 @@ struct ContentView: View {
                         onSignInWithKakao: {
                             Task { try? await authManager.signInWithKakao() }
                         },
-                        onSignInWithApple: {
-                            Task { try? await authManager.signInWithApple() }
+                        onSignInWithApple: { authorization in
+                            Task { try? await authManager.signInWithApple(authorization: authorization) }
                         },
                         onSignOut: {
                             Task { try? await authManager.signOut() }

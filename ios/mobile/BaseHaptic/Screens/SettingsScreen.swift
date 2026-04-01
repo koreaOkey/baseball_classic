@@ -10,7 +10,7 @@ struct SettingsScreen: View {
     let onOpenWatchTest: () -> Void
     var authState: AuthState = .loggedOut
     var onSignInWithKakao: () -> Void = {}
-    var onSignInWithApple: () -> Void = {}
+    var onSignInWithApple: (ASAuthorization) -> Void = { _ in }
     var onSignOut: () -> Void = {}
 
     @Environment(\.teamTheme) private var teamTheme
@@ -114,9 +114,12 @@ struct SettingsScreen: View {
                         }
 
                         // Apple 로그인
-                        SignInWithAppleButton(.signIn) { _ in
-                        } onCompletion: { _ in
-                            onSignInWithApple()
+                        SignInWithAppleButton(.signIn) { request in
+                            request.requestedScopes = [.email]
+                        } onCompletion: { result in
+                            if case .success(let authorization) = result {
+                                onSignInWithApple(authorization)
+                            }
                         }
                         .signInWithAppleButtonStyle(.white)
                         .frame(height: 50)
