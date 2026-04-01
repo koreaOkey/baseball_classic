@@ -13,6 +13,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     @Published var latestEventTimestamp: Date?
     @Published var watchSyncPrompt: WatchSyncPrompt?
 
+    /// 경기 데이터가 마지막으로 업데이트된 시각
+    private var gameDataUpdatedAt: Date?
+
     struct WatchSyncPrompt {
         let gameId: String
         let homeTeam: String
@@ -46,6 +49,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         // applicationContext에서 게임 데이터 복원
         if let type = ctx["type"] as? String, type == "game_data" {
             handleMessage(ctx)
+            // 종료된 경기가 자정을 넘긴 경우 바로 정리
+            DispatchQueue.main.async {
+                self.clearExpiredGameData()
+            }
         }
 
         // applicationContext에서 테마 복원
@@ -135,6 +142,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             scoreDiff: 0,
             myTeamName: message["my_team"] as? String ?? ""
         )
+        if let updatedAt = message["updated_at"] as? TimeInterval {
+            gameDataUpdatedAt = Date(timeIntervalSince1970: updatedAt)
+        } else {
+            gameDataUpdatedAt = Date()
+        }
 
         // 모바일에서 이미 경기 관람을 시작한 경우 → 워치 팝업 자동 수락
         if let prompt = watchSyncPrompt,
@@ -152,7 +164,14 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         if let eventType = message["event_type"] as? String, !eventType.isEmpty {
             latestEventType = eventType.uppercased()
             latestEventTimestamp = Date()
-            triggerHaptic(eventType: eventType)
+            // 오래된 이벤트는 햅틱 무시
+            let isStale: Bool = {
+                guard let ts = message["timestamp"] as? TimeInterval else { return false }
+                return Date().timeIntervalSince1970 - ts > Self.staleEventThreshold
+            }()
+            if !isStale {
+                triggerHaptic(eventType: eventType)
+            }
         }
 
         // 경기가 LIVE이면 Extended Session 시작, 종료되면 정지
@@ -169,8 +188,18 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         }
     }
 
+    /// 10초 이상 된 이벤트는 stale로 판정 (워치 재시작 시 이벤트 폭주 방지)
+    private static let staleEventThreshold: TimeInterval = 10.0
+
     private func handleHapticEvent(_ message: [String: Any]) {
         guard let eventType = message["event_type"] as? String, !eventType.isEmpty else { return }
+
+        // 오래된 이벤트는 햅틱 무시
+        if let eventTimestamp = message["timestamp"] as? TimeInterval,
+           Date().timeIntervalSince1970 - eventTimestamp > Self.staleEventThreshold {
+            print("[WatchConnectivity] Skipping stale haptic event: \(eventType)")
+            return
+        }
 
         latestEventType = eventType.uppercased()
         latestEventTimestamp = Date()
@@ -213,6 +242,17 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     func clearSyncPrompt() {
         watchSyncPrompt = nil
+    }
+
+    /// 종료된 경기가 자정을 넘긴 경우 gameData를 nil로 초기화
+    func clearExpiredGameData() {
+        guard let game = gameData, !game.isLive,
+              let updatedAt = gameDataUpdatedAt else { return }
+        let todayMidnight = Calendar.current.startOfDay(for: Date())
+        if updatedAt < todayMidnight {
+            gameData = nil
+            gameDataUpdatedAt = nil
+        }
     }
 
     // MARK: - Extended Runtime Session (백그라운드 햅틱 유지)

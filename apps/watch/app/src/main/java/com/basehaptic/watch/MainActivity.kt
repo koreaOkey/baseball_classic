@@ -472,6 +472,20 @@ private fun readGameDataFromPrefs(context: Context): GameData? {
     val status = prefs.getString(DataLayerListenerService.KEY_STATUS, "") ?: ""
     val isFinished = status.equals("FINISHED", ignoreCase = true) || isFinishedInning(inning)
 
+    // 종료된 경기가 자정을 넘긴 경우 → 경기 없음으로 표시
+    if (isFinished) {
+        val updatedAt = prefs.getLong(DataLayerListenerService.KEY_GAME_UPDATED_AT, 0L)
+        if (updatedAt > 0L) {
+            val todayMidnight = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }.timeInMillis
+            if (updatedAt < todayMidnight) return null
+        }
+    }
+
     return GameData(
         gameId = gameId,
         homeTeam = prefs.getString(DataLayerListenerService.KEY_HOME_TEAM, "") ?: "",

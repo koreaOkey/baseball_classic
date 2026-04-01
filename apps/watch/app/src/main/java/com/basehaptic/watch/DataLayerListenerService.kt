@@ -54,12 +54,14 @@ class DataLayerListenerService : WearableListenerService() {
         const val KEY_LAST_EVENT_TYPE = "last_event_type"
         const val KEY_LAST_EVENT_AT = "last_event_at"
         const val KEY_LAST_EVENT_CURSOR = "last_event_cursor"
+        const val KEY_GAME_UPDATED_AT = "game_updated_at"
         const val KEY_PENDING_SYNC_GAME_ID = "pending_sync_game_id"
         const val KEY_PENDING_SYNC_HOME_TEAM = "pending_sync_home_team"
         const val KEY_PENDING_SYNC_AWAY_TEAM = "pending_sync_away_team"
         const val KEY_PENDING_SYNC_MY_TEAM = "pending_sync_my_team"
 
         private const val WAKE_LOCK_TIMEOUT_MS = 3_000L
+        private const val STALE_EVENT_THRESHOLD_MS = 10_000L
     }
     
     override fun onDataChanged(dataEvents: DataEventBuffer) {
@@ -112,6 +114,7 @@ class DataLayerListenerService : WearableListenerService() {
             .putString(KEY_PITCHER, dataMap.getString(KEY_PITCHER, ""))
             .putString(KEY_BATTER, dataMap.getString(KEY_BATTER, ""))
             .putString(KEY_MY_TEAM, dataMap.getString(KEY_MY_TEAM, ""))
+            .putLong(KEY_GAME_UPDATED_AT, System.currentTimeMillis())
             .apply()
 
         // 테마도 같이 업데이트 (게임 데이터의 my_team 기준)
@@ -141,8 +144,14 @@ class DataLayerListenerService : WearableListenerService() {
 
         val eventType = dataMap.getString(KEY_EVENT_TYPE, "")
         if (eventType.isNotBlank()) {
+            // 오래된 이벤트는 햅틱 무시 (워치 재시작 시 이벤트 폭주 방지)
+            val isStale = if (dataMap.containsKey("updated_at")) {
+                System.currentTimeMillis() - dataMap.getLong("updated_at", 0L) > STALE_EVENT_THRESHOLD_MS
+            } else false
             saveLatestEvent(eventType, null)
-            triggerHapticFeedback(eventType)
+            if (!isStale) {
+                triggerHapticFeedback(eventType)
+            }
         }
 
         if (isFinished) {
@@ -178,6 +187,16 @@ class DataLayerListenerService : WearableListenerService() {
         val dataMap = DataMapItem.fromDataItem(item).dataMap
         val eventType = dataMap.getString(KEY_EVENT_TYPE, "")
         if (eventType.isBlank()) return
+
+        // 오래된 이벤트는 햅틱 무시 (워치 재시작 시 이벤트 폭주 방지)
+        if (dataMap.containsKey("updated_at")) {
+            val eventTimestamp = dataMap.getLong("updated_at", 0L)
+            if (System.currentTimeMillis() - eventTimestamp > STALE_EVENT_THRESHOLD_MS) {
+                Log.d(TAG, "Skipping stale haptic event: $eventType (age=${System.currentTimeMillis() - eventTimestamp}ms)")
+                return
+            }
+        }
+
         val eventCursor = if (dataMap.containsKey(KEY_EVENT_CURSOR)) {
             dataMap.getLong(KEY_EVENT_CURSOR, -1L)
         } else {
@@ -246,6 +265,17 @@ class DataLayerListenerService : WearableListenerService() {
         }
 
         val (timings, amplitudes) = when (eventType.uppercase()) {
+            "VICTORY" -> {
+                // 4초간 반복 진동 (200ms on, 100ms off × 13회 = 3900ms)
+                val count = 13
+                val t = LongArray(count * 2).also { arr ->
+                    for (i in 0 until count) { arr[i * 2] = if (i == 0) 0L else 100L; arr[i * 2 + 1] = 200L }
+                }
+                val a = IntArray(count * 2).also { arr ->
+                    for (i in 0 until count) { arr[i * 2] = 0; arr[i * 2 + 1] = 255 }
+                }
+                t to a
+            }
             "HOMERUN" -> longArrayOf(0, 200, 150, 200, 150, 200) to
                     intArrayOf(0, 255, 0, 255, 0, 255)
             "HIT" -> longArrayOf(0, 150, 100, 150) to

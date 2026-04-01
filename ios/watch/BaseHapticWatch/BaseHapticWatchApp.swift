@@ -21,6 +21,8 @@ struct BaseHapticWatchApp: App {
 struct WatchContentView: View {
     @EnvironmentObject private var connectivity: WatchConnectivityManager
     @Environment(\.watchTeamTheme) private var watchTheme
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var isEventOverlayVisible = false
     @State private var visibleEventType: String?
@@ -36,7 +38,16 @@ struct WatchContentView: View {
 
     var body: some View {
         ZStack {
-            if isVictoryVisible {
+            if isLuminanceReduced {
+                // Always On Display: 간소화된 화면 (애니메이션 없음)
+                if let gameData = connectivity.gameData {
+                    WatchLiveGameScreen(gameData: gameData)
+                        .opacity(0.6)
+                } else {
+                    WatchNoGameScreen()
+                        .opacity(0.6)
+                }
+            } else if isVictoryVisible {
                 // 승리 애니메이션 전체 화면
                 VictoryTransitionScreen(onFinished: {
                     withAnimation(.easeInOut(duration: 0.3)) {
@@ -98,6 +109,16 @@ struct WatchContentView: View {
                 }
             }
         }
+        .onChange(of: isLuminanceReduced) { _, reduced in
+            // AOD 진입 시 진행 중인 전환 애니메이션 해제
+            if reduced {
+                isVictoryVisible = false
+                isHomeRunVisible = false
+                isHitVisible = false
+                isDoublePlayVisible = false
+                isEventOverlayVisible = false
+            }
+        }
         .onChange(of: connectivity.gameData?.isLive) { oldValue, newValue in
             // 경기가 live → finished로 전환될 때 내 팀 승리 확인
             if oldValue == true, newValue == false,
@@ -115,6 +136,8 @@ struct WatchContentView: View {
             }
         }
         .onChange(of: connectivity.latestEventTimestamp) { _, timestamp in
+            // AOD 모드에서는 애니메이션/오버레이 표시하지 않음 (햅틱은 WatchConnectivityManager에서 직접 실행됨)
+            guard !isLuminanceReduced else { return }
             guard let timestamp = timestamp,
                   let eventType = connectivity.latestEventType,
                   Date().timeIntervalSince(timestamp) < eventFreshness else { return }
@@ -158,6 +181,14 @@ struct WatchContentView: View {
                     }
                 }
             }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                connectivity.clearExpiredGameData()
+            }
+        }
+        .onAppear {
+            connectivity.clearExpiredGameData()
         }
     }
 }
