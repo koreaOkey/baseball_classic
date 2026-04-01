@@ -48,5 +48,7 @@
 	<string>wss://baseballclassic-production.up.railway.app</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 </dict>
 </plist>

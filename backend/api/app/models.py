@@ -249,6 +249,21 @@ class DeviceToken(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
 
+class LiveActivityToken(Base):
+    __tablename__ = "live_activity_tokens"
+    __table_args__ = (
+        UniqueConstraint("game_id", "token", name="uq_live_activity_token_game"),
+        Index("idx_live_activity_tokens_game_id", "game_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    token: Mapped[str] = mapped_column(String(256), nullable=False)
+    game_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    my_team: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class TeamRecord(Base):
     __tablename__ = "team_record"
     __table_args__ = (

@@ -103,6 +103,62 @@ async def send_push(
         return False
 
 
+async def send_live_activity_push(
+    push_token: str,
+    content_state: dict[str, Any],
+    *,
+    event_type: str = "update",  # "update" or "end"
+    timestamp: int | None = None,
+) -> bool:
+    """ActivityKit Live Activity push 전송"""
+    settings = get_settings()
+    jwt_token = _create_jwt_token()
+    if jwt_token is None:
+        return False
+
+    base_url = APNS_SANDBOX_URL if settings.apns_use_sandbox else APNS_PRODUCTION_URL
+    url = f"{base_url}/3/device/{push_token}"
+
+    ts = timestamp or int(time.time())
+
+    headers = {
+        "authorization": f"bearer {jwt_token}",
+        "apns-topic": f"{settings.apns_bundle_id}.push-type.liveactivity",
+        "apns-push-type": "liveactivity",
+        "apns-priority": "10",
+    }
+
+    apns_payload = {
+        "aps": {
+            "timestamp": ts,
+            "event": event_type,
+            "content-state": content_state,
+        },
+    }
+
+    try:
+        async with httpx.AsyncClient(http2=True) as client:
+            response = await client.post(
+                url,
+                content=json.dumps(apns_payload),
+                headers={**headers, "content-type": "application/json"},
+                timeout=10.0,
+            )
+
+        if response.status_code == 200:
+            return True
+
+        logger.warning(
+            "[APNs-LA] Push failed: status=%s body=%s token=%s...",
+            response.status_code, response.text, push_token[:16],
+        )
+        return False
+
+    except Exception:
+        logger.exception("[APNs-LA] Push request error: token=%s...", push_token[:16])
+        return False
+
+
 async def send_push_to_tokens(
     tokens: list[str],
     payload: dict[str, Any],

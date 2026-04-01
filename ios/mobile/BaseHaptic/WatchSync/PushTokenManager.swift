@@ -33,6 +33,46 @@ enum PushTokenManager {
         }
     }
 
+    // MARK: - Live Activity Token
+
+    /// Live Activity push token 등록
+    static func registerLiveActivityToken(gameId: String, token: String, myTeam: String) async {
+        let url = URL(string: "\(BackendConfig.baseURL)/live-activity-tokens")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "token": token,
+            "game_id": gameId,
+            "my_team": myTeam,
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            print("[PushToken] Live Activity token registered: \(statusCode)")
+        } catch {
+            print("[PushToken] Live Activity token register failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Live Activity token 해제
+    static func unregisterLiveActivityToken(gameId: String) async {
+        guard let encoded = gameId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return }
+        let url = URL(string: "\(BackendConfig.baseURL)/live-activity-tokens?game_id=\(encoded)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+
+        do {
+            let (_, _) = try await URLSession.shared.data(for: request)
+            print("[PushToken] Live Activity token unregistered")
+        } catch {
+            print("[PushToken] Live Activity token unregister failed: \(error.localizedDescription)")
+        }
+    }
+
     /// 경기 구독 해제 시 디바이스 토큰 삭제
     static func unregister(gameId: String) async {
         guard let token = UserDefaults.standard.string(forKey: "apns_device_token"),

@@ -267,3 +267,9 @@ class DeviceTokenRequest(BaseModel):
     game_id: str = Field(min_length=1, max_length=64)
     my_team: str | None = Field(default=None, max_length=64)
     platform: str = Field(default="ios", max_length=16)
+
+
+class LiveActivityTokenRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+    game_id: str = Field(min_length=1, max_length=64)
+    my_team: str | None = Field(default=None, max_length=64)

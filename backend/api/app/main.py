@@ -19,13 +19,14 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
-from .models import DeviceToken, Game, GameEvent
+from .models import DeviceToken, Game, GameEvent, LiveActivityToken
 from .redis_bus import RedisBroadcastRelay
-from .apns import send_push_to_tokens
+from .apns import send_live_activity_push, send_push_to_tokens
 from .schemas import (
     CrawlerSnapshotRequest,
     CrawlerTeamRecordRequest,
     DeviceTokenRequest,
+    LiveActivityTokenRequest,
     EventsResponse,
     GameStateOut,
     GameStatus,
@@ -319,6 +320,44 @@ def unregister_device_token(
     return {"status": "ok"}
 
 
+@app.post("/live-activity-tokens")
+def register_live_activity_token(
+    payload: LiveActivityTokenRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    existing = db.execute(
+        select(LiveActivityToken).where(
+            LiveActivityToken.game_id == payload.game_id,
+            LiveActivityToken.token == payload.token,
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        existing.my_team = payload.my_team
+    else:
+        db.add(LiveActivityToken(
+            token=payload.token,
+            game_id=payload.game_id,
+            my_team=payload.my_team,
+        ))
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.delete("/live-activity-tokens")
+def unregister_live_activity_token(
+    game_id: str = Query(...),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    rows = db.execute(
+        select(LiveActivityToken).where(LiveActivityToken.game_id == game_id)
+    ).scalars().all()
+    for row in rows:
+        db.delete(row)
+    db.commit()
+    return {"status": "ok"}
+
+
 def _load_push_tokens(game_id: str) -> list[tuple[str, str | None]]:
     """게임에 구독된 디바이스 토큰 목록 조회 (sync DB work)"""
     with SessionLocal() as db:
@@ -389,6 +428,46 @@ async def _send_push_for_game_events(
         for token in tokens:
             payload_with_team = {**push_payload, "my_team": my_team_by_token.get(token, "")}
             await send_push_to_tokens([token], payload_with_team)
+
+
+def _load_live_activity_tokens(game_id: str) -> list[str]:
+    """게임에 구독된 Live Activity 토큰 목록 조회"""
+    with SessionLocal() as db:
+        rows = db.execute(
+            select(LiveActivityToken.token).where(LiveActivityToken.game_id == game_id)
+        ).all()
+        return [row.token for row in rows]
+
+
+async def _send_live_activity_update(
+    game_id: str,
+    state_payload: dict[str, Any],
+    event_type: str = "update",
+) -> None:
+    """Live Activity push로 잠금화면 업데이트"""
+    tokens = await asyncio.to_thread(_load_live_activity_tokens, game_id)
+    if not tokens:
+        return
+
+    last_event_type = state_payload.get("lastEventType")
+    content_state = {
+        "homeScore": state_payload.get("homeScore", 0),
+        "awayScore": state_payload.get("awayScore", 0),
+        "inning": state_payload.get("inning", ""),
+        "ball": state_payload.get("ball", 0),
+        "strike": state_payload.get("strike", 0),
+        "out": state_payload.get("out", 0),
+        "baseFirst": state_payload.get("bases", {}).get("first", False),
+        "baseSecond": state_payload.get("bases", {}).get("second", False),
+        "baseThird": state_payload.get("bases", {}).get("third", False),
+        "pitcher": state_payload.get("pitcher", "") or "",
+        "batter": state_payload.get("batter", "") or "",
+        "status": state_payload.get("status", "LIVE"),
+        "lastEventType": last_event_type,
+    }
+
+    for token in tokens:
+        await send_live_activity_push(token, content_state, event_type=event_type)
 
 
 @app.get("/team-records/{team_id}", response_model=TeamRecordOut)
@@ -509,6 +588,16 @@ def _ingest_crawler_snapshot_locked(
         background_tasks.add_task(
             _send_push_for_game_events, game_id, state_payload, inserted_event_payload,
         )
+
+    # Live Activity push 전송 (잠금화면 실시간 업데이트)
+    la_event = "end" if state_payload.get("status") == "FINISHED" else "update"
+    if inserted_event_payload:
+        state_payload_with_event = {**state_payload, "lastEventType": inserted_event_payload[-1].get("type")}
+    else:
+        state_payload_with_event = {**state_payload, "lastEventType": None}
+    background_tasks.add_task(
+        _send_live_activity_update, game_id, state_payload_with_event, la_event,
+    )
 
     return IngestResult(
         gameId=game.id,

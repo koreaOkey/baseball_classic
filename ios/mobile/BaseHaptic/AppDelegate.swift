@@ -97,9 +97,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNPresentationOptions) -> Void
-    ) {
-        completionHandler([])
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        return []
     }
 }
