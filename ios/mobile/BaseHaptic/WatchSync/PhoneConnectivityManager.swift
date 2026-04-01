@@ -61,6 +61,22 @@ final class PhoneConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         replyHandler(["status": "ok"])
     }
 
+    /// 워치에서 transferUserInfo로 보낸 메시지 수신
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        guard let type = userInfo["type"] as? String else { return }
+
+        switch type {
+        case "watch_sync_response":
+            let gameId = userInfo["game_id"] as? String ?? ""
+            let accepted = userInfo["accepted"] as? Bool ?? false
+            DispatchQueue.main.async {
+                self.watchSyncResponse = WatchSyncResponse(gameId: gameId, accepted: accepted)
+            }
+        default:
+            break
+        }
+    }
+
     func consumePendingResponse() -> WatchSyncResponse? {
         let response = watchSyncResponse
         watchSyncResponse = nil

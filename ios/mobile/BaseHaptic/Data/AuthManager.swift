@@ -33,13 +33,16 @@ class AuthManager: ObservableObject {
             for await (event, session) in stream {
                 await MainActor.run { [weak self] in
                     guard let self else { return }
+                    print("[Auth] authStateChange event: \(event)")
                     switch event {
                     case .signedIn:
                         if let session {
                             self.authState = self.makeLoggedInState(from: session)
+                            print("[Auth] authState → loggedIn")
                         }
                     case .signedOut:
                         self.authState = .loggedOut
+                        print("[Auth] authState → loggedOut")
                     default:
                         break
                     }
@@ -49,7 +52,7 @@ class AuthManager: ObservableObject {
     }
 
     func signInWithKakao() async throws {
-        // Supabase 2.5.1: Provider enum에 kakao 없음 → URL 직접 구성
+        // Supabase 2.5.1: Provider enum에 kakao 없음 → URL 직접 구성 (implicit flow)
         let baseURL = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String
             ?? "https://snrafqoqpmtoannnnwdq.supabase.co"
         let redirectTo = "com.basehaptic.app://login-callback"
@@ -76,7 +79,8 @@ class AuthManager: ObservableObject {
             session.start()
         }
 
-        try await client.auth.session(from: callbackURL)
+        let session = try await client.auth.session(from: callbackURL)
+        authState = makeLoggedInState(from: session)
     }
 
     func signInWithApple(authorization: ASAuthorization) async throws {
@@ -86,9 +90,10 @@ class AuthManager: ObservableObject {
             throw NSError(domain: "AuthManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Apple ID token missing"])
         }
 
-        try await client.auth.signInWithIdToken(
+        let session = try await client.auth.signInWithIdToken(
             credentials: .init(provider: .apple, idToken: idToken)
         )
+        authState = makeLoggedInState(from: session)
     }
 
     func signOut() async throws {
@@ -127,4 +132,5 @@ private class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationC
         return window
     }
 }
+
 

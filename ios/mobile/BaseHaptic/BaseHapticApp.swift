@@ -102,10 +102,24 @@ struct ContentView: View {
                     onComplete: onOnboardingComplete,
                     authState: authManager.authState,
                     onSignInWithKakao: {
-                        Task { try? await authManager.signInWithKakao() }
+                        Task {
+                            do {
+                                try await authManager.signInWithKakao()
+                                print("[Auth] Kakao sign-in succeeded")
+                            } catch {
+                                print("[Auth] Kakao sign-in error: \(error)")
+                            }
+                        }
                     },
                     onSignInWithApple: { authorization in
-                        Task { try? await authManager.signInWithApple(authorization: authorization) }
+                        Task {
+                            do {
+                                try await authManager.signInWithApple(authorization: authorization)
+                                print("[Auth] Apple sign-in succeeded")
+                            } catch {
+                                print("[Auth] Apple sign-in error: \(error)")
+                            }
+                        }
                     }
                 )
             } else {
@@ -177,10 +191,24 @@ struct ContentView: View {
                         onOpenWatchTest: { navigateTo(.watchTest) },
                         authState: authManager.authState,
                         onSignInWithKakao: {
-                            Task { try? await authManager.signInWithKakao() }
+                            Task {
+                                do {
+                                    try await authManager.signInWithKakao()
+                                    print("[Auth] Kakao sign-in succeeded")
+                                } catch {
+                                    print("[Auth] Kakao sign-in error: \(error)")
+                                }
+                            }
                         },
                         onSignInWithApple: { authorization in
-                            Task { try? await authManager.signInWithApple(authorization: authorization) }
+                            Task {
+                                do {
+                                    try await authManager.signInWithApple(authorization: authorization)
+                                    print("[Auth] Apple sign-in succeeded")
+                                } catch {
+                                    print("[Auth] Apple sign-in error: \(error)")
+                                }
+                            }
                         },
                         onSignOut: {
                             Task { try? await authManager.signOut() }

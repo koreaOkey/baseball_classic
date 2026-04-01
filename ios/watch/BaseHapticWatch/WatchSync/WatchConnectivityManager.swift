@@ -194,16 +194,20 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     // MARK: - Send Watch Sync Response
     func sendSyncResponse(gameId: String, accepted: Bool) {
-        guard WCSession.default.isReachable else { return }
-
         let response: [String: Any] = [
             "type": "watch_sync_response",
             "game_id": gameId,
             "accepted": accepted
         ]
 
-        WCSession.default.sendMessage(response, replyHandler: nil) { error in
-            print("[WatchConnectivity] Failed to send sync response: \(error.localizedDescription)")
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(response, replyHandler: nil) { error in
+                print("[WatchConnectivity] sendMessage failed, falling back to transferUserInfo: \(error.localizedDescription)")
+                WCSession.default.transferUserInfo(response)
+            }
+        } else {
+            // 폰이 백그라운드/비활성 상태 → transferUserInfo로 전달 (큐잉됨)
+            WCSession.default.transferUserInfo(response)
         }
     }
 
@@ -239,6 +243,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         let device = WKInterfaceDevice.current()
 
         switch eventType.uppercased() {
+        case "VICTORY":
+            // 4초간 반복 진동 (0.3초 간격, 13회)
+            for i in 0..<13 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.3) {
+                    device.play(.notification)
+                }
+            }
         case "HOMERUN":
             // 3번 강한 진동
             device.play(.notification)

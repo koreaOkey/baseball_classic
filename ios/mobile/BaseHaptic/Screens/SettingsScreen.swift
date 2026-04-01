@@ -65,7 +65,7 @@ struct SettingsScreen: View {
                 SettingsSection(title: "계정")
 
                 switch authState {
-                case .loggedIn(_, let email, _):
+                case .loggedIn(_, let email, let provider):
                     VStack(spacing: 8) {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
@@ -76,7 +76,7 @@ struct SettingsScreen: View {
                                 .foregroundColor(.green)
                             Spacer()
                         }
-                        Text(email ?? "카카오 계정")
+                        Text(email ?? (provider == "apple" ? "애플로 로그인됨" : "카카오로 로그인됨"))
                             .font(.system(size: 16))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
