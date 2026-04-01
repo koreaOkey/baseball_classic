@@ -229,7 +229,7 @@ struct WatchTestScreen: View {
                         let event = rows[rowIndex][colIndex]
                         Button {
                             addLog("[\(event.0)] 수동 전송")
-                            WatchGameSyncManager.shared.sendHapticEvent(eventType: event.0)
+                            sendCurrentState(eventType: event.0)
                         } label: {
                             Text(event.1)
                                 .font(.system(size: 14, weight: .bold))

@@ -22,6 +22,7 @@ struct HitTransitionScreen: View {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
+                    .offset(x: -20)
                     .ignoresSafeArea()
             }
         }

@@ -172,13 +172,15 @@ struct WatchContentView: View {
 
     private func showTransition(for eventType: String) {
         let game = connectivity.gameData
+        let isTestGame = game?.gameId.hasPrefix("test_") == true
+
         let myTeam = game?.myTeamName.uppercased() ?? ""
         let isMyTeamHome = myTeam == game?.homeTeam.uppercased()
         let isMyTeamAway = myTeam == game?.awayTeam.uppercased()
         let inning = game?.inning ?? ""
-        let isMyTeamBatting = (isMyTeamHome && inning.contains("말")) ||
+        let isMyTeamBatting = isTestGame || (isMyTeamHome && inning.contains("말")) ||
                               (isMyTeamAway && inning.contains("초"))
-        let isMyTeamFielding = !isMyTeamBatting && (isMyTeamHome || isMyTeamAway)
+        let isMyTeamFielding = isTestGame || (!isMyTeamBatting && (isMyTeamHome || isMyTeamAway))
 
         if eventType == "VICTORY" {
             withAnimation(.easeInOut(duration: 0.3)) {

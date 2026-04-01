@@ -40,7 +40,8 @@ struct BaseHapticApp: App {
             .preferredColorScheme(.dark)
             .onAppear {
                 connectivityManager.activate()
-                LiveActivityManager.shared.cleanupStaleActivities()
+                // TODO: Live Activity 배포 시 활성화
+                // LiveActivityManager.shared.cleanupStaleActivities()
             }
             .task {
                 await authManager.initialize()
@@ -141,28 +142,20 @@ struct ContentView: View {
             // 기존 스트림 취소 후 새 스트림 시작 (별도 Task로 실행하여 백그라운드에서도 유지)
             gameStreamTask?.cancel()
 
-            // APNs 디바이스 토큰 등록/해제 + Live Activity 시작/종료
+            // APNs 디바이스 토큰 등록/해제
             Task {
                 if let oldGameId = oldId, !oldGameId.isEmpty {
                     await PushTokenManager.unregister(gameId: oldGameId)
-                    await PushTokenManager.unregisterLiveActivityToken(gameId: oldGameId)
-                    LiveActivityManager.shared.endCurrentActivity()
+                    // TODO: Live Activity 배포 시 활성화
+                    // await PushTokenManager.unregisterLiveActivityToken(gameId: oldGameId)
+                    // LiveActivityManager.shared.endCurrentActivity()
                 }
                 if let newGameId = newId, !newGameId.isEmpty {
                     await PushTokenManager.register(gameId: newGameId, myTeam: selectedTeam.rawValue)
-                    // Live Activity 시작
-                    if let game = todayGames.first(where: { $0.id == newGameId }), game.status == .live {
-                        LiveActivityManager.shared.startActivity(
-                            gameId: game.id,
-                            homeTeam: game.homeTeamId.rawValue,
-                            awayTeam: game.awayTeamId.rawValue,
-                            homeScore: game.homeScore,
-                            awayScore: game.awayScore,
-                            inning: game.inning,
-                            status: game.status.rawValue,
-                            myTeam: selectedTeam.rawValue
-                        )
-                    }
+                    // TODO: Live Activity 배포 시 활성화
+                    // if let game = todayGames.first(where: { $0.id == newGameId }), game.status == .live {
+                    //     LiveActivityManager.shared.startActivity(...)
+                    // }
                 }
             }
 
@@ -421,28 +414,12 @@ struct ContentView: View {
                         )
                         lastWatchSignature = signature
 
-                        // Live Activity 로컬 업데이트
-                        let contentState = BaseballGameAttributes.ContentState(
-                            homeScore: state.homeScore,
-                            awayScore: state.awayScore,
-                            inning: state.inning,
-                            ball: state.ball,
-                            strike: state.strike,
-                            out: state.out,
-                            baseFirst: state.baseFirst,
-                            baseSecond: state.baseSecond,
-                            baseThird: state.baseThird,
-                            pitcher: state.pitcher,
-                            batter: state.batter,
-                            status: state.status.rawValue,
-                            lastEventType: nil
-                        )
-                        await LiveActivityManager.shared.updateActivity(state: contentState)
-
-                        // 경기 종료 시 Live Activity 종료
-                        if state.status == .finished {
-                            LiveActivityManager.shared.endCurrentActivity()
-                        }
+                        // TODO: Live Activity 배포 시 활성화
+                        // let contentState = BaseballGameAttributes.ContentState(...)
+                        // await LiveActivityManager.shared.updateActivity(state: contentState)
+                        // if state.status == .finished {
+                        //     LiveActivityManager.shared.endCurrentActivity()
+                        // }
                     }
                 case .events(let items):
                     let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
