@@ -38,15 +38,10 @@ struct WatchContentView: View {
 
     var body: some View {
         ZStack {
-            if isLuminanceReduced {
-                // Always On Display: 간소화된 화면 (애니메이션 없음)
-                if let gameData = connectivity.gameData {
-                    WatchLiveGameScreen(gameData: gameData)
-                        .opacity(0.6)
-                } else {
-                    WatchNoGameScreen()
-                        .opacity(0.6)
-                }
+            if isLuminanceReduced, let gameData = connectivity.gameData, gameData.isLive {
+                // Always On Display: 경기 중일 때만 화면 유지 (경기 종료 시 시계 화면으로 자연스럽게 전환)
+                WatchLiveGameScreen(gameData: gameData)
+                    .opacity(0.6)
             } else if isVictoryVisible {
                 // 승리 애니메이션 전체 화면
                 VictoryTransitionScreen(onFinished: {

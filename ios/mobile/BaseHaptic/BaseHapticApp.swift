@@ -3,6 +3,7 @@ import UIKit
 
 @main
 struct BaseHapticApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var connectivityManager = PhoneConnectivityManager.shared
     @StateObject private var authManager = AuthManager.shared
     @AppStorage("selected_team") private var selectedTeamRaw: String = Team.none.rawValue
@@ -135,9 +136,20 @@ struct ContentView: View {
         .task(id: selectedTeam) {
             await pollGames()
         }
-        .onChange(of: syncedGameId) { _, newId in
+        .onChange(of: syncedGameId) { oldId, newId in
             // 기존 스트림 취소 후 새 스트림 시작 (별도 Task로 실행하여 백그라운드에서도 유지)
             gameStreamTask?.cancel()
+
+            // APNs 디바이스 토큰 등록/해제
+            Task {
+                if let oldGameId = oldId, !oldGameId.isEmpty {
+                    await PushTokenManager.unregister(gameId: oldGameId)
+                }
+                if let newGameId = newId, !newGameId.isEmpty {
+                    await PushTokenManager.register(gameId: newGameId, myTeam: selectedTeam.rawValue)
+                }
+            }
+
             guard let gameId = newId, !gameId.isEmpty else {
                 gameStreamTask = nil
                 return

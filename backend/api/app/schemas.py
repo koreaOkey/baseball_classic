@@ -260,3 +260,10 @@ class GameEventOut(BaseModel):
 class EventsResponse(BaseModel):
     items: list[GameEventOut]
     nextCursor: int | None = None
+
+
+class DeviceTokenRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=256)
+    game_id: str = Field(min_length=1, max_length=64)
+    my_team: str | None = Field(default=None, max_length=64)
+    platform: str = Field(default="ios", max_length=16)

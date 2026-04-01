@@ -233,6 +233,22 @@ class GameNote(Base):
     game: Mapped[Game] = relationship(back_populates="notes")
 
 
+class DeviceToken(Base):
+    __tablename__ = "device_tokens"
+    __table_args__ = (
+        UniqueConstraint("token", "game_id", name="uq_device_token_game"),
+        Index("idx_device_tokens_game_id", "game_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    token: Mapped[str] = mapped_column(String(256), nullable=False)
+    game_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    my_team: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False, default="ios")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class TeamRecord(Base):
     __tablename__ = "team_record"
     __table_args__ = (

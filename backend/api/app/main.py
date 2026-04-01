@@ -19,11 +19,13 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
-from .models import Game, GameEvent
+from .models import DeviceToken, Game, GameEvent
 from .redis_bus import RedisBroadcastRelay
+from .apns import send_push_to_tokens
 from .schemas import (
     CrawlerSnapshotRequest,
     CrawlerTeamRecordRequest,
+    DeviceTokenRequest,
     EventsResponse,
     GameStateOut,
     GameStatus,
@@ -266,6 +268,129 @@ def get_game_events(
     )
 
 
+# MARK: - Device Token (APNs)
+
+@app.post("/device-tokens")
+def register_device_token(
+    payload: DeviceTokenRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    existing = db.execute(
+        select(DeviceToken).where(
+            DeviceToken.token == payload.token,
+            DeviceToken.game_id == payload.game_id,
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        existing.my_team = payload.my_team
+    else:
+        db.add(DeviceToken(
+            token=payload.token,
+            game_id=payload.game_id,
+            my_team=payload.my_team,
+            platform=payload.platform,
+        ))
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.delete("/device-tokens/{token}")
+def unregister_device_token(
+    token: str,
+    game_id: str = Query(...),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    db.execute(
+        select(DeviceToken).where(
+            DeviceToken.token == token,
+            DeviceToken.game_id == game_id,
+        )
+    )
+    row = db.execute(
+        select(DeviceToken).where(
+            DeviceToken.token == token,
+            DeviceToken.game_id == game_id,
+        )
+    ).scalar_one_or_none()
+    if row:
+        db.delete(row)
+        db.commit()
+    return {"status": "ok"}
+
+
+def _load_push_tokens(game_id: str) -> list[tuple[str, str | None]]:
+    """게임에 구독된 디바이스 토큰 목록 조회 (sync DB work)"""
+    with SessionLocal() as db:
+        rows = db.execute(
+            select(DeviceToken.token, DeviceToken.my_team).where(DeviceToken.game_id == game_id)
+        ).all()
+        return [(row.token, row.my_team) for row in rows]
+
+
+async def _send_push_for_game_events(
+    game_id: str,
+    state_payload: dict[str, Any],
+    event_payloads: list[dict[str, Any]],
+) -> None:
+    """게임 이벤트 발생 시 구독된 디바이스에 silent push 전송"""
+    token_rows = await asyncio.to_thread(_load_push_tokens, game_id)
+    if not token_rows:
+        return
+
+    tokens = [t[0] for t in token_rows]
+    my_team_by_token = {t[0]: t[1] for t in token_rows}
+
+    # 이벤트가 있으면 각 이벤트에 대해 push, 없으면 상태 업데이트만
+    if event_payloads:
+        for event in event_payloads:
+            push_payload = {
+                "game_id": state_payload.get("gameId", game_id),
+                "event_type": event.get("type", ""),
+                "event_cursor": event.get("cursor", 0),
+                "home_team": state_payload.get("homeTeam", ""),
+                "away_team": state_payload.get("awayTeam", ""),
+                "home_score": state_payload.get("homeScore", 0),
+                "away_score": state_payload.get("awayScore", 0),
+                "status": state_payload.get("status", ""),
+                "inning": state_payload.get("inning", ""),
+                "ball": state_payload.get("ball", 0),
+                "strike": state_payload.get("strike", 0),
+                "out": state_payload.get("out", 0),
+                "base_first": state_payload.get("bases", {}).get("first", False),
+                "base_second": state_payload.get("bases", {}).get("second", False),
+                "base_third": state_payload.get("bases", {}).get("third", False),
+                "pitcher": state_payload.get("pitcher", ""),
+                "batter": state_payload.get("batter", ""),
+            }
+            # 각 토큰의 my_team 추가
+            for token in tokens:
+                payload_with_team = {**push_payload, "my_team": my_team_by_token.get(token, "")}
+                await send_push_to_tokens([token], payload_with_team)
+    else:
+        # 이벤트 없이 상태만 변경된 경우 (점수 변경 등)
+        push_payload = {
+            "game_id": state_payload.get("gameId", game_id),
+            "home_team": state_payload.get("homeTeam", ""),
+            "away_team": state_payload.get("awayTeam", ""),
+            "home_score": state_payload.get("homeScore", 0),
+            "away_score": state_payload.get("awayScore", 0),
+            "status": state_payload.get("status", ""),
+            "inning": state_payload.get("inning", ""),
+            "ball": state_payload.get("ball", 0),
+            "strike": state_payload.get("strike", 0),
+            "out": state_payload.get("out", 0),
+            "base_first": state_payload.get("bases", {}).get("first", False),
+            "base_second": state_payload.get("bases", {}).get("second", False),
+            "base_third": state_payload.get("bases", {}).get("third", False),
+            "pitcher": state_payload.get("pitcher", ""),
+            "batter": state_payload.get("batter", ""),
+        }
+        for token in tokens:
+            payload_with_team = {**push_payload, "my_team": my_team_by_token.get(token, "")}
+            await send_push_to_tokens([token], payload_with_team)
+
+
 @app.get("/team-records/{team_id}", response_model=TeamRecordOut)
 def get_team_record_by_team(
     team_id: str,
@@ -378,6 +503,12 @@ def _ingest_crawler_snapshot_locked(
     background_tasks.add_task(
         _cache_game_data, game_id, state_payload, inserted_event_payload,
     )
+
+    # APNs silent push 전송 (백그라운드에서도 워치로 이벤트 전달)
+    if inserted_event_payload:
+        background_tasks.add_task(
+            _send_push_for_game_events, game_id, state_payload, inserted_event_payload,
+        )
 
     return IngestResult(
         gameId=game.id,
