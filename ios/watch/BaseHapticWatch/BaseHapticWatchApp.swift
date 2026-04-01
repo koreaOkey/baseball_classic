@@ -215,18 +215,6 @@ struct WatchContentView: View {
 
 // MARK: - Event Overlay
 struct WatchEventOverlay: View {
-            if newPhase == .active {
-                connectivity.clearExpiredGameData()
-            }
-        }
-        .onAppear {
-            connectivity.clearExpiredGameData()
-        }
-    }
-}
-
-// MARK: - Event Overlay
-struct WatchEventOverlay: View {
     let eventType: String
 
     private var eventUI: (label: String, icon: String, color: Color)? {
