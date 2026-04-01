@@ -31,9 +31,12 @@ struct WatchContentView: View {
     @State private var isHitVisible = false
     @State private var isDoublePlayVisible = false
     @State private var isVictoryVisible = false
+    @State private var pendingEventType: String?
+    @State private var pendingEventTimestamp: Date?
 
     private let eventOverlayDuration: TimeInterval = 2.2
     private let eventFreshness: TimeInterval = 5.0
+    private let pendingEventFreshness: TimeInterval = 30.0
     private let homeRunDuration: TimeInterval = 4.0
 
     var body: some View {
@@ -105,13 +108,25 @@ struct WatchContentView: View {
             }
         }
         .onChange(of: isLuminanceReduced) { _, reduced in
-            // AOD 진입 시 진행 중인 전환 애니메이션 해제
             if reduced {
+                // AOD 진입 시 진행 중인 전환 애니메이션 해제
                 isVictoryVisible = false
                 isHomeRunVisible = false
                 isHitVisible = false
                 isDoublePlayVisible = false
                 isEventOverlayVisible = false
+            } else {
+                // AOD 해제(손목 올림) 시 대기 중인 이벤트 재생
+                if let eventType = pendingEventType,
+                   let timestamp = pendingEventTimestamp,
+                   Date().timeIntervalSince(timestamp) < pendingEventFreshness {
+                    pendingEventType = nil
+                    pendingEventTimestamp = nil
+                    showTransition(for: eventType)
+                } else {
+                    pendingEventType = nil
+                    pendingEventTimestamp = nil
+                }
             }
         }
         .onChange(of: connectivity.gameData?.isLive) { oldValue, newValue in
@@ -131,53 +146,75 @@ struct WatchContentView: View {
             }
         }
         .onChange(of: connectivity.latestEventTimestamp) { _, timestamp in
-            // AOD 모드에서는 애니메이션/오버레이 표시하지 않음 (햅틱은 WatchConnectivityManager에서 직접 실행됨)
-            guard !isLuminanceReduced else { return }
             guard let timestamp = timestamp,
                   let eventType = connectivity.latestEventType,
                   Date().timeIntervalSince(timestamp) < eventFreshness else { return }
 
             let upper = eventType.uppercased()
-            let game = connectivity.gameData
-            let myTeam = game?.myTeamName.uppercased() ?? ""
-            let isMyTeamHome = myTeam == game?.homeTeam.uppercased()
-            let isMyTeamAway = myTeam == game?.awayTeam.uppercased()
-            let inning = game?.inning ?? ""
-            let isMyTeamBatting = (isMyTeamHome && inning.contains("말")) ||
-                                  (isMyTeamAway && inning.contains("초"))
-            let isMyTeamFielding = !isMyTeamBatting && (isMyTeamHome || isMyTeamAway)
 
-            if upper == "VICTORY" {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isVictoryVisible = true
+            // AOD 모드에서는 영상 이벤트를 대기열에 저장 (햅틱은 WatchConnectivityManager에서 직접 실행됨)
+            if isLuminanceReduced {
+                if ["HOMERUN", "HIT", "DOUBLE_PLAY", "VICTORY"].contains(upper) {
+                    pendingEventType = upper
+                    pendingEventTimestamp = Date()
                 }
-            } else if upper == "HOMERUN", isMyTeamBatting {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isHomeRunVisible = true
-                }
-            } else if upper == "HIT", isMyTeamBatting {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isHitVisible = true
-                }
-            } else if upper == "DOUBLE_PLAY", isMyTeamFielding {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isDoublePlayVisible = true
-                }
-            } else {
-                // 기타 이벤트 또는 상대팀 이벤트: 오버레이
-                visibleEventType = eventType
-                visibleEventTimestamp = timestamp
-                isEventOverlayVisible = true
+                return
+            }
 
-                DispatchQueue.main.asyncAfter(deadline: .now() + eventOverlayDuration) {
-                    if visibleEventTimestamp == timestamp {
-                        isEventOverlayVisible = false
-                        visibleEventType = nil
-                    }
+            showTransition(for: upper)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                connectivity.clearExpiredGameData()
+            }
+        }
+    }
+
+    private func showTransition(for eventType: String) {
+        let game = connectivity.gameData
+        let myTeam = game?.myTeamName.uppercased() ?? ""
+        let isMyTeamHome = myTeam == game?.homeTeam.uppercased()
+        let isMyTeamAway = myTeam == game?.awayTeam.uppercased()
+        let inning = game?.inning ?? ""
+        let isMyTeamBatting = (isMyTeamHome && inning.contains("말")) ||
+                              (isMyTeamAway && inning.contains("초"))
+        let isMyTeamFielding = !isMyTeamBatting && (isMyTeamHome || isMyTeamAway)
+
+        if eventType == "VICTORY" {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isVictoryVisible = true
+            }
+        } else if eventType == "HOMERUN", isMyTeamBatting {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isHomeRunVisible = true
+            }
+        } else if eventType == "HIT", isMyTeamBatting {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isHitVisible = true
+            }
+        } else if eventType == "DOUBLE_PLAY", isMyTeamFielding {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isDoublePlayVisible = true
+            }
+        } else {
+            // 기타 이벤트 또는 상대팀 이벤트: 오버레이
+            visibleEventType = eventType
+            visibleEventTimestamp = Date()
+            isEventOverlayVisible = true
+
+            let ts = visibleEventTimestamp
+            DispatchQueue.main.asyncAfter(deadline: .now() + eventOverlayDuration) {
+                if visibleEventTimestamp == ts {
+                    isEventOverlayVisible = false
+                    visibleEventType = nil
                 }
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
+    }
+}
+
+// MARK: - Event Overlay
+struct WatchEventOverlay: View {
             if newPhase == .active {
                 connectivity.clearExpiredGameData()
             }
