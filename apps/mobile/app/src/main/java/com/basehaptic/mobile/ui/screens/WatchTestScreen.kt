@@ -112,7 +112,6 @@ private val simulationScenario = listOf(
         },
         delayMs = 3000L
     ),
-    SimEvent(EventType.SCORE, "SSG 2점 리드", { it }),
     SimEvent(EventType.BALL, "최정에게 볼", { it.copy(ball = 1) }),
     SimEvent(
         EventType.OUT,
@@ -164,8 +163,7 @@ private val simulationScenario = listOf(
             )
         },
         delayMs = 3000L
-    ),
-    SimEvent(EventType.SCORE, "KIA 역전", { it.copy(inning = "1회말") })
+    )
 )
 
 @Composable
@@ -387,6 +385,7 @@ fun WatchTestScreen(
                                         onClick = {
                                             addLog("[$type] 수동 전송")
                                             sendCurrentState(type.name)
+                                            WearGameSyncManager.sendHapticEvent(context, type.name)
                                         },
                                         modifier = Modifier
                                             .weight(1f)

@@ -313,6 +313,20 @@ fun SettingsScreen(
 
         item {
             Spacer(modifier = Modifier.height(16.dp))
+            SettingsSection(title = "개발자")
+        }
+
+        item {
+            SettingsItem(
+                icon = Icons.Default.Watch,
+                title = "워치 테스트",
+                subtitle = "시뮬레이션 이벤트로 워치 동기화 테스트",
+                onClick = onOpenWatchTest
+            )
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
             SettingsSection(title = "정보")
         }
 

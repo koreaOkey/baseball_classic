@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0A2EE9240C436B71C1B1997C /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE96A677E34F2CC49DE538E /* Game.swift */; };
 		0D6A47E4F1A834887215F7A8 /* VictoryTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */; };
+		CC1111111111111111111111 /* ScoreTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2222222222222222222222 /* ScoreTransitionScreen.swift */; };
 		15887FB643D106BB387CDCB9 /* BaseHapticApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */; };
 		15AE36C23A5E7E394F13C981 /* PhoneConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCEDEF5F6EAC1E19BA575A /* PhoneConnectivityManager.swift */; };
 		17EDDCE4B419ECA41B8F9FD6 /* TeamTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */; };
@@ -116,6 +117,7 @@
 		B4BD360BFA65BD1D45DBFC4E /* DoublePlayTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoublePlayTransitionScreen.swift; sourceTree = "<group>"; };
 		B7DA9E7CF2523E80A298664E /* LiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveGameScreen.swift; sourceTree = "<group>"; };
 		C7F73397A462741B40912C00 /* WatchTestScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTestScreen.swift; sourceTree = "<group>"; };
+		CC2222222222222222222222 /* ScoreTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreTransitionScreen.swift; sourceTree = "<group>"; };
 		C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamTheme.swift; sourceTree = "<group>"; };
 		D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
 		D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticApp.swift; sourceTree = "<group>"; };
@@ -224,6 +226,7 @@
 				B4BD360BFA65BD1D45DBFC4E /* DoublePlayTransitionScreen.swift */,
 				F02160EE92426CB6BBC5C5B0 /* HitTransitionScreen.swift */,
 				AF0BFD94627C9204BFDBCF7A /* HomeRunTransitionScreen.swift */,
+				CC2222222222222222222222 /* ScoreTransitionScreen.swift */,
 				E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */,
 				745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */,
 				2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */,
@@ -474,6 +477,7 @@
 				A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */,
 				BCEE9E4446DDD495E71BA162 /* HitTransitionScreen.swift in Sources */,
 				FD3779F6DF3FD699477A9E47 /* HomeRunTransitionScreen.swift in Sources */,
+				CC1111111111111111111111 /* ScoreTransitionScreen.swift in Sources */,
 				0D6A47E4F1A834887215F7A8 /* VictoryTransitionScreen.swift in Sources */,
 				2E75C724CD95802AA0187E81 /* WatchColors.swift in Sources */,
 				667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */,

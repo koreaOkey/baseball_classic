@@ -30,6 +30,7 @@ struct WatchContentView: View {
     @State private var isHomeRunVisible = false
     @State private var isHitVisible = false
     @State private var isDoublePlayVisible = false
+    @State private var isScoreVisible = false
     @State private var isVictoryVisible = false
     @State private var pendingEventType: String?
     @State private var pendingEventTimestamp: Date?
@@ -77,6 +78,14 @@ struct WatchContentView: View {
                     }
                 })
                 .transition(.opacity)
+            } else if isScoreVisible {
+                // 득점 애니메이션 전체 화면
+                ScoreTransitionScreen(onFinished: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        isScoreVisible = false
+                    }
+                })
+                .transition(.opacity)
             } else {
                 // Main content
                 if let gameData = connectivity.gameData {
@@ -114,6 +123,7 @@ struct WatchContentView: View {
                 isHomeRunVisible = false
                 isHitVisible = false
                 isDoublePlayVisible = false
+                isScoreVisible = false
                 isEventOverlayVisible = false
             } else {
                 // AOD 해제(손목 올림) 시 대기 중인 이벤트 재생
@@ -154,7 +164,7 @@ struct WatchContentView: View {
 
             // AOD 모드에서는 영상 이벤트를 대기열에 저장 (햅틱은 WatchConnectivityManager에서 직접 실행됨)
             if isLuminanceReduced {
-                if ["HOMERUN", "HIT", "DOUBLE_PLAY", "VICTORY"].contains(upper) {
+                if ["HOMERUN", "HIT", "DOUBLE_PLAY", "SCORE", "VICTORY"].contains(upper) {
                     pendingEventType = upper
                     pendingEventTimestamp = Date()
                 }
@@ -197,6 +207,10 @@ struct WatchContentView: View {
         } else if eventType == "DOUBLE_PLAY", isMyTeamFielding {
             withAnimation(.easeInOut(duration: 0.3)) {
                 isDoublePlayVisible = true
+            }
+        } else if eventType == "SCORE", isMyTeamBatting {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                isScoreVisible = true
             }
         } else {
             // 기타 이벤트 또는 상대팀 이벤트: 오버레이

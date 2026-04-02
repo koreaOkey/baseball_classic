@@ -258,6 +258,7 @@ class DataLayerListenerService : WearableListenerService() {
     }
     
     private fun triggerHapticFeedback(eventType: String) {
+        @Suppress("DEPRECATION")
         val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         if (vibrator == null || !vibrator.hasVibrator()) {
             Log.w(TAG, "Vibrator not available")

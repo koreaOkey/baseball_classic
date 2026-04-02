@@ -203,6 +203,8 @@ fun WatchApp(isAmbient: Boolean = false) {
     var hitTransitionToken by remember { mutableStateOf<Long?>(null) }
     var isDoublePlayTransitionVisible by remember { mutableStateOf(false) }
     var doublePlayTransitionToken by remember { mutableStateOf<Long?>(null) }
+    var isScoreTransitionVisible by remember { mutableStateOf(false) }
+    var scoreTransitionToken by remember { mutableStateOf<Long?>(null) }
     var isVictoryTransitionVisible by remember { mutableStateOf(false) }
     var victoryTransitionToken by remember { mutableStateOf<Long?>(null) }
     var previousGameIsLive by remember { mutableStateOf<Boolean?>(null) }
@@ -238,6 +240,16 @@ fun WatchApp(isAmbient: Boolean = false) {
             prepare()
         }
     }
+    val scorePlayer = remember(context) {
+        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_score_clip}")
+        ExoPlayer.Builder(context).build().apply {
+            setMediaItem(MediaItem.fromUri(clipUri))
+            repeatMode = Player.REPEAT_MODE_OFF
+            volume = 0f
+            playWhenReady = false
+            prepare()
+        }
+    }
     val victoryPlayer = remember(context) {
         val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_victory_clip}")
         ExoPlayer.Builder(context).build().apply {
@@ -249,11 +261,12 @@ fun WatchApp(isAmbient: Boolean = false) {
         }
     }
 
-    DisposableEffect(hitPlayer, homeRunPlayer, doublePlayPlayer, victoryPlayer) {
+    DisposableEffect(hitPlayer, homeRunPlayer, doublePlayPlayer, scorePlayer, victoryPlayer) {
         onDispose {
             hitPlayer.release()
             homeRunPlayer.release()
             doublePlayPlayer.release()
+            scorePlayer.release()
             victoryPlayer.release()
         }
     }
@@ -298,16 +311,18 @@ fun WatchApp(isAmbient: Boolean = false) {
         val event = latestEvent ?: return@LaunchedEffect
         if (System.currentTimeMillis() - event.timestamp > EVENT_OVERLAY_FRESHNESS_MS) return@LaunchedEffect
         val game = gameData ?: return@LaunchedEffect
+        val isTestGame = game.gameId.startsWith("test_")
         val myTeam = game.myTeamName.uppercase()
         val isMyTeamHome = myTeam == game.homeTeam.uppercase()
         val isMyTeamAway = myTeam == game.awayTeam.uppercase()
-        val isMyTeamBatting = (isMyTeamHome && isBottomInning(game.inning)) ||
+        val isMyTeamBatting = isTestGame || (isMyTeamHome && isBottomInning(game.inning)) ||
                               (isMyTeamAway && isTopInning(game.inning))
-        val isMyTeamFielding = !isMyTeamBatting && (isMyTeamHome || isMyTeamAway)
+        val isMyTeamFielding = isTestGame || (!isMyTeamBatting && (isMyTeamHome || isMyTeamAway))
         when (event.type.uppercase()) {
             "HOMERUN" -> if (isMyTeamBatting) homeRunTransitionToken = event.timestamp
             "HIT" -> if (isMyTeamBatting) hitTransitionToken = event.timestamp
             "DOUBLE_PLAY" -> if (isMyTeamFielding) doublePlayTransitionToken = event.timestamp
+            "SCORE" -> if (isMyTeamBatting) scoreTransitionToken = event.timestamp
             "VICTORY" -> victoryTransitionToken = event.timestamp
         }
     }
@@ -345,6 +360,18 @@ fun WatchApp(isAmbient: Boolean = false) {
         if (doublePlayTransitionToken == token) {
             isDoublePlayTransitionVisible = false
             doublePlayPlayer.pause()
+        }
+    }
+
+    LaunchedEffect(scoreTransitionToken) {
+        val token = scoreTransitionToken ?: return@LaunchedEffect
+        scorePlayer.seekTo(0)
+        scorePlayer.play()
+        isScoreTransitionVisible = true
+        delay(SCORE_SCREEN_DURATION_MS)
+        if (scoreTransitionToken == token) {
+            isScoreTransitionVisible = false
+            scorePlayer.pause()
         }
     }
 
@@ -399,6 +426,7 @@ fun WatchApp(isAmbient: Boolean = false) {
                     val transitionState = when {
                         isVictoryTransitionVisible -> "victory"
                         isHomeRunTransitionVisible -> "homerun"
+                        isScoreTransitionVisible -> "score"
                         isDoublePlayTransitionVisible -> "double_play"
                         isHitTransitionVisible -> "hit"
                         else -> "game"
@@ -414,6 +442,7 @@ fun WatchApp(isAmbient: Boolean = false) {
                         when (state) {
                             "victory" -> PlayerTransitionScreen(victoryPlayer)
                             "homerun" -> PlayerTransitionScreen(homeRunPlayer)
+                            "score" -> PlayerTransitionScreen(scorePlayer)
                             "double_play" -> PlayerTransitionScreen(doublePlayPlayer)
                             "hit" -> PlayerTransitionScreen(hitPlayer)
                             else -> {
@@ -423,7 +452,11 @@ fun WatchApp(isAmbient: Boolean = false) {
                                     } else {
                                         NoGameScreen()
                                     }
-                                    WatchEventOverlay(latestEvent = latestEvent)
+                                    WatchEventOverlay(
+                                        latestEvent = latestEvent,
+                                        hideTypes = setOf("HOMERUN", "HIT", "DOUBLE_PLAY", "VICTORY") +
+                                            (if (scoreTransitionToken != null) setOf("SCORE") else emptySet())
+                                    )
                                 }
                             }
                         }
@@ -531,6 +564,7 @@ private const val EVENT_OVERLAY_FRESHNESS_MS = 5000L
 private const val HOMERUN_SCREEN_DURATION_MS = 5100L
 private const val HIT_SCREEN_DURATION_MS = 4100L
 private const val DOUBLE_PLAY_SCREEN_DURATION_MS = 4100L
+private const val SCORE_SCREEN_DURATION_MS = 4100L
 private const val VICTORY_SCREEN_DURATION_MS = 4100L
 
 private fun isTopInning(inning: String): Boolean {
@@ -587,7 +621,7 @@ private fun clearWatchSyncPrompt(context: Context) {
 }
 
 @Composable
-private fun WatchEventOverlay(latestEvent: WatchEventInfo?) {
+private fun WatchEventOverlay(latestEvent: WatchEventInfo?, hideTypes: Set<String> = emptySet()) {
     val uiProfile = rememberWatchUiProfile()
     var visibleEvent by remember { mutableStateOf<WatchEventInfo?>(null) }
 
@@ -596,6 +630,7 @@ private fun WatchEventOverlay(latestEvent: WatchEventInfo?) {
         if (System.currentTimeMillis() - event.timestamp > EVENT_OVERLAY_FRESHNESS_MS) {
             return@LaunchedEffect
         }
+        if (event.type.uppercase() in hideTypes) return@LaunchedEffect
         visibleEvent = event
         delay(EVENT_OVERLAY_DURATION_MS)
         if (visibleEvent?.timestamp == event.timestamp) {

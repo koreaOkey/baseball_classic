@@ -39,7 +39,6 @@ private let simulationScenario: [SimEvent] = [
     SimEvent("STRIKE", "김재환에게 스트라이크") { var s = $0; s.strike = 1; return s },
     SimEvent("STRIKE", "연속 스트라이크") { var s = $0; s.strike = 2; return s },
     SimEvent("HOMERUN", "김재환 투런 홈런", delayMs: 3000) { var s = $0; s.homeScore += 2; s.ball = 0; s.strike = 0; s.baseFirst = false; s.batter = "최정"; return s },
-    SimEvent("SCORE", "SSG 2점 리드") { $0 },
     SimEvent("BALL", "최정에게 볼") { var s = $0; s.ball = 1; return s },
     SimEvent("OUT", "최정 뜬공 아웃") { var s = $0; s.ball = 0; s.strike = 0; s.out = 1; s.batter = "최지훈"; return s },
     SimEvent("STRIKE", "최지훈에게 스트라이크") { var s = $0; s.strike = 1; return s },
@@ -49,8 +48,7 @@ private let simulationScenario: [SimEvent] = [
     SimEvent("STRIKE", "나성범에게 스트라이크") { var s = $0; s.strike = 1; return s },
     SimEvent("BALL", "볼") { var s = $0; s.ball = 1; return s },
     SimEvent("HIT", "나성범 우전 안타") { var s = $0; s.ball = 0; s.strike = 0; s.baseFirst = true; s.batter = "김선빈"; return s },
-    SimEvent("HOMERUN", "김선빈 역전 투런 홈런", delayMs: 3000) { var s = $0; s.awayScore += 2; s.ball = 0; s.strike = 0; s.baseFirst = false; s.batter = "최형우"; return s },
-    SimEvent("SCORE", "KIA 역전") { var s = $0; s.inning = "1회말"; return s }
+    SimEvent("HOMERUN", "김선빈 역전 투런 홈런", delayMs: 3000) { var s = $0; s.awayScore += 2; s.ball = 0; s.strike = 0; s.baseFirst = false; s.batter = "최형우"; return s }
 ]
 
 // MARK: - WatchTestScreen
