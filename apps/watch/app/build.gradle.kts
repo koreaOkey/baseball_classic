@@ -4,22 +4,42 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val keystoreProperties = mutableMapOf<String, String>()
+rootProject.file("keystore.properties").let { file ->
+    if (file.exists()) {
+        file.readLines().filter { it.contains("=") && !it.trimStart().startsWith("#") }.forEach { line ->
+            val (key, value) = line.split("=", limit = 2)
+            keystoreProperties[key.trim()] = value.trim()
+        }
+    }
+}
+
 android {
     namespace = "com.basehaptic.watch"
-    compileSdk = 34
+    compileSdk = 35
+
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file(keystoreProperties["storeFile"] ?: "")
+            storePassword = keystoreProperties["storePassword"] ?: ""
+            keyAlias = keystoreProperties["keyAlias"] ?: ""
+            keyPassword = keystoreProperties["keyPassword"] ?: ""
+        }
+    }
 
     defaultConfig {
         applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 35
+        versionCode = 6
+        versionName = "1.0.1"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

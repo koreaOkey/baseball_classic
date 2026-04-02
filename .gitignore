@@ -12,6 +12,9 @@ __pycache__/
 .gradle/
 **/app/build/
 local.properties
+*.jks
+*.keystore
+keystore.properties
 nul
 
 # IDE

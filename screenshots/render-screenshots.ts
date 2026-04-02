@@ -13,6 +13,22 @@ const compositionIds = [
   "iphone1-onboarding",
   "iphone2-home",
   "iphone3-watch-sync",
+  // Wear OS
+  "wearos-promo",
+  // Android
+  "android-feature-graphic",
+  "android-phone1-home",
+  "android-phone2-onboarding",
+  "android-phone3-watch-sync",
+  "android-phone4-watch-preview",
+  "android-tablet7-1",
+  "android-tablet7-2",
+  "android-tablet7-3",
+  "android-tablet7-4",
+  "android-tablet10-1",
+  "android-tablet10-2",
+  "android-tablet10-3",
+  "android-tablet10-4",
 ];
 
 async function main() {
