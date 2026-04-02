@@ -157,11 +157,11 @@ struct SettingsScreen: View {
                 // )
 
                 // 개발자 섹션 - 배포 시 숨김
-                // Spacer().frame(height: 16)
-                // SettingsSection(title: "개발자")
-                // SettingsItem(icon: "applewatch.radiowaves.left.and.right", title: "워치 테스트", subtitle: "시뮬레이션 이벤트로 워치 동기화 테스트") {
-                //     onOpenWatchTest()
-                // }
+                Spacer().frame(height: 16)
+                SettingsSection(title: "개발자")
+                SettingsItem(icon: "applewatch.radiowaves.left.and.right", title: "워치 테스트", subtitle: "시뮬레이션 이벤트로 워치 동기화 테스트") {
+                    onOpenWatchTest()
+                }
 
                 // 정보 섹션
                 Spacer().frame(height: 16)

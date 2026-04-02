@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
@@ -213,7 +213,17 @@ fun WatchTestScreen(
         logMessages = (listOf(msg) + logMessages).take(30)
     }
 
+    fun shouldSendEvent(eventType: String?): Boolean {
+        val type = eventType?.uppercase() ?: return true
+        if (type == "BALL" || type == "STRIKE") {
+            return context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+                .getBoolean("ball_strike_haptic_enabled", true)
+        }
+        return true
+    }
+
     fun sendCurrentState(eventType: String?) {
+        val filteredEventType = if (shouldSendEvent(eventType)) eventType else null
         WearGameSyncManager.sendGameData(
             context = context,
             gameId = "test_001",
@@ -231,7 +241,7 @@ fun WatchTestScreen(
             pitcher = gameState.pitcher,
             batter = gameState.batter,
             myTeam = selectedTeam.teamName,
-            eventType = eventType
+            eventType = filteredEventType
         )
     }
 
@@ -245,7 +255,7 @@ fun WatchTestScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "뒤로", tint = Color.White)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로", tint = Color.White)
                 }
                 Text(
                     text = "워치 테스트",
@@ -414,7 +424,9 @@ fun WatchTestScreen(
                                         onClick = {
                                             addLog("[$type] 수동 전송")
                                             sendCurrentState(type.name)
-                                            WearGameSyncManager.sendHapticEvent(context, type.name)
+                                            if (shouldSendEvent(type.name)) {
+                                                WearGameSyncManager.sendHapticEvent(context, type.name)
+                                            }
                                         },
                                         modifier = Modifier
                                             .weight(1f)

@@ -375,7 +375,16 @@ struct WatchTestScreen: View {
         logMessages = ([msg] + logMessages).prefix(30).map { $0 }
     }
 
+    private func shouldSendEvent(_ eventType: String?) -> Bool {
+        guard let type = eventType?.uppercased() else { return true }
+        if type == "BALL" || type == "STRIKE" {
+            return UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
+        }
+        return true
+    }
+
     private func sendCurrentState(eventType: String?) {
+        let filteredEventType = shouldSendEvent(eventType) ? eventType : nil
         WatchGameSyncManager.shared.sendGameData(
             gameId: "test_001",
             homeTeam: gameState.homeTeam,
@@ -392,7 +401,7 @@ struct WatchTestScreen: View {
             pitcher: gameState.pitcher,
             batter: gameState.batter,
             myTeam: selectedTeam.rawValue,
-            eventType: eventType
+            eventType: filteredEventType
         )
     }
 
