@@ -87,83 +87,112 @@ data class SimEvent(
     val delayMs: Long = 2000L
 )
 
+// 10분+ 시뮬레이션 시나리오 (백그라운드 데이터 전송 테스트용)
+// 이벤트 간 간격: 기본 5초, 주요 이벤트 7초
 private val simulationScenario = listOf(
-    SimEvent(EventType.BALL, "1회초 초구 볼", { it.copy(ball = 1) }),
-    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }),
-    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }),
-    SimEvent(
-        EventType.HIT,
-        "추신수 좌전 안타",
-        { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김재환") }
-    ),
-    SimEvent(EventType.STRIKE, "김재환에게 스트라이크", { it.copy(strike = 1) }),
-    SimEvent(EventType.STRIKE, "연속 스트라이크", { it.copy(strike = 2) }),
-    SimEvent(
-        EventType.HOMERUN,
-        "김재환 투런 홈런",
-        {
-            it.copy(
-                awayScore = it.awayScore + 2,
-                ball = 0,
-                strike = 0,
-                baseFirst = false,
-                batter = "최정"
-            )
-        },
-        delayMs = 3000L
-    ),
-    SimEvent(EventType.BALL, "최정에게 볼", { it.copy(ball = 1) }),
-    SimEvent(
-        EventType.OUT,
-        "최정 뜬공 아웃",
-        { it.copy(ball = 0, strike = 0, out = 1, batter = "최지훈") }
-    ),
-    SimEvent(EventType.STRIKE, "최지훈에게 스트라이크", { it.copy(strike = 1) }),
-    SimEvent(
-        EventType.HIT,
-        "최지훈 중전 안타",
-        { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "박성한") }
-    ),
-    SimEvent(
-        EventType.OUT,
-        "박성한 1루 땅볼 아웃",
-        { it.copy(ball = 0, strike = 0, out = 2, batter = "이재원") }
-    ),
-    SimEvent(
-        EventType.DOUBLE_PLAY,
-        "이재원 2루수 병살타",
-        {
-            it.copy(
-                ball = 0,
-                strike = 0,
-                out = 0,
-                baseFirst = false,
-                baseSecond = false,
-                baseThird = false
-            )
-        }
-    ),
-    SimEvent(EventType.STRIKE, "나성범에게 스트라이크", { it.copy(strike = 1, inning = "1회말", pitcher = "김건우", batter = "나성범") }),
-    SimEvent(EventType.BALL, "볼", { it.copy(ball = 1) }),
-    SimEvent(
-        EventType.HIT,
-        "나성범 우전 안타",
-        { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김선빈") }
-    ),
-    SimEvent(
-        EventType.HOMERUN,
-        "김선빈 역전 투런 홈런",
-        {
-            it.copy(
-                homeScore = it.homeScore + 2,
-                ball = 0,
-                strike = 0,
-                baseFirst = false,
-                batter = "최형우"
-            )
-        },
-        delayMs = 3000L
-    )
+    // --- 1회초 (SSG 공격) ---
+    SimEvent(EventType.BALL, "1회초 초구 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }, 5000L),
+    SimEvent(EventType.HIT, "추신수 좌전 안타", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김재환") }, 7000L),
+    SimEvent(EventType.STRIKE, "김재환에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "연속 스트라이크", { it.copy(strike = 2) }, 5000L),
+    SimEvent(EventType.HOMERUN, "김재환 투런 홈런", { it.copy(homeScore = it.homeScore + 2, ball = 0, strike = 0, baseFirst = false, batter = "최정") }, 7000L),
+    SimEvent(EventType.BALL, "최정에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.OUT, "최정 뜬공 아웃", { it.copy(ball = 0, strike = 0, out = 1, batter = "최지훈") }, 5000L),
+    SimEvent(EventType.STRIKE, "최지훈에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.HIT, "최지훈 중전 안타", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "박성한") }, 7000L),
+    SimEvent(EventType.OUT, "박성한 1루 땅볼 아웃", { it.copy(ball = 0, strike = 0, out = 2, batter = "이재원") }, 5000L),
+    SimEvent(EventType.DOUBLE_PLAY, "이재원 병살타", { it.copy(ball = 0, strike = 0, out = 0, baseFirst = false, baseSecond = false, baseThird = false, inning = "1회말", pitcher = "김건우", batter = "나성범") }, 7000L),
+    // --- 1회말 (KIA 공격) ---
+    SimEvent(EventType.STRIKE, "나성범에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.HIT, "나성범 우전 안타", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김선빈") }, 7000L),
+    SimEvent(EventType.HOMERUN, "김선빈 역전 투런 홈런", { it.copy(awayScore = it.awayScore + 2, ball = 0, strike = 0, baseFirst = false, batter = "최형우") }, 7000L),
+    SimEvent(EventType.BALL, "최형우에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.OUT, "최형우 삼진 아웃", { it.copy(ball = 0, strike = 0, out = 1, batter = "이창진") }, 5000L),
+    SimEvent(EventType.BALL, "이창진에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.OUT, "이창진 땅볼 아웃", { it.copy(ball = 0, strike = 0, out = 2, batter = "류지혁") }, 5000L),
+    SimEvent(EventType.STRIKE, "류지혁에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "연속 스트라이크", { it.copy(strike = 2) }, 5000L),
+    SimEvent(EventType.OUT, "류지혁 삼진", { it.copy(ball = 0, strike = 0, out = 0, inning = "2회초", pitcher = "김광현", batter = "추신수") }, 5000L),
+    // --- 2회초 (SSG 공격) ---
+    SimEvent(EventType.BALL, "추신수에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 3) }, 5000L),
+    SimEvent(EventType.WALK, "추신수 볼넷", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김재환") }, 7000L),
+    SimEvent(EventType.STRIKE, "김재환에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.HIT, "김재환 좌전 안타", { it.copy(ball = 0, strike = 0, baseFirst = true, baseSecond = true, batter = "최정") }, 7000L),
+    SimEvent(EventType.BALL, "최정에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.HIT, "최정 적시타", { it.copy(homeScore = it.homeScore + 1, ball = 0, strike = 0, baseFirst = true, baseSecond = false, baseThird = true, batter = "최지훈") }, 7000L),
+    SimEvent(EventType.SCORE, "SSG 1점 추가", { it }, 7000L),
+    SimEvent(EventType.BALL, "최지훈에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "연속 스트라이크", { it.copy(strike = 2) }, 5000L),
+    SimEvent(EventType.OUT, "최지훈 삼진", { it.copy(ball = 0, strike = 0, out = 1, batter = "박성한") }, 5000L),
+    SimEvent(EventType.STRIKE, "박성한에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.OUT, "박성한 플라이 아웃", { it.copy(ball = 0, strike = 0, out = 2, batter = "이재원") }, 5000L),
+    SimEvent(EventType.BALL, "이재원에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.OUT, "이재원 땅볼 아웃", { it.copy(ball = 0, strike = 0, out = 0, baseFirst = false, baseThird = false, inning = "2회말", pitcher = "김건우", batter = "나성범") }, 5000L),
+    // --- 2회말 (KIA 공격) ---
+    SimEvent(EventType.STRIKE, "나성범에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.OUT, "나성범 플라이 아웃", { it.copy(ball = 0, strike = 0, out = 1, batter = "김선빈") }, 5000L),
+    SimEvent(EventType.BALL, "김선빈에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.STEAL, "김선빈 도루 시도", { it.copy(baseSecond = true) }, 5000L),
+    SimEvent(EventType.HIT, "최형우 우전 안타", { it.copy(ball = 0, strike = 0, baseFirst = true, baseSecond = true, batter = "이창진") }, 7000L),
+    SimEvent(EventType.STRIKE, "이창진에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "연속 스트라이크", { it.copy(strike = 2) }, 5000L),
+    SimEvent(EventType.OUT, "이창진 삼진", { it.copy(ball = 0, strike = 0, out = 2, batter = "류지혁") }, 5000L),
+    SimEvent(EventType.BALL, "류지혁에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.HIT, "류지혁 적시타", { it.copy(awayScore = it.awayScore + 1, ball = 0, strike = 0, baseFirst = true, baseSecond = false, baseThird = false, batter = "박찬호") }, 7000L),
+    SimEvent(EventType.SCORE, "KIA 동점", { it }, 7000L),
+    SimEvent(EventType.BALL, "박찬호에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.OUT, "박찬호 땅볼 아웃", { it.copy(ball = 0, strike = 0, out = 0, baseFirst = false, inning = "3회초", pitcher = "김광현", batter = "추신수") }, 5000L),
+    // --- 3회초 (SSG 공격) ---
+    SimEvent(EventType.STRIKE, "추신수에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }, 5000L),
+    SimEvent(EventType.HIT, "추신수 중전 안타", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "김재환") }, 7000L),
+    SimEvent(EventType.BALL, "김재환에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }, 5000L),
+    SimEvent(EventType.STRIKE, "연속 스트라이크", { it.copy(strike = 2) }, 5000L),
+    SimEvent(EventType.HIT, "김재환 2루타", { it.copy(homeScore = it.homeScore + 1, ball = 0, strike = 0, baseFirst = false, baseSecond = true, baseThird = true, batter = "최정") }, 7000L),
+    SimEvent(EventType.SCORE, "SSG 역전", { it }, 7000L),
+    SimEvent(EventType.BALL, "최정에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 2) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 3) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 4) }, 5000L),
+    SimEvent(EventType.WALK, "최정 고의사구", { it.copy(ball = 0, strike = 0, baseFirst = true, batter = "최지훈") }, 5000L),
+    SimEvent(EventType.STRIKE, "최지훈에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.OUT, "최지훈 삼진", { it.copy(ball = 0, strike = 0, out = 1, batter = "박성한") }, 5000L),
+    SimEvent(EventType.OUT, "박성한 플라이 아웃", { it.copy(out = 2, batter = "이재원") }, 5000L),
+    SimEvent(EventType.OUT, "이재원 땅볼 아웃", { it.copy(out = 0, baseFirst = false, baseSecond = false, baseThird = false, inning = "3회말", pitcher = "김건우", batter = "나성범") }, 5000L),
+    // --- 3회말 (KIA 공격) ---
+    SimEvent(EventType.BALL, "나성범에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.OUT, "나성범 땅볼 아웃", { it.copy(ball = 0, strike = 0, out = 1, batter = "김선빈") }, 5000L),
+    SimEvent(EventType.STRIKE, "김선빈에게 스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.BALL, "볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.OUT, "김선빈 플라이 아웃", { it.copy(ball = 0, strike = 0, out = 2, batter = "최형우") }, 5000L),
+    SimEvent(EventType.BALL, "최형우에게 볼", { it.copy(ball = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "스트라이크", { it.copy(strike = 1) }, 5000L),
+    SimEvent(EventType.STRIKE, "연속 스트라이크", { it.copy(strike = 2) }, 5000L),
+    SimEvent(EventType.OUT, "최형우 삼진", { it.copy(ball = 0, strike = 0, out = 0, inning = "경기 종료") }, 5000L),
+    // --- 경기 종료 ---
+    SimEvent(EventType.VICTORY, "SSG 승리!", { it }, 7000L)
 )
 
 @Composable
