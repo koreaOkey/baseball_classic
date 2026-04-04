@@ -40,23 +40,21 @@ fun TeamLogo(
         Team.NONE -> null
     }
 
-    Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(team.color),
-        contentAlignment = Alignment.Center
-    ) {
-        if (logoResource != null) {
-            Image(
-                painter = painterResource(id = logoResource),
-                contentDescription = "${team.teamName} 로고",
-                modifier = Modifier
-                    .size(size * 0.8f)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Fit
-            )
-        } else {
+    if (logoResource != null) {
+        Image(
+            painter = painterResource(id = logoResource),
+            contentDescription = "${team.teamName} 로고",
+            modifier = modifier.size(size),
+            contentScale = ContentScale.Fit
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(team.color),
+            contentAlignment = Alignment.Center
+        ) {
             Text(
                 text = "?",
                 color = Color.White,

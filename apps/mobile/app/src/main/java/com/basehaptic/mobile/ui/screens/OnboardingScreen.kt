@@ -332,7 +332,7 @@ private fun TeamSelectionItem(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        TeamLogo(team = team, size = 40.dp)
+        TeamLogo(team = team, size = 72.dp)
         Spacer(modifier = Modifier.width(12.dp))
 
         Text(

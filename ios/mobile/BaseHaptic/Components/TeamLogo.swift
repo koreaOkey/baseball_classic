@@ -6,18 +6,16 @@ struct TeamLogo: View {
     var size: CGFloat = 40
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(team.color)
+        if let imageName = teamImageName, UIImage(named: imageName) != nil {
+            Image(imageName)
+                .resizable()
+                .scaledToFit()
                 .frame(width: size, height: size)
-
-            if let imageName = teamImageName, UIImage(named: imageName) != nil {
-                Image(imageName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: size * 0.8, height: size * 0.8)
-                    .clipShape(Circle())
-            } else {
+        } else {
+            ZStack {
+                Circle()
+                    .fill(team.color)
+                    .frame(width: size, height: size)
                 Text(teamInitial)
                     .font(.system(size: size * 0.4, weight: .bold))
                     .foregroundColor(.white)

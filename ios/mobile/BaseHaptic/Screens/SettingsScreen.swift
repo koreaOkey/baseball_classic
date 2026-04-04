@@ -39,7 +39,7 @@ struct SettingsScreen: View {
                                 showTeamPicker = false
                             } label: {
                                 HStack(spacing: 12) {
-                                    TeamLogo(team: team, size: 32)
+                                    TeamLogo(team: team, size: 56)
                                     Text(team.teamName)
                                         .font(.system(size: 15, weight: team == selectedTeam ? .bold : .regular))
                                         .foregroundColor(team == selectedTeam ? .white : AppColors.gray300)

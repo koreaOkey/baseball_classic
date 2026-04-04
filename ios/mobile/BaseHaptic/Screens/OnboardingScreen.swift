@@ -222,7 +222,7 @@ private struct TeamSelectionItem: View {
     var body: some View {
         Button(action: onTap) {
             HStack {
-                TeamLogo(team: team, size: 40)
+                TeamLogo(team: team, size: 72)
                     .padding(.trailing, 4)
 
                 Text(team.teamName)

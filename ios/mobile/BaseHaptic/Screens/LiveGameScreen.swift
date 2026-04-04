@@ -203,9 +203,9 @@ private struct ScoreboardCard: View {
             }
 
             Spacer().frame(height: 14)
-            LiveTeamScoreRow(teamName: state.awayTeam, team: state.awayTeamId, score: state.awayScore)
+            LiveTeamScoreRow(teamName: state.awayTeamId.teamName, team: state.awayTeamId, score: state.awayScore)
             Spacer().frame(height: 10)
-            LiveTeamScoreRow(teamName: state.homeTeam, team: state.homeTeamId, score: state.homeScore)
+            LiveTeamScoreRow(teamName: state.homeTeamId.teamName, team: state.homeTeamId, score: state.homeScore)
 
             Spacer().frame(height: 12)
             HStack(spacing: 8) {
@@ -263,7 +263,7 @@ private struct LiveTeamScoreRow: View {
     var body: some View {
         HStack {
             HStack(spacing: 10) {
-                TeamLogo(team: team, size: 28)
+                TeamLogo(team: team, size: 52)
                 Text(teamName)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white)

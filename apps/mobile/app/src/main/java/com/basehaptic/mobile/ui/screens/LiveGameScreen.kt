@@ -300,13 +300,13 @@ private fun ScoreboardCard(
 
             TeamScoreRow(
                 team = state.awayTeamId,
-                teamName = state.awayTeam,
+                teamName = state.awayTeamId.teamName,
                 score = state.awayScore
             )
             Spacer(modifier = Modifier.height(10.dp))
             TeamScoreRow(
                 team = state.homeTeamId,
-                teamName = state.homeTeam,
+                teamName = state.homeTeamId.teamName,
                 score = state.homeScore
             )
 
@@ -359,7 +359,7 @@ private fun TeamScoreRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TeamLogo(team = team, size = 28.dp)
+            TeamLogo(team = team, size = 52.dp)
             Spacer(modifier = Modifier.size(10.dp))
             Text(
                 text = teamName,

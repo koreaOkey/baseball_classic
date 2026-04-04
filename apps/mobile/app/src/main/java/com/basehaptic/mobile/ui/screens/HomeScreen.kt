@@ -189,7 +189,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            TeamLogo(team = selectedTeam, size = 56.dp)
+                            TeamLogo(team = selectedTeam, size = 92.dp)
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
@@ -391,13 +391,13 @@ private fun UpcomingGameCard(
 ) {
     val game = upcoming.game
     val isMyTeamHome = game.homeTeamId == selectedTeam
-    val myTeamName = if (isMyTeamHome) game.homeTeam else game.awayTeam
-    val opponentTeamName = if (isMyTeamHome) game.awayTeam else game.homeTeam
+    val myTeamName = if (isMyTeamHome) game.homeTeamId.teamName else game.awayTeamId.teamName
+    val opponentTeamName = if (isMyTeamHome) game.awayTeamId.teamName else game.homeTeamId.teamName
     val dateTimeText = formatUpcomingDateTime(upcoming.gameDate, game.time)
     val venueText = if (isMyTeamHome) {
-        "${game.homeTeam} 홈경기"
+        "${game.homeTeamId.teamName} 홈경기"
     } else {
-        "${game.homeTeam} 원정경기"
+        "${game.homeTeamId.teamName} 원정경기"
     }
 
     Surface(
@@ -644,7 +644,7 @@ private fun GameCard(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     TeamScoreRow(
                         team = game.awayTeamId,
-                        teamName = game.awayTeam,
+                        teamName = game.awayTeamId.teamName,
                         score = game.awayScore,
                         pitcher = game.awayPitcher,
                         isScheduled = isNotStartedStatus(game.status),
@@ -654,7 +654,7 @@ private fun GameCard(
 
                     TeamScoreRow(
                         team = game.homeTeamId,
-                        teamName = game.homeTeam,
+                        teamName = game.homeTeamId.teamName,
                         score = game.homeScore,
                         pitcher = game.homePitcher,
                         isScheduled = isNotStartedStatus(game.status),
@@ -686,7 +686,7 @@ private fun TeamScoreRow(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TeamLogo(team = team, size = 32.dp)
+            TeamLogo(team = team, size = 56.dp)
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(

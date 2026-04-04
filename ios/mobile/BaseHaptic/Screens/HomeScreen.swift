@@ -43,7 +43,7 @@ struct HomeScreen: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 HStack(spacing: 12) {
-                    TeamLogo(team: selectedTeam, size: 56)
+                    TeamLogo(team: selectedTeam, size: 92)
                     VStack(alignment: .leading) {
                         Text("BaseHaptic Live")
                             .font(.system(size: 12))
@@ -228,11 +228,11 @@ private struct GameCard: View {
 
                 // Score rows
                 VStack(spacing: 12) {
-                    TeamScoreRow(team: game.awayTeamId, teamName: game.awayTeam, score: game.awayScore,
+                    TeamScoreRow(team: game.awayTeamId, teamName: game.awayTeamId.teamName, score: game.awayScore,
                                  isScheduled: isNotStartedStatus(game.status),
                                  isWinner: game.status == .finished && game.awayScore > game.homeScore,
                                  isMyTeam: game.isMyTeam)
-                    TeamScoreRow(team: game.homeTeamId, teamName: game.homeTeam, score: game.homeScore,
+                    TeamScoreRow(team: game.homeTeamId, teamName: game.homeTeamId.teamName, score: game.homeScore,
                                  isScheduled: isNotStartedStatus(game.status),
                                  isWinner: game.status == .finished && game.homeScore > game.awayScore,
                                  isMyTeam: game.isMyTeam)
@@ -327,7 +327,7 @@ private struct TeamScoreRow: View {
     var body: some View {
         HStack {
             HStack(spacing: 12) {
-                TeamLogo(team: team, size: 32)
+                TeamLogo(team: team, size: 56)
                 Text(teamName)
                     .font(.system(size: isMyTeam ? 18 : 16, weight: .medium))
                     .foregroundColor(isWinner ? .white : (isScheduled ? .white : AppColors.gray500))
@@ -355,18 +355,18 @@ private struct UpcomingGameCard: View {
                 .foregroundColor(AppColors.gray400)
 
             HStack {
-                Text(isMyTeamHome ? game.homeTeam : game.awayTeam)
+                Text(isMyTeamHome ? game.homeTeamId.teamName : game.awayTeamId.teamName)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white)
                 Text(" vs ")
                     .font(.system(size: 14))
                     .foregroundColor(AppColors.gray500)
-                Text(isMyTeamHome ? game.awayTeam : game.homeTeam)
+                Text(isMyTeamHome ? game.awayTeamId.teamName : game.homeTeamId.teamName)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white)
             }
 
-            Text(isMyTeamHome ? "\(game.homeTeam) 홈경기" : "\(game.homeTeam) 원정경기")
+            Text(isMyTeamHome ? "\(game.homeTeamId.teamName) 홈경기" : "\(game.homeTeamId.teamName) 원정경기")
                 .font(.system(size: 12))
                 .foregroundColor(AppColors.gray500)
         }

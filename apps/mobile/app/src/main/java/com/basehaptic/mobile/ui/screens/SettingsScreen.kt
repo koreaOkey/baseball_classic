@@ -141,7 +141,7 @@ fun SettingsScreen(
                                         .padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    TeamLogo(team = team, size = 32.dp)
+                                    TeamLogo(team = team, size = 56.dp)
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
                                         text = team.teamName,

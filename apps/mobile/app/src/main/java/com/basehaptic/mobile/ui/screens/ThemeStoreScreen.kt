@@ -148,7 +148,7 @@ private fun ThemeStoreItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TeamLogo(team = item.theme.teamId, size = 36.dp)
+                    TeamLogo(team = item.theme.teamId, size = 60.dp)
                     Spacer(modifier = Modifier.size(10.dp))
                     Column {
                         Text(
