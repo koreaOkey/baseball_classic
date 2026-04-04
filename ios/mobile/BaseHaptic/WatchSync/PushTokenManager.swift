@@ -3,6 +3,38 @@ import Foundation
 /// APNs 디바이스 토큰을 백엔드에 등록/해제하는 매니저
 enum PushTokenManager {
 
+    /// embedded.mobileprovision에서 aps-environment를 읽어 sandbox 여부 판단
+    static func isApnsSandbox() -> Bool {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let str = String(data: data, encoding: .ascii) else {
+            // mobileprovision이 없으면 (시뮬레이터 등) DEBUG로 폴백
+            #if DEBUG
+            return true
+            #else
+            return false
+            #endif
+        }
+        // plist 부분 추출
+        if let start = str.range(of: "<plist"),
+           let end = str.range(of: "</plist>") {
+            let plistStr = String(str[start.lowerBound...end.upperBound])
+            if let plistData = plistStr.data(using: .ascii),
+               let plist = try? PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any],
+               let entitlements = plist["Entitlements"] as? [String: Any],
+               let apsEnv = entitlements["aps-environment"] as? String {
+                let isSandbox = apsEnv == "development"
+                print("[PushToken] aps-environment=\(apsEnv) → isSandbox=\(isSandbox)")
+                return isSandbox
+            }
+        }
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
     /// 경기 구독 시 디바이스 토큰을 백엔드에 등록
     static func register(gameId: String, myTeam: String) async {
         guard let token = UserDefaults.standard.string(forKey: "apns_device_token"),
@@ -16,11 +48,7 @@ enum PushTokenManager {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        #if DEBUG
-        let isSandbox = true
-        #else
-        let isSandbox = false
-        #endif
+        let isSandbox = Self.isApnsSandbox()
 
         let body: [String: Any] = [
             "token": token,
@@ -55,11 +83,7 @@ enum PushTokenManager {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        #if DEBUG
-        let isSandbox = true
-        #else
-        let isSandbox = false
-        #endif
+        let isSandbox = Self.isApnsSandbox()
 
         let body: [String: Any] = [
             "token": token,
