@@ -18,16 +18,16 @@ enum Team: String, CaseIterable, Codable, Identifiable {
     var teamName: String {
         switch self {
         case .none: return "없음"
-        case .doosan: return "두산 베어스"
-        case .lg: return "LG 트윈스"
-        case .kiwoom: return "키움 히어로즈"
-        case .samsung: return "삼성 라이온즈"
-        case .lotte: return "롯데 자이언츠"
-        case .ssg: return "SSG 랜더스"
-        case .kt: return "KT 위즈"
-        case .hanwha: return "한화 이글스"
-        case .kia: return "KIA 타이거즈"
-        case .nc: return "NC 다이노스"
+        case .doosan: return "베어스"
+        case .lg: return "트윈스"
+        case .kiwoom: return "히어로즈"
+        case .samsung: return "라이온즈"
+        case .lotte: return "자이언츠"
+        case .ssg: return "랜더스"
+        case .kt: return "위즈"
+        case .hanwha: return "이글스"
+        case .kia: return "타이거즈"
+        case .nc: return "다이노스"
         }
     }
 

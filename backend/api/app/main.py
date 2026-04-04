@@ -553,19 +553,16 @@ def _ingest_crawler_snapshot_locked(
     if game is None or state_payload is None or response_status is None or response_updated_at is None:
         raise HTTPException(status_code=500, detail="snapshot ingest failed")
 
-    if inserted_event_payload:
-        background_tasks.add_task(
-            _broadcast_live_message,
-            game_id,
-            {
-                "type": "events",
-                "payload": {"items": inserted_event_payload},
-            },
-        )
     background_tasks.add_task(
         _broadcast_live_message,
         game_id,
-        {"type": "state", "payload": state_payload},
+        {
+            "type": "update",
+            "payload": {
+                "state": state_payload,
+                "events": inserted_event_payload,
+            },
+        },
     )
 
     # Cache state and recent events in Redis for fast WS on-connect

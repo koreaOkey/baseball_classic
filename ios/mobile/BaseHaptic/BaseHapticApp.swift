@@ -440,6 +440,49 @@ struct ContentView: View {
                             lastSentEventCursor = max(lastSentEventCursor, event.cursor)
                         }
                     }
+                case .update(let state, let events):
+                    // events 먼저 처리 (햅틱)
+                    let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
+                    for event in events.sorted(by: { $0.cursor < $1.cursor }) {
+                        if event.cursor > lastSentEventCursor {
+                            if let mapped = mapToWatchEventType(event.type) {
+                                let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
+                                if !isBallOrStrike || ballStrikeEnabled {
+                                    WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
+                                }
+                            }
+                            lastSentEventCursor = max(lastSentEventCursor, event.cursor)
+                        }
+                    }
+                    // state 반영 (이닝 전환 시 딜레이)
+                    if let state {
+                        let isInningChange = state.out == 0 && (lastWatchSignature?.contains("|0|") == false) && state.status == .live
+                        if isInningChange {
+                            try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        }
+                        let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)"
+                        if signature != lastWatchSignature {
+                            WatchGameSyncManager.shared.sendGameData(
+                                gameId: state.gameId,
+                                homeTeam: state.homeTeam,
+                                awayTeam: state.awayTeam,
+                                homeScore: state.homeScore,
+                                awayScore: state.awayScore,
+                                status: state.status.rawValue,
+                                inning: state.inning,
+                                ball: state.ball,
+                                strike: state.strike,
+                                out: state.out,
+                                baseFirst: state.baseFirst,
+                                baseSecond: state.baseSecond,
+                                baseThird: state.baseThird,
+                                pitcher: state.pitcher,
+                                batter: state.batter,
+                                myTeam: selectedTeam.rawValue
+                            )
+                            lastWatchSignature = signature
+                        }
+                    }
                 case .pong:
                     break
                 }

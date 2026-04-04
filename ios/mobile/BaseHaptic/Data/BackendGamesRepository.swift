@@ -75,6 +75,7 @@ enum LiveStreamMessage {
     case connected
     case state(LiveGameState)
     case events([LiveEvent])
+    case update(state: LiveGameState?, events: [LiveEvent])
     case pong(String?)
     case error(Error)
     case closed
@@ -365,6 +366,11 @@ final class BackendGamesRepository {
                   let itemsArray = payload["items"] as? [[String: Any]] else { return nil }
             let items = itemsArray.compactMap { parseLiveEvent($0) }
             return .events(items)
+        case "update":
+            guard let payload = json["payload"] as? [String: Any] else { return nil }
+            let state = (payload["state"] as? [String: Any]).flatMap { parseLiveGameState($0) }
+            let events = (payload["events"] as? [[String: Any]])?.compactMap { parseLiveEvent($0) } ?? []
+            return .update(state: state, events: events)
         case "pong":
             let at = (json["payload"] as? [String: Any])?["at"] as? String
             return .pong(at)

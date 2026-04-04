@@ -149,6 +149,16 @@ struct LiveGameScreen: View {
                     case .state(let state):
                         gameState = state
                         loadError = nil
+                    case .update(let state, let events):
+                        mergeEvents(events)
+                        if let state {
+                            let isInningChange = state.out == 0 && (gameState?.out ?? 0) >= 1 && state.status == .live
+                            if isInningChange {
+                                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                            }
+                            gameState = state
+                            loadError = nil
+                        }
                     case .pong:
                         break
                     }
