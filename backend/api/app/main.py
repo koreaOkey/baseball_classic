@@ -366,7 +366,7 @@ def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool]]:
         rows = db.execute(
             select(DeviceToken.token, DeviceToken.my_team, DeviceToken.is_sandbox).where(DeviceToken.game_id == game_id)
         ).all()
-        return [(row.token, row.my_team) for row in rows]
+        return [(row.token, row.my_team, row.is_sandbox) for row in rows]
 
 
 async def _send_push_for_game_events(
