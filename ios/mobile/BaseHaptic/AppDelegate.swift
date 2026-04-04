@@ -47,18 +47,25 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
+        let appState = UIApplication.shared.applicationState
+        let stateStr = appState == .active ? "active" : appState == .background ? "background" : "inactive"
+        print("📱 [APNs] Push received | appState=\(stateStr) | payload=\(userInfo)")
+
         guard let eventType = userInfo["event_type"] as? String, !eventType.isEmpty else {
             // 이벤트가 아닌 경우: 게임 상태 업데이트만 시도
             if let gameId = userInfo["game_id"] as? String, !gameId.isEmpty {
+                print("📱 [APNs] No event_type, forwarding game_data only (gameId=\(gameId))")
                 sendGameDataToWatch(from: userInfo)
                 completionHandler(.newData)
             } else {
+                print("📱 [APNs] No event_type, no game_id → noData")
                 completionHandler(.noData)
             }
             return
         }
 
         // 햅틱 이벤트 워치로 전달
+        print("📱 [APNs] Forwarding haptic event to watch: \(eventType)")
         let cursor = userInfo["event_cursor"] as? Int64
         WatchGameSyncManager.shared.sendHapticEvent(eventType: eventType, cursor: cursor)
 

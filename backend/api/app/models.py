@@ -245,6 +245,7 @@ class DeviceToken(Base):
     game_id: Mapped[str] = mapped_column(String(64), nullable=False)
     my_team: Mapped[str | None] = mapped_column(String(64), nullable=True)
     platform: Mapped[str] = mapped_column(String(16), nullable=False, default="ios")
+    is_sandbox: Mapped[bool] = mapped_column(nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 

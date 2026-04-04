@@ -5,38 +5,38 @@ enum PushTokenManager {
 
     /// 경기 구독 시 디바이스 토큰을 백엔드에 등록
     static func register(gameId: String, myTeam: String) async {
-        print("[PushToken] register() called — gameId=\(gameId) myTeam=\(myTeam)")
-
         guard let token = UserDefaults.standard.string(forKey: "apns_device_token"),
               !token.isEmpty else {
-            print("[PushToken] ❌ No device token in UserDefaults! APNs token was never saved.")
+            print("[PushToken] No device token available")
             return
         }
 
-        print("[PushToken] Token found: \(token.prefix(16))...")
-        let urlStr = "\(BackendConfig.baseURL)/device-tokens"
-        print("[PushToken] POST → \(urlStr)")
-
-        let url = URL(string: urlStr)!
+        let url = URL(string: "\(BackendConfig.baseURL)/device-tokens")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        #if DEBUG
+        let isSandbox = true
+        #else
+        let isSandbox = false
+        #endif
 
         let body: [String: Any] = [
             "token": token,
             "game_id": gameId,
             "my_team": myTeam,
-            "platform": "ios"
+            "platform": "ios",
+            "is_sandbox": isSandbox
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let responseBody = String(data: data, encoding: .utf8) ?? ""
-            print("[PushToken] ✅ Registered: status=\(statusCode) body=\(responseBody)")
+            print("[PushToken] Registered: \(statusCode)")
         } catch {
-            print("[PushToken] ❌ Register failed: \(error)")
+            print("[PushToken] Register failed: \(error.localizedDescription)")
         }
     }
 

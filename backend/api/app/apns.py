@@ -58,6 +58,8 @@ def _create_jwt_token() -> str | None:
 async def send_push(
     device_token: str,
     payload: dict[str, Any],
+    *,
+    use_sandbox: bool | None = None,
 ) -> bool:
     """단일 디바이스에 silent push 전송"""
     settings = get_settings()
@@ -65,7 +67,8 @@ async def send_push(
     if jwt_token is None:
         return False
 
-    base_url = APNS_SANDBOX_URL if settings.apns_use_sandbox else APNS_PRODUCTION_URL
+    sandbox = use_sandbox if use_sandbox is not None else settings.apns_use_sandbox
+    base_url = APNS_SANDBOX_URL if sandbox else APNS_PRODUCTION_URL
     url = f"{base_url}/3/device/{device_token}"
 
     headers = {

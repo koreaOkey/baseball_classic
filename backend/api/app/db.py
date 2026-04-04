@@ -70,6 +70,7 @@ def init_db() -> None:
     _ensure_game_event_columns()
     _ensure_boxscore_context_columns()
     _ensure_game_event_type_check_constraint()
+    _ensure_device_token_columns()
 
 
 def _ensure_game_columns() -> None:
@@ -179,6 +180,23 @@ def _ensure_game_event_type_check_constraint() -> None:
             add constraint game_events_event_type_check
             check (event_type in ({values}))
             """,
+        )
+
+
+def _ensure_device_token_columns() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "device_tokens" not in table_names:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("device_tokens")}
+    if "is_sandbox" in columns:
+        return
+
+    with engine.begin() as conn:
+        _execute_ddl_best_effort(
+            conn,
+            "ALTER TABLE device_tokens ADD COLUMN is_sandbox BOOLEAN NOT NULL DEFAULT FALSE",
         )
 
 

@@ -65,16 +65,19 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     /// iPhone에서 보낸 메시지 수신
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        print("⌚ [WatchConn] didReceiveMessage: type=\(message["type"] ?? "nil"), event=\(message["event_type"] ?? "nil")")
         handleMessage(message)
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        print("⌚ [WatchConn] didReceiveMessage(reply): type=\(message["type"] ?? "nil"), event=\(message["event_type"] ?? "nil")")
         handleMessage(message)
         replyHandler(["status": "ok"])
     }
 
     /// applicationContext 업데이트 수신 (테마 + 게임 데이터 폴백)
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        print("⌚ [WatchConn] didReceiveApplicationContext: type=\(applicationContext["type"] ?? "nil")")
         if applicationContext["type"] is String {
             // game_data가 applicationContext로 온 경우 (폴백)
             handleMessage(applicationContext)
@@ -87,6 +90,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     /// transferUserInfo로 수신된 메시지 처리
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        print("⌚ [WatchConn] didReceiveUserInfo: type=\(userInfo["type"] ?? "nil"), event=\(userInfo["event_type"] ?? "nil")")
         handleMessage(userInfo)
     }
 
@@ -192,13 +196,21 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     private static let staleEventThreshold: TimeInterval = 10.0
 
     private func handleHapticEvent(_ message: [String: Any]) {
-        guard let eventType = message["event_type"] as? String, !eventType.isEmpty else { return }
+        guard let eventType = message["event_type"] as? String, !eventType.isEmpty else {
+            print("⌚ [WatchConn] handleHapticEvent: empty event_type, ignoring")
+            return
+        }
 
         // 오래된 이벤트는 햅틱 무시
-        if let eventTimestamp = message["timestamp"] as? TimeInterval,
-           Date().timeIntervalSince1970 - eventTimestamp > Self.staleEventThreshold {
-            print("[WatchConnectivity] Skipping stale haptic event: \(eventType)")
-            return
+        if let eventTimestamp = message["timestamp"] as? TimeInterval {
+            let age = Date().timeIntervalSince1970 - eventTimestamp
+            if age > Self.staleEventThreshold {
+                print("⌚ [WatchConn] Skipping stale haptic event: \(eventType) (age=\(String(format: "%.1f", age))s)")
+                return
+            }
+            print("⌚ [WatchConn] handleHapticEvent: \(eventType) (age=\(String(format: "%.1f", age))s) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
+        } else {
+            print("⌚ [WatchConn] handleHapticEvent: \(eventType) (no timestamp) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
         }
 
         latestEventType = eventType.uppercased()

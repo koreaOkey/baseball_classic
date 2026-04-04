@@ -21,7 +21,7 @@ from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
 from .models import DeviceToken, Game, GameEvent, LiveActivityToken
 from .redis_bus import RedisBroadcastRelay
-from .apns import send_live_activity_push, send_push_to_tokens
+from .apns import send_live_activity_push, send_push, send_push_to_tokens
 from .schemas import (
     CrawlerSnapshotRequest,
     CrawlerTeamRecordRequest,
@@ -285,12 +285,14 @@ def register_device_token(
 
     if existing:
         existing.my_team = payload.my_team
+        existing.is_sandbox = payload.is_sandbox
     else:
         db.add(DeviceToken(
             token=payload.token,
             game_id=payload.game_id,
             my_team=payload.my_team,
             platform=payload.platform,
+            is_sandbox=payload.is_sandbox,
         ))
     db.commit()
     return {"status": "ok"}
@@ -358,11 +360,11 @@ def unregister_live_activity_token(
     return {"status": "ok"}
 
 
-def _load_push_tokens(game_id: str) -> list[tuple[str, str | None]]:
+def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool]]:
     """게임에 구독된 디바이스 토큰 목록 조회 (sync DB work)"""
     with SessionLocal() as db:
         rows = db.execute(
-            select(DeviceToken.token, DeviceToken.my_team).where(DeviceToken.game_id == game_id)
+            select(DeviceToken.token, DeviceToken.my_team, DeviceToken.is_sandbox).where(DeviceToken.game_id == game_id)
         ).all()
         return [(row.token, row.my_team) for row in rows]
 
@@ -377,8 +379,9 @@ async def _send_push_for_game_events(
     if not token_rows:
         return
 
-    tokens = [t[0] for t in token_rows]
     my_team_by_token = {t[0]: t[1] for t in token_rows}
+    sandbox_by_token = {t[0]: t[2] for t in token_rows}
+    tokens = [t[0] for t in token_rows]
 
     # 이벤트가 있으면 각 이벤트에 대해 push, 없으면 상태 업데이트만
     if event_payloads:
@@ -405,7 +408,7 @@ async def _send_push_for_game_events(
             # 각 토큰의 my_team 추가
             for token in tokens:
                 payload_with_team = {**push_payload, "my_team": my_team_by_token.get(token, "")}
-                await send_push_to_tokens([token], payload_with_team)
+                await send_push(token, payload_with_team, use_sandbox=sandbox_by_token.get(token, False))
     else:
         # 이벤트 없이 상태만 변경된 경우 (점수 변경 등)
         push_payload = {
@@ -427,7 +430,7 @@ async def _send_push_for_game_events(
         }
         for token in tokens:
             payload_with_team = {**push_payload, "my_team": my_team_by_token.get(token, "")}
-            await send_push_to_tokens([token], payload_with_team)
+            await send_push(token, payload_with_team, use_sandbox=sandbox_by_token.get(token, False))
 
 
 def _load_live_activity_tokens(game_id: str) -> list[str]:
