@@ -456,7 +456,7 @@ struct ContentView: View {
                     }
                     // state 반영 (이닝 전환 시 딜레이)
                     if let state {
-                        let isInningChange = state.out == 0 && (lastWatchSignature?.contains("|0|") == false) && state.status == .live
+                        let isInningChange = state.out == 0 && (lastWatchSignature.contains("|0|") == false) && state.status == .live
                         if isInningChange {
                             try? await Task.sleep(nanoseconds: 1_500_000_000)
                         }
