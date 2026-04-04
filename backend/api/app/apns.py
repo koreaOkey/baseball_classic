@@ -69,8 +69,6 @@ async def send_push(
         return False
 
     sandbox = use_sandbox if use_sandbox is not None else settings.apns_use_sandbox
-    base_url = APNS_SANDBOX_URL if sandbox else APNS_PRODUCTION_URL
-    url = f"{base_url}/3/device/{device_token}"
 
     # watchOS는 별도 번들 ID 사용
     topic = f"{settings.apns_bundle_id}.watchkitapp" if platform == "watchos" else settings.apns_bundle_id
@@ -87,27 +85,47 @@ async def send_push(
         **payload,
     }
 
-    try:
-        async with httpx.AsyncClient(http2=True) as client:
-            response = await client.post(
-                url,
-                content=json.dumps(apns_payload),
-                headers={**headers, "content-type": "application/json"},
-                timeout=10.0,
-            )
+    # 먼저 지정된 환경으로 시도, 실패 시 반대 환경으로 폴백
+    environments = [sandbox, not sandbox]
+    for try_sandbox in environments:
+        base_url = APNS_SANDBOX_URL if try_sandbox else APNS_PRODUCTION_URL
+        url = f"{base_url}/3/device/{device_token}"
 
-        if response.status_code == 200:
-            return True
+        try:
+            async with httpx.AsyncClient(http2=True) as client:
+                response = await client.post(
+                    url,
+                    content=json.dumps(apns_payload),
+                    headers={**headers, "content-type": "application/json"},
+                    timeout=10.0,
+                )
 
-        body = response.text
-        logger.warning("[APNs] Push failed: status=%s body=%s token=%s... sandbox=%s topic=%s", response.status_code, body, device_token[:16], sandbox, topic)
+            if response.status_code == 200:
+                # 환경이 바뀌었으면 DB 업데이트를 위해 로그
+                if try_sandbox != sandbox:
+                    logger.info("[APNs] Push succeeded with fallback env: sandbox=%s token=%s...", try_sandbox, device_token[:16])
+                return True
 
-        # 410 Gone = 토큰 만료 → 호출자가 삭제 처리
-        return False
+            body = response.text
+            reason = ""
+            try:
+                reason = json.loads(body).get("reason", "")
+            except Exception:
+                pass
 
-    except Exception:
-        logger.exception("[APNs] Push request error: token=%s...", device_token[:16])
-        return False
+            # 환경 불일치면 반대 환경으로 재시도
+            if reason in ("BadEnvironmentKeyInToken",) and try_sandbox == sandbox:
+                logger.info("[APNs] Environment mismatch, retrying with sandbox=%s token=%s...", not sandbox, device_token[:16])
+                continue
+
+            logger.warning("[APNs] Push failed: status=%s body=%s token=%s... sandbox=%s topic=%s", response.status_code, body, device_token[:16], try_sandbox, topic)
+            return False
+
+        except Exception:
+            logger.exception("[APNs] Push request error: token=%s...", device_token[:16])
+            return False
+
+    return False
 
 
 async def send_live_activity_push(
