@@ -139,6 +139,10 @@ struct ContentView: View {
             await pollGames()
         }
         .onChange(of: syncedGameId) { oldId, newId in
+            // UserDefaults에 저장 (워치 토큰 등록 시 참조)
+            UserDefaults.standard.set(newId ?? "", forKey: "synced_game_id")
+            UserDefaults.standard.set(selectedTeam.rawValue, forKey: "synced_my_team")
+
             // 기존 스트림 취소 후 새 스트림 시작 (별도 Task로 실행하여 백그라운드에서도 유지)
             gameStreamTask?.cancel()
 
@@ -146,12 +150,14 @@ struct ContentView: View {
             Task {
                 if let oldGameId = oldId, !oldGameId.isEmpty {
                     await PushTokenManager.unregister(gameId: oldGameId)
+                    await PushTokenManager.unregisterWatchToken(gameId: oldGameId)
                     // TODO: Live Activity 배포 시 활성화
                     // await PushTokenManager.unregisterLiveActivityToken(gameId: oldGameId)
                     // LiveActivityManager.shared.endCurrentActivity()
                 }
                 if let newGameId = newId, !newGameId.isEmpty {
                     await PushTokenManager.register(gameId: newGameId, myTeam: selectedTeam.rawValue)
+                    await PushTokenManager.registerWatchToken(gameId: newGameId, myTeam: selectedTeam.rawValue)
                     // TODO: Live Activity 배포 시 활성화
                     // if let game = todayGames.first(where: { $0.id == newGameId }), game.status == .live {
                     //     LiveActivityManager.shared.startActivity(...)

@@ -360,13 +360,14 @@ def unregister_live_activity_token(
     return {"status": "ok"}
 
 
-def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool]]:
+def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str]]:
     """게임에 구독된 디바이스 토큰 목록 조회 (sync DB work)"""
     with SessionLocal() as db:
         rows = db.execute(
-            select(DeviceToken.token, DeviceToken.my_team, DeviceToken.is_sandbox).where(DeviceToken.game_id == game_id)
+            select(DeviceToken.token, DeviceToken.my_team, DeviceToken.is_sandbox, DeviceToken.platform)
+            .where(DeviceToken.game_id == game_id)
         ).all()
-        return [(row.token, row.my_team, row.is_sandbox) for row in rows]
+        return [(row.token, row.my_team, row.is_sandbox, row.platform) for row in rows]
 
 
 async def _send_push_for_game_events(
@@ -379,58 +380,44 @@ async def _send_push_for_game_events(
     if not token_rows:
         return
 
-    my_team_by_token = {t[0]: t[1] for t in token_rows}
-    sandbox_by_token = {t[0]: t[2] for t in token_rows}
-    tokens = [t[0] for t in token_rows]
+    token_info = {t[0]: {"my_team": t[1], "is_sandbox": t[2], "platform": t[3]} for t in token_rows}
+    tokens = list(token_info.keys())
 
     # 이벤트가 있으면 각 이벤트에 대해 push, 없으면 상태 업데이트만
+    base_payload = {
+        "game_id": state_payload.get("gameId", game_id),
+        "home_team": state_payload.get("homeTeam", ""),
+        "away_team": state_payload.get("awayTeam", ""),
+        "home_score": state_payload.get("homeScore", 0),
+        "away_score": state_payload.get("awayScore", 0),
+        "status": state_payload.get("status", ""),
+        "inning": state_payload.get("inning", ""),
+        "ball": state_payload.get("ball", 0),
+        "strike": state_payload.get("strike", 0),
+        "out": state_payload.get("out", 0),
+        "base_first": state_payload.get("bases", {}).get("first", False),
+        "base_second": state_payload.get("bases", {}).get("second", False),
+        "base_third": state_payload.get("bases", {}).get("third", False),
+        "pitcher": state_payload.get("pitcher", ""),
+        "batter": state_payload.get("batter", ""),
+    }
+
     if event_payloads:
         for event in event_payloads:
             push_payload = {
-                "game_id": state_payload.get("gameId", game_id),
+                **base_payload,
                 "event_type": event.get("type", ""),
                 "event_cursor": event.get("cursor", 0),
-                "home_team": state_payload.get("homeTeam", ""),
-                "away_team": state_payload.get("awayTeam", ""),
-                "home_score": state_payload.get("homeScore", 0),
-                "away_score": state_payload.get("awayScore", 0),
-                "status": state_payload.get("status", ""),
-                "inning": state_payload.get("inning", ""),
-                "ball": state_payload.get("ball", 0),
-                "strike": state_payload.get("strike", 0),
-                "out": state_payload.get("out", 0),
-                "base_first": state_payload.get("bases", {}).get("first", False),
-                "base_second": state_payload.get("bases", {}).get("second", False),
-                "base_third": state_payload.get("bases", {}).get("third", False),
-                "pitcher": state_payload.get("pitcher", ""),
-                "batter": state_payload.get("batter", ""),
             }
-            # 각 토큰의 my_team 추가
             for token in tokens:
-                payload_with_team = {**push_payload, "my_team": my_team_by_token.get(token, "")}
-                await send_push(token, payload_with_team, use_sandbox=sandbox_by_token.get(token, False))
+                info = token_info[token]
+                payload_with_team = {**push_payload, "my_team": info["my_team"] or ""}
+                await send_push(token, payload_with_team, use_sandbox=info["is_sandbox"], platform=info["platform"])
     else:
-        # 이벤트 없이 상태만 변경된 경우 (점수 변경 등)
-        push_payload = {
-            "game_id": state_payload.get("gameId", game_id),
-            "home_team": state_payload.get("homeTeam", ""),
-            "away_team": state_payload.get("awayTeam", ""),
-            "home_score": state_payload.get("homeScore", 0),
-            "away_score": state_payload.get("awayScore", 0),
-            "status": state_payload.get("status", ""),
-            "inning": state_payload.get("inning", ""),
-            "ball": state_payload.get("ball", 0),
-            "strike": state_payload.get("strike", 0),
-            "out": state_payload.get("out", 0),
-            "base_first": state_payload.get("bases", {}).get("first", False),
-            "base_second": state_payload.get("bases", {}).get("second", False),
-            "base_third": state_payload.get("bases", {}).get("third", False),
-            "pitcher": state_payload.get("pitcher", ""),
-            "batter": state_payload.get("batter", ""),
-        }
         for token in tokens:
-            payload_with_team = {**push_payload, "my_team": my_team_by_token.get(token, "")}
-            await send_push(token, payload_with_team, use_sandbox=sandbox_by_token.get(token, False))
+            info = token_info[token]
+            payload_with_team = {**base_payload, "my_team": info["my_team"] or ""}
+            await send_push(token, payload_with_team, use_sandbox=info["is_sandbox"], platform=info["platform"])
 
 
 def _load_live_activity_tokens(game_id: str) -> list[str]:

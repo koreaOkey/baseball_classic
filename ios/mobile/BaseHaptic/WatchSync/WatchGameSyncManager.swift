@@ -82,14 +82,7 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
 
     // MARK: - Send Haptic Event
     func sendHapticEvent(eventType: String, cursor: Int64? = nil) {
-        let activationState = WCSession.default.activationState
-        guard activationState == .activated else {
-            print("📱 [WatchGameSync] sendHapticEvent SKIP - session not activated (state=\(activationState.rawValue))")
-            return
-        }
-
-        let isReachable = WCSession.default.isReachable
-        print("📱 [WatchGameSync] sendHapticEvent: \(eventType) | isReachable=\(isReachable) | isPaired=\(WCSession.default.isPaired) | isWatchAppInstalled=\(WCSession.default.isWatchAppInstalled)")
+        guard WCSession.default.activationState == .activated else { return }
 
         var message: [String: Any] = [
             "type": "haptic_event",
@@ -100,14 +93,13 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
             message["event_cursor"] = cursor
         }
 
-        if isReachable {
+        if WCSession.default.isReachable {
             WCSession.default.sendMessage(message, replyHandler: nil) { error in
-                print("📱 [WatchGameSync] sendMessage FAILED for haptic: \(error.localizedDescription)")
+                print("[WatchGameSync] Failed to send haptic event: \(error.localizedDescription)")
             }
-            print("📱 [WatchGameSync] sendMessage sent for haptic: \(eventType)")
         } else {
+            // 워치가 unreachable이어도 워치 직접 APNs로 전달되므로 transferUserInfo는 폴백용
             WCSession.default.transferUserInfo(message)
-            print("📱 [WatchGameSync] transferUserInfo queued for haptic: \(eventType) (watch not reachable)")
         }
     }
 

@@ -60,6 +60,7 @@ async def send_push(
     payload: dict[str, Any],
     *,
     use_sandbox: bool | None = None,
+    platform: str = "ios",
 ) -> bool:
     """단일 디바이스에 silent push 전송"""
     settings = get_settings()
@@ -71,9 +72,12 @@ async def send_push(
     base_url = APNS_SANDBOX_URL if sandbox else APNS_PRODUCTION_URL
     url = f"{base_url}/3/device/{device_token}"
 
+    # watchOS는 별도 번들 ID 사용
+    topic = f"{settings.apns_bundle_id}.watchkitapp" if platform == "watchos" else settings.apns_bundle_id
+
     headers = {
         "authorization": f"bearer {jwt_token}",
-        "apns-topic": settings.apns_bundle_id,
+        "apns-topic": topic,
         "apns-push-type": "background",
         "apns-priority": "5",
     }

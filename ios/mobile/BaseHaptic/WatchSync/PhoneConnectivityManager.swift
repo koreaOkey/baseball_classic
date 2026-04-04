@@ -41,18 +41,7 @@ final class PhoneConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     /// 워치에서 보낸 메시지 수신 (sync response 등)
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        guard let type = message["type"] as? String else { return }
-
-        switch type {
-        case "watch_sync_response":
-            let gameId = message["game_id"] as? String ?? ""
-            let accepted = message["accepted"] as? Bool ?? false
-            DispatchQueue.main.async {
-                self.watchSyncResponse = WatchSyncResponse(gameId: gameId, accepted: accepted)
-            }
-        default:
-            break
-        }
+        handleWatchMessage(message)
     }
 
     /// 워치에서 보낸 메시지 수신 (reply 포함)
@@ -63,14 +52,31 @@ final class PhoneConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     /// 워치에서 transferUserInfo로 보낸 메시지 수신
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
-        guard let type = userInfo["type"] as? String else { return }
+        handleWatchMessage(userInfo)
+    }
+
+    private func handleWatchMessage(_ message: [String: Any]) {
+        guard let type = message["type"] as? String else { return }
 
         switch type {
         case "watch_sync_response":
-            let gameId = userInfo["game_id"] as? String ?? ""
-            let accepted = userInfo["accepted"] as? Bool ?? false
+            let gameId = message["game_id"] as? String ?? ""
+            let accepted = message["accepted"] as? Bool ?? false
             DispatchQueue.main.async {
                 self.watchSyncResponse = WatchSyncResponse(gameId: gameId, accepted: accepted)
+            }
+        case "watch_push_token":
+            if let token = message["watch_token"] as? String, !token.isEmpty {
+                print("[PhoneConnectivity] Received watch push token: \(token.prefix(16))...")
+                UserDefaults.standard.set(token, forKey: "watch_apns_device_token")
+                // 현재 구독 중인 경기가 있으면 즉시 백엔드에 등록
+                if let gameId = UserDefaults.standard.string(forKey: "synced_game_id"),
+                   !gameId.isEmpty {
+                    let myTeam = UserDefaults.standard.string(forKey: "synced_my_team") ?? ""
+                    Task {
+                        await PushTokenManager.registerWatchToken(gameId: gameId, myTeam: myTeam)
+                    }
+                }
             }
         default:
             break

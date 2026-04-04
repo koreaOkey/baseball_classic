@@ -3,6 +3,7 @@ import WatchKit
 
 @main
 struct BaseHapticWatchApp: App {
+    @WKApplicationDelegateAdaptor(WatchAppDelegate.self) var appDelegate
     @StateObject private var connectivity = WatchConnectivityManager.shared
 
     var body: some Scene {

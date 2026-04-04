@@ -65,19 +65,16 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     /// iPhone에서 보낸 메시지 수신
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        print("⌚ [WatchConn] didReceiveMessage: type=\(message["type"] ?? "nil"), event=\(message["event_type"] ?? "nil")")
         handleMessage(message)
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-        print("⌚ [WatchConn] didReceiveMessage(reply): type=\(message["type"] ?? "nil"), event=\(message["event_type"] ?? "nil")")
         handleMessage(message)
         replyHandler(["status": "ok"])
     }
 
     /// applicationContext 업데이트 수신 (테마 + 게임 데이터 폴백)
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        print("⌚ [WatchConn] didReceiveApplicationContext: type=\(applicationContext["type"] ?? "nil")")
         if applicationContext["type"] is String {
             // game_data가 applicationContext로 온 경우 (폴백)
             handleMessage(applicationContext)
@@ -90,7 +87,6 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     /// transferUserInfo로 수신된 메시지 처리
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
-        print("⌚ [WatchConn] didReceiveUserInfo: type=\(userInfo["type"] ?? "nil"), event=\(userInfo["event_type"] ?? "nil")")
         handleMessage(userInfo)
     }
 
@@ -196,21 +192,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     private static let staleEventThreshold: TimeInterval = 10.0
 
     private func handleHapticEvent(_ message: [String: Any]) {
-        guard let eventType = message["event_type"] as? String, !eventType.isEmpty else {
-            print("⌚ [WatchConn] handleHapticEvent: empty event_type, ignoring")
-            return
-        }
+        guard let eventType = message["event_type"] as? String, !eventType.isEmpty else { return }
 
         // 오래된 이벤트는 햅틱 무시
-        if let eventTimestamp = message["timestamp"] as? TimeInterval {
-            let age = Date().timeIntervalSince1970 - eventTimestamp
-            if age > Self.staleEventThreshold {
-                print("⌚ [WatchConn] Skipping stale haptic event: \(eventType) (age=\(String(format: "%.1f", age))s)")
-                return
-            }
-            print("⌚ [WatchConn] handleHapticEvent: \(eventType) (age=\(String(format: "%.1f", age))s) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
-        } else {
-            print("⌚ [WatchConn] handleHapticEvent: \(eventType) (no timestamp) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
+        if let eventTimestamp = message["timestamp"] as? TimeInterval,
+           Date().timeIntervalSince1970 - eventTimestamp > Self.staleEventThreshold {
+            print("[WatchConnectivity] Skipping stale haptic event: \(eventType)")
+            return
         }
 
         latestEventType = eventType.uppercased()
@@ -231,6 +219,48 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         if let myTeam = message["my_team"] as? String, !myTeam.isEmpty {
             syncedTeamName = myTeam
         }
+    }
+
+    // MARK: - Direct Push Handlers (워치 직접 APNs 수신)
+
+    /// APNs push에서 직접 받은 햅틱 이벤트 처리
+    func handleDirectPushHapticEvent(eventType: String) {
+        let upper = eventType.uppercased()
+        print("⌚ [WatchConn] Direct push haptic: \(upper) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
+        latestEventType = upper
+        latestEventTimestamp = Date()
+        triggerHaptic(eventType: eventType)
+    }
+
+    /// APNs push에서 직접 받은 게임 데이터 처리
+    func handleDirectPushGameData(_ message: [String: Any]) {
+        print("⌚ [WatchConn] Direct push game_data")
+        handleGameData(message)
+    }
+
+    // MARK: - Send Watch Push Token to iPhone
+
+    /// 워치 APNs 토큰을 iPhone으로 전달 (iPhone이 백엔드에 등록)
+    func sendWatchPushToken(_ token: String) {
+        guard WCSession.default.activationState == .activated else {
+            print("⌚ [WatchConn] Session not activated, deferring watch token send")
+            return
+        }
+
+        let message: [String: Any] = [
+            "type": "watch_push_token",
+            "watch_token": token,
+        ]
+
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("⌚ [WatchConn] sendMessage failed for watch token, using transferUserInfo: \(error.localizedDescription)")
+                WCSession.default.transferUserInfo(message)
+            }
+        } else {
+            WCSession.default.transferUserInfo(message)
+        }
+        print("⌚ [WatchConn] Watch push token sent to iPhone")
     }
 
     // MARK: - Send Watch Sync Response
