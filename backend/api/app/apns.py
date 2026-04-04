@@ -100,7 +100,7 @@ async def send_push(
             return True
 
         body = response.text
-        logger.warning("[APNs] Push failed: status=%s body=%s token=%s...", response.status_code, body, device_token[:16])
+        logger.warning("[APNs] Push failed: status=%s body=%s token=%s... sandbox=%s topic=%s", response.status_code, body, device_token[:16], sandbox, topic)
 
         # 410 Gone = 토큰 만료 → 호출자가 삭제 처리
         return False
