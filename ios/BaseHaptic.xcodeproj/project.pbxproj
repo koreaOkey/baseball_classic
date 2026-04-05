@@ -25,6 +25,7 @@
 		62E56EC524620B79ECF0BA61 /* WatchThemeSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F152131C406034E1B3EF86E9 /* WatchThemeSyncManager.swift */; };
 		667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */; };
 		BB7777777777777777777777 /* WatchTokenRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8888888888888888888888 /* WatchTokenRegistrar.swift */; };
+		CC9999999999999999999999 /* WatchGamePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCAAAAAAAAAAAAAAAAAAAAAA /* WatchGamePoller.swift */; };
 		717442959BABBD4ADE5E26A6 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */; };
 		7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */; };
 		80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */; };

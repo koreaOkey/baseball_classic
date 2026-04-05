@@ -115,8 +115,6 @@ struct WatchContentView: View {
                                     myTeam: connectivity.syncedTeamName
                                 )
                             }
-                            // Extended Runtime Session 시작 (push 수신 유지)
-                            connectivity.startExtendedSession()
                         },
                         onDecline: {
                             connectivity.sendSyncResponse(gameId: prompt.gameId, accepted: false)
@@ -125,6 +123,12 @@ struct WatchContentView: View {
                     )
                 }
             }
+        }
+        .onAppear {
+            startGamePollerIfNeeded()
+        }
+        .onChange(of: connectivity.syncedTeamName) { _, _ in
+            startGamePollerIfNeeded()
         }
         .onChange(of: isLuminanceReduced) { _, reduced in
             if reduced {
@@ -187,6 +191,25 @@ struct WatchContentView: View {
             if newPhase == .active {
                 connectivity.clearExpiredGameData()
             }
+        }
+    }
+
+    private func startGamePollerIfNeeded() {
+        let team = connectivity.syncedTeamName
+        guard !team.isEmpty, team != "DEFAULT" else { return }
+        // 이미 동기화 중이면 폴링 불필요
+        guard connectivity.gameData == nil || connectivity.gameData?.isLive != true else { return }
+
+        WatchGamePoller.shared.startPolling(myTeam: team) { [self] gameId, homeTeam, awayTeam in
+            // 이미 동기화 중이거나 팝업이 표시 중이면 무시
+            guard connectivity.gameData?.isLive != true,
+                  connectivity.watchSyncPrompt == nil else { return }
+
+            connectivity.watchSyncPrompt = WatchConnectivityManager.WatchSyncPrompt(
+                gameId: gameId,
+                homeTeam: homeTeam,
+                awayTeam: awayTeam
+            )
         }
     }
 

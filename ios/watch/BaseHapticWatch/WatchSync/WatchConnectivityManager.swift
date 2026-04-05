@@ -304,18 +304,22 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     // MARK: - Extended Runtime Session (백그라운드 햅틱 유지)
 
+    private var extendedSessionRetryCount = 0
+    private static let maxExtendedSessionRetries = 3
+
     /// 경기 동기화가 시작되면 Extended Runtime Session을 시작하여 백그라운드에서도 햅틱이 동작하도록 합니다.
     func startExtendedSession() {
         guard extendedSession == nil || extendedSession?.state == .invalid else { return }
         let session = WKExtendedRuntimeSession()
         session.delegate = self
-        session.start()
         extendedSession = session
+        session.start()
         print("[WatchConnectivity] Extended runtime session started")
     }
 
     /// 경기 동기화가 종료되면 Extended Runtime Session을 종료합니다.
     func stopExtendedSession() {
+        extendedSessionRetryCount = 0
         guard let session = extendedSession, session.state == .running else {
             extendedSession = nil
             return
@@ -400,23 +404,31 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 extension WatchConnectivityManager: WKExtendedRuntimeSessionDelegate {
     func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
         print("[WatchConnectivity] Extended session running")
+        extendedSessionRetryCount = 0
     }
 
     func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
         // 세션 만료 임박 시 새 세션 시작
         print("[WatchConnectivity] Extended session expiring, restarting...")
         extendedSession = nil
+        extendedSessionRetryCount = 0
         if gameData?.isLive == true {
             startExtendedSession()
         }
     }
 
     func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession, didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: (any Error)?) {
-        print("[WatchConnectivity] Extended session invalidated: \(reason.rawValue)")
+        print("[WatchConnectivity] Extended session invalidated: \(reason.rawValue), error: \(error?.localizedDescription ?? "none")")
         extendedSession = nil
+        extendedSessionRetryCount += 1
+        // 재시도 횟수 초과 시 포기 (APNs push가 앱을 깨워줌)
+        guard extendedSessionRetryCount <= Self.maxExtendedSessionRetries else {
+            print("[WatchConnectivity] Extended session retry limit reached, relying on APNs push")
+            return
+        }
         // 경기가 진행 중이면 세션 재시작
         if gameData?.isLive == true {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
                 self?.startExtendedSession()
             }
         }

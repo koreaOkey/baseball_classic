@@ -1083,17 +1083,17 @@ def to_event_out(event: GameEvent) -> GameEventOut:
     )
 
 
-def _normalize_bso_for_state(ball: int, strike: int, out: int) -> tuple[int, int]:
+def _normalize_bso_for_state(ball: int, strike: int, out: int) -> tuple[int, int, int]:
     if out >= 3:
-        return 0, 0
-    return ball, strike
+        return 0, 0, 0
+    return ball, strike, out
 
 
 def build_game_state(db: Session, game: Game) -> GameStateOut:
     latest_event = db.execute(
         select(GameEvent).where(GameEvent.game_id == game.id).order_by(GameEvent.cursor.desc()).limit(1)
     ).scalar_one_or_none()
-    ball, strike = _normalize_bso_for_state(game.ball_count, game.strike_count, game.out_count)
+    ball, strike, out = _normalize_bso_for_state(game.ball_count, game.strike_count, game.out_count)
 
     return GameStateOut(
         gameId=game.id,
@@ -1105,7 +1105,7 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         status=normalize_status(game.status),
         ball=ball,
         strike=strike,
-        out=game.out_count,
+        out=out,
         bases=BaseStatus(first=game.base_first, second=game.base_second, third=game.base_third),
         pitcher=game.pitcher,
         batter=game.batter,

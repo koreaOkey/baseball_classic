@@ -18,6 +18,10 @@
 	<string>APPL</string>
 	<key>WKApplication</key>
 	<true/>
+	<key>WKBackgroundModes</key>
+	<array>
+		<string>self-care</string>
+	</array>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.basehaptic.app</string>
 	<key>BACKEND_BASE_URL</key>
