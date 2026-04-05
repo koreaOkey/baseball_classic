@@ -33,6 +33,16 @@ android {
         targetSdk = 35
         versionCode = 6
         versionName = "1.0.1"
+
+        val backendBaseUrl = (
+            System.getenv("BACKEND_BASE_URL")
+                ?: "https://baseballclassic-production.up.railway.app"
+            ).replace("\"", "\\\"")
+        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {

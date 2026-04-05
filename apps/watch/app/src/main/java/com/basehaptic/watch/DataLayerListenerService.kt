@@ -220,6 +220,15 @@ class DataLayerListenerService : WearableListenerService() {
         val gameId = dataMap.getString(KEY_GAME_ID, "")
         if (gameId.isBlank()) return
 
+        val prefs = getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
+        // 이미 해당 경기 데이터를 수신 중이면 팝업 무시
+        val currentGameId = prefs.getString("game_id", "") ?: ""
+        val isLive = prefs.getBoolean("is_live", false)
+        if (currentGameId == gameId && isLive) return
+        // 이미 같은 경기 팝업이 떠있으면 무시
+        val existingPromptId = prefs.getString(KEY_PENDING_SYNC_GAME_ID, "") ?: ""
+        if (existingPromptId == gameId) return
+
         val homeTeam = dataMap.getString(KEY_HOME_TEAM, "")
         val awayTeam = dataMap.getString(KEY_AWAY_TEAM, "")
         val myTeam = dataMap.getString(KEY_MY_TEAM, "")

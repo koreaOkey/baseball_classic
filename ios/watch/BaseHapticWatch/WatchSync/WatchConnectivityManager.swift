@@ -215,6 +215,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         let gameId = message["game_id"] as? String ?? ""
         guard !gameId.isEmpty else { return }
 
+        // 이미 해당 경기 데이터를 수신 중이면 팝업 무시
+        if gameData?.gameId == gameId, gameData?.isLive == true { return }
+        // 이미 같은 경기 팝업이 떠있으면 무시
+        if watchSyncPrompt?.gameId == gameId { return }
+
         watchSyncPrompt = WatchSyncPrompt(
             gameId: gameId,
             homeTeam: message["home_team"] as? String ?? "",

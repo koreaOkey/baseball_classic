@@ -117,6 +117,7 @@
 		CC2222222222222222222222 /* ScoreTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreTransitionScreen.swift; sourceTree = "<group>"; };
 		D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
 		BB8888888888888888888888 /* WatchTokenRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTokenRegistrar.swift; sourceTree = "<group>"; };
+		CCAAAAAAAAAAAAAAAAAAAAAA /* WatchGamePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGamePoller.swift; sourceTree = "<group>"; };
 		D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticApp.swift; sourceTree = "<group>"; };
 		D59061C8B8CAB2114F761D19 /* Team.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Team.swift; sourceTree = "<group>"; };
 		E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VictoryTransitionScreen.swift; sourceTree = "<group>"; };
@@ -215,6 +216,7 @@
 			children = (
 				D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */,
 				BB8888888888888888888888 /* WatchTokenRegistrar.swift */,
+				CCAAAAAAAAAAAAAAAAAAAAAA /* WatchGamePoller.swift */,
 			);
 			path = WatchSync;
 			sourceTree = "<group>";
@@ -483,6 +485,7 @@
 				A05164992F811CC9003A65E0 /* WatchAppDelegate.swift in Sources */,
 				667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */,
 				BB7777777777777777777777 /* WatchTokenRegistrar.swift in Sources */,
+				CC9999999999999999999999 /* WatchGamePoller.swift in Sources */,
 				80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */,
 				D8BA20E9208A4DEA2D40597A /* WatchNoGameScreen.swift in Sources */,
 				835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */,

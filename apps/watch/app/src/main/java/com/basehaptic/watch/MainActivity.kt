@@ -305,6 +305,14 @@ fun WatchApp(isAmbient: Boolean = false) {
         onDispose { context.unregisterReceiver(receiver) }
     }
 
+    // 워치 독립 경기 폴링 시작
+    LaunchedEffect(syncedTeamName) {
+        val team = syncedTeamName
+        if (team.isNotBlank() && team != "DEFAULT" && gameData?.isLive != true) {
+            WatchGamePoller.startPolling(context, team)
+        }
+    }
+
     val teamName = if (syncedTeamName != "DEFAULT") syncedTeamName else (gameData?.myTeamName ?: "DEFAULT")
 
     LaunchedEffect(latestEvent?.timestamp) {
