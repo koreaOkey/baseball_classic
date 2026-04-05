@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -1083,17 +1084,36 @@ def to_event_out(event: GameEvent) -> GameEventOut:
     )
 
 
-def _normalize_bso_for_state(ball: int, strike: int, out: int) -> tuple[int, int, int]:
+def _advance_inning(inning: str) -> str:
+    match = re.match(r"^(\d+)회(초|말)$", inning or "")
+    if not match:
+        return inning or ""
+    number = int(match.group(1))
+    half = match.group(2)
+    if half == "초":
+        return f"{number}회말"
+    return f"{number + 1}회초"
+
+
+def _normalize_state_for_three_outs(
+    ball: int, strike: int, out: int,
+    base_first: bool, base_second: bool, base_third: bool,
+    inning: str,
+) -> tuple[int, int, int, bool, bool, bool, str]:
     if out >= 3:
-        return 0, 0, 0
-    return ball, strike, out
+        return 0, 0, 0, False, False, False, _advance_inning(inning)
+    return ball, strike, out, base_first, base_second, base_third, inning
 
 
 def build_game_state(db: Session, game: Game) -> GameStateOut:
     latest_event = db.execute(
         select(GameEvent).where(GameEvent.game_id == game.id).order_by(GameEvent.cursor.desc()).limit(1)
     ).scalar_one_or_none()
-    ball, strike, out = _normalize_bso_for_state(game.ball_count, game.strike_count, game.out_count)
+    ball, strike, out, base_first, base_second, base_third, inning = _normalize_state_for_three_outs(
+        game.ball_count, game.strike_count, game.out_count,
+        game.base_first, game.base_second, game.base_third,
+        game.inning,
+    )
 
     return GameStateOut(
         gameId=game.id,
@@ -1101,12 +1121,12 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         awayTeam=game.away_team,
         homeScore=game.home_score,
         awayScore=game.away_score,
-        inning=game.inning,
+        inning=inning,
         status=normalize_status(game.status),
         ball=ball,
         strike=strike,
         out=out,
-        bases=BaseStatus(first=game.base_first, second=game.base_second, third=game.base_third),
+        bases=BaseStatus(first=base_first, second=base_second, third=base_third),
         pitcher=game.pitcher,
         batter=game.batter,
         lastEventType=normalize_event_type(latest_event.event_type) if latest_event else None,

@@ -123,8 +123,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
         gameData = GameData(
             gameId: message["game_id"] as? String ?? "",
-            homeTeam: message["home_team"] as? String ?? "",
-            awayTeam: message["away_team"] as? String ?? "",
+            homeTeam: Self.displayTeamName(message["home_team"] as? String ?? ""),
+            awayTeam: Self.displayTeamName(message["away_team"] as? String ?? ""),
             homeScore: message["home_score"] as? Int ?? 0,
             awayScore: message["away_score"] as? Int ?? 0,
             inning: normalizedInning,
@@ -222,8 +222,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
         watchSyncPrompt = WatchSyncPrompt(
             gameId: gameId,
-            homeTeam: message["home_team"] as? String ?? "",
-            awayTeam: message["away_team"] as? String ?? ""
+            homeTeam: Self.displayTeamName(message["home_team"] as? String ?? ""),
+            awayTeam: Self.displayTeamName(message["away_team"] as? String ?? "")
         )
 
         if let myTeam = message["my_team"] as? String, !myTeam.isEmpty {
@@ -402,6 +402,22 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         default:
             break
         }
+    }
+    /// 백엔드 팀명("SSG 랜더스" 등)을 표시용 이름("랜더스")으로 변환
+    private static func displayTeamName(_ name: String) -> String {
+        let n = name.trimmingCharacters(in: .whitespaces).lowercased()
+        if n.isEmpty { return name }
+        if n.contains("doosan") || n.contains("두산") || n.contains("베어스") { return "베어스" }
+        if n.contains("lg") || n.contains("엘지") || n.contains("트윈스") { return "트윈스" }
+        if n.contains("kiwoom") || n.contains("키움") || n.contains("히어로즈") || n.contains("넥센") { return "히어로즈" }
+        if n.contains("samsung") || n.contains("삼성") || n.contains("라이온즈") { return "라이온즈" }
+        if n.contains("lotte") || n.contains("롯데") || n.contains("자이언츠") { return "자이언츠" }
+        if n.contains("ssg") || n.contains("lander") || n.contains("에스에스지") || n.contains("랜더스") { return "랜더스" }
+        if n.contains("kt") || n.contains("wiz") || n.contains("케이티") || n.contains("위즈") { return "위즈" }
+        if n.contains("hanwha") || n.contains("한화") || n.contains("이글스") { return "이글스" }
+        if n.contains("kia") || n.contains("기아") || n.contains("타이거즈") { return "타이거즈" }
+        if n.contains("nc") || n.contains("dinos") || n.contains("엔씨") || n.contains("다이노스") { return "다이노스" }
+        return name // 매칭 안 되면 원본
     }
 }
 

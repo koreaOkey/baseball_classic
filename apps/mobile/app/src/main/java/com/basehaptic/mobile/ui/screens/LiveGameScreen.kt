@@ -146,6 +146,14 @@ fun LiveGameScreen(
                             loadError = null
                         }
 
+                        is BackendGamesRepository.LiveStreamMessage.Update -> {
+                            mergeEvents(message.events)
+                            message.state?.let {
+                                gameState = it
+                                loadError = null
+                            }
+                        }
+
                         is BackendGamesRepository.LiveStreamMessage.Pong -> Unit
                     }
                 }

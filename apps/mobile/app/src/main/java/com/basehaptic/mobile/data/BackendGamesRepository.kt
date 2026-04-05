@@ -101,6 +101,7 @@ object BackendGamesRepository {
         data object Connected : LiveStreamMessage
         data class State(val state: LiveGameState) : LiveStreamMessage
         data class Events(val items: List<LiveEvent>) : LiveStreamMessage
+        data class Update(val state: LiveGameState?, val events: List<LiveEvent>) : LiveStreamMessage
         data class Pong(val at: String?) : LiveStreamMessage
         data class Error(val throwable: Throwable) : LiveStreamMessage
         data object Closed : LiveStreamMessage
@@ -538,6 +539,23 @@ object BackendGamesRepository {
                     runCatching { event.toLiveEvent() }.getOrNull()?.let(parsed::add)
                 }
                 LiveStreamMessage.Events(parsed)
+            }
+
+            "update" -> {
+                val payload = root.optJSONObject("payload") ?: return null
+                val stateJson = payload.optJSONObject("state")
+                val eventsJson = payload.optJSONArray("events")
+                val state = stateJson?.let { runCatching { it.toLiveGameState() }.getOrNull() }
+                val events = ArrayList<LiveEvent>()
+                if (eventsJson != null) {
+                    for (i in 0 until eventsJson.length()) {
+                        val event = eventsJson.optJSONObject(i) ?: continue
+                        runCatching { event.toLiveEvent() }.getOrNull()?.let(events::add)
+                    }
+                }
+                // Return state if available; events will be sent as a follow-up parse
+                // We return a combined Update message
+                LiveStreamMessage.Update(state = state, events = events)
             }
 
             "pong" -> {

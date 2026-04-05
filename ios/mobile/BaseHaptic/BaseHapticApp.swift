@@ -358,8 +358,8 @@ struct ContentView: View {
                         selectedGameId = game.id
                         WatchGameSyncManager.shared.sendWatchSyncPrompt(
                             gameId: game.id,
-                            homeTeam: game.homeTeam,
-                            awayTeam: game.awayTeam,
+                            homeTeam: game.homeTeamId.teamName,
+                            awayTeam: game.awayTeamId.teamName,
                             myTeam: selectedTeam.rawValue
                         )
                     }
@@ -429,12 +429,19 @@ struct ContentView: View {
                     }
                 case .events(let items):
                     let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
-                    for event in items.sorted(by: { $0.cursor < $1.cursor }) {
+                    let sortedItems = items.sorted(by: { $0.cursor < $1.cursor })
+                    let newItems = sortedItems.filter { $0.cursor > lastSentEventCursor }
+                    let batchTypes = Set(newItems.compactMap { mapToWatchEventType($0.type) })
+                    let hasScore = batchTypes.contains("SCORE") || batchTypes.contains("HOMERUN")
+                    for event in sortedItems {
                         if event.cursor > lastSentEventCursor {
                             if let mapped = mapToWatchEventType(event.type) {
-                                let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
-                                if !isBallOrStrike || ballStrikeEnabled {
-                                    WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
+                                if mapped == "HIT" && hasScore { /* skip HIT when SCORE present */ }
+                                else {
+                                    let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
+                                    if !isBallOrStrike || ballStrikeEnabled {
+                                        WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
+                                    }
                                 }
                             }
                             lastSentEventCursor = max(lastSentEventCursor, event.cursor)
@@ -443,12 +450,19 @@ struct ContentView: View {
                 case .update(let state, let events):
                     // events 먼저 처리 (햅틱)
                     let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
-                    for event in events.sorted(by: { $0.cursor < $1.cursor }) {
+                    let sortedEvents = events.sorted(by: { $0.cursor < $1.cursor })
+                    let newEvents = sortedEvents.filter { $0.cursor > lastSentEventCursor }
+                    let batchTypes = Set(newEvents.compactMap { mapToWatchEventType($0.type) })
+                    let hasScore = batchTypes.contains("SCORE") || batchTypes.contains("HOMERUN")
+                    for event in sortedEvents {
                         if event.cursor > lastSentEventCursor {
                             if let mapped = mapToWatchEventType(event.type) {
-                                let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
-                                if !isBallOrStrike || ballStrikeEnabled {
-                                    WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
+                                if mapped == "HIT" && hasScore { /* skip HIT when SCORE present */ }
+                                else {
+                                    let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
+                                    if !isBallOrStrike || ballStrikeEnabled {
+                                        WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
+                                    }
                                 }
                             }
                             lastSentEventCursor = max(lastSentEventCursor, event.cursor)
@@ -464,8 +478,8 @@ struct ContentView: View {
                         if signature != lastWatchSignature {
                             WatchGameSyncManager.shared.sendGameData(
                                 gameId: state.gameId,
-                                homeTeam: state.homeTeam,
-                                awayTeam: state.awayTeam,
+                                homeTeam: state.homeTeamId.teamName,
+                                awayTeam: state.awayTeamId.teamName,
                                 homeScore: state.homeScore,
                                 awayScore: state.awayScore,
                                 status: state.status.rawValue,

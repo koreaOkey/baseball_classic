@@ -291,10 +291,12 @@ class GameSyncForegroundService : Service() {
                 if (sendHaptics) {
                     val ballStrikeEnabled = getSharedPreferences("basehaptic_user_prefs", MODE_PRIVATE)
                         .getBoolean("ball_strike_haptic_enabled", true)
-                    sorted
-                        .filter { it.cursor > lastSentEventCursor }
-                        .forEach { event ->
+                    val newEvents = sorted.filter { it.cursor > lastSentEventCursor }
+                    val batchEventTypes = newEvents.mapNotNull { mapToWatchEventType(it.type) }.toSet()
+                    val hasScore = "SCORE" in batchEventTypes || "HOMERUN" in batchEventTypes
+                    newEvents.forEach { event ->
                             mapToWatchEventType(event.type)?.let { mapped ->
+                                if (mapped == "HIT" && hasScore) return@let
                                 val isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
                                 if (!isBallOrStrike || ballStrikeEnabled) {
                                     WearGameSyncManager.sendHapticEvent(
@@ -340,6 +342,11 @@ class GameSyncForegroundService : Service() {
 
                             is BackendGamesRepository.LiveStreamMessage.State -> {
                                 pushStateToWatch(message.state)
+                            }
+
+                            is BackendGamesRepository.LiveStreamMessage.Update -> {
+                                applyIncomingEvents(message.events, sendHaptics = true)
+                                message.state?.let { pushStateToWatch(it) }
                             }
 
                             is BackendGamesRepository.LiveStreamMessage.Pong -> Unit

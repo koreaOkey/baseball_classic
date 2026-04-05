@@ -73,10 +73,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
               let homeTeam = userInfo["home_team"] as? String,
               let awayTeam = userInfo["away_team"] as? String else { return }
 
+        let homeDisplay = Team.fromBackendName(homeTeam).teamName
+        let awayDisplay = Team.fromBackendName(awayTeam).teamName
+
         WatchGameSyncManager.shared.sendGameData(
             gameId: gameId,
-            homeTeam: homeTeam,
-            awayTeam: awayTeam,
+            homeTeam: homeDisplay,
+            awayTeam: awayDisplay,
             homeScore: userInfo["home_score"] as? Int ?? 0,
             awayScore: userInfo["away_score"] as? Int ?? 0,
             status: userInfo["status"] as? String ?? "LIVE",
