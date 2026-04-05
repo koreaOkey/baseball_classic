@@ -38,16 +38,16 @@ export interface TeamDef {
 }
 
 export const teams: TeamDef[] = [
-  { name: "DOOSAN", nameKo: "두산 베어스", primary: "#131230", primaryDark: "#0A0918", secondary: "#EF4444", logo: "team_doosan.png" },
-  { name: "LG", nameKo: "LG 트윈스", primary: "#C30452", primaryDark: "#8E023B", secondary: "#000000", logo: "team_lg.png" },
-  { name: "KIWOOM", nameKo: "키움 히어로즈", primary: "#820024", primaryDark: "#5C001A", secondary: "#D4A843", logo: "team_kiwoom.png" },
-  { name: "SAMSUNG", nameKo: "삼성 라이온즈", primary: "#074CA1", primaryDark: "#053678", secondary: "#FFFFFF", logo: "team_samsung.png" },
-  { name: "LOTTE", nameKo: "롯데 자이언츠", primary: "#041E42", primaryDark: "#021230", secondary: "#E31B23", logo: "team_lotte.png" },
-  { name: "SSG", nameKo: "SSG 랜더스", primary: "#CE0E2D", primaryDark: "#960A20", secondary: "#FFD700", logo: "team_ssg.png" },
-  { name: "KT", nameKo: "KT 위즈", primary: "#1A1A1A", primaryDark: "#000000", secondary: "#ED1C24", logo: "team_kt.png" },
-  { name: "HANWHA", nameKo: "한화 이글스", primary: "#FF6600", primaryDark: "#CC5200", secondary: "#000000", logo: "team_hanwha.png" },
-  { name: "KIA", nameKo: "KIA 타이거즈", primary: "#EA0029", primaryDark: "#B5001F", secondary: "#000000", logo: "team_kia.png" },
-  { name: "NC", nameKo: "NC 다이노스", primary: "#315288", primaryDark: "#213A61", secondary: "#CFB53B", logo: "team_nc.png" },
+  { name: "DOOSAN", nameKo: "베어스", primary: "#131230", primaryDark: "#0A0918", secondary: "#EF4444", logo: "team_doosan.png" },
+  { name: "LG", nameKo: "트윈스", primary: "#C30452", primaryDark: "#8E023B", secondary: "#000000", logo: "team_lg.png" },
+  { name: "KIWOOM", nameKo: "히어로즈", primary: "#820024", primaryDark: "#5C001A", secondary: "#D4A843", logo: "team_kiwoom.png" },
+  { name: "SAMSUNG", nameKo: "라이온즈", primary: "#074CA1", primaryDark: "#053678", secondary: "#FFFFFF", logo: "team_samsung.png" },
+  { name: "LOTTE", nameKo: "자이언츠", primary: "#041E42", primaryDark: "#021230", secondary: "#E31B23", logo: "team_lotte.png" },
+  { name: "SSG", nameKo: "랜더스", primary: "#CE0E2D", primaryDark: "#960A20", secondary: "#FFD700", logo: "team_ssg.png" },
+  { name: "KT", nameKo: "위즈", primary: "#1A1A1A", primaryDark: "#000000", secondary: "#ED1C24", logo: "team_kt.png" },
+  { name: "HANWHA", nameKo: "이글스", primary: "#FF6600", primaryDark: "#CC5200", secondary: "#000000", logo: "team_hanwha.png" },
+  { name: "KIA", nameKo: "타이거즈", primary: "#EA0029", primaryDark: "#B5001F", secondary: "#000000", logo: "team_kia.png" },
+  { name: "NC", nameKo: "다이노스", primary: "#315288", primaryDark: "#213A61", secondary: "#CFB53B", logo: "team_nc.png" },
 ];
 
 // 선택된 팀 (스크린샷 기준)

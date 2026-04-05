@@ -191,6 +191,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     /// 10초 이상 된 이벤트는 stale로 판정 (워치 재시작 시 이벤트 폭주 방지)
     private static let staleEventThreshold: TimeInterval = 10.0
 
+    /// 같은 이벤트가 중복 채널(APNs + WatchConnectivity)로 올 때 이중 햅틱 방지
+    private var lastTriggeredEvent: String?
+    private var lastTriggeredAt: Date?
+    private static let deduplicationWindow: TimeInterval = 3.0
+
     private func handleHapticEvent(_ message: [String: Any]) {
         guard let eventType = message["event_type"] as? String, !eventType.isEmpty else { return }
 
@@ -322,6 +327,17 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     // MARK: - Haptic Feedback (Apple Watch Taptic Engine)
     private func triggerHaptic(eventType: String) {
+        let upper = eventType.uppercased()
+        // 중복 채널(APNs + WatchConnectivity) 이중 햅틱 방지
+        if let lastEvent = lastTriggeredEvent, lastEvent == upper,
+           let lastTime = lastTriggeredAt,
+           Date().timeIntervalSince(lastTime) < Self.deduplicationWindow {
+            print("⌚ [WatchConn] Skipping duplicate haptic: \(upper)")
+            return
+        }
+        lastTriggeredEvent = upper
+        lastTriggeredAt = Date()
+
         let device = WKInterfaceDevice.current()
 
         switch eventType.uppercased() {

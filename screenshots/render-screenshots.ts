@@ -6,13 +6,20 @@ const compositionIds = [
   // Watch
   "screenshot1-live-score",
   "screenshot2-homerun",
-  "screenshot3-event-overlay",
+  "screenshot3-hit",
   "screenshot4-victory",
   "screenshot5-sync-prompt",
-  // iPhone
+  "screenshot6-score",
+  // iPhone (6.7")
   "iphone1-onboarding",
   "iphone2-home",
   "iphone3-watch-sync",
+  // iOS App Store - Watch (396x484, same as watch screenshots)
+  // (reusing screenshot1~5 above)
+  // iOS App Store - iPhone 6.5" (1242x2688)
+  "ios-iphone1-onboarding",
+  "ios-iphone2-home",
+  "ios-iphone3-watch-sync",
   // Wear OS
   "wearos-promo",
   // Android

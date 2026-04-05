@@ -108,6 +108,15 @@ struct WatchContentView: View {
                         onAccept: {
                             connectivity.sendSyncResponse(gameId: prompt.gameId, accepted: true)
                             connectivity.clearSyncPrompt()
+                            // 워치에서 직접 백엔드에 APNs 토큰 등록 → 폰 앱 없이도 push 수신
+                            Task {
+                                await WatchTokenRegistrar.register(
+                                    gameId: prompt.gameId,
+                                    myTeam: connectivity.syncedTeamName
+                                )
+                            }
+                            // Extended Runtime Session 시작 (push 수신 유지)
+                            connectivity.startExtendedSession()
                         },
                         onDecline: {
                             connectivity.sendSyncResponse(gameId: prompt.gameId, accepted: false)

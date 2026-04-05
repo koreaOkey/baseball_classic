@@ -1,7 +1,7 @@
 import React from "react";
 import { staticFile } from "remotion";
 
-/** 실제 승리 애니메이션 프레임 */
+/** 펭귄 승리 애니메이션 프레임 (frame 40/81) */
 export const VictoryScreen: React.FC = () => (
   <div
     style={{
@@ -15,7 +15,7 @@ export const VictoryScreen: React.FC = () => (
     }}
   >
     <img
-      src={staticFile("victory_new.jpg")}
+      src={staticFile("penguin_victory.jpg")}
       style={{
         width: "100%",
         height: "100%",

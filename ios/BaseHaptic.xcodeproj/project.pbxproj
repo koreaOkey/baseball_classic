@@ -24,6 +24,7 @@
 		5C35221BA6986D70720B25D7 /* WatchUiProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E991C41C1A2E1BA5484914C /* WatchUiProfile.swift */; };
 		62E56EC524620B79ECF0BA61 /* WatchThemeSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F152131C406034E1B3EF86E9 /* WatchThemeSyncManager.swift */; };
 		667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */; };
+		BB7777777777777777777777 /* WatchTokenRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB8888888888888888888888 /* WatchTokenRegistrar.swift */; };
 		717442959BABBD4ADE5E26A6 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */; };
 		7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */; };
 		80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */; };
@@ -114,6 +115,7 @@
 		C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamTheme.swift; sourceTree = "<group>"; };
 		CC2222222222222222222222 /* ScoreTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreTransitionScreen.swift; sourceTree = "<group>"; };
 		D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
+		BB8888888888888888888888 /* WatchTokenRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTokenRegistrar.swift; sourceTree = "<group>"; };
 		D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticApp.swift; sourceTree = "<group>"; };
 		D59061C8B8CAB2114F761D19 /* Team.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Team.swift; sourceTree = "<group>"; };
 		E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VictoryTransitionScreen.swift; sourceTree = "<group>"; };
@@ -211,6 +213,7 @@
 			isa = PBXGroup;
 			children = (
 				D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */,
+				BB8888888888888888888888 /* WatchTokenRegistrar.swift */,
 			);
 			path = WatchSync;
 			sourceTree = "<group>";
@@ -478,6 +481,7 @@
 				2E75C724CD95802AA0187E81 /* WatchColors.swift in Sources */,
 				A05164992F811CC9003A65E0 /* WatchAppDelegate.swift in Sources */,
 				667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */,
+				BB7777777777777777777777 /* WatchTokenRegistrar.swift in Sources */,
 				80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */,
 				D8BA20E9208A4DEA2D40597A /* WatchNoGameScreen.swift in Sources */,
 				835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */,

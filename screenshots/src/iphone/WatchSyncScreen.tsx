@@ -126,7 +126,7 @@ export const WatchSyncScreen: React.FC = () => (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
               <TeamLogo logo="team_kia.png" bgColor="#EA0029" size={64} />
-              <span style={{ fontSize: 32, fontWeight: 500, color: "white" }}>KIA</span>
+              <span style={{ fontSize: 32, fontWeight: 500, color: "white" }}>타이거즈</span>
             </div>
             <span style={{ fontSize: 48, fontWeight: 700, color: "white" }}>4</span>
           </div>
@@ -134,7 +134,7 @@ export const WatchSyncScreen: React.FC = () => (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
               <TeamLogo logo="team_ssg.png" bgColor="#CE0E2D" size={64} />
-              <span style={{ fontSize: 36, fontWeight: 600, color: "white" }}>SSG</span>
+              <span style={{ fontSize: 36, fontWeight: 600, color: "white" }}>랜더스</span>
             </div>
             <span style={{ fontSize: 56, fontWeight: 700, color: "white" }}>5</span>
           </div>
@@ -158,7 +158,7 @@ export const WatchSyncScreen: React.FC = () => (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
               <TeamLogo logo="team_lg.png" bgColor="#C30452" size={64} />
-              <span style={{ fontSize: 32, fontWeight: 500, color: "white" }}>LG</span>
+              <span style={{ fontSize: 32, fontWeight: 500, color: "white" }}>트윈스</span>
             </div>
             <span style={{ fontSize: 48, fontWeight: 700, color: "white" }}>3</span>
           </div>

@@ -1,7 +1,7 @@
 import React from "react";
 import { staticFile } from "remotion";
 
-/** 실제 홈런 애니메이션 프레임 */
+/** 펭귄 홈런 애니메이션 프레임 (frame 50/101) */
 export const HomeRunScreen: React.FC = () => (
   <div
     style={{
@@ -15,11 +15,12 @@ export const HomeRunScreen: React.FC = () => (
     }}
   >
     <img
-      src={staticFile("homerun_new.jpg")}
+      src={staticFile("penguin_hr.jpg")}
       style={{
         width: "100%",
         height: "100%",
         objectFit: "cover",
+        marginLeft: -20,
       }}
     />
   </div>

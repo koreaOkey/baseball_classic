@@ -1038,8 +1038,6 @@ def _start_crawler(
         str(normalized_backend_timeout),
         "--backend-retries",
         str(normalized_backend_retries),
-        "--output",
-        str(log_dir / f"relay_{game_id}.xlsx"),
     ]
     process = subprocess.Popen(
         cmd,

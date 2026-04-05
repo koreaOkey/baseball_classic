@@ -6,8 +6,14 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-import pandas as pd
 import requests
+
+try:
+    import pandas as pd
+    import openpyxl as _openpyxl  # noqa: F401
+    _HAS_EXCEL = True
+except ImportError:
+    _HAS_EXCEL = False
 
 from backend_sender import build_snapshot_payload, post_snapshot_to_backend
 
@@ -423,6 +429,8 @@ def save_excel(
     game: Dict[str, Any],
     parsed: Dict[str, List[Dict[str, Any]]],
 ) -> None:
+    if not _HAS_EXCEL:
+        raise RuntimeError("pandas and openpyxl are required for excel output (pip install pandas openpyxl)")
     at_bats_df = pd.DataFrame(parsed["at_bats"])
     pinch_df = pd.DataFrame(parsed["pinch_hitters"])
     pitcher_df = pd.DataFrame(parsed["pitcher_changes"])
@@ -553,8 +561,9 @@ def run(
             time.sleep(interval)
             continue
 
-        target = output_path or build_output_name(game_id)
-        save_excel(target, game_data, combined)
+        if output_path:
+            save_excel(output_path, game_data, combined)
+
         status = (game_data.get("statusCode") or "").upper()
         inning = (game_data.get("statusInfo") or game_data.get("currentInning") or "-").strip()
         away_score = game_data.get("awayTeamScore")
@@ -567,7 +576,8 @@ def run(
             f"atBats={len(combined['at_bats'])} pitcherChanges={len(combined['pitcher_changes'])}",
             flush=True,
         )
-        print(f"[output] excel={target}", flush=True)
+        if output_path:
+            print(f"[output] excel={output_path}", flush=True)
 
         if backend_base_url:
             if not backend_api_key:
