@@ -400,6 +400,7 @@ struct ContentView: View {
                 case .state(let state):
                     let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)"
                     if signature != lastWatchSignature {
+                        let wasLive = lastWatchSignature.contains("|live|") || lastWatchSignature.contains("|LIVE|")
                         WatchGameSyncManager.shared.sendGameData(
                             gameId: state.gameId,
                             homeTeam: state.homeTeam,
@@ -420,12 +421,15 @@ struct ContentView: View {
                         )
                         lastWatchSignature = signature
 
-                        // TODO: Live Activity 배포 시 활성화
-                        // let contentState = BaseballGameAttributes.ContentState(...)
-                        // await LiveActivityManager.shared.updateActivity(state: contentState)
-                        // if state.status == .finished {
-                        //     LiveActivityManager.shared.endCurrentActivity()
-                        // }
+                        if wasLive && state.status == .finished {
+                            let isMyTeamHome = selectedTeam != .none && state.homeTeamId == selectedTeam
+                            let isMyTeamAway = selectedTeam != .none && state.awayTeamId == selectedTeam
+                            let myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
+                                            (isMyTeamAway && state.awayScore > state.homeScore)
+                            if myTeamWon {
+                                WatchGameSyncManager.shared.sendHapticEvent(eventType: "VICTORY")
+                            }
+                        }
                     }
                 case .events(let items):
                     let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
@@ -476,6 +480,7 @@ struct ContentView: View {
                         }
                         let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)"
                         if signature != lastWatchSignature {
+                            let wasLive = lastWatchSignature.contains("|live|") || lastWatchSignature.contains("|LIVE|")
                             WatchGameSyncManager.shared.sendGameData(
                                 gameId: state.gameId,
                                 homeTeam: state.homeTeamId.teamName,
@@ -495,6 +500,16 @@ struct ContentView: View {
                                 myTeam: selectedTeam.rawValue
                             )
                             lastWatchSignature = signature
+
+                            if wasLive && state.status == .finished {
+                                let isMyTeamHome = selectedTeam != .none && state.homeTeamId == selectedTeam
+                                let isMyTeamAway = selectedTeam != .none && state.awayTeamId == selectedTeam
+                                let myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
+                                                (isMyTeamAway && state.awayScore > state.homeScore)
+                                if myTeamWon {
+                                    WatchGameSyncManager.shared.sendHapticEvent(eventType: "VICTORY")
+                                }
+                            }
                         }
                     }
                 case .pong:

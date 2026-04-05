@@ -1109,11 +1109,17 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
     latest_event = db.execute(
         select(GameEvent).where(GameEvent.game_id == game.id).order_by(GameEvent.cursor.desc()).limit(1)
     ).scalar_one_or_none()
-    ball, strike, out, base_first, base_second, base_third, inning = _normalize_state_for_three_outs(
-        game.ball_count, game.strike_count, game.out_count,
-        game.base_first, game.base_second, game.base_third,
-        game.inning,
-    )
+    game_status = normalize_status(game.status)
+    if game_status in {GameStatus.FINISHED, GameStatus.CANCELED, GameStatus.POSTPONED}:
+        ball, strike, out = 0, 0, 0
+        base_first, base_second, base_third = False, False, False
+        inning = game.inning or ""
+    else:
+        ball, strike, out, base_first, base_second, base_third, inning = _normalize_state_for_three_outs(
+            game.ball_count, game.strike_count, game.out_count,
+            game.base_first, game.base_second, game.base_third,
+            game.inning,
+        )
 
     return GameStateOut(
         gameId=game.id,
@@ -1122,7 +1128,7 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         homeScore=game.home_score,
         awayScore=game.away_score,
         inning=inning,
-        status=normalize_status(game.status),
+        status=game_status,
         ball=ball,
         strike=strike,
         out=out,

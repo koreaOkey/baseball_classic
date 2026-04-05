@@ -257,6 +257,7 @@ class GameSyncForegroundService : Service() {
                 ).joinToString("|")
 
                 if (signature != lastWatchSignature) {
+                    val wasLive = lastWatchSignature.contains("|LIVE|")
                     WearGameSyncManager.sendGameData(
                         context = applicationContext,
                         gameId = state.gameId,
@@ -278,6 +279,17 @@ class GameSyncForegroundService : Service() {
                         eventType = null
                     )
                     lastWatchSignature = signature
+
+                    // 경기 종료 + 내 팀 승리 → VICTORY 햅틱
+                    if (wasLive && state.status == GameStatus.FINISHED) {
+                        val isMyTeamHome = selectedTeam != Team.NONE && state.homeTeamId == selectedTeam
+                        val isMyTeamAway = selectedTeam != Team.NONE && state.awayTeamId == selectedTeam
+                        val myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
+                            (isMyTeamAway && state.awayScore > state.homeScore)
+                        if (myTeamWon) {
+                            WearGameSyncManager.sendHapticEvent(applicationContext, "VICTORY")
+                        }
+                    }
                 }
             }
 
