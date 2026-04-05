@@ -448,7 +448,7 @@ struct ContentView: View {
                         }
                     }
                 case .update(let state, let events):
-                    // events 먼저 처리 (햅틱)
+                    // events 처리 (햅틱 먼저)
                     let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
                     let sortedEvents = events.sorted(by: { $0.cursor < $1.cursor })
                     let newEvents = sortedEvents.filter { $0.cursor > lastSentEventCursor }
@@ -468,10 +468,10 @@ struct ContentView: View {
                             lastSentEventCursor = max(lastSentEventCursor, event.cursor)
                         }
                     }
-                    // state 반영 (이닝 전환 시 딜레이)
+                    // state 반영 (점수 즉시 전송, 이닝 전환 딜레이는 이벤트 없을 때만)
                     if let state {
                         let isInningChange = state.out == 0 && (lastWatchSignature.contains("|0|") == false) && state.status == .live
-                        if isInningChange {
+                        if isInningChange && events.isEmpty {
                             try? await Task.sleep(nanoseconds: 1_500_000_000)
                         }
                         let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)"
