@@ -66,10 +66,14 @@ fun SettingsScreen(
     onOpenWatchTest: () -> Unit,
     authState: AuthState = AuthState.LoggedOut,
     onSignInWithKakao: () -> Unit = {},
-    onSignOut: () -> Unit = {}
+    onSignOut: () -> Unit = {},
+    onDeleteAccount: (suspend () -> Boolean)? = null
 ) {
     val teamTheme = LocalTeamTheme.current
     var showTeamPicker by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var isDeletingAccount by remember { mutableStateOf(false) }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
         modifier = Modifier
@@ -224,6 +228,35 @@ fun SettingsScreen(
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable(enabled = !isDeletingAccount) { showDeleteConfirm = true },
+                                shape = RoundedCornerShape(8.dp),
+                                color = Gray800
+                            ) {
+                                if (isDeletingAccount) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier
+                                            .padding(12.dp)
+                                            .size(20.dp),
+                                        color = Color.Red,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text(
+                                        text = "계정 삭제",
+                                        fontSize = 14.sp,
+                                        color = Color.Red,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -342,6 +375,35 @@ fun SettingsScreen(
         item {
             Spacer(modifier = Modifier.height(80.dp))
         }
+    }
+
+    if (showDeleteConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("계정 삭제") },
+            text = { Text("계정을 삭제하면 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다. 정말 삭제하시겠습니까?") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        isDeletingAccount = true
+                        coroutineScope.launch {
+                            val success = onDeleteAccount?.invoke() ?: false
+                            isDeletingAccount = false
+                        }
+                    }
+                ) {
+                    Text("삭제", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showDeleteConfirm = false }
+                ) {
+                    Text("취소")
+                }
+            }
+        )
     }
 }
 

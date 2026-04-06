@@ -12,12 +12,15 @@ struct SettingsScreen: View {
     var onSignInWithKakao: () -> Void = {}
     var onSignInWithApple: (ASAuthorization) -> Void = { _ in }
     var onSignOut: () -> Void = {}
+    var onDeleteAccount: () async -> Bool = { false }
 
     @Environment(\.teamTheme) private var teamTheme
     @State private var showTeamPicker = false
     @State private var hapticEnabled = true
     @State private var highFiveEnabled = true
     @AppStorage("ball_strike_haptic_enabled") private var ballStrikeHapticEnabled = true
+    @State private var showDeleteConfirm = false
+    @State private var isDeletingAccount = false
 
     var body: some View {
         ScrollView {
@@ -90,6 +93,24 @@ struct SettingsScreen: View {
                                 .background(AppColors.gray800)
                                 .cornerRadius(8)
                         }
+
+                        Button { showDeleteConfirm = true } label: {
+                            if isDeletingAccount {
+                                ProgressView()
+                                    .tint(.red)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                            } else {
+                                Text("계정 삭제")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.red)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(12)
+                                    .background(AppColors.gray800)
+                                    .cornerRadius(8)
+                            }
+                        }
+                        .disabled(isDeletingAccount)
                     }
                     .padding(16)
                     .background(AppColors.gray900)
@@ -174,6 +195,18 @@ struct SettingsScreen: View {
             .padding(24)
         }
         .background(AppColors.gray950)
+        .alert("계정 삭제", isPresented: $showDeleteConfirm) {
+            Button("취소", role: .cancel) {}
+            Button("삭제", role: .destructive) {
+                isDeletingAccount = true
+                Task {
+                    _ = await onDeleteAccount()
+                    isDeletingAccount = false
+                }
+            }
+        } message: {
+            Text("계정을 삭제하면 모든 데이터가 영구적으로 삭제되며 복구할 수 없습니다. 정말 삭제하시겠습니까?")
+        }
     }
 }
 

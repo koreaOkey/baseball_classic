@@ -3,12 +3,14 @@ from collections import defaultdict
 from datetime import UTC, date, datetime
 from typing import Annotated, Any
 import asyncio
+import httpx
+import jwt
 import logging
 import secrets
 import time
 import threading
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -267,6 +269,50 @@ def get_game_events(
         items=[to_event_out(row) for row in chunk],
         nextCursor=next_cursor,
     )
+
+
+# MARK: - Account Deletion
+
+def _extract_user_id_from_token(authorization: str) -> str:
+    """JWT에서 user_id(sub)를 추출. 서명 검증은 Supabase가 담당."""
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        payload = jwt.decode(token, options={"verify_signature": False})
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="invalid token: missing sub")
+        return user_id
+    except jwt.DecodeError:
+        raise HTTPException(status_code=401, detail="invalid token")
+
+
+@app.delete("/account")
+async def delete_account(
+    request: Request,
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, str]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="authorization header required")
+
+    user_id = _extract_user_id_from_token(authorization)
+
+    if not settings.supabase_url or not settings.supabase_service_role_key:
+        raise HTTPException(status_code=500, detail="account deletion not configured")
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.delete(
+            f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
+            headers={
+                "apikey": settings.supabase_service_role_key,
+                "Authorization": f"Bearer {settings.supabase_service_role_key}",
+            },
+        )
+
+    if resp.status_code >= 400:
+        logger.error("supabase delete user failed: status=%s body=%s", resp.status_code, resp.text)
+        raise HTTPException(status_code=502, detail="failed to delete account")
+
+    return {"status": "ok"}
 
 
 # MARK: - Device Token (APNs)

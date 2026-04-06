@@ -407,6 +407,9 @@ fun BaseHapticApp(
                         },
                         onSignOut = {
                             coroutineScope.launch { AuthManager.signOut() }
+                        },
+                        onDeleteAccount = {
+                            AuthManager.deleteAccount(context)
                         }
                     )
                     Screen.WatchTest -> WatchTestScreen(

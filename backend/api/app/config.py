@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     crawler_api_key: str = "dev-crawler-key"
     cors_allow_origins: str = "*"
 
+    # Supabase Admin
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+
     # APNs
     apns_key_base64: str | None = None  # .p8 파일 내용을 base64 인코딩한 값
     apns_key_id: str = ""

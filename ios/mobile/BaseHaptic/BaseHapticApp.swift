@@ -239,6 +239,15 @@ struct ContentView: View {
                         },
                         onSignOut: {
                             Task { try? await authManager.signOut() }
+                        },
+                        onDeleteAccount: {
+                            do {
+                                try await authManager.deleteAccount()
+                                return true
+                            } catch {
+                                print("[Auth] Account deletion error: \(error)")
+                                return false
+                            }
                         }
                     )
                 default:

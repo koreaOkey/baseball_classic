@@ -1,5 +1,6 @@
 package com.basehaptic.mobile.auth
 
+import android.content.Context
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.OTP
 import io.github.jan.supabase.auth.providers.Kakao
@@ -11,6 +12,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.basehaptic.mobile.BuildConfig
+import java.net.HttpURLConnection
+import java.net.URL
 
 sealed class AuthState {
     object Loading : AuthState()
@@ -55,5 +59,30 @@ object AuthManager {
 
     suspend fun signOut() {
         supabase.auth.signOut()
+    }
+
+    suspend fun deleteAccount(context: Context): Boolean {
+        val session = supabase.auth.currentSessionOrNull() ?: return false
+        val backendUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
+
+        val result = kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val url = URL("$backendUrl/account")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "DELETE"
+            conn.setRequestProperty("Authorization", "Bearer ${session.accessToken}")
+            try {
+                conn.responseCode == 200
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+        if (result) {
+            supabase.auth.signOut()
+            context.getSharedPreferences("basehaptic_user_prefs", Context.MODE_PRIVATE)
+                .edit().clear().apply()
+        }
+
+        return result
     }
 }

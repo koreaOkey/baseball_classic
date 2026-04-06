@@ -100,6 +100,31 @@ class AuthManager: ObservableObject {
         try await client.auth.signOut()
     }
 
+    func deleteAccount() async throws {
+        let session = try await client.auth.session
+        let backendURL = Bundle.main.object(forInfoDictionaryKey: "BACKEND_BASE_URL") as? String
+            ?? "https://baseballclassic-production.up.railway.app"
+        guard let deleteURL = URL(string: "\(backendURL)/account") else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: deleteURL)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+
+        try await client.auth.signOut()
+
+        // 로컬 데이터 초기화
+        UserDefaults.standard.removeObject(forKey: "selected_team")
+        UserDefaults.standard.removeObject(forKey: "synced_game_id")
+        UserDefaults.standard.removeObject(forKey: "synced_my_team")
+    }
+
     private func makeLoggedInState(from session: Session) -> AuthState {
         let provider = session.user.appMetadata["provider"]?.value as? String ?? "unknown"
         return .loggedIn(
