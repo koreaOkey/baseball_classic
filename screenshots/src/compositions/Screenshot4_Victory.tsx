@@ -1,4 +1,5 @@
 import React from "react";
-import { VictoryScreen } from "../components/VictoryScreen";
+import { HomeRunScreen } from "../components/HomeRunScreen";
 
-export const Screenshot4_Victory: React.FC = () => <VictoryScreen />;
+/** 펭귄 홈런 애니메이션 (실제 앱 기능) */
+export const Screenshot4_Victory: React.FC = () => <HomeRunScreen />;

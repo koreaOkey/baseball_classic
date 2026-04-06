@@ -78,7 +78,9 @@ object AuthManager {
         }
 
         if (result) {
-            supabase.auth.signOut()
+            // 유저가 이미 삭제되었으므로 signOut 실패해도 무시
+            try { supabase.auth.signOut() } catch (_: Exception) {}
+            _authState.value = AuthState.LoggedOut
             context.getSharedPreferences("basehaptic_user_prefs", Context.MODE_PRIVATE)
                 .edit().clear().apply()
         }

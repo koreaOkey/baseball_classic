@@ -308,7 +308,7 @@ async def delete_account(
             },
         )
 
-    if resp.status_code >= 400:
+    if resp.status_code >= 400 and resp.status_code != 404:
         logger.error("supabase delete user failed: status=%s body=%s", resp.status_code, resp.text)
         raise HTTPException(status_code=502, detail="failed to delete account")
 

@@ -98,6 +98,7 @@ class AuthManager: ObservableObject {
 
     func signOut() async throws {
         try await client.auth.signOut()
+        authState = .loggedOut
     }
 
     func deleteAccount() async throws {
@@ -117,7 +118,9 @@ class AuthManager: ObservableObject {
             throw URLError(.badServerResponse)
         }
 
-        try await client.auth.signOut()
+        // 유저가 이미 삭제되었으므로 signOut 실패해도 무시
+        try? await client.auth.signOut()
+        authState = .loggedOut
 
         // 로컬 데이터 초기화
         UserDefaults.standard.removeObject(forKey: "selected_team")

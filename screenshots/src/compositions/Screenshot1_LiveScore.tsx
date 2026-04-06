@@ -4,8 +4,8 @@ import { LiveGameScreen } from "../components/LiveGameScreen";
 export const Screenshot1_LiveScore: React.FC = () => (
   <LiveGameScreen
     data={{
-      awayTeam: "KIA",
-      homeTeam: "SSG",
+      awayTeam: "타이거즈",
+      homeTeam: "랜더스",
       awayScore: 4,
       homeScore: 5,
       inning: "9회말",
