@@ -18,6 +18,9 @@ import { PhoneScreenshot4_WatchPreview } from "./android/PhoneScreenshot4_WatchP
 import { IosOnboardingScreen } from "./iphone/IosOnboardingScreen";
 import { IosHomeScreen } from "./iphone/IosHomeScreen";
 import { IosWatchSyncScreen } from "./iphone/IosWatchSyncScreen";
+import { IpadOnboardingScreen } from "./iphone/IpadOnboardingScreen";
+import { IpadHomeScreen } from "./iphone/IpadHomeScreen";
+import { IpadWatchSyncScreen } from "./iphone/IpadWatchSyncScreen";
 
 // Apple Watch Series 9 (App Store)
 const W = 396;
@@ -30,6 +33,10 @@ const IH = 2796;
 // iPhone 6.5" (App Store - XS Max / 11 Pro Max)
 const IOS65W = 1242;
 const IOS65H = 2688;
+
+// iPad Pro 13" (App Store)
+const IPADW = 2064;
+const IPADH = 2752;
 
 // Android phone (9:16)
 const PW = 1080;
@@ -64,6 +71,11 @@ export const RemotionRoot: React.FC = () => (
     <Composition id="ios-iphone1-onboarding" component={IosOnboardingScreen} durationInFrames={1} fps={1} width={IOS65W} height={IOS65H} />
     <Composition id="ios-iphone2-home" component={IosHomeScreen} durationInFrames={1} fps={1} width={IOS65W} height={IOS65H} />
     <Composition id="ios-iphone3-watch-sync" component={IosWatchSyncScreen} durationInFrames={1} fps={1} width={IOS65W} height={IOS65H} />
+
+    {/* iOS App Store - iPad Pro 13" (2064x2752) */}
+    <Composition id="ios-ipad1-onboarding" component={IpadOnboardingScreen} durationInFrames={1} fps={1} width={IPADW} height={IPADH} />
+    <Composition id="ios-ipad2-home" component={IpadHomeScreen} durationInFrames={1} fps={1} width={IPADW} height={IPADH} />
+    <Composition id="ios-ipad3-watch-sync" component={IpadWatchSyncScreen} durationInFrames={1} fps={1} width={IPADW} height={IPADH} />
 
     {/* Wear OS promo */}
     <Composition id="wearos-promo" component={WearOsPromo} durationInFrames={1} fps={1} width={1024} height={500} />

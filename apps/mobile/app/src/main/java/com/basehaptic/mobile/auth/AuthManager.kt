@@ -59,6 +59,7 @@ object AuthManager {
 
     suspend fun signOut() {
         supabase.auth.signOut()
+        _authState.value = AuthState.LoggedOut
     }
 
     suspend fun deleteAccount(context: Context): Boolean {

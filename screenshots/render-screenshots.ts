@@ -20,6 +20,10 @@ const compositionIds = [
   "ios-iphone1-onboarding",
   "ios-iphone2-home",
   "ios-iphone3-watch-sync",
+  // iOS App Store - iPad Pro 13" (2064x2752)
+  "ios-ipad1-onboarding",
+  "ios-ipad2-home",
+  "ios-ipad3-watch-sync",
   // Wear OS
   "wearos-promo",
   // Android
