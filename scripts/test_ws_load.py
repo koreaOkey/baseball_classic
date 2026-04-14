@@ -137,6 +137,21 @@ async def ws_client(
                         result.initial_state = True
                     elif msg.get("type") == "events":
                         result.initial_events = True
+                        # Events initial may carry OUR test events as replay-on-connect
+                        # after a previous ingest. Count them as broadcast_events if so.
+                        items = (msg.get("payload") or {}).get("items") or []
+                        if any(
+                            isinstance(e, dict)
+                            and isinstance(e.get("id"), str)
+                            and e["id"].startswith(f"test_{test_run.test_id}_")
+                            for e in items
+                        ):
+                            if test_run.ingest_sent_at > 0:
+                                result.broadcast_state = True
+                                result.broadcast_events = True
+                                latency = (time.monotonic() - test_run.ingest_sent_at) * 1000
+                                result.broadcast_state_latency_ms = round(latency, 1)
+                                result.broadcast_events_latency_ms = round(latency, 1)
             except asyncio.TimeoutError:
                 pass
 
@@ -158,10 +173,33 @@ async def ws_client(
 
                     latency_ms = (recv_at - test_run.ingest_sent_at) * 1000
 
-                    if msg.get("type") == "state" and not result.broadcast_state:
+                    msg_type = msg.get("type")
+                    if msg_type == "update":
+                        payload = msg.get("payload") or {}
+                        events_list = payload.get("events") or []
+                        # Only count messages that carry OUR test_id events (skip crawler fanout)
+                        def _has_our_id(e: Any) -> bool:
+                            if not isinstance(e, dict):
+                                return False
+                            for key in ("id", "sourceEventId"):
+                                val = e.get(key)
+                                if isinstance(val, str) and val.startswith(f"test_{test_run.test_id}_"):
+                                    return True
+                            return False
+
+                        has_our_events = any(_has_our_id(e) for e in events_list)
+                        if not has_our_events:
+                            continue
+                        if not result.broadcast_state:
+                            result.broadcast_state = True
+                            result.broadcast_state_latency_ms = round(latency_ms, 1)
+                        if not result.broadcast_events:
+                            result.broadcast_events = True
+                            result.broadcast_events_latency_ms = round(latency_ms, 1)
+                    elif msg_type == "state" and not result.broadcast_state:
                         result.broadcast_state = True
                         result.broadcast_state_latency_ms = round(latency_ms, 1)
-                    elif msg.get("type") == "events" and not result.broadcast_events:
+                    elif msg_type == "events" and not result.broadcast_events:
                         result.broadcast_events = True
                         result.broadcast_events_latency_ms = round(latency_ms, 1)
 

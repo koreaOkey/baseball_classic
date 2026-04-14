@@ -1,0 +1,11 @@
+## Tasks
+- [x] `backend/api/app/event_bus.py` — `connect/register/safe_send/broadcast/disconnect` 재구성, per-ws `asyncio.Lock`, broadcast 경로에서 global `_lock` 제거, stats 카운터 추가
+- [x] `backend/api/app/redis_bus.py` — subscribe 성공 로그/`subscribed_at`, publish/sub/error 카운터
+- [x] `backend/api/app/main.py` — 두 WS 핸들러를 `connect → register → safe_send`로 재배치, `/debug/relay-stats` 엔드포인트, 로그 WARNING 레벨 고정
+- [x] `scripts/test_ws_load.py` — `type=update` 인식, test_id 기반 아티팩트 격리(`id`/`sourceEventId` 둘 다), replay-on-reconnect 인식
+- [x] `openspec/specs/realtime/spec.md` — 전송 직렬화 요구사항 2건 추가
+- [x] Railway 환경변수: `NIXPACKS_START_CMD` 교정, Custom Start Command 설정, `DB_POOL_SIZE=1`/`MAX_OVERFLOW=1`
+- [x] 200/500/1000 부하 테스트로 100% 전달률(핸드셰이크 성공분) 검증
+- [ ] 시크릿 로테이션 (`DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `APNS_KEY_BASE64`, `CRAWLER_API_KEY`) — 사용자 수동 작업
+- [ ] 실사용 모니터링 후 Supabase Transaction Pooler 전환 검토 (별도 change)
+- [ ] 1000+ 동시 핸드셰이크 지원을 위한 replica scale-out 검토 (별도 change)

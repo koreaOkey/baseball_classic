@@ -52,6 +52,11 @@ from .services import (
 
 
 settings = get_settings()
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s %(levelname)s %(name)s [%(process)d] %(message)s",
+    force=True,
+)
 logger = logging.getLogger(__name__)
 _snapshot_ingest_locks: dict[str, threading.Lock] = defaultdict(threading.Lock)
 
@@ -200,6 +205,20 @@ async def health_verbose() -> dict[str, Any]:
         "environment": settings.environment,
         "redis": redis_detail if not redis_connected else "connected",
         "time": datetime.now(UTC),
+    }
+
+
+@app.get("/debug/relay-stats")
+async def debug_relay_stats() -> dict[str, Any]:
+    import os as _os
+    import socket as _socket
+    return {
+        "pid": _os.getpid(),
+        "hostname": _socket.gethostname(),
+        "source_instance_id": redis_relay._source_instance_id,
+        "redis_subscribed_at": redis_relay.subscribed_at,
+        "redis_stats": dict(redis_relay.stats),
+        "event_bus_stats": event_bus.snapshot_stats(),
     }
 
 
@@ -700,18 +719,24 @@ async def _load_game_initial_data_cached(game_id: str) -> tuple[dict[str, Any] |
 
 @app.websocket("/ws/games/{game_id}")
 async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
-    await event_bus.connect(game_id, websocket)
+    await event_bus.connect(websocket)
+    await event_bus.register(game_id, websocket)
 
     state_payload, events_payload = await _load_game_initial_data_cached(game_id)
     if state_payload is not None:
-        await websocket.send_json({"type": "state", "payload": state_payload})
+        await event_bus.safe_send(websocket, {"type": "state", "payload": state_payload})
     if events_payload:
-        await websocket.send_json({"type": "events", "payload": {"items": events_payload}})
+        await event_bus.safe_send(
+            websocket, {"type": "events", "payload": {"items": events_payload}}
+        )
 
     try:
         while True:
             await websocket.receive_text()
-            await websocket.send_json({"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}})
+            await event_bus.safe_send(
+                websocket,
+                {"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}},
+            )
     except WebSocketDisconnect:
         await event_bus.disconnect(game_id, websocket)
 
@@ -755,17 +780,21 @@ async def websocket_team_record_stream(
         season_code=normalized_season_code,
         team_id=normalized_team_id,
     )
-    await event_bus.connect(channel, websocket)
+    await event_bus.connect(websocket)
+    await event_bus.register(channel, websocket)
 
     message = await _load_team_record_initial_data_cached(
         normalized_category_id, normalized_season_code, normalized_team_id,
     )
     if message is not None:
-        await websocket.send_json(message)
+        await event_bus.safe_send(websocket, message)
 
     try:
         while True:
             await websocket.receive_text()
-            await websocket.send_json({"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}})
+            await event_bus.safe_send(
+                websocket,
+                {"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}},
+            )
     except WebSocketDisconnect:
         await event_bus.disconnect(channel, websocket)

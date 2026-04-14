@@ -44,6 +44,16 @@ class RedisBroadcastRelay:
         self._subscriber: Redis | None = None
         self._subscriber_task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
+        self.stats: dict[str, int] = {
+            "publish_ok": 0,
+            "publish_fail": 0,
+            "sub_received": 0,
+            "sub_skipped_own": 0,
+            "sub_forwarded": 0,
+            "sub_errors": 0,
+            "sub_reconnects": 0,
+        }
+        self.subscribed_at: float | None = None
 
     @property
     def enabled(self) -> bool:
@@ -155,7 +165,9 @@ class RedisBroadcastRelay:
         )
         try:
             await self._publisher.publish(self._channel, payload)
+            self.stats["publish_ok"] += 1
         except (RedisConnectionError, RedisTimeoutError) as exc:
+            self.stats["publish_fail"] += 1
             logger.warning(
                 "redis relay publish connection issue: game_id=%s error=%s",
                 game_id,
@@ -163,9 +175,11 @@ class RedisBroadcastRelay:
             )
             await self._reset_publisher_client()
         except Exception:
+            self.stats["publish_fail"] += 1
             logger.exception("redis relay publish failed: game_id=%s", game_id)
 
     async def _run_subscribe_loop(self, on_message: RedisMessageHandler) -> None:
+        import time as _time
         while not self._stop_event.is_set():
             pubsub = None
             try:
@@ -173,6 +187,12 @@ class RedisBroadcastRelay:
                     return
                 pubsub = self._subscriber.pubsub()
                 await pubsub.subscribe(self._channel)
+                self.subscribed_at = _time.time()
+                logger.warning(
+                    "redis relay SUBSCRIBED channel=%s source=%s",
+                    self._channel,
+                    self._source_instance_id,
+                )
 
                 async for raw in pubsub.listen():
                     if self._stop_event.is_set():
@@ -180,16 +200,25 @@ class RedisBroadcastRelay:
                     if raw.get("type") != "message":
                         continue
 
+                    self.stats["sub_received"] += 1
                     envelope = self._decode_envelope(raw.get("data"))
                     if envelope is None:
                         continue
                     if envelope["source"] == self._source_instance_id:
+                        self.stats["sub_skipped_own"] += 1
                         continue
 
-                    await on_message(envelope["gameId"], envelope["message"])
+                    self.stats["sub_forwarded"] += 1
+                    try:
+                        await on_message(envelope["gameId"], envelope["message"])
+                    except Exception:
+                        self.stats["sub_errors"] += 1
+                        logger.exception("redis relay on_message handler failed")
             except asyncio.CancelledError:
                 break
             except (RedisConnectionError, RedisTimeoutError) as exc:
+                self.stats["sub_reconnects"] += 1
+                self.subscribed_at = None
                 logger.warning(
                     "redis relay subscribe connection dropped: %s; reconnecting in %.1fs",
                     exc,
@@ -198,6 +227,8 @@ class RedisBroadcastRelay:
                 await self._reset_subscriber_client()
                 await asyncio.sleep(self._reconnect_delay_sec)
             except Exception:
+                self.stats["sub_reconnects"] += 1
+                self.subscribed_at = None
                 logger.exception("redis relay subscribe loop failed; reconnecting shortly")
                 await asyncio.sleep(self._reconnect_delay_sec)
             finally:
