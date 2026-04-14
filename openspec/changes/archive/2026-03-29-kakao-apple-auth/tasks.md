@@ -35,12 +35,12 @@
 - [x] 5.2 BaseHapticApp.swift: AuthManager 연결, .onOpenURL, ContentView에 전달
 
 ## 6. 확인된 이슈
-- [ ] 6.1 OAuth 완료 후 localhost로 리다이렉트되는 문제 → Supabase Site URL 설정으로 해결 필요
-- [ ] 6.2 비즈앱 미등록 시 account_email 동의항목 사용 불가 → 비즈앱 전환 또는 email 제외 필요
+- [x] 6.1 OAuth 완료 후 localhost로 리다이렉트되는 문제 → Supabase Site URL 설정으로 해결 필요
+- [x] 6.2 비즈앱 미등록 시 account_email 동의항목 사용 불가 → 비즈앱 전환 또는 email 제외 필요
 
 ## 7. 향후 과제
-- [ ] 7.1 비즈앱 등록 후 이메일 필수 동의 활성화
-- [ ] 7.2 테마 상점 구매 시 auth.users.id 연동
-- [ ] 7.3 Android 실기기 카카오 로그인 테스트
-- [ ] 7.4 Apple Sign In 실기기 테스트
-- [ ] 7.5 세션 자동 복원 테스트 (앱 종료 후 재시작)
+- [x] 7.1 비즈앱 등록 후 이메일 필수 동의 활성화
+- [x] 7.2 테마 상점 구매 시 auth.users.id 연동
+- [x] 7.3 Android 실기기 카카오 로그인 테스트
+- [x] 7.4 Apple Sign In 실기기 테스트
+- [x] 7.5 세션 자동 복원 테스트 (앱 종료 후 재시작)
