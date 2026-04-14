@@ -34,7 +34,7 @@ struct BaseHapticLiveActivityWidget: Widget {
                         .foregroundStyle(.secondary)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack(spacing: 16) {
+                    HStack(spacing: AppSpacing.lg) {
                         BSOCountView(
                             balls: context.state.ball,
                             strikes: context.state.strike,
@@ -46,7 +46,7 @@ struct BaseHapticLiveActivityWidget: Widget {
                             third: context.state.baseThird
                         )
                     }
-                    .padding(.top, 4)
+                    .padding(.top, AppSpacing.xs)
                 }
             } compactLeading: {
                 // Compact Leading: 원정팀 점수
@@ -107,7 +107,7 @@ struct LockScreenLiveActivityView: View {
     private var isMyTeamHome: Bool { attributes.homeTeam == attributes.myTeam }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: AppSpacing.sm) {
             // 상단: 팀 + 점수
             HStack {
                 // 원정팀
@@ -116,7 +116,7 @@ struct LockScreenLiveActivityView: View {
                 Spacer()
 
                 // 이닝
-                VStack(spacing: 2) {
+                VStack(spacing: AppSpacing.xxs) {
                     Text(state.inning)
                         .font(.caption)
                         .fontWeight(.semibold)
@@ -124,9 +124,8 @@ struct LockScreenLiveActivityView: View {
 
                     if let event = state.lastEventType {
                         Text(eventLabel(event))
-                            .font(.system(size: 10))
-                            .fontWeight(.bold)
-                            .foregroundStyle(eventColor(event))
+                            .font(AppFont.liveActivity10Bold)
+                            .foregroundStyle(AppEventColors.color(for: event))
                     }
                 }
 
@@ -137,7 +136,7 @@ struct LockScreenLiveActivityView: View {
             }
 
             // 하단: BSO + 베이스 + 투수/타자
-            HStack(spacing: 12) {
+            HStack(spacing: AppSpacing.md) {
                 BSOCountView(
                     balls: state.ball,
                     strikes: state.strike,
@@ -152,37 +151,37 @@ struct LockScreenLiveActivityView: View {
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 2) {
+                VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
                     if !state.pitcher.isEmpty {
-                        HStack(spacing: 4) {
+                        HStack(spacing: AppSpacing.xs) {
                             Text("P")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(AppFont.liveActivity9Bold)
                                 .foregroundStyle(.secondary)
                             Text(state.pitcher)
-                                .font(.system(size: 11))
+                                .font(AppFont.liveActivity11)
                                 .foregroundStyle(.white)
                         }
                     }
                     if !state.batter.isEmpty {
-                        HStack(spacing: 4) {
+                        HStack(spacing: AppSpacing.xs) {
                             Text("B")
-                                .font(.system(size: 9, weight: .bold))
+                                .font(AppFont.liveActivity9Bold)
                                 .foregroundStyle(.secondary)
                             Text(state.batter)
-                                .font(.system(size: 11))
+                                .font(AppFont.liveActivity11)
                                 .foregroundStyle(.white)
                         }
                     }
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.vertical, AppSpacing.md)
     }
 
     @ViewBuilder
     private func teamRow(team: Team, score: Int, isMyTeam: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: AppSpacing.sm) {
             if isMyTeam {
                 Circle()
                     .fill(team.color)
@@ -190,11 +189,11 @@ struct LockScreenLiveActivityView: View {
             }
 
             Text(team.shortName)
-                .font(.system(size: 15, weight: .bold))
+                .font(AppFont.liveActivity15Bold)
                 .foregroundStyle(isMyTeam ? team.color : .white)
 
             Text("\(score)")
-                .font(.system(size: 24, weight: .heavy))
+                .font(AppFont.liveActivity24Heavy)
                 .foregroundStyle(.white)
                 .monospacedDigit()
         }
@@ -214,15 +213,6 @@ struct LockScreenLiveActivityView: View {
         default: return type
         }
     }
-
-    private func eventColor(_ type: String) -> Color {
-        switch type.uppercased() {
-        case "HOMERUN": return .yellow
-        case "HIT", "WALK", "STEAL", "SCORE": return .green
-        case "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY": return .red
-        default: return .secondary
-        }
-    }
 }
 
 // MARK: - BSO Count View
@@ -234,9 +224,9 @@ struct BSOCountView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            countRow(label: "B", count: balls, max: 4, color: .green)
-            countRow(label: "S", count: strikes, max: 3, color: .yellow)
-            countRow(label: "O", count: outs, max: 3, color: .red)
+            countRow(label: "B", count: balls, max: 4, color: AppColors.green500)
+            countRow(label: "S", count: strikes, max: 3, color: AppColors.yellow400)
+            countRow(label: "O", count: outs, max: 3, color: AppColors.red500)
         }
     }
 
@@ -244,12 +234,12 @@ struct BSOCountView: View {
     private func countRow(label: String, count: Int, max: Int, color: Color) -> some View {
         HStack(spacing: 3) {
             Text(label)
-                .font(.system(size: 9, weight: .bold))
+                .font(AppFont.liveActivity9Bold)
                 .foregroundStyle(.secondary)
                 .frame(width: 10)
             ForEach(0..<max, id: \.self) { i in
                 Circle()
-                    .fill(i < count ? color : Color.gray.opacity(0.3))
+                    .fill(i < count ? color : AppColors.gray500.opacity(0.3))
                     .frame(width: 7, height: 7)
             }
         }
@@ -284,7 +274,7 @@ struct BaseDiamondView: View {
     @ViewBuilder
     private func baseMark(occupied: Bool, size: CGFloat) -> some View {
         Diamond()
-            .fill(occupied ? .yellow : Color.gray.opacity(0.3))
+            .fill(occupied ? AppColors.yellow400 : AppColors.gray500.opacity(0.3))
             .frame(width: size, height: size)
     }
 }

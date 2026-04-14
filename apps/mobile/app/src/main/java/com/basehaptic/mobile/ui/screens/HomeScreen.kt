@@ -1,4 +1,4 @@
-﻿package com.basehaptic.mobile.ui.screens
+package com.basehaptic.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,9 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.*
 import com.basehaptic.mobile.ui.components.TeamLogo
@@ -148,7 +145,7 @@ fun HomeScreen(
             value = backendUpcomingGames
         }
     }
-    
+
     val teamTheme = LocalTeamTheme.current
     val primaryColor = activeTheme?.colors?.primary ?: teamTheme.primary
     val rankingText = teamRecordStats?.ranking?.let { "${it}위" } ?: "-"
@@ -176,12 +173,12 @@ fun HomeScreen(
                             )
                         )
                     )
-                    .padding(bottom = 32.dp)
+                    .padding(bottom = AppSpacing.xxxl)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp)
+                        .padding(AppSpacing.xxl)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -190,17 +187,16 @@ fun HomeScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             TeamLogo(team = selectedTeam, size = 92.dp)
-                            Spacer(modifier = Modifier.width(12.dp))
+                            Spacer(modifier = Modifier.width(AppSpacing.md))
                             Column {
                                 Text(
                                     text = "BaseHaptic Live",
-                                    fontSize = 12.sp,
+                                    style = AppFont.micro,
                                     color = Color.White.copy(alpha = 0.7f)
                                 )
                                 Text(
                                     text = selectedTeam.teamName,
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    style = AppFont.h3Bold,
                                     color = Color.White
                                 )
                             }
@@ -222,15 +218,15 @@ fun HomeScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(AppSpacing.lg))
 
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = AppShapes.lg,
                         color = Color.White.copy(alpha = 0.15f)
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp)
+                            modifier = Modifier.padding(AppSpacing.lg)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -239,20 +235,20 @@ fun HomeScreen(
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(AppSpacing.sm))
                                 Text(
                                     text = LocalDate.now().format(
                                         DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN)
                                     ),
-                                    fontSize = 14.sp,
+                                    style = AppFont.body,
                                     color = Color.White
                                 )
                             }
                             Text(
                                 text = "\uC624\uB298\uC758 \uACBD\uAE30 ${games.count { isPlayableGameStatus(it.status) }}\uAC1C",
-                                fontSize = 14.sp,
+                                style = AppFont.body,
                                 color = Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.padding(top = 4.dp)
+                                modifier = Modifier.padding(top = AppSpacing.xs)
                             )
                         }
                     }
@@ -265,9 +261,9 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = AppSpacing.xxl)
                     .offset(y = (-16).dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.md)
             ) {
                 StatCard(
                     modifier = Modifier.weight(1f),
@@ -295,13 +291,12 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                    .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.lg),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "\uC624\uB298\uC758 \uACBD\uAE30",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = AppFont.h5Bold,
                     color = Color.White
                 )
             }
@@ -324,13 +319,12 @@ fun HomeScreen(
         // Upcoming Games (next 3 my-team schedules after today)
         if (upcomingGames.isNotEmpty()) {
             item {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(AppSpacing.xxxl))
                 Text(
                     text = "\uB2E4\uAC00\uC624\uB294 \uACBD\uAE30",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = AppFont.h5Bold,
                     color = Color.White,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                    modifier = Modifier.padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.lg)
                 )
             }
 
@@ -346,7 +340,7 @@ fun HomeScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.bottomSafeSpacer))
         }
     }
 }
@@ -360,25 +354,24 @@ private fun StatCard(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
+        shape = AppShapes.md,
         color = Gray900,
         tonalElevation = 1.dp
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(AppSpacing.lg),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = value,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
+                style = AppFont.h4Bold,
                 color = valueColor
             )
             Text(
                 text = label,
-                fontSize = 11.sp,
+                style = AppFont.tiny,
                 color = Gray400,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = AppSpacing.xs)
             )
         }
     }
@@ -403,14 +396,14 @@ private fun UpcomingGameCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 12.dp),
-        shape = RoundedCornerShape(16.dp),
+            .padding(horizontal = AppSpacing.xxl)
+            .padding(bottom = AppSpacing.md),
+        shape = AppShapes.lg,
         color = Gray900,
         tonalElevation = 1.dp
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(AppSpacing.lg)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -418,12 +411,12 @@ private fun UpcomingGameCard(
             ) {
                 Text(
                     text = dateTimeText,
-                    fontSize = 14.sp,
+                    style = AppFont.body,
                     color = Gray400
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.sm))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -433,20 +426,18 @@ private fun UpcomingGameCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = myTeamName,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
+                        style = AppFont.bodyLgMedium,
                         color = Color.White
                     )
                     Text(
                         text = " vs ",
-                        fontSize = 14.sp,
+                        style = AppFont.body,
                         color = Gray500,
-                        modifier = Modifier.padding(horizontal = 8.dp)
+                        modifier = Modifier.padding(horizontal = AppSpacing.sm)
                     )
                     Text(
                         text = opponentTeamName,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
+                        style = AppFont.bodyLgMedium,
                         color = Color.White
                     )
                 }
@@ -454,9 +445,9 @@ private fun UpcomingGameCard(
 
             Text(
                 text = venueText,
-                fontSize = 12.sp,
+                style = AppFont.micro,
                 color = Gray500,
-                modifier = Modifier.padding(top = 8.dp)
+                modifier = Modifier.padding(top = AppSpacing.sm)
             )
         }
     }
@@ -478,9 +469,9 @@ private fun GameCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xs)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = AppShapes.lg,
         color = backgroundColor,
         tonalElevation = if (isWatchSynced || game.isMyTeam) 2.dp else 1.dp
     ) {
@@ -493,13 +484,13 @@ private fun GameCard(
                         .border(
                             width = if (isWatchSynced) 2.dp else 1.dp,
                             color = if (isWatchSynced) Yellow500 else Yellow500.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = AppShapes.lg
                         )
                 )
             }
 
             Column(
-                modifier = Modifier.padding(20.dp)
+                modifier = Modifier.padding(AppSpacing.xl)
             ) {
                 // Status and Badge
                 Row(
@@ -516,25 +507,23 @@ private fun GameCard(
                                         .clip(CircleShape)
                                         .background(Red500)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(AppSpacing.sm))
                                 Text(
                                     text = "LIVE",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    style = AppFont.bodyMedium,
                                     color = Red500
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(AppSpacing.md))
                                 Text(
                                     text = game.inning,
-                                    fontSize = 14.sp,
+                                    style = AppFont.body,
                                     color = if (game.isMyTeam) Color.White.copy(alpha = 0.9f) else Gray400
                                 )
                                 if (isWatchSynced) {
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
                                         text = "(워치에서 중계중)",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
+                                        style = AppFont.microMedium,
                                         color = Yellow400
                                     )
                                 }
@@ -546,17 +535,17 @@ private fun GameCard(
                                     tint = Gray400,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(AppSpacing.sm))
                                 Text(
                                     text = if (game.time.isNullOrBlank()) "" else "경기 시작 시간 ${game.time}",
-                                    fontSize = 14.sp,
+                                    style = AppFont.body,
                                     color = Gray400
                                 )
                             }
                             GameStatus.FINISHED -> {
                                 Text(
                                     text = "\uACBD\uAE30 \uC885\uB8CC",
-                                    fontSize = 14.sp,
+                                    style = AppFont.body,
                                     color = Gray500
                                 )
                             }
@@ -567,18 +556,17 @@ private fun GameCard(
                                         .clip(CircleShape)
                                         .background(Red500)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(AppSpacing.sm))
                                 Text(
                                     text = "경기 취소",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    style = AppFont.bodyMedium,
                                     color = Red500
                                 )
                                 if (!game.time.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
                                         text = "예정 ${game.time}",
-                                        fontSize = 12.sp,
+                                        style = AppFont.micro,
                                         color = Gray500
                                     )
                                 }
@@ -590,18 +578,17 @@ private fun GameCard(
                                         .clip(CircleShape)
                                         .background(Orange500)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(AppSpacing.sm))
                                 Text(
                                     text = "경기 연기",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    style = AppFont.bodyMedium,
                                     color = Orange500
                                 )
                                 if (!game.time.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
                                         text = "기존 예정 ${game.time}",
-                                        fontSize = 12.sp,
+                                        style = AppFont.micro,
                                         color = Gray500
                                     )
                                 }
@@ -611,13 +598,11 @@ private fun GameCard(
 
                     if (game.isMyTeam) {
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = Brush.horizontalGradient(
-                                colors = listOf(Yellow500, Orange500)
-                            ).let { Color(0xFFEAB308) }
+                            shape = AppShapes.xl,
+                            color = Yellow500
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = AppSpacing.xs),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -626,11 +611,10 @@ private fun GameCard(
                                     tint = Color.White,
                                     modifier = Modifier.size(14.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(AppSpacing.xs))
                                 Text(
                                     text = "응원팀",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    style = AppFont.microBold,
                                     color = Color.White
                                 )
                             }
@@ -638,10 +622,10 @@ private fun GameCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(AppSpacing.lg))
 
                 // Teams and Scores
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
                     TeamScoreRow(
                         team = game.awayTeamId,
                         teamName = game.awayTeamId.teamName,
@@ -687,20 +671,19 @@ private fun TeamScoreRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TeamLogo(team = team, size = 56.dp)
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(AppSpacing.md))
             Column {
                 Text(
                     text = teamName,
-                    fontSize = if (isMyTeam) 18.sp else 16.sp,
-                    fontWeight = FontWeight.Medium,
+                    style = if (isMyTeam) AppFont.h5Bold else AppFont.bodyLgMedium,
                     color = if (isWinner) Color.White else if (isScheduled) Color.White else Gray500
                 )
                 if (pitcher != null) {
                     Text(
                         text = "선발투수 ${pitcher.name}, 최근 ${pitcher.record.wins}/${pitcher.record.draws}/${pitcher.record.losses}",
-                        fontSize = 12.sp,
+                        style = AppFont.micro,
                         color = if (isWinner) Gray400 else Gray600,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = AppSpacing.xxs)
                     )
                 }
             }
@@ -708,8 +691,7 @@ private fun TeamScoreRow(
 
         Text(
             text = if (isScheduled) "-" else score.toString(),
-            fontSize = if (isMyTeam) 28.sp else 24.sp,
-            fontWeight = FontWeight.Bold,
+            style = if (isMyTeam) AppFont.h2 else AppFont.h3Bold,
             color = if (isWinner) Color.White else if (isScheduled) Color.White else Gray500
         )
     }

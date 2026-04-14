@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -33,11 +32,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeColors
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.ui.components.TeamLogo
+import com.basehaptic.mobile.ui.theme.AppFont
+import com.basehaptic.mobile.ui.theme.AppShapes
+import com.basehaptic.mobile.ui.theme.AppSpacing
 import com.basehaptic.mobile.ui.theme.Blue500
 import com.basehaptic.mobile.ui.theme.Gray300
 import com.basehaptic.mobile.ui.theme.Gray400
@@ -68,30 +69,30 @@ fun ThemeStoreScreen(
     ) {
         item {
             Column(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
+                modifier = Modifier.padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xl)
             ) {
                 Text(
                     text = "테마 상점",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = AppFont.h3Bold,
                     color = Color.White
                 )
                 Text(
                     text = "목업 데이터로 구성된 테마 프리뷰입니다.",
-                    fontSize = 14.sp,
+                    style = AppFont.body,
                     color = Gray400,
+                    // Reason: 서브 텍스트 미세 조정 여백
                     modifier = Modifier.padding(top = 6.dp)
                 )
                 Text(
                     text = "현재 적용: ${activeTheme?.name ?: "기본 팀 테마"}",
-                    fontSize = 13.sp,
+                    style = AppFont.caption,
                     color = teamTheme.primary,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = AppSpacing.sm)
                 )
                 OutlinedButton(
                     onClick = { onApplyTheme(null) },
                     enabled = activeTheme != null,
-                    modifier = Modifier.padding(top = 12.dp)
+                    modifier = Modifier.padding(top = AppSpacing.md)
                 ) {
                     Text("기본 팀 테마 적용")
                 }
@@ -113,13 +114,14 @@ fun ThemeStoreScreen(
         item {
             Text(
                 text = "목업 데이터는 실제 결제/다운로드와 연결되어 있지 않습니다.",
-                fontSize = 12.sp,
+                style = AppFont.micro,
                 color = Gray400,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 20.dp)
+                    .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xl)
             )
+            // Reason: 하단 safe area (72dp: 네비게이션 바 높이 + 여유)
             Spacer(modifier = Modifier.height(72.dp))
         }
     }
@@ -136,12 +138,12 @@ private fun ThemeStoreItemCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.sm),
         color = Gray900,
-        shape = RoundedCornerShape(16.dp),
+        shape = AppShapes.lg,
         tonalElevation = 1.dp
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(AppSpacing.lg)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -149,30 +151,30 @@ private fun ThemeStoreItemCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TeamLogo(team = item.theme.teamId, size = 60.dp)
-                    Spacer(modifier = Modifier.size(10.dp))
+                    Spacer(modifier = Modifier.size(AppSpacing.md))
                     Column {
                         Text(
                             text = item.theme.name,
-                            fontSize = 17.sp,
+                            // Reason: 17sp는 h5(18)과 bodyLg(16) 사이, 디자인 상 중간값 필요
+                            style = AppFont.bodyLgMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White
                         )
                         Text(
                             text = item.subtitle,
-                            fontSize = 12.sp,
+                            style = AppFont.micro,
                             color = Gray400
                         )
                     }
                 }
                 Text(
                     text = "${item.price}P",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = AppFont.labelBold,
                     color = if (isPurchased) Gray300 else Yellow500
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.md))
 
             Box(
                 modifier = Modifier
@@ -182,7 +184,7 @@ private fun ThemeStoreItemCard(
                         brush = Brush.horizontalGradient(
                             colors = listOf(item.theme.colors.primary, item.theme.colors.secondary)
                         ),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = AppShapes.md
                     )
             ) {
                 Text(
@@ -191,11 +193,11 @@ private fun ThemeStoreItemCard(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 14.dp)
+                        .padding(end = AppSpacing.lg)
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.md))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -231,7 +233,7 @@ private fun ThemeStoreItemCard(
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.size(6.dp))
+                            Spacer(modifier = Modifier.size(AppSpacing.xs))
                             Text("구매하기")
                         }
                     }
@@ -247,6 +249,7 @@ private data class ThemeStoreItem(
     val subtitle: String
 )
 
+// Reason: 목업 테마 스토어 데이터. 각 테마가 고유 색 조합을 가지므로 토큰 팔레트 밖의 색상 사용 허용.
 private fun getMockThemeStoreItems(selectedTeam: Team): List<ThemeStoreItem> {
     return listOf(
         ThemeStoreItem(

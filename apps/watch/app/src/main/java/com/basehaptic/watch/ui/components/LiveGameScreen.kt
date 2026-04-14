@@ -38,6 +38,8 @@ import com.basehaptic.watch.ui.theme.Gray950
 import com.basehaptic.watch.ui.theme.Green500
 import com.basehaptic.watch.ui.theme.Orange500
 import com.basehaptic.watch.ui.theme.Red500
+import com.basehaptic.watch.ui.theme.WatchAppShapes
+import com.basehaptic.watch.ui.theme.WatchAppSpacing
 import com.basehaptic.watch.ui.theme.WatchUiProfile
 import com.basehaptic.watch.ui.theme.Yellow400
 import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
@@ -82,12 +84,13 @@ fun LiveGameScreen(
         Row(
             modifier = Modifier
                 .constrainAs(mainScoreCard) {
-                    top.linkTo(topBanner.bottom, margin = 4.dp)
+                    top.linkTo(topBanner.bottom, margin = WatchAppSpacing.xs)
                     start.linkTo(parent.start)
                     end.linkTo(parent.end)
                     width = Dimension.fillToConstraints
                 }
                 .offset(y = (-4).dp)
+                // Reason: 메인 스코어 카드 전용 18dp 둥근 모서리 (md(12)와 lg(14) 사이)
                 .clip(RoundedCornerShape(18.dp))
                 .background(Gray950)
                 .padding(
@@ -105,12 +108,13 @@ fun LiveGameScreen(
 
             Column(
                 modifier = Modifier
+                    // Reason: 이닝 박스 좌우 여백 6dp (xs 4와 sm 8 사이 미세 조정)
                     .padding(horizontal = 6.dp)
                     .size(
                         width = uiProfile.inningBoxMinWidthDp.dp,
                         height = uiProfile.inningBoxHeightDp.dp
                     )
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(WatchAppShapes.md10)
                     .background(Color.White.copy(alpha = 0.05f)),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -326,7 +330,7 @@ private fun BaseCell(
     Box(
         modifier = Modifier
             .size(uiProfile.baseCellSizeDp.dp)
-            .clip(RoundedCornerShape(2.dp))
+            .clip(WatchAppShapes.xxs)
             .background(
                 if (isOccupied) accentColor else if (isHome) Color.White.copy(alpha = 0.08f) else Gray800,
                 RectangleShape

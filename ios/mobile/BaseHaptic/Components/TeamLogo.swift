@@ -17,6 +17,7 @@ struct TeamLogo: View {
                     .fill(team.color)
                     .frame(width: size, height: size)
                 Text(teamInitial)
+                    // Reason: 로고 폴백 텍스트는 size 인자에 비례해서 동적으로 커지므로 토큰화 불가
                     .font(.system(size: size * 0.4, weight: .bold))
                     .foregroundColor(.white)
             }

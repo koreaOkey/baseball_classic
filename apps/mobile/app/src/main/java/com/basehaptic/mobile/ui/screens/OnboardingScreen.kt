@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Button
@@ -36,13 +35,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.ui.components.TeamLogo
+import com.basehaptic.mobile.ui.theme.AppFont
+import com.basehaptic.mobile.ui.theme.AppShapes
+import com.basehaptic.mobile.ui.theme.AppSpacing
 import com.basehaptic.mobile.ui.theme.Blue600
 import com.basehaptic.mobile.ui.theme.Gray400
 import com.basehaptic.mobile.ui.theme.Gray800
@@ -75,6 +76,7 @@ fun OnboardingScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(
+                // Reason: 온보딩 전용 3단 그라디언트. 중간색은 디자인 요구사항이라 토큰화하지 않음.
                 Brush.verticalGradient(
                     colors = listOf(
                         Gray950,
@@ -88,53 +90,52 @@ fun OnboardingScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
+                .padding(AppSpacing.xxl),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when (step) {
                 1 -> {
+                    // Reason: 온보딩 아이콘 전용 큰 사이즈 (64sp, display 56보다 크게)
                     Text(
                         text = "⚾",
                         fontSize = 64.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        modifier = Modifier.padding(bottom = AppSpacing.lg)
                     )
 
                     Text(
                         text = "야구봄",
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.Bold,
+                        style = AppFont.h1,
                         color = Color.White,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = AppSpacing.sm)
                     )
 
                     Text(
                         text = "응원 팀을 선택하고 워치로 실시간 중계를 확인하세요.",
-                        fontSize = 14.sp,
+                        style = AppFont.body,
                         color = Gray400,
-                        modifier = Modifier.padding(bottom = 32.dp)
+                        modifier = Modifier.padding(bottom = AppSpacing.xxxl)
                     )
 
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = AppShapes.lg,
                         color = Gray900.copy(alpha = 0.5f)
                     ) {
                         Column(
-                            modifier = Modifier.padding(24.dp)
+                            modifier = Modifier.padding(AppSpacing.xxl)
                         ) {
                             Text(
                                 text = "응원하는 팀을 선택하세요",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
+                                style = AppFont.h4Bold,
                                 color = Color.White,
-                                modifier = Modifier.padding(bottom = 16.dp)
+                                modifier = Modifier.padding(bottom = AppSpacing.lg)
                             )
 
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(max = 400.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
                             ) {
                                 items(teams, key = { it.name }) { team ->
                                     TeamSelectionItem(
@@ -150,17 +151,16 @@ fun OnboardingScreen(
                                 enabled = selectedTeam != Team.NONE,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 24.dp),
+                                    .padding(top = AppSpacing.xxl),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Blue600,
                                     disabledContainerColor = Gray800
                                 ),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = AppShapes.md
                             ) {
                                 Text(
                                     text = "계속하기",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
+                                    style = AppFont.bodyLgMedium
                                 )
                             }
                         }
@@ -169,18 +169,17 @@ fun OnboardingScreen(
                 2 -> {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = AppShapes.lg,
                         color = Gray900.copy(alpha = 0.5f)
                     ) {
                         Column(
-                            modifier = Modifier.padding(24.dp)
+                            modifier = Modifier.padding(AppSpacing.xxl)
                         ) {
                             Text(
                                 text = "기능 설명",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
+                                style = AppFont.h3Bold,
                                 color = Color.White,
-                                modifier = Modifier.padding(bottom = 24.dp)
+                                modifier = Modifier.padding(bottom = AppSpacing.xxl)
                             )
 
                             FeatureCard(
@@ -189,26 +188,17 @@ fun OnboardingScreen(
                                 description = "득점, 홈런 등 주요 이벤트 발생 시 스마트워치로 진동 알림을 보냅니다."
                             )
 
-                            // 경기 일정 자동 동기화 - 추후 공개
-                            // FeatureCard(
-                            //     emoji = "🗓",
-                            //     title = "경기 일정 자동 동기화",
-                            //     description = "응원 팀 경기 일정을 캘린더에 자동으로 등록합니다.",
-                            //     modifier = Modifier.padding(top = 16.dp)
-                            // )
-
                             Button(
                                 onClick = { step = 3 },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 24.dp),
+                                    .padding(top = AppSpacing.xxl),
                                 colors = ButtonDefaults.buttonColors(containerColor = Blue600),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = AppShapes.md
                             ) {
                                 Text(
                                     text = "계속하기",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
+                                    style = AppFont.bodyLgMedium
                                 )
                             }
                         }
@@ -217,49 +207,47 @@ fun OnboardingScreen(
                 3 -> {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = AppShapes.lg,
                         color = Gray900.copy(alpha = 0.5f)
                     ) {
                         Column(
-                            modifier = Modifier.padding(24.dp),
+                            modifier = Modifier.padding(AppSpacing.xxl),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 text = "로그인",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
+                                style = AppFont.h3Bold,
                                 color = Color.White,
-                                modifier = Modifier.padding(bottom = 8.dp)
+                                modifier = Modifier.padding(bottom = AppSpacing.sm)
                             )
 
                             Text(
                                 text = "로그인하면 데이터를 안전하게 저장하고\n다른 기기에서도 이용할 수 있어요.",
-                                fontSize = 14.sp,
+                                style = AppFont.body,
                                 color = Gray400,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(bottom = 24.dp)
+                                modifier = Modifier.padding(bottom = AppSpacing.xxl)
                             )
 
                             when (authState) {
                                 is AuthState.LoggedIn -> {
                                     Text(
                                         text = "로그인 완료!",
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Medium,
+                                        style = AppFont.bodyLgMedium,
+                                        // Reason: "로그인 완료" 피드백 전용 Material green 톤
                                         color = Color(0xFF4CAF50),
-                                        modifier = Modifier.padding(bottom = 16.dp)
+                                        modifier = Modifier.padding(bottom = AppSpacing.lg)
                                     )
 
                                     Button(
                                         onClick = { onComplete(selectedTeam) },
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Blue600),
-                                        shape = RoundedCornerShape(12.dp)
+                                        shape = AppShapes.md
                                     ) {
                                         Text(
                                             text = "시작하기",
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.Medium
+                                            style = AppFont.bodyLgMedium
                                         )
                                     }
                                 }
@@ -268,33 +256,34 @@ fun OnboardingScreen(
                                     Surface(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .clip(AppShapes.md)
                                             .clickable { onSignInWithKakao() },
-                                        shape = RoundedCornerShape(12.dp),
+                                        shape = AppShapes.md,
+                                        // Reason: 카카오 브랜드 지정 색 (#FEE500)
                                         color = Color(0xFFFEE500)
                                     ) {
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(16.dp),
+                                                .padding(AppSpacing.lg),
                                             horizontalArrangement = Arrangement.Center,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
                                                 text = "\uD83D\uDCAC",
-                                                fontSize = 20.sp
+                                                style = AppFont.h4
                                             )
-                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Spacer(modifier = Modifier.width(AppSpacing.sm))
                                             Text(
                                                 text = "카카오로 로그인",
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Bold,
+                                                style = AppFont.bodyLgBold,
+                                                // Reason: 카카오 브랜드 지정 색 (거의 블랙)
                                                 color = Color(0xFF191919)
                                             )
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Spacer(modifier = Modifier.height(AppSpacing.lg))
 
                                     // 건너뛰기 버튼
                                     TextButton(
@@ -303,7 +292,7 @@ fun OnboardingScreen(
                                     ) {
                                         Text(
                                             text = "건너뛰기",
-                                            fontSize = 14.sp,
+                                            style = AppFont.body,
                                             color = Gray400
                                         )
                                     }
@@ -326,19 +315,18 @@ private fun TeamSelectionItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(AppShapes.md)
             .background(if (isSelected) team.color else Gray800.copy(alpha = 0.5f))
             .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(AppSpacing.lg),
         verticalAlignment = Alignment.CenterVertically
     ) {
         TeamLogo(team = team, size = 72.dp)
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(AppSpacing.md))
 
         Text(
             text = team.teamName,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
+            style = AppFont.bodyLgMedium,
             color = Color.White,
             modifier = Modifier.weight(1f)
         )
@@ -363,28 +351,28 @@ private fun FeatureCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, Gray800.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-            .padding(16.dp)
+            .clip(AppShapes.md)
+            .border(1.dp, Gray800.copy(alpha = 0.8f), AppShapes.md)
+            .padding(AppSpacing.lg)
     ) {
         Text(
             text = emoji,
-            fontSize = 24.sp,
-            modifier = Modifier.padding(end = 12.dp)
+            style = AppFont.h3,
+            modifier = Modifier.padding(end = AppSpacing.md)
         )
 
         Column {
             Text(
                 text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
+                style = AppFont.bodyLgMedium,
                 color = Color.White,
-                modifier = Modifier.padding(bottom = 4.dp)
+                modifier = Modifier.padding(bottom = AppSpacing.xs)
             )
             Text(
                 text = description,
-                fontSize = 14.sp,
+                style = AppFont.body,
                 color = Gray400,
+                // Reason: 설명 텍스트 줄 간격 조정
                 lineHeight = 20.sp
             )
         }

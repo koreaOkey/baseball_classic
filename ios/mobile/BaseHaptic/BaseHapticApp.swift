@@ -208,6 +208,19 @@ struct ContentView: View {
                         selectedTeam: selectedTeam,
                         onBack: { navigateBack() }
                     )
+                case .store:
+                    ThemeStoreScreen(
+                        selectedTeam: selectedTeam,
+                        activeTheme: activeTheme,
+                        purchasedThemes: purchasedThemes,
+                        onApplyTheme: { activeTheme = $0 },
+                        onPurchaseTheme: { theme in
+                            if !purchasedThemes.contains(where: { $0.id == theme.id }) {
+                                purchasedThemes.append(theme)
+                            }
+                            activeTheme = theme
+                        }
+                    )
                 case .settings:
                     SettingsScreen(
                         selectedTeam: selectedTeam,
@@ -282,11 +295,14 @@ struct ContentView: View {
             BottomNavItem(icon: "house.fill", label: "홈", isSelected: currentView == .home) {
                 navigateTo(.home)
             }
+            BottomNavItem(icon: "bag.fill", label: "상점", isSelected: currentView == .store) {
+                navigateTo(.store)
+            }
             BottomNavItem(icon: "gearshape.fill", label: "설정", isSelected: currentView == .settings) {
                 navigateTo(.settings)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, AppSpacing.sm)
         .background(AppColors.gray900)
     }
 
@@ -545,13 +561,13 @@ private struct BottomNavItem: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: AppSpacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 24))
+                    .font(AppFont.h3)
                 Text(label)
-                    .font(.system(size: 12))
+                    .font(AppFont.micro)
             }
-            .foregroundColor(isSelected ? teamTheme.navIndicator : Color(hex: 0x71717A))
+            .foregroundColor(isSelected ? teamTheme.navIndicator : AppColors.gray500)
             .frame(maxWidth: .infinity)
         }
     }

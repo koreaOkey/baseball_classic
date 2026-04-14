@@ -16,6 +16,8 @@ val Blue500 = Color(0xFF3B82F6)
 val Blue600 = Color(0xFF2563EB)
 val Blue400 = Color(0xFF60A5FA)
 
+val Cyan500 = Color(0xFF06B6D4)
+
 val Yellow500 = Color(0xFFEAB308)
 val Yellow400 = Color(0xFFFACC15)
 val Orange500 = Color(0xFFF97316)

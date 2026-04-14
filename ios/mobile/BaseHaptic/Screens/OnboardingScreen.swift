@@ -13,6 +13,7 @@ struct OnboardingScreen: View {
 
     var body: some View {
         ZStack {
+            // Reason: 온보딩 전용 3단 그라디언트. 중간색은 디자인 요구사항이라 토큰화하지 않음.
             LinearGradient(
                 colors: [AppColors.gray950, Color(hex: 0x0F172A), AppColors.gray950],
                 startPoint: .top,
@@ -33,7 +34,7 @@ struct OnboardingScreen: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, AppSpacing.xxl)
         }
         .onChange(of: authState) { _, newState in
             if case .loggedIn = newState, step == 3, !didAutoComplete {
@@ -47,28 +48,28 @@ struct OnboardingScreen: View {
     private var teamSelectionStep: some View {
         VStack(spacing: 0) {
             Image(systemName: "baseball.fill")
-                .font(.system(size: 56))
+                .font(AppFont.display)
                 .foregroundColor(.white)
-                .padding(.bottom, 16)
+                .padding(.bottom, AppSpacing.lg)
 
             Text("야구봄")
-                .font(.system(size: 36, weight: .bold))
+                .font(AppFont.h1)
                 .foregroundColor(.white)
-                .padding(.bottom, 8)
+                .padding(.bottom, AppSpacing.sm)
 
             Text("응원 팀을 선택하고 워치로 실시간 중계를 확인하세요.")
-                .font(.system(size: 14))
+                .font(AppFont.body)
                 .foregroundColor(AppColors.gray400)
-                .padding(.bottom, 32)
+                .padding(.bottom, AppSpacing.xxxl)
 
             VStack(spacing: 0) {
                 Text("응원하는 팀을 선택하세요")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(AppFont.h4Bold)
                     .foregroundColor(.white)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, AppSpacing.lg)
 
                 ScrollView {
-                    VStack(spacing: 8) {
+                    VStack(spacing: AppSpacing.sm) {
                         ForEach(Team.selectableTeams) { team in
                             TeamSelectionItem(
                                 team: team,
@@ -82,19 +83,20 @@ struct OnboardingScreen: View {
 
                 Button(action: { step = 2 }) {
                     Text("계속하기")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(AppFont.bodyLgMedium)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
+                        // Reason: 표준 버튼 높이(14pt = lg/2 - xs)
                         .padding(.vertical, 14)
                         .background(selectedTeam != .none ? AppColors.blue600 : AppColors.gray800)
-                        .cornerRadius(12)
+                        .cornerRadius(AppRadius.md)
                 }
                 .disabled(selectedTeam == .none)
-                .padding(.top, 24)
+                .padding(.top, AppSpacing.xxl)
             }
-            .padding(24)
+            .padding(AppSpacing.xxl)
             .background(AppColors.gray900.opacity(0.5))
-            .cornerRadius(16)
+            .cornerRadius(AppRadius.lg)
         }
     }
 
@@ -102,85 +104,79 @@ struct OnboardingScreen: View {
     private var featureStep: some View {
         VStack(spacing: 0) {
             Text("기능 설명")
-                .font(.system(size: 24, weight: .bold))
+                .font(AppFont.h3Bold)
                 .foregroundColor(.white)
-                .padding(.bottom, 24)
+                .padding(.bottom, AppSpacing.xxl)
 
             FeatureCard(systemImage: "applewatch.radiowaves.left.and.right", title: "워치로 라이브 경기 보기",
                         description: "득점, 홈런 등 주요 이벤트 발생 시 스마트워치로 진동 알림을 보냅니다.")
 
-            // 경기 일정 자동 동기화 - 추후 공개
-            // FeatureCard(emoji: "🗓", title: "경기 일정 자동 동기화",
-            //             description: "응원 팀 경기 일정을 캘린더에 자동으로 등록합니다.")
-            //     .padding(.top, 16)
-
-            // 원격 하이파이브 - 추후 공개
-            // FeatureCard(emoji: "🤝", title: "원격 하이파이브",
-            //             description: "친구와 득점 순간의 감정을 함께 공유합니다. (블루투스 사용)")
-            //     .padding(.top, 16)
-
             Button(action: { step = 3 }) {
                 Text("계속하기")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
+                    // Reason: 표준 버튼 높이
                     .padding(.vertical, 14)
                     .background(AppColors.blue600)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.md)
             }
-            .padding(.top, 24)
+            .padding(.top, AppSpacing.xxl)
         }
-        .padding(24)
+        .padding(AppSpacing.xxl)
         .background(AppColors.gray900.opacity(0.5))
-        .cornerRadius(16)
+        .cornerRadius(AppRadius.lg)
     }
 
     // MARK: - Step 3: Login
     private var loginStep: some View {
         VStack(spacing: 0) {
             Text("로그인")
-                .font(.system(size: 24, weight: .bold))
+                .font(AppFont.h3Bold)
                 .foregroundColor(.white)
-                .padding(.bottom, 8)
+                .padding(.bottom, AppSpacing.sm)
 
             Text("로그인하면 데이터를 안전하게 저장하고\n다른 기기에서도 이용할 수 있어요.")
-                .font(.system(size: 14))
+                .font(AppFont.body)
                 .foregroundColor(AppColors.gray400)
                 .multilineTextAlignment(.center)
-                .padding(.bottom, 24)
+                .padding(.bottom, AppSpacing.xxl)
 
             switch authState {
             case .loggedIn:
+                // Reason: "로그인 완료" 피드백 전용 Material green 톤
                 Text("로그인 완료!")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(AppFont.bodyLgMedium)
                     .foregroundColor(Color(red: 76/255, green: 175/255, blue: 80/255))
-                    .padding(.bottom, 16)
+                    .padding(.bottom, AppSpacing.lg)
 
                 Button(action: { onComplete(selectedTeam) }) {
                     Text("시작하기")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(AppFont.bodyLgMedium)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                         .background(AppColors.blue600)
-                        .cornerRadius(12)
+                        .cornerRadius(AppRadius.md)
                 }
 
             default:
                 // 카카오 로그인
                 Button(action: onSignInWithKakao) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: AppSpacing.sm) {
                         Image(systemName: "message.fill")
-                            .font(.system(size: 20))
+                            .font(AppFont.h4)
+                            // Reason: 카카오 브랜드 지정 색 (거의 블랙)
                             .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
                         Text("카카오로 로그인")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(AppFont.bodyLgBold)
                             .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(16)
+                    .padding(AppSpacing.lg)
+                    // Reason: 카카오 브랜드 지정 색 (#FEE500)
                     .background(Color(red: 254/255, green: 229/255, blue: 0))
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.md)
                 }
 
                 // Apple 로그인
@@ -193,23 +189,23 @@ struct OnboardingScreen: View {
                 }
                 .signInWithAppleButtonStyle(.white)
                 .frame(height: 50)
-                .cornerRadius(12)
-                .padding(.top, 8)
+                .cornerRadius(AppRadius.md)
+                .padding(.top, AppSpacing.sm)
 
                 // 건너뛰기
                 Button(action: { onComplete(selectedTeam) }) {
                     Text("건너뛰기")
-                        .font(.system(size: 14))
+                        .font(AppFont.body)
                         .foregroundColor(AppColors.gray400)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, AppSpacing.md)
                 }
-                .padding(.top, 8)
+                .padding(.top, AppSpacing.sm)
             }
         }
-        .padding(24)
+        .padding(AppSpacing.xxl)
         .background(AppColors.gray900.opacity(0.5))
-        .cornerRadius(16)
+        .cornerRadius(AppRadius.lg)
     }
 }
 
@@ -223,10 +219,10 @@ private struct TeamSelectionItem: View {
         Button(action: onTap) {
             HStack {
                 TeamLogo(team: team, size: 72)
-                    .padding(.trailing, 4)
+                    .padding(.trailing, AppSpacing.xs)
 
                 Text(team.teamName)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
 
                 Spacer()
@@ -236,9 +232,9 @@ private struct TeamSelectionItem: View {
                         .foregroundColor(.white)
                 }
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(isSelected ? team.color : AppColors.gray800.opacity(0.5))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.md)
         }
     }
 }
@@ -251,25 +247,25 @@ private struct FeatureCard: View {
     var body: some View {
         HStack(alignment: .top) {
             Image(systemName: systemImage)
-                .font(.system(size: 24))
+                .font(AppFont.h3)
                 .foregroundColor(.white)
                 .frame(width: 32)
-                .padding(.trailing, 12)
+                .padding(.trailing, AppSpacing.md)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 Text(title)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
 
                 Text(description)
-                    .font(.system(size: 14))
+                    .font(AppFont.body)
                     .foregroundColor(AppColors.gray400)
                     .lineSpacing(4)
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(AppColors.gray800.opacity(0.8), lineWidth: 1)
         )
     }

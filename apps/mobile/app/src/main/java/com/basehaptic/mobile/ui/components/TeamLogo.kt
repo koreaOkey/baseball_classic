@@ -58,10 +58,10 @@ fun TeamLogo(
             Text(
                 text = "?",
                 color = Color.White,
+                // Reason: 로고 폴백 텍스트는 size 인자에 비례해서 동적으로 커지므로 토큰화 불가
                 fontSize = (size.value / 3).sp,
                 fontWeight = FontWeight.Bold
             )
         }
     }
 }
-

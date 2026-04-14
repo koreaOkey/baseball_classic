@@ -27,7 +27,7 @@ struct HomeScreen: View {
                 gamesListHeader
                 gamesListSection
                 upcomingGamesSection
-                Spacer().frame(height: 80)
+                Spacer().frame(height: AppSpacing.bottomSafeSpacer)
             }
         }
         .background(AppColors.gray950)
@@ -42,14 +42,14 @@ struct HomeScreen: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                HStack(spacing: 12) {
+                HStack(spacing: AppSpacing.md) {
                     TeamLogo(team: selectedTeam, size: 92)
                     VStack(alignment: .leading) {
                         Text("BaseHaptic Live")
-                            .font(.system(size: 12))
+                            .font(AppFont.micro)
                             .foregroundColor(.white.opacity(0.7))
                         Text(selectedTeam.teamName)
-                            .font(.system(size: 24, weight: .bold))
+                            .font(AppFont.h3Bold)
                             .foregroundColor(.white)
                     }
                 }
@@ -63,28 +63,28 @@ struct HomeScreen: View {
                     )
             }
 
-            Spacer().frame(height: 16)
+            Spacer().frame(height: AppSpacing.lg)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                HStack(spacing: AppSpacing.sm) {
                     Image(systemName: "calendar")
                         .foregroundColor(.white)
-                        .font(.system(size: 16))
+                        .font(AppFont.bodyLg)
                     Text(todayDateString)
-                        .font(.system(size: 14))
+                        .font(AppFont.body)
                         .foregroundColor(.white)
                 }
                 Text("오늘의 경기 \(games.filter { isPlayableGameStatus($0.status) }.count)개")
-                    .font(.system(size: 14))
+                    .font(AppFont.body)
                     .foregroundColor(.white.opacity(0.8))
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.white.opacity(0.15))
-            .cornerRadius(16)
+            .cornerRadius(AppRadius.lg)
         }
-        .padding(24)
-        .padding(.bottom, 32)
+        .padding(AppSpacing.xxl)
+        .padding(.bottom, AppSpacing.xxxl)
         .background(
             LinearGradient(
                 colors: [primaryColor, primaryColor.opacity(0.9)],
@@ -96,25 +96,25 @@ struct HomeScreen: View {
 
     // MARK: - Quick Stats
     private var quickStatsSection: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: AppSpacing.md) {
             StatCard(value: recentWinsText, label: "최근 5경기", valueColor: AppColors.green500)
             StatCard(value: rankingText, label: "현재 순위", valueColor: AppColors.yellow500)
             StatCard(value: wraText, label: "승률", valueColor: AppColors.blue500)
         }
-        .padding(.horizontal, 24)
-        .offset(y: -16)
+        .padding(.horizontal, AppSpacing.xxl)
+        .offset(y: -AppSpacing.lg)
     }
 
     // MARK: - Games List
     private var gamesListHeader: some View {
         HStack {
             Text("오늘의 경기")
-                .font(.system(size: 18, weight: .bold))
+                .font(AppFont.h5Bold)
                 .foregroundColor(.white)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.vertical, AppSpacing.lg)
     }
 
     private var gamesListSection: some View {
@@ -130,13 +130,13 @@ struct HomeScreen: View {
     @ViewBuilder
     private var upcomingGamesSection: some View {
         if !upcomingGames.isEmpty {
-            Spacer().frame(height: 32)
+            Spacer().frame(height: AppSpacing.xxxl)
             Text("다가오는 경기")
-                .font(.system(size: 18, weight: .bold))
+                .font(AppFont.h5Bold)
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 16)
+                .padding(.horizontal, AppSpacing.xxl)
+                .padding(.vertical, AppSpacing.lg)
 
             ForEach(upcomingGames) { upcoming in
                 UpcomingGameCard(selectedTeam: selectedTeam, upcoming: upcoming)
@@ -190,18 +190,18 @@ private struct StatCard: View {
     let valueColor: Color
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: AppSpacing.xs) {
             Text(value)
-                .font(.system(size: 20, weight: .bold))
+                .font(AppFont.h4Bold)
                 .foregroundColor(valueColor)
             Text(label)
-                .font(.system(size: 11))
+                .font(AppFont.tiny)
                 .foregroundColor(AppColors.gray400)
         }
         .frame(maxWidth: .infinity)
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(AppColors.gray900)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.md)
     }
 }
 
@@ -224,10 +224,10 @@ private struct GameCard: View {
                     }
                 }
 
-                Spacer().frame(height: 16)
+                Spacer().frame(height: AppSpacing.lg)
 
                 // Score rows
-                VStack(spacing: 12) {
+                VStack(spacing: AppSpacing.md) {
                     TeamScoreRow(team: game.awayTeamId, teamName: game.awayTeamId.teamName, score: game.awayScore,
                                  isScheduled: isNotStartedStatus(game.status),
                                  isWinner: game.status == .finished && game.awayScore > game.homeScore,
@@ -238,11 +238,11 @@ private struct GameCard: View {
                                  isMyTeam: game.isMyTeam)
                 }
             }
-            .padding(20)
+            .padding(AppSpacing.xl)
             .background(game.isMyTeam ? primaryColor.opacity(0.15) : AppColors.gray900)
-            .cornerRadius(16)
+            .cornerRadius(AppRadius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.lg)
                     .stroke(
                         isWatchSynced ? AppColors.yellow500 :
                             (game.isMyTeam ? AppColors.yellow500.opacity(0.5) : Color.clear),
@@ -251,67 +251,69 @@ private struct GameCard: View {
             )
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, AppSpacing.xxl)
+        // Reason: 카드 간 간격을 최소화하기 위한 미세 조정값
         .padding(.vertical, 6)
     }
 
     @ViewBuilder
     private var statusView: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: AppSpacing.sm) {
             switch game.status {
             case .live:
                 Circle().fill(AppColors.red500).frame(width: 8, height: 8)
                 Text("LIVE")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(AppFont.bodyMedium)
                     .foregroundColor(AppColors.red500)
                 Text(game.inning)
-                    .font(.system(size: 14))
+                    .font(AppFont.body)
                     .foregroundColor(game.isMyTeam ? .white.opacity(0.9) : AppColors.gray400)
                 if isWatchSynced {
                     Text("(워치에서 중계중)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AppFont.microMedium)
                         .foregroundColor(AppColors.yellow400)
                 }
             case .scheduled:
                 Image(systemName: "clock")
                     .foregroundColor(AppColors.gray400)
-                    .font(.system(size: 16))
+                    .font(AppFont.bodyLg)
                 if let time = game.time, !time.isEmpty {
                     Text("경기 시작 시간 \(time)")
-                        .font(.system(size: 14))
+                        .font(AppFont.body)
                         .foregroundColor(AppColors.gray400)
                 }
             case .finished:
                 Text("경기 종료")
-                    .font(.system(size: 14))
+                    .font(AppFont.body)
                     .foregroundColor(AppColors.gray500)
             case .canceled:
                 Circle().fill(AppColors.red500).frame(width: 8, height: 8)
                 Text("경기 취소")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(AppFont.bodyMedium)
                     .foregroundColor(AppColors.red500)
             case .postponed:
                 Circle().fill(AppColors.orange500).frame(width: 8, height: 8)
                 Text("경기 연기")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(AppFont.bodyMedium)
                     .foregroundColor(AppColors.orange500)
             }
         }
     }
 
     private var myTeamBadge: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: AppSpacing.xs) {
             Image(systemName: "star.fill")
-                .font(.system(size: 14))
+                .font(AppFont.body)
                 .foregroundColor(.white)
             Text("응원팀")
-                .font(.system(size: 12, weight: .bold))
+                .font(AppFont.microBold)
                 .foregroundColor(.white)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, AppSpacing.md)
+        // Reason: 배지 높이를 살짝 압축하기 위한 미세 조정값
         .padding(.vertical, 6)
         .background(AppColors.yellow500)
-        .cornerRadius(20)
+        .cornerRadius(AppRadius.xl)
     }
 }
 
@@ -326,15 +328,15 @@ private struct TeamScoreRow: View {
 
     var body: some View {
         HStack {
-            HStack(spacing: 12) {
+            HStack(spacing: AppSpacing.md) {
                 TeamLogo(team: team, size: 56)
                 Text(teamName)
-                    .font(.system(size: isMyTeam ? 18 : 16, weight: .medium))
+                    .font(isMyTeam ? AppFont.h5Bold : AppFont.bodyLgMedium)
                     .foregroundColor(isWinner ? .white : (isScheduled ? .white : AppColors.gray500))
             }
             Spacer()
             Text(isScheduled ? "-" : "\(score)")
-                .font(.system(size: isMyTeam ? 28 : 24, weight: .bold))
+                .font(isMyTeam ? AppFont.h2 : AppFont.h3Bold)
                 .foregroundColor(isWinner ? .white : (isScheduled ? .white : AppColors.gray500))
         }
     }
@@ -349,33 +351,33 @@ private struct UpcomingGameCard: View {
     private var isMyTeamHome: Bool { game.homeTeamId == selectedTeam }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text(formatUpcomingDateTime(upcoming.gameDate, time: game.time))
-                .font(.system(size: 14))
+                .font(AppFont.body)
                 .foregroundColor(AppColors.gray400)
 
             HStack {
                 Text(isMyTeamHome ? game.homeTeamId.teamName : game.awayTeamId.teamName)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
                 Text(" vs ")
-                    .font(.system(size: 14))
+                    .font(AppFont.body)
                     .foregroundColor(AppColors.gray500)
                 Text(isMyTeamHome ? game.awayTeamId.teamName : game.homeTeamId.teamName)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
             }
 
             Text(isMyTeamHome ? "\(game.homeTeamId.teamName) 홈경기" : "\(game.homeTeamId.teamName) 원정경기")
-                .font(.system(size: 12))
+                .font(AppFont.micro)
                 .foregroundColor(AppColors.gray500)
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppColors.gray900)
-        .cornerRadius(16)
-        .padding(.horizontal, 24)
-        .padding(.bottom, 12)
+        .cornerRadius(AppRadius.lg)
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.bottom, AppSpacing.md)
     }
 
     private func formatUpcomingDateTime(_ date: Date, time: String?) -> String {

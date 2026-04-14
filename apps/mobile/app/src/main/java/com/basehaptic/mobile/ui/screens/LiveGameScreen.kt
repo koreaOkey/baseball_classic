@@ -1,4 +1,4 @@
-﻿package com.basehaptic.mobile.ui.screens
+package com.basehaptic.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Watch
@@ -35,23 +34,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.ui.components.TeamLogo
+import com.basehaptic.mobile.ui.theme.AppEventColors
+import com.basehaptic.mobile.ui.theme.AppFont
+import com.basehaptic.mobile.ui.theme.AppShapes
+import com.basehaptic.mobile.ui.theme.AppSpacing
 import com.basehaptic.mobile.ui.theme.Gray400
 import com.basehaptic.mobile.ui.theme.Gray500
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.ui.theme.Gray950
 import com.basehaptic.mobile.ui.theme.Green500
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
-import com.basehaptic.mobile.ui.theme.Orange500
-import com.basehaptic.mobile.ui.theme.Red500
-import com.basehaptic.mobile.ui.theme.Yellow500
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -183,7 +181,7 @@ fun LiveGameScreen(
                         colors = listOf(primaryColor, primaryColor.copy(alpha = 0.85f))
                     )
                 )
-                .padding(16.dp)
+                .padding(AppSpacing.lg)
         ) {
             Column {
                 IconButton(onClick = onBack) {
@@ -198,13 +196,13 @@ fun LiveGameScreen(
                     Text(
                         text = "선택한 경기가 없습니다.",
                         color = Color.White,
-                        modifier = Modifier.padding(top = 8.dp, start = 8.dp, end = 8.dp, bottom = 16.dp)
+                        modifier = Modifier.padding(top = AppSpacing.sm, start = AppSpacing.sm, end = AppSpacing.sm, bottom = AppSpacing.lg)
                     )
                 } else if (gameState == null) {
                     Text(
                         text = loadError ?: "경기 데이터를 불러오는 중...",
                         color = Color.White,
-                        modifier = Modifier.padding(top = 8.dp, start = 8.dp, end = 8.dp, bottom = 16.dp)
+                        modifier = Modifier.padding(top = AppSpacing.sm, start = AppSpacing.sm, end = AppSpacing.sm, bottom = AppSpacing.lg)
                     )
                 } else {
                     ScoreboardCard(state = gameState!!, events = events)
@@ -215,12 +213,12 @@ fun LiveGameScreen(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            shape = RoundedCornerShape(12.dp),
+                .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.md),
+            shape = AppShapes.md,
             color = Gray900
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = AppSpacing.lg, vertical = AppSpacing.md),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -228,7 +226,7 @@ fun LiveGameScreen(
                     contentDescription = null,
                     tint = if (syncedGameId.isNullOrBlank()) Gray400 else Green500
                 )
-                Spacer(modifier = Modifier.size(8.dp))
+                Spacer(modifier = Modifier.size(AppSpacing.sm))
                 Text(
                     text = when {
                         syncedGameId.isNullOrBlank() -> "워치 동기화 꺼짐"
@@ -236,8 +234,7 @@ fun LiveGameScreen(
                         else -> "워치 동기화 대상: $syncedGameId"
                     },
                     color = if (syncedGameId.isNullOrBlank()) Gray400 else Green500,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
+                    style = AppFont.captionMedium
                 )
             }
         }
@@ -246,14 +243,14 @@ fun LiveGameScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = AppSpacing.lg)
         ) {
             item {
                 Text(
                     text = "실시간 이벤트",
                     style = MaterialTheme.typography.titleMedium,
                     color = Color.White,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    modifier = Modifier.padding(vertical = AppSpacing.sm)
                 )
             }
 
@@ -262,7 +259,7 @@ fun LiveGameScreen(
                     Text(
                         text = "아직 이벤트가 없습니다.",
                         color = Gray500,
-                        modifier = Modifier.padding(vertical = 12.dp)
+                        modifier = Modifier.padding(vertical = AppSpacing.md)
                     )
                 }
             } else {
@@ -271,7 +268,7 @@ fun LiveGameScreen(
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(80.dp)) }
+            item { Spacer(modifier = Modifier.height(AppSpacing.bottomSafeSpacer)) }
         }
     }
 }
@@ -283,10 +280,10 @@ private fun ScoreboardCard(
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.12f)),
-        shape = RoundedCornerShape(14.dp),
+        shape = AppShapes.md,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(AppSpacing.lg)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -294,33 +291,32 @@ private fun ScoreboardCard(
                 Text(
                     text = statusLine(status = state.status, inning = state.inning),
                     color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
+                    style = AppFont.captionSemibold
                 )
                 Text(
                     text = "GAME ${state.gameId}",
                     color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 11.sp
+                    style = AppFont.tiny
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.lg))
 
             TeamScoreRow(
                 team = state.awayTeamId,
                 teamName = state.awayTeamId.teamName,
                 score = state.awayScore
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.md))
             TeamScoreRow(
                 team = state.homeTeamId,
                 teamName = state.homeTeamId.teamName,
                 score = state.homeScore
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.md))
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CountChip(label = "B", value = state.ball)
@@ -330,24 +326,24 @@ private fun ScoreboardCard(
                 Text(
                     text = "주자 ${baseText(state)}",
                     color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 12.sp
+                    style = AppFont.micro
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.md))
             Text(
                 text = "투수 ${state.pitcher.ifBlank { "-" }} · 타자 ${state.batter.ifBlank { "-" }}",
                 color = Color.White.copy(alpha = 0.9f),
-                fontSize = 12.sp
+                style = AppFont.micro
             )
 
             val latestEvent = events.firstOrNull()
             if (latestEvent != null) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(AppSpacing.sm))
                 Text(
                     text = "최근 이벤트 ${latestEvent.type}: ${latestEvent.description.ifBlank { "-" }}",
                     color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 12.sp,
+                    style = AppFont.micro,
                     maxLines = 1
                 )
             }
@@ -368,19 +364,17 @@ private fun TeamScoreRow(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TeamLogo(team = team, size = 52.dp)
-            Spacer(modifier = Modifier.size(10.dp))
+            Spacer(modifier = Modifier.size(AppSpacing.md))
             Text(
                 text = teamName,
                 color = Color.White,
-                fontWeight = FontWeight.Medium,
-                fontSize = 16.sp
+                style = AppFont.bodyLgMedium
             )
         }
         Text(
             text = score.toString(),
             color = Color.White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 28.sp
+            style = AppFont.h2
         )
     }
 }
@@ -389,14 +383,14 @@ private fun TeamScoreRow(
 private fun CountChip(label: String, value: Int) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
+            .clip(AppShapes.pill)
             .background(Gray900.copy(alpha = 0.55f))
-            .padding(horizontal = 10.dp, vertical = 5.dp)
+            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.xs)
     ) {
         Text(
             text = "$label $value",
             color = Color.White,
-            fontSize = 12.sp
+            style = AppFont.micro
         )
     }
 }
@@ -406,11 +400,11 @@ private fun EventCard(event: BackendGamesRepository.LiveEvent) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
-        shape = RoundedCornerShape(12.dp),
+            .padding(vertical = AppSpacing.xs),
+        shape = AppShapes.md,
         colors = CardDefaults.cardColors(containerColor = Gray900)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(AppSpacing.lg)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -418,22 +412,21 @@ private fun EventCard(event: BackendGamesRepository.LiveEvent) {
             ) {
                 Text(
                     text = event.type,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = eventColor(event.type)
+                    style = AppFont.captionBold,
+                    color = AppEventColors.eventColor(event.type)
                 )
                 Text(
                     text = event.time,
-                    fontSize = 12.sp,
+                    style = AppFont.micro,
                     color = Gray400
                 )
             }
             if (event.description.isNotBlank()) {
                 Text(
                     text = event.description,
-                    fontSize = 13.sp,
+                    style = AppFont.caption,
                     color = Color.White,
-                    modifier = Modifier.padding(top = 8.dp)
+                    modifier = Modifier.padding(top = AppSpacing.sm)
                 )
             }
         }
@@ -458,16 +451,5 @@ private fun statusLine(status: GameStatus, inning: String): String {
         GameStatus.FINISHED -> "경기 종료"
         GameStatus.CANCELED -> "우천 취소"
         GameStatus.POSTPONED -> "경기 연기"
-    }
-}
-
-private fun eventColor(type: String): Color {
-    return when (type.uppercase()) {
-        "HOMERUN", "SCORE", "SAC_FLY_SCORE" -> Yellow500
-        "HIT", "STEAL", "WALK" -> Green500
-        "DOUBLE_PLAY", "TRIPLE_PLAY" -> Orange500
-        "OUT", "STRIKE" -> Red500
-        "BALL" -> Gray400
-        else -> Gray500
     }
 }

@@ -158,27 +158,27 @@ struct WatchTestScreen: View {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
                         .foregroundColor(.white)
-                        .font(.system(size: 20))
+                        .font(AppFont.h4)
                 }
                 Text("워치 테스트")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(AppFont.h4Bold)
                     .foregroundColor(.white)
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.vertical, AppSpacing.md)
             .background(AppColors.gray950)
 
             ScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: AppSpacing.md) {
                     scoreCard
                     autoSimulationCard
                     manualEventCard
                     logCard
-                    Spacer().frame(height: 80)
+                    Spacer().frame(height: AppSpacing.bottomSafeSpacer)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.horizontal, AppSpacing.lg)
+                .padding(.top, AppSpacing.md)
             }
         }
         .background(AppColors.gray950)
@@ -189,90 +189,90 @@ struct WatchTestScreen: View {
 
     // MARK: - Score Card
     private var scoreCard: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: AppSpacing.sm) {
             Text(gameState.inning)
-                .font(.system(size: 14, weight: .bold))
+                .font(AppFont.bodyBold)
                 .foregroundColor(teamTheme.primary)
 
             HStack {
                 Spacer()
                 VStack {
                     Text(gameState.homeTeam)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppFont.bodyLgBold)
                         .foregroundColor(.white)
                     Text("\(gameState.homeScore)")
-                        .font(.system(size: 36, weight: .bold))
+                        .font(AppFont.h1)
                         .foregroundColor(.white)
                 }
                 Spacer()
                 Text(":")
-                    .font(.system(size: 28))
+                    .font(AppFont.h2)
                     .foregroundColor(AppColors.gray500)
                 Spacer()
                 VStack {
                     Text(gameState.awayTeam)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppFont.bodyLgBold)
                         .foregroundColor(.white)
                     Text("\(gameState.awayScore)")
-                        .font(.system(size: 36, weight: .bold))
+                        .font(AppFont.h1)
                         .foregroundColor(.white)
                 }
                 Spacer()
             }
 
-            HStack(spacing: 16) {
-                Text("B \(gameState.ball)").font(.system(size: 13)).foregroundColor(Color(hex: 0x4ADE80))
-                Text("S \(gameState.strike)").font(.system(size: 13)).foregroundColor(Color(hex: 0xFACC15))
-                Text("O \(gameState.out)").font(.system(size: 13)).foregroundColor(Color(hex: 0xF87171))
+            HStack(spacing: AppSpacing.lg) {
+                Text("B \(gameState.ball)").font(AppFont.caption).foregroundColor(AppColors.green400)
+                Text("S \(gameState.strike)").font(AppFont.caption).foregroundColor(AppColors.yellow400)
+                Text("O \(gameState.out)").font(AppFont.caption).foregroundColor(AppColors.red400)
             }
 
             let bases = [gameState.baseFirst ? "1루" : nil, gameState.baseSecond ? "2루" : nil, gameState.baseThird ? "3루" : nil].compactMap { $0 }
             Text(bases.isEmpty ? "주자 없음" : "주자: \(bases.joined(separator: ", "))")
-                .font(.system(size: 12)).foregroundColor(AppColors.gray400)
+                .font(AppFont.micro).foregroundColor(AppColors.gray400)
             Text("투수: \(gameState.pitcher)  타자: \(gameState.batter)")
-                .font(.system(size: 12)).foregroundColor(AppColors.gray400)
+                .font(AppFont.micro).foregroundColor(AppColors.gray400)
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(AppColors.gray900)
-        .cornerRadius(16)
+        .cornerRadius(AppRadius.lg)
     }
 
     // MARK: - Auto Simulation
     private var autoSimulationCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text("자동 시뮬레이션")
-                .font(.system(size: 14, weight: .bold))
+                .font(AppFont.bodyBold)
                 .foregroundColor(AppColors.gray300)
 
-            HStack(spacing: 8) {
+            HStack(spacing: AppSpacing.sm) {
                 Button {
                     startSimulation()
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "play.fill").font(.system(size: 14))
+                    HStack(spacing: AppSpacing.xs) {
+                        Image(systemName: "play.fill").font(AppFont.body)
                         Text("시작")
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.sm)
                     .background(isSimulating ? AppColors.gray700 : teamTheme.primary)
                     .foregroundColor(.white)
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.sm)
                 }
                 .disabled(isSimulating)
 
                 Button {
                     stopSimulation()
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "stop.fill").font(.system(size: 14))
+                    HStack(spacing: AppSpacing.xs) {
+                        Image(systemName: "stop.fill").font(AppFont.body)
                         Text("중단")
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.sm)
                     .background(Color.clear)
-                    .foregroundColor(isSimulating ? Color(hex: 0xF87171) : AppColors.gray500)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(isSimulating ? Color(hex: 0xF87171) : AppColors.gray600, lineWidth: 1))
-                    .cornerRadius(8)
+                    .foregroundColor(isSimulating ? AppColors.red400 : AppColors.gray500)
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(isSimulating ? AppColors.red400 : AppColors.gray600, lineWidth: 1))
+                    .cornerRadius(AppRadius.sm)
                 }
                 .disabled(!isSimulating)
             }
@@ -282,35 +282,36 @@ struct WatchTestScreen: View {
                     .tint(teamTheme.primary)
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(AppColors.gray900)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.md)
     }
 
     // MARK: - Manual Events
     private var manualEventCard: some View {
+        // HOMERUN은 팀 테마 primary를 강조색으로 사용, 나머지는 AppEventColors 매핑.
         let events: [(String, String, Color)] = [
             ("HOMERUN", "홈런", teamTheme.primary),
-            ("HIT", "안타", Color(hex: 0x22C55E)),
-            ("WALK", "볼넷", Color(hex: 0x4ADE80)),
-            ("STEAL", "도루", Color(hex: 0x3B82F6)),
-            ("SCORE", "득점", Color(hex: 0xEAB308)),
-            ("DOUBLE_PLAY", "병살", Color(hex: 0xF97316)),
-            ("TRIPLE_PLAY", "삼중살", Color(hex: 0xF87171)),
-            ("OUT", "아웃", Color(hex: 0xEF4444)),
-            ("STRIKE", "스트라이크", Color(hex: 0xF97316)),
-            ("BALL", "볼", Color(hex: 0x3B82F6)),
-            ("VICTORY", "승리", Color(hex: 0xEAB308))
+            ("HIT", "안타", AppEventColors.color(for: "HIT")),
+            ("WALK", "볼넷", AppEventColors.color(for: "WALK")),
+            ("STEAL", "도루", AppEventColors.color(for: "STEAL")),
+            ("SCORE", "득점", AppEventColors.color(for: "SCORE")),
+            ("DOUBLE_PLAY", "병살", AppEventColors.color(for: "DOUBLE_PLAY")),
+            ("TRIPLE_PLAY", "삼중살", AppEventColors.color(for: "TRIPLE_PLAY")),
+            ("OUT", "아웃", AppEventColors.color(for: "OUT")),
+            ("STRIKE", "스트라이크", AppEventColors.color(for: "STRIKE")),
+            ("BALL", "볼", AppEventColors.color(for: "BALL")),
+            ("VICTORY", "승리", AppEventColors.color(for: "VICTORY"))
         ]
 
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             Text("수동 이벤트 전송")
-                .font(.system(size: 14, weight: .bold))
+                .font(AppFont.bodyBold)
                 .foregroundColor(AppColors.gray300)
 
             let rows = stride(from: 0, to: events.count, by: 2).map { Array(events[$0..<min($0 + 2, events.count)]) }
             ForEach(0..<rows.count, id: \.self) { rowIndex in
-                HStack(spacing: 8) {
+                HStack(spacing: AppSpacing.sm) {
                     ForEach(0..<rows[rowIndex].count, id: \.self) { colIndex in
                         let event = rows[rowIndex][colIndex]
                         Button {
@@ -318,12 +319,12 @@ struct WatchTestScreen: View {
                             sendCurrentState(eventType: event.0)
                         } label: {
                             Text(event.1)
-                                .font(.system(size: 14, weight: .bold))
+                                .font(AppFont.bodyBold)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 48)
+                                .frame(height: AppSpacing.buttonHeight)
                                 .background(event.2)
-                                .cornerRadius(10)
+                                .cornerRadius(AppRadius.sm)
                         }
                     }
                     if rows[rowIndex].count < 2 {
@@ -332,42 +333,42 @@ struct WatchTestScreen: View {
                 }
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(AppColors.gray900)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.md)
     }
 
     // MARK: - Log Card
     private var logCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
                 Text("전송 로그")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(AppFont.bodyBold)
                     .foregroundColor(AppColors.gray300)
                 Spacer()
                 Button("지우기") { logMessages = [] }
-                    .font(.system(size: 12))
+                    .font(AppFont.micro)
                     .foregroundColor(AppColors.gray500)
             }
 
             if logMessages.isEmpty {
                 Text("이벤트를 전송하면 여기에 표시됩니다.")
-                    .font(.system(size: 13))
+                    .font(AppFont.caption)
                     .foregroundColor(AppColors.gray600)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, AppSpacing.lg)
             } else {
                 ForEach(0..<logMessages.count, id: \.self) { i in
                     Text(logMessages[i])
-                        .font(.system(size: 13))
+                        .font(AppFont.caption)
                         .foregroundColor(AppColors.gray400)
-                        .padding(.vertical, 2)
+                        .padding(.vertical, AppSpacing.xxs)
                 }
             }
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(AppColors.gray900)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.md)
     }
 
     // MARK: - Actions

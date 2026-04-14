@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -38,13 +37,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.data.model.EventType
 import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.ui.theme.Blue500
+import com.basehaptic.mobile.ui.theme.AppEventColors
+import com.basehaptic.mobile.ui.theme.AppFont
+import com.basehaptic.mobile.ui.theme.AppShapes
+import com.basehaptic.mobile.ui.theme.AppSpacing
 import com.basehaptic.mobile.ui.theme.Gray300
 import com.basehaptic.mobile.ui.theme.Gray400
 import com.basehaptic.mobile.ui.theme.Gray500
@@ -53,13 +53,9 @@ import com.basehaptic.mobile.ui.theme.Gray700
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.ui.theme.Gray950
 import com.basehaptic.mobile.ui.theme.Green400
-import com.basehaptic.mobile.ui.theme.Green500
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
-import com.basehaptic.mobile.ui.theme.Orange500
 import com.basehaptic.mobile.ui.theme.Red400
-import com.basehaptic.mobile.ui.theme.Red500
 import com.basehaptic.mobile.ui.theme.Yellow400
-import com.basehaptic.mobile.ui.theme.Yellow500
 import com.basehaptic.mobile.wear.WearGameSyncManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -251,7 +247,7 @@ fun WatchTestScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Gray950)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.md),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
@@ -259,8 +255,7 @@ fun WatchTestScreen(
                 }
                 Text(
                     text = "워치 테스트",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = AppFont.h4Bold,
                     color = Color.White
                 )
             }
@@ -271,44 +266,44 @@ fun WatchTestScreen(
                 .fillMaxSize()
                 .background(Gray950)
                 .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = AppSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
         ) {
             item {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = AppShapes.lg,
                     color = Gray900,
                     tonalElevation = 2.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(AppSpacing.lg),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(gameState.inning, fontSize = 14.sp, color = teamTheme.primary, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
+                        Text(gameState.inning, style = AppFont.bodyBold, color = teamTheme.primary)
+                        Spacer(Modifier.height(AppSpacing.sm))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(gameState.homeTeam, fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                Text("${gameState.homeScore}", fontSize = 36.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(gameState.homeTeam, style = AppFont.bodyLgBold, color = Color.White)
+                                Text("${gameState.homeScore}", style = AppFont.h1, color = Color.White)
                             }
-                            Text(":", fontSize = 28.sp, color = Gray500)
+                            Text(":", style = AppFont.h2, color = Gray500)
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(gameState.awayTeam, fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                Text("${gameState.awayScore}", fontSize = 36.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(gameState.awayTeam, style = AppFont.bodyLgBold, color = Color.White)
+                                Text("${gameState.awayScore}", style = AppFont.h1, color = Color.White)
                             }
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text("B ${gameState.ball}", fontSize = 13.sp, color = Green400)
-                            Text("S ${gameState.strike}", fontSize = 13.sp, color = Yellow400)
-                            Text("O ${gameState.out}", fontSize = 13.sp, color = Red400)
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.lg)) {
+                            Text("B ${gameState.ball}", style = AppFont.caption, color = Green400)
+                            Text("S ${gameState.strike}", style = AppFont.caption, color = Yellow400)
+                            Text("O ${gameState.out}", style = AppFont.caption, color = Red400)
                         }
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(AppSpacing.xs))
                         val bases = listOfNotNull(
                             if (gameState.baseFirst) "1루" else null,
                             if (gameState.baseSecond) "2루" else null,
@@ -316,24 +311,24 @@ fun WatchTestScreen(
                         )
                         Text(
                             if (bases.isEmpty()) "주자 없음" else "주자: ${bases.joinToString(", ")}",
-                            fontSize = 12.sp,
+                            style = AppFont.micro,
                             color = Gray400
                         )
-                        Text("투수: ${gameState.pitcher}  타자: ${gameState.batter}", fontSize = 12.sp, color = Gray400)
+                        Text("투수: ${gameState.pitcher}  타자: ${gameState.batter}", style = AppFont.micro, color = Gray400)
                     }
                 }
             }
 
             item {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = AppShapes.md,
                     color = Gray900,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("자동 시뮬레이션", fontSize = 14.sp, color = Gray300, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                        Text("자동 시뮬레이션", style = AppFont.bodyBold, color = Gray300)
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
                             Button(
                                 onClick = {
                                     if (!isSimulating) {
@@ -362,7 +357,7 @@ fun WatchTestScreen(
                                 colors = ButtonDefaults.buttonColors(containerColor = teamTheme.primary)
                             ) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
+                                Spacer(Modifier.width(AppSpacing.xs))
                                 Text("시작")
                             }
                             OutlinedButton(
@@ -373,12 +368,12 @@ fun WatchTestScreen(
                                 enabled = isSimulating
                             ) {
                                 Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp), tint = Red400)
-                                Spacer(Modifier.width(4.dp))
+                                Spacer(Modifier.width(AppSpacing.xs))
                                 Text("중단", color = Color.White)
                             }
                         }
                         if (isSimulating) {
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(AppSpacing.sm))
                             LinearProgressIndicator(
                                 progress = { (simIndex + 1).toFloat() / simulationScenario.size },
                                 modifier = Modifier.fillMaxWidth(),
@@ -392,32 +387,33 @@ fun WatchTestScreen(
 
             item {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = AppShapes.md,
                     color = Gray900,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("수동 이벤트 전송", fontSize = 14.sp, color = Gray300, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                        Text("수동 이벤트 전송", style = AppFont.bodyBold, color = Gray300)
+                        Spacer(Modifier.height(AppSpacing.sm))
 
+                        // HOMERUN은 팀 테마 primary를 강조색으로 사용, 나머지는 AppEventColors 매핑.
                         val events = listOf(
                             Triple(EventType.HOMERUN, "홈런", teamTheme.primary),
-                            Triple(EventType.HIT, "안타", Green500),
-                            Triple(EventType.WALK, "볼넷", Green400),
-                            Triple(EventType.STEAL, "도루", Blue500),
-                            Triple(EventType.SCORE, "득점", Yellow500),
-                            Triple(EventType.DOUBLE_PLAY, "병살", Orange500),
-                            Triple(EventType.TRIPLE_PLAY, "삼중살", Red400),
-                            Triple(EventType.OUT, "아웃", Red500),
-                            Triple(EventType.STRIKE, "스트라이크", Orange500),
-                            Triple(EventType.BALL, "볼", Blue500),
-                            Triple(EventType.VICTORY, "승리", Yellow500)
+                            Triple(EventType.HIT, "안타", AppEventColors.eventColor("HIT")),
+                            Triple(EventType.WALK, "볼넷", AppEventColors.eventColor("WALK")),
+                            Triple(EventType.STEAL, "도루", AppEventColors.eventColor("STEAL")),
+                            Triple(EventType.SCORE, "득점", AppEventColors.eventColor("SCORE")),
+                            Triple(EventType.DOUBLE_PLAY, "병살", AppEventColors.eventColor("DOUBLE_PLAY")),
+                            Triple(EventType.TRIPLE_PLAY, "삼중살", AppEventColors.eventColor("TRIPLE_PLAY")),
+                            Triple(EventType.OUT, "아웃", AppEventColors.eventColor("OUT")),
+                            Triple(EventType.STRIKE, "스트라이크", AppEventColors.eventColor("STRIKE")),
+                            Triple(EventType.BALL, "볼", AppEventColors.eventColor("BALL")),
+                            Triple(EventType.VICTORY, "승리", AppEventColors.eventColor("VICTORY"))
                         )
 
                         events.chunked(2).forEach { row ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)
                             ) {
                                 row.forEach { (type, label, color) ->
                                     Button(
@@ -430,18 +426,18 @@ fun WatchTestScreen(
                                         },
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(48.dp),
+                                            .height(AppSpacing.buttonHeight),
                                         colors = ButtonDefaults.buttonColors(containerColor = color),
-                                        shape = RoundedCornerShape(10.dp)
+                                        shape = AppShapes.sm
                                     ) {
-                                        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                        Text(label, style = AppFont.bodyBold)
                                     }
                                 }
                                 if (row.size < 2) {
                                     Spacer(Modifier.weight(1f))
                                 }
                             }
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(AppSpacing.sm))
                         }
                     }
                 }
@@ -449,41 +445,41 @@ fun WatchTestScreen(
 
             item {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = AppShapes.md,
                     color = Gray900,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("전송 로그", fontSize = 14.sp, color = Gray300, fontWeight = FontWeight.Bold)
+                            Text("전송 로그", style = AppFont.bodyBold, color = Gray300)
                             TextButton(onClick = { logMessages = emptyList() }) {
-                                Text("지우기", fontSize = 12.sp, color = Gray500)
+                                Text("지우기", style = AppFont.micro, color = Gray500)
                             }
                         }
                         if (logMessages.isEmpty()) {
                             Text(
                                 "이벤트를 전송하면 여기에 표시됩니다.",
-                                fontSize = 13.sp,
+                                style = AppFont.caption,
                                 color = Gray600,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 16.dp)
+                                    .padding(vertical = AppSpacing.lg)
                             )
                         } else {
                             logMessages.forEach { msg ->
-                                Text(msg, fontSize = 13.sp, color = Gray400, modifier = Modifier.padding(vertical = 2.dp))
+                                Text(msg, style = AppFont.caption, color = Gray400, modifier = Modifier.padding(vertical = AppSpacing.xxs))
                             }
                         }
                     }
                 }
             }
 
-            item { Spacer(Modifier.height(80.dp)) }
+            item { Spacer(Modifier.height(AppSpacing.bottomSafeSpacer)) }
         }
     }
 }

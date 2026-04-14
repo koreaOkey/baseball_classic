@@ -24,11 +24,11 @@ struct SettingsScreen: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: AppSpacing.sm) {
                 Text("설정")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(AppFont.h2)
                     .foregroundColor(.white)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, AppSpacing.lg)
 
                 SettingsItem(icon: "person.2.fill", title: "응원 팀", subtitle: selectedTeam.teamName) {
                     showTeamPicker.toggle()
@@ -41,27 +41,27 @@ struct SettingsScreen: View {
                                 onChangeTeam(team)
                                 showTeamPicker = false
                             } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: AppSpacing.md) {
                                     TeamLogo(team: team, size: 56)
                                     Text(team.teamName)
-                                        .font(.system(size: 15, weight: team == selectedTeam ? .bold : .regular))
+                                        .font(team == selectedTeam ? AppFont.labelBold : AppFont.label)
                                         .foregroundColor(team == selectedTeam ? .white : AppColors.gray300)
                                     Spacer()
                                     if team == selectedTeam {
                                         Image(systemName: "checkmark")
                                             .foregroundColor(teamTheme.primary)
-                                            .font(.system(size: 20))
+                                            .font(AppFont.h4)
                                     }
                                 }
-                                .padding(12)
+                                .padding(AppSpacing.md)
                                 .background(team == selectedTeam ? teamTheme.primary.opacity(0.2) : Color.clear)
-                                .cornerRadius(8)
+                                .cornerRadius(AppRadius.sm)
                             }
                         }
                     }
-                    .padding(12)
+                    .padding(AppSpacing.md)
                     .background(AppColors.gray800)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.md)
                 }
 
                 // 계정 섹션
@@ -69,29 +69,29 @@ struct SettingsScreen: View {
 
                 switch authState {
                 case .loggedIn(_, let email, let provider):
-                    VStack(spacing: 8) {
+                    VStack(spacing: AppSpacing.sm) {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(.green)
-                                .font(.system(size: 20))
+                                .font(AppFont.h4)
                             Text("로그인됨")
-                                .font(.system(size: 14, weight: .medium))
+                                .font(AppFont.bodyMedium)
                                 .foregroundColor(.green)
                             Spacer()
                         }
                         Text(email ?? (provider == "apple" ? "애플로 로그인됨" : "카카오로 로그인됨"))
-                            .font(.system(size: 16))
+                            .font(AppFont.bodyLg)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         Button(action: onSignOut) {
                             Text("로그아웃")
-                                .font(.system(size: 14))
+                                .font(AppFont.body)
                                 .foregroundColor(AppColors.gray400)
                                 .frame(maxWidth: .infinity)
-                                .padding(12)
+                                .padding(AppSpacing.md)
                                 .background(AppColors.gray800)
-                                .cornerRadius(8)
+                                .cornerRadius(AppRadius.sm)
                         }
 
                         Button { showDeleteConfirm = true } label: {
@@ -99,39 +99,41 @@ struct SettingsScreen: View {
                                 ProgressView()
                                     .tint(.red)
                                     .frame(maxWidth: .infinity)
-                                    .padding(12)
+                                    .padding(AppSpacing.md)
                             } else {
                                 Text("계정 삭제")
-                                    .font(.system(size: 14))
+                                    .font(AppFont.body)
                                     .foregroundColor(.red)
                                     .frame(maxWidth: .infinity)
-                                    .padding(12)
+                                    .padding(AppSpacing.md)
                                     .background(AppColors.gray800)
-                                    .cornerRadius(8)
+                                    .cornerRadius(AppRadius.sm)
                             }
                         }
                         .disabled(isDeletingAccount)
                     }
-                    .padding(16)
+                    .padding(AppSpacing.lg)
                     .background(AppColors.gray900)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.md)
 
                 case .loggedOut:
-                    VStack(spacing: 8) {
+                    VStack(spacing: AppSpacing.sm) {
                         // 카카오 로그인
                         Button(action: onSignInWithKakao) {
-                            HStack(spacing: 8) {
+                            HStack(spacing: AppSpacing.sm) {
                                 Image(systemName: "message.fill")
-                                    .font(.system(size: 20))
+                                    .font(AppFont.h4)
+                                    // Reason: 카카오 브랜드 지정 색
                                     .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
                                 Text("카카오로 로그인")
-                                    .font(.system(size: 16, weight: .bold))
+                                    .font(AppFont.bodyLgBold)
                                     .foregroundColor(Color(red: 0.1, green: 0.1, blue: 0.1))
                             }
                             .frame(maxWidth: .infinity)
-                            .padding(16)
+                            .padding(AppSpacing.lg)
+                            // Reason: 카카오 브랜드 지정 색 (#FEE500)
                             .background(Color(red: 254/255, green: 229/255, blue: 0))
-                            .cornerRadius(12)
+                            .cornerRadius(AppRadius.md)
                         }
 
                         // Apple 로그인
@@ -144,7 +146,7 @@ struct SettingsScreen: View {
                         }
                         .signInWithAppleButtonStyle(.white)
                         .frame(height: 50)
-                        .cornerRadius(12)
+                        .cornerRadius(AppRadius.md)
                     }
 
                 case .loading:
@@ -152,7 +154,7 @@ struct SettingsScreen: View {
                 }
 
                 // 알림 섹션
-                Spacer().frame(height: 16)
+                Spacer().frame(height: AppSpacing.lg)
                 SettingsSection(title: "알림")
 
                 SettingsItemWithToggle(
@@ -169,30 +171,22 @@ struct SettingsScreen: View {
                     isOn: $ballStrikeHapticEnabled
                 )
 
-                // 원격 하이파이브 - 추후 공개
-                // SettingsItemWithToggle(
-                //     icon: "antenna.radiowaves.left.and.right",
-                //     title: "원격 하이파이브",
-                //     subtitle: "친구와 득점 순간을 함께 공유",
-                //     isOn: $highFiveEnabled
-                // )
-
                 // 개발자 섹션 - 배포 시 숨김
-                Spacer().frame(height: 16)
+                Spacer().frame(height: AppSpacing.lg)
                 SettingsSection(title: "개발자")
                 SettingsItem(icon: "applewatch.radiowaves.left.and.right", title: "워치 테스트", subtitle: "시뮬레이션 이벤트로 워치 동기화 테스트") {
                     onOpenWatchTest()
                 }
 
                 // 정보 섹션
-                Spacer().frame(height: 16)
+                Spacer().frame(height: AppSpacing.lg)
                 SettingsSection(title: "정보")
 
                 SettingsItem(icon: "info.circle.fill", title: "버전", subtitle: "1.0.0") {}
 
-                Spacer().frame(height: 80)
+                Spacer().frame(height: AppSpacing.bottomSafeSpacer)
             }
-            .padding(24)
+            .padding(AppSpacing.xxl)
         }
         .background(AppColors.gray950)
         .alert("계정 삭제", isPresented: $showDeleteConfirm) {
@@ -215,10 +209,10 @@ private struct SettingsSection: View {
     let title: String
     var body: some View {
         Text(title)
-            .font(.system(size: 14, weight: .medium))
+            .font(AppFont.bodyMedium)
             .foregroundColor(AppColors.gray400)
-            .padding(.top, 8)
-            .padding(.bottom, 8)
+            .padding(.top, AppSpacing.sm)
+            .padding(.bottom, AppSpacing.sm)
     }
 }
 
@@ -232,19 +226,19 @@ private struct SettingsItem: View {
 
     var body: some View {
         Button(action: onTap) {
-            HStack(spacing: 16) {
+            HStack(spacing: AppSpacing.lg) {
                 Image(systemName: icon)
                     .foregroundColor(teamTheme.primary)
-                    .font(.system(size: 24))
+                    .font(AppFont.h3)
                     .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                     Text(title)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(AppFont.bodyLgMedium)
                         .foregroundColor(.white)
                     if !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(.system(size: 14))
+                            .font(AppFont.body)
                             .foregroundColor(AppColors.gray400)
                     }
                 }
@@ -253,11 +247,11 @@ private struct SettingsItem: View {
 
                 Image(systemName: "chevron.right")
                     .foregroundColor(AppColors.gray500)
-                    .font(.system(size: 20))
+                    .font(AppFont.h4)
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(AppColors.gray900)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.md)
         }
         .buttonStyle(.plain)
     }
@@ -272,19 +266,19 @@ private struct SettingsItemWithToggle: View {
     @Environment(\.teamTheme) private var teamTheme
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: AppSpacing.lg) {
             Image(systemName: icon)
                 .foregroundColor(teamTheme.primary)
-                .font(.system(size: 24))
+                .font(AppFont.h3)
                 .frame(width: 24)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                 Text(title)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
                 if !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 14))
+                        .font(AppFont.body)
                         .foregroundColor(AppColors.gray400)
                 }
             }
@@ -295,8 +289,8 @@ private struct SettingsItemWithToggle: View {
                 .labelsHidden()
                 .tint(teamTheme.primary)
         }
-        .padding(16)
+        .padding(AppSpacing.lg)
         .background(AppColors.gray900)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.md)
     }
 }

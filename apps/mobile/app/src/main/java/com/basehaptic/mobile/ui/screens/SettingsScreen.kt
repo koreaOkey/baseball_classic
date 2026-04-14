@@ -1,4 +1,4 @@
-﻿package com.basehaptic.mobile.ui.screens
+package com.basehaptic.mobile.ui.screens
 
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
@@ -14,16 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -40,13 +37,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.ui.components.TeamLogo
+import com.basehaptic.mobile.ui.theme.AppFont
+import com.basehaptic.mobile.ui.theme.AppShapes
+import com.basehaptic.mobile.ui.theme.AppSpacing
 import com.basehaptic.mobile.ui.theme.Gray300
 import com.basehaptic.mobile.ui.theme.Gray400
 import com.basehaptic.mobile.ui.theme.Gray500
@@ -80,16 +78,15 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Gray950)
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(AppSpacing.xxl),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
     ) {
         item {
             Text(
                 text = "설정",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
+                style = AppFont.h2,
                 color = Color.White,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = AppSpacing.lg)
             )
         }
 
@@ -106,11 +103,11 @@ fun SettingsScreen(
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = AppShapes.md,
                     color = Gray800,
                     tonalElevation = 2.dp
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(AppSpacing.md)) {
                         val teams = listOf(
                             Team.DOOSAN,
                             Team.LG,
@@ -128,7 +125,7 @@ fun SettingsScreen(
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(AppShapes.sm)
                                     .clickable {
                                         onChangeTeam(team)
                                         showTeamPicker = false
@@ -138,21 +135,20 @@ fun SettingsScreen(
                                 } else {
                                     Color.Transparent
                                 },
-                                shape = RoundedCornerShape(8.dp)
+                                shape = AppShapes.sm
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(12.dp),
+                                        .padding(AppSpacing.md),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     TeamLogo(team = team, size = 56.dp)
-                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Spacer(modifier = Modifier.width(AppSpacing.md))
                                     Text(
                                         text = team.teamName,
-                                        fontSize = 15.sp,
-                                        color = if (team == selectedTeam) Color.White else Gray300,
-                                        fontWeight = if (team == selectedTeam) FontWeight.Bold else FontWeight.Normal
+                                        style = if (team == selectedTeam) AppFont.labelBold else AppFont.label,
+                                        color = if (team == selectedTeam) Color.White else Gray300
                                     )
                                     Spacer(modifier = Modifier.weight(1f))
                                     if (team == selectedTeam) {
@@ -180,68 +176,69 @@ fun SettingsScreen(
                 is AuthState.LoggedIn -> {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = AppShapes.md,
                         color = Gray900,
                         tonalElevation = 1.dp
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp)
+                                .padding(AppSpacing.lg)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = null,
+                                    // Reason: 로그인 성공 피드백 Material green 톤
                                     tint = Color(0xFF4CAF50),
                                     modifier = Modifier.size(20.dp)
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(AppSpacing.sm))
                                 Text(
                                     text = "로그인됨",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
+                                    style = AppFont.bodyMedium,
+                                    // Reason: 로그인 성공 피드백 Material green 톤
                                     color = Color(0xFF4CAF50)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(AppSpacing.sm))
                             Text(
                                 text = authState.email ?: "카카오 계정",
-                                fontSize = 16.sp,
+                                style = AppFont.bodyLg,
                                 color = Color.White
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(AppSpacing.md))
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(AppShapes.sm)
                                     .clickable { onSignOut() },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = AppShapes.sm,
                                 color = Gray800
                             ) {
                                 Text(
                                     text = "로그아웃",
-                                    fontSize = 14.sp,
+                                    style = AppFont.body,
                                     color = Gray400,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(12.dp),
+                                        .padding(AppSpacing.md),
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(AppSpacing.sm))
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(AppShapes.sm)
                                     .clickable(enabled = !isDeletingAccount) { showDeleteConfirm = true },
-                                shape = RoundedCornerShape(8.dp),
+                                shape = AppShapes.sm,
                                 color = Gray800
                             ) {
                                 if (isDeletingAccount) {
                                     androidx.compose.material3.CircularProgressIndicator(
                                         modifier = Modifier
-                                            .padding(12.dp)
+                                            .padding(AppSpacing.md)
                                             .size(20.dp),
                                         color = Color.Red,
                                         strokeWidth = 2.dp
@@ -249,11 +246,11 @@ fun SettingsScreen(
                                 } else {
                                     Text(
                                         text = "계정 삭제",
-                                        fontSize = 14.sp,
+                                        style = AppFont.body,
                                         color = Color.Red,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(12.dp),
+                                            .padding(AppSpacing.md),
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                 }
@@ -268,27 +265,28 @@ fun SettingsScreen(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(AppShapes.md)
                             .clickable { onSignInWithKakao() },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = AppShapes.md,
+                        // Reason: 카카오 브랜드 지정 색
                         color = Color(0xFFFEE500)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
+                                .padding(AppSpacing.lg),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "\uD83D\uDCAC",
-                                fontSize = 20.sp
+                                style = AppFont.h4
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(AppSpacing.sm))
                             Text(
                                 text = "카카오로 로그인",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
+                                style = AppFont.bodyLgBold,
+                                // Reason: 카카오 브랜드 지정 색 (거의 블랙)
                                 color = Color(0xFF191919)
                             )
                         }
@@ -298,7 +296,7 @@ fun SettingsScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.lg))
             SettingsSection(title = "알림")
         }
 
@@ -333,34 +331,8 @@ fun SettingsScreen(
             )
         }
 
-        // 원격 하이파이브 - 추후 공개
-        // item {
-        //     var highFive by remember { mutableStateOf(true) }
-        //     SettingsItemWithSwitch(
-        //         icon = Icons.Default.Bluetooth,
-        //         title = "원격 하이파이브",
-        //         subtitle = "친구와 득점 순간을 함께 공유",
-        //         checked = highFive,
-        //         onCheckedChange = { highFive = it }
-        //     )
-        // }
-
-        // 개발자 섹션 - 배포 시 숨김
-        // item {
-        //     Spacer(modifier = Modifier.height(16.dp))
-        //     SettingsSection(title = "개발자")
-        // }
-        // item {
-        //     SettingsItem(
-        //         icon = Icons.Default.Watch,
-        //         title = "워치 테스트",
-        //         subtitle = "시뮬레이션 이벤트로 워치 동기화 테스트",
-        //         onClick = onOpenWatchTest
-        //     )
-        // }
-
         item {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.lg))
             SettingsSection(title = "정보")
         }
 
@@ -374,7 +346,7 @@ fun SettingsScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.height(AppSpacing.bottomSafeSpacer))
         }
     }
 
@@ -412,10 +384,9 @@ fun SettingsScreen(
 private fun SettingsSection(title: String) {
     Text(
         text = title,
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
+        style = AppFont.bodyMedium,
         color = Gray400,
-        modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
+        modifier = Modifier.padding(top = AppSpacing.sm, bottom = AppSpacing.sm)
     )
 }
 
@@ -429,16 +400,16 @@ private fun SettingsItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(AppShapes.md)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = AppShapes.md,
         color = Gray900,
         tonalElevation = 1.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(AppSpacing.lg),
             verticalAlignment = Alignment.CenterVertically
         ) {
             val theme = LocalTeamTheme.current
@@ -449,21 +420,20 @@ private fun SettingsItem(
                 modifier = Modifier.size(24.dp)
             )
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(AppSpacing.lg))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
+                    style = AppFont.bodyLgMedium,
                     color = Color.White
                 )
                 if (subtitle.isNotEmpty()) {
                     Text(
                         text = subtitle,
-                        fontSize = 14.sp,
+                        style = AppFont.body,
                         color = Gray400,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = AppSpacing.xxs)
                     )
                 }
             }
@@ -490,14 +460,14 @@ private fun SettingsItemWithSwitch(
     val teamTheme = LocalTeamTheme.current
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = AppShapes.md,
         color = Gray900,
         tonalElevation = 1.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(AppSpacing.lg),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -507,21 +477,20 @@ private fun SettingsItemWithSwitch(
                 modifier = Modifier.size(24.dp)
             )
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(AppSpacing.lg))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
+                    style = AppFont.bodyLgMedium,
                     color = if (enabled) Color.White else Gray500
                 )
                 if (subtitle.isNotEmpty()) {
                     Text(
                         text = subtitle,
-                        fontSize = 14.sp,
+                        style = AppFont.body,
                         color = if (enabled) Gray400 else Gray500,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = AppSpacing.xxs)
                     )
                 }
             }

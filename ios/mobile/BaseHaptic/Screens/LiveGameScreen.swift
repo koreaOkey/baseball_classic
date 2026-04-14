@@ -22,25 +22,25 @@ struct LiveGameScreen: View {
                 Button(action: onBack) {
                     Image(systemName: "arrow.left")
                         .foregroundColor(.white)
-                        .font(.system(size: 20))
-                        .padding(12)
+                        .font(AppFont.h4)
+                        .padding(AppSpacing.md)
                 }
 
                 if gameId == nil || gameId?.isEmpty == true {
                     Text("선택한 경기가 없습니다.")
                         .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, AppSpacing.sm)
+                        .padding(.bottom, AppSpacing.lg)
                 } else if gameState == nil {
                     Text(loadError ?? "경기 데이터를 불러오는 중...")
                         .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, AppSpacing.sm)
+                        .padding(.bottom, AppSpacing.lg)
                 } else {
                     ScoreboardCard(state: gameState!, events: events)
                 }
             }
-            .padding(16)
+            .padding(AppSpacing.lg)
             .background(
                 LinearGradient(
                     colors: [primaryColor, primaryColor.opacity(0.85)],
@@ -50,20 +50,20 @@ struct LiveGameScreen: View {
             )
 
             // Watch sync status
-            HStack(spacing: 8) {
+            HStack(spacing: AppSpacing.sm) {
                 Image(systemName: "applewatch")
                     .foregroundColor(syncedGameId?.isEmpty ?? true ? AppColors.gray400 : AppColors.green500)
                 Text(watchSyncText)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(AppFont.captionMedium)
                     .foregroundColor(syncedGameId?.isEmpty ?? true ? AppColors.gray400 : AppColors.green500)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.vertical, AppSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppColors.gray900)
-            .cornerRadius(12)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .cornerRadius(AppRadius.md)
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.vertical, AppSpacing.md)
 
             // Events list
             ScrollView {
@@ -72,21 +72,21 @@ struct LiveGameScreen: View {
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, AppSpacing.sm)
 
                     if events.isEmpty {
                         Text("아직 이벤트가 없습니다.")
                             .foregroundColor(AppColors.gray500)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, AppSpacing.md)
                     } else {
                         ForEach(events) { event in
                             EventCard(event: event)
                         }
                     }
 
-                    Spacer().frame(height: 80)
+                    Spacer().frame(height: AppSpacing.bottomSafeSpacer)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, AppSpacing.lg)
             }
         }
         .background(AppColors.gray950)
@@ -194,46 +194,46 @@ private struct ScoreboardCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(statusLine(status: state.status, inning: state.inning))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppFont.captionSemibold)
                     .foregroundColor(.white)
                 Spacer()
                 Text("GAME \(state.gameId)")
-                    .font(.system(size: 11))
+                    .font(AppFont.tiny)
                     .foregroundColor(.white.opacity(0.8))
             }
 
-            Spacer().frame(height: 14)
+            Spacer().frame(height: AppSpacing.lg)
             LiveTeamScoreRow(teamName: state.awayTeamId.teamName, team: state.awayTeamId, score: state.awayScore)
-            Spacer().frame(height: 10)
+            Spacer().frame(height: AppSpacing.md)
             LiveTeamScoreRow(teamName: state.homeTeamId.teamName, team: state.homeTeamId, score: state.homeScore)
 
-            Spacer().frame(height: 12)
-            HStack(spacing: 8) {
+            Spacer().frame(height: AppSpacing.md)
+            HStack(spacing: AppSpacing.sm) {
                 CountChip(label: "B", value: state.ball)
                 CountChip(label: "S", value: state.strike)
                 CountChip(label: "O", value: state.out)
                 Spacer()
                 Text("주자 \(baseText(state))")
-                    .font(.system(size: 12))
+                    .font(AppFont.micro)
                     .foregroundColor(.white.opacity(0.9))
             }
 
-            Spacer().frame(height: 10)
+            Spacer().frame(height: AppSpacing.md)
             Text("투수 \(state.pitcher.isEmpty ? "-" : state.pitcher) · 타자 \(state.batter.isEmpty ? "-" : state.batter)")
-                .font(.system(size: 12))
+                .font(AppFont.micro)
                 .foregroundColor(.white.opacity(0.9))
 
             if let latestEvent = events.first {
-                Spacer().frame(height: 8)
+                Spacer().frame(height: AppSpacing.sm)
                 Text("최근 이벤트 \(latestEvent.type): \(latestEvent.description.isEmpty ? "-" : latestEvent.description)")
-                    .font(.system(size: 12))
+                    .font(AppFont.micro)
                     .foregroundColor(.white.opacity(0.85))
                     .lineLimit(1)
             }
         }
-        .padding(14)
+        .padding(AppSpacing.lg)
         .background(Color.white.opacity(0.12))
-        .cornerRadius(14)
+        .cornerRadius(AppRadius.md)
     }
 
     private func statusLine(status: GameStatus, inning: String) -> String {
@@ -262,15 +262,15 @@ private struct LiveTeamScoreRow: View {
 
     var body: some View {
         HStack {
-            HStack(spacing: 10) {
+            HStack(spacing: AppSpacing.md) {
                 TeamLogo(team: team, size: 52)
                 Text(teamName)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
             }
             Spacer()
             Text("\(score)")
-                .font(.system(size: 28, weight: .bold))
+                .font(AppFont.h2)
                 .foregroundColor(.white)
         }
     }
@@ -282,12 +282,12 @@ private struct CountChip: View {
 
     var body: some View {
         Text("\(label) \(value)")
-            .font(.system(size: 12))
+            .font(AppFont.micro)
             .foregroundColor(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, AppSpacing.md)
+            .padding(.vertical, AppSpacing.xs)
             .background(AppColors.gray900.opacity(0.55))
-            .cornerRadius(999)
+            .cornerRadius(AppRadius.pill)
     }
 }
 
@@ -299,34 +299,23 @@ private struct EventCard: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(event.type)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(eventColor(event.type))
+                    .font(AppFont.captionBold)
+                    .foregroundColor(AppEventColors.color(for: event.type))
                 Spacer()
                 Text(event.time)
-                    .font(.system(size: 12))
+                    .font(AppFont.micro)
                     .foregroundColor(AppColors.gray400)
             }
             if !event.description.isEmpty {
                 Text(event.description)
-                    .font(.system(size: 13))
+                    .font(AppFont.caption)
                     .foregroundColor(.white)
-                    .padding(.top, 8)
+                    .padding(.top, AppSpacing.sm)
             }
         }
-        .padding(14)
+        .padding(AppSpacing.lg)
         .background(AppColors.gray900)
-        .cornerRadius(12)
-        .padding(.vertical, 5)
-    }
-
-    private func eventColor(_ type: String) -> Color {
-        switch type.uppercased() {
-        case "HOMERUN", "SCORE", "SAC_FLY_SCORE": return AppColors.yellow500
-        case "HIT", "STEAL", "WALK": return AppColors.green500
-        case "DOUBLE_PLAY", "TRIPLE_PLAY": return AppColors.orange500
-        case "OUT", "STRIKE": return AppColors.red500
-        case "BALL": return AppColors.gray400
-        default: return AppColors.gray500
-        }
+        .cornerRadius(AppRadius.md)
+        .padding(.vertical, AppSpacing.xs)
     }
 }

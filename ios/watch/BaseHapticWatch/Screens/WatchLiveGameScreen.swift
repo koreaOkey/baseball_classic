@@ -33,8 +33,8 @@ struct WatchLiveGameScreen: View {
                 }
                 .frame(minWidth: 40, minHeight: 30)
                 .background(Color.white.opacity(0.05))
-                .cornerRadius(10)
-                .padding(.horizontal, 4)
+                .cornerRadius(WatchAppRadius.md10)
+                .padding(.horizontal, WatchAppSpacing.xs)
 
                 // Home team
                 ScoreSide(team: gameData.homeTeam, score: gameData.homeScore, uiProfile: uiProfile)
@@ -45,7 +45,7 @@ struct WatchLiveGameScreen: View {
             Spacer().frame(height: uiProfile.bsoScoreSpacing)
 
             // BSO + Base Diamond
-            HStack(spacing: 8) {
+            HStack(spacing: WatchAppSpacing.sm) {
                 BaseDiamond(bases: gameData.bases, uiProfile: uiProfile)
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -152,7 +152,7 @@ private struct BaseCell: View {
         Rectangle()
             .fill(isOccupied ? WatchColors.yellow400 : (isHome ? Color.white.opacity(0.08) : WatchColors.gray800))
             .frame(width: uiProfile.baseCellSize, height: uiProfile.baseCellSize)
-            .cornerRadius(2)
+            .cornerRadius(WatchAppRadius.xxs)
     }
 }
 

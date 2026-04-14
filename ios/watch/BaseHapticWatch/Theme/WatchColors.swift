@@ -14,6 +14,8 @@ enum WatchColors {
     static let blue600 = Color(red: 37/255, green: 99/255, blue: 235/255)
     static let blue400 = Color(red: 96/255, green: 165/255, blue: 250/255)
 
+    static let cyan500 = Color(red: 6/255, green: 182/255, blue: 212/255)
+
     static let yellow500 = Color(red: 234/255, green: 179/255, blue: 8/255)
     static let yellow400 = Color(red: 250/255, green: 204/255, blue: 21/255)
     static let orange500 = Color(red: 249/255, green: 115/255, blue: 22/255)
