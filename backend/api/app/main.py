@@ -339,6 +339,7 @@ async def delete_account(
 @app.post("/device-tokens")
 def register_device_token(
     payload: DeviceTokenRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     if db.bind is not None and db.bind.dialect.name == "postgresql":
@@ -379,12 +380,14 @@ def register_device_token(
                 is_sandbox=payload.is_sandbox,
             ))
     db.commit()
+    background_tasks.add_task(_invalidate_push_token_cache, payload.game_id)
     return {"status": "ok"}
 
 
 @app.delete("/device-tokens/{token}")
 def unregister_device_token(
     token: str,
+    background_tasks: BackgroundTasks,
     game_id: str = Query(...),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
@@ -403,12 +406,14 @@ def unregister_device_token(
     if row:
         db.delete(row)
         db.commit()
+    background_tasks.add_task(_invalidate_push_token_cache, game_id)
     return {"status": "ok"}
 
 
 @app.post("/live-activity-tokens")
 def register_live_activity_token(
     payload: LiveActivityTokenRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     existing = db.execute(
@@ -427,11 +432,13 @@ def register_live_activity_token(
             my_team=payload.my_team,
         ))
     db.commit()
+    background_tasks.add_task(_invalidate_live_activity_token_cache, payload.game_id)
     return {"status": "ok"}
 
 
 @app.delete("/live-activity-tokens")
 def unregister_live_activity_token(
+    background_tasks: BackgroundTasks,
     game_id: str = Query(...),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
@@ -441,6 +448,7 @@ def unregister_live_activity_token(
     for row in rows:
         db.delete(row)
     db.commit()
+    background_tasks.add_task(_invalidate_live_activity_token_cache, game_id)
     return {"status": "ok"}
 
 
@@ -452,6 +460,59 @@ def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str]]:
             .where(DeviceToken.game_id == game_id)
         ).all()
         return [(row.token, row.my_team, row.is_sandbox, row.platform) for row in rows]
+
+
+# 푸시 토큰은 경기당 수십~수백 건이고 거의 변하지 않으므로 짧은 TTL 로 Redis 캐시.
+# 이벤트마다 DB SELECT 를 돌리면 핫패스에 불필요한 부하가 쌓인다.
+PUSH_TOKEN_CACHE_TTL_SEC = 60
+_PUSH_TOKEN_CACHE_KEY = "push_tokens:{game_id}"
+_LIVE_ACTIVITY_TOKEN_CACHE_KEY = "live_activity_tokens:{game_id}"
+
+
+async def _cached_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str]]:
+    cache_key = _PUSH_TOKEN_CACHE_KEY.format(game_id=game_id)
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None:
+        items = cached.get("items") if isinstance(cached, dict) else None
+        if isinstance(items, list):
+            return [
+                (str(row[0]), row[1], bool(row[2]), str(row[3]))
+                for row in items
+                if isinstance(row, (list, tuple)) and len(row) == 4
+            ]
+
+    rows = await asyncio.to_thread(_load_push_tokens, game_id)
+    await redis_relay.set_cache(
+        cache_key,
+        {"items": [list(row) for row in rows]},
+        ttl_sec=PUSH_TOKEN_CACHE_TTL_SEC,
+    )
+    return rows
+
+
+async def _cached_live_activity_tokens(game_id: str) -> list[str]:
+    cache_key = _LIVE_ACTIVITY_TOKEN_CACHE_KEY.format(game_id=game_id)
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None:
+        items = cached.get("items") if isinstance(cached, dict) else None
+        if isinstance(items, list):
+            return [str(item) for item in items if isinstance(item, str)]
+
+    tokens = await asyncio.to_thread(_load_live_activity_tokens, game_id)
+    await redis_relay.set_cache(
+        cache_key,
+        {"items": list(tokens)},
+        ttl_sec=PUSH_TOKEN_CACHE_TTL_SEC,
+    )
+    return tokens
+
+
+async def _invalidate_push_token_cache(game_id: str) -> None:
+    await redis_relay.delete_cache(_PUSH_TOKEN_CACHE_KEY.format(game_id=game_id))
+
+
+async def _invalidate_live_activity_token_cache(game_id: str) -> None:
+    await redis_relay.delete_cache(_LIVE_ACTIVITY_TOKEN_CACHE_KEY.format(game_id=game_id))
 
 
 # 배포된 워치(2026-04-05 커밋 30720af 이후)는 home_team/away_team을 마스코트로
@@ -484,7 +545,7 @@ async def _send_push_for_game_events(
     event_payloads: list[dict[str, Any]],
 ) -> None:
     """게임 이벤트 발생 시 구독된 디바이스에 silent push 전송"""
-    token_rows = await asyncio.to_thread(_load_push_tokens, game_id)
+    token_rows = await _cached_push_tokens(game_id)
     if not token_rows:
         return
 
@@ -549,7 +610,7 @@ async def _send_live_activity_update(
     event_type: str = "update",
 ) -> None:
     """Live Activity push로 잠금화면 업데이트"""
-    tokens = await asyncio.to_thread(_load_live_activity_tokens, game_id)
+    tokens = await _cached_live_activity_tokens(game_id)
     if not tokens:
         return
 

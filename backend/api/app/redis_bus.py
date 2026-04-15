@@ -150,6 +150,14 @@ class RedisBroadcastRelay:
             logger.debug("redis cache get failed: key=%s", key)
             return None
 
+    async def delete_cache(self, key: str) -> None:
+        if not self.enabled or self._publisher is None:
+            return
+        try:
+            await self._publisher.delete(key)
+        except Exception:
+            logger.debug("redis cache delete failed: key=%s", key)
+
     async def publish(self, game_id: str, message: dict[str, Any]) -> None:
         if not self.enabled or self._publisher is None:
             return
