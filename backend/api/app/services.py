@@ -1,9 +1,12 @@
 import hashlib
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
@@ -235,6 +238,23 @@ def _game_date_from_game_id(game_id: str) -> str | None:
     return None
 
 
+_GAME_END_MARKERS: tuple[str, ...] = ("승리투수", "패전투수", "세이브투수")
+
+
+def _has_game_end_signal(payload: CrawlerSnapshotRequest) -> bool:
+    """박스스코어 집계가 끝났음을 나타내는 텍스트를 이벤트에서 탐지.
+
+    네이버 라이브는 statusCode=FINISHED 를 내려주기까지 수 초~수십 초 지연이
+    있는데, "승리투수/패전투수/세이브투수" 텍스트는 그보다 먼저 relay 에
+    등장한다. 이를 조기 종료 신호로 사용해 워치 승리 영상 트리거 지연을 줄인다.
+    """
+    for event in payload.events or []:
+        text = event.description or ""
+        if any(marker in text for marker in _GAME_END_MARKERS):
+            return True
+    return False
+
+
 def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> Game:
     game = db.get(Game, game_id)
     if game is None:
@@ -242,12 +262,22 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
         db.add(game)
 
     incoming_status = normalize_status(payload.status)
+    if incoming_status is not GameStatus.FINISHED and _has_game_end_signal(payload):
+        logger.info(
+            "[game-end-signal] gameId=%s 조기 FINISHED 전이 (status=%s inning=%s)",
+            game_id,
+            payload.status,
+            payload.inning,
+        )
+        incoming_status = GameStatus.FINISHED
     next_status = _resolve_next_game_status(game.status, incoming_status)
 
     game.home_team = payload.homeTeam
     game.away_team = payload.awayTeam
     game.status = next_status.value
-    game.inning = payload.inning
+    # FINISHED 전이 시 inning 텍스트도 "경기 종료" 로 일관성 확보.
+    # (네이버가 잠깐 "10회초" 같은 중간 상태를 찍어도 플리커 방지)
+    game.inning = "경기 종료" if next_status is GameStatus.FINISHED else payload.inning
     game.home_score = payload.homeScore
     game.away_score = payload.awayScore
     game.ball_count = payload.ball
