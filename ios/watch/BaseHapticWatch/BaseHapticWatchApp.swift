@@ -35,11 +35,17 @@ struct WatchContentView: View {
     @State private var isVictoryVisible = false
     @State private var pendingEventType: String?
     @State private var pendingEventTimestamp: Date?
+    // 비디오 재생 중 새 이벤트로 화면이 끊기지 않도록 하는 가드.
+    // true 인 동안은 후속 이벤트를 전부 무시. 각 영상 onFinished 에서 false
+    // 로 복구하고, 혹시 onFinished 가 누락돼도 watchdog 타이머로 자동 해제.
+    @State private var isPlayingVideo = false
 
     private let eventOverlayDuration: TimeInterval = 2.2
     private let eventFreshness: TimeInterval = 5.0
     private let pendingEventFreshness: TimeInterval = 30.0
     private let homeRunDuration: TimeInterval = 4.0
+    // 영상 최대 길이 여유치(홈런 5.05s + 버퍼). watchdog 자동 해제 타이머용.
+    private let videoWatchdogDuration: TimeInterval = 6.5
 
     var body: some View {
         ZStack {
@@ -53,6 +59,7 @@ struct WatchContentView: View {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isVictoryVisible = false
                     }
+                    isPlayingVideo = false
                 })
                 .transition(.opacity)
             } else if isHomeRunVisible {
@@ -61,6 +68,7 @@ struct WatchContentView: View {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isHomeRunVisible = false
                     }
+                    isPlayingVideo = false
                 })
                 .transition(.opacity)
             } else if isHitVisible {
@@ -69,6 +77,7 @@ struct WatchContentView: View {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isHitVisible = false
                     }
+                    isPlayingVideo = false
                 })
                 .transition(.opacity)
             } else if isDoublePlayVisible {
@@ -77,6 +86,7 @@ struct WatchContentView: View {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isDoublePlayVisible = false
                     }
+                    isPlayingVideo = false
                 })
                 .transition(.opacity)
             } else if isScoreVisible {
@@ -85,6 +95,7 @@ struct WatchContentView: View {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isScoreVisible = false
                     }
+                    isPlayingVideo = false
                 })
                 .transition(.opacity)
             } else {
@@ -139,6 +150,7 @@ struct WatchContentView: View {
                 isDoublePlayVisible = false
                 isScoreVisible = false
                 isEventOverlayVisible = false
+                isPlayingVideo = false
             } else {
                 // AOD 해제(손목 올림) 시 대기 중인 이벤트 재생
                 if let eventType = pendingEventType,
@@ -163,6 +175,7 @@ struct WatchContentView: View {
                 let myTeamWon = (isMyTeamHome && game.homeScore > game.awayScore) ||
                                 (isMyTeamAway && game.awayScore > game.homeScore)
                 if myTeamWon {
+                    beginVideoPlayback()
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isVictoryVisible = true
                     }
@@ -182,6 +195,11 @@ struct WatchContentView: View {
                     pendingEventType = upper
                     pendingEventTimestamp = Date()
                 }
+                return
+            }
+
+            // 비디오 재생 중에는 후속 이벤트 무시 (사용자가 영상을 끝까지 보도록 보호)
+            if isPlayingVideo {
                 return
             }
 
@@ -226,27 +244,32 @@ struct WatchContentView: View {
         let isMyTeamFielding = isTestGame || (!isMyTeamBatting && (isMyTeamHome || isMyTeamAway))
 
         if eventType == "VICTORY" {
+            beginVideoPlayback()
             withAnimation(.easeInOut(duration: 0.3)) {
                 isVictoryVisible = true
             }
         } else if eventType == "HOMERUN", isMyTeamBatting {
+            beginVideoPlayback()
             withAnimation(.easeInOut(duration: 0.3)) {
                 isHomeRunVisible = true
             }
         } else if eventType == "HIT", isMyTeamBatting {
+            beginVideoPlayback()
             withAnimation(.easeInOut(duration: 0.3)) {
                 isHitVisible = true
             }
         } else if eventType == "DOUBLE_PLAY", isMyTeamFielding {
+            beginVideoPlayback()
             withAnimation(.easeInOut(duration: 0.3)) {
                 isDoublePlayVisible = true
             }
         } else if eventType == "SCORE", isMyTeamBatting {
+            beginVideoPlayback()
             withAnimation(.easeInOut(duration: 0.3)) {
                 isScoreVisible = true
             }
         } else {
-            // 기타 이벤트 또는 상대팀 이벤트: 오버레이
+            // 기타 이벤트 또는 상대팀 이벤트: 오버레이 (비디오 아님)
             visibleEventType = eventType
             visibleEventTimestamp = Date()
             isEventOverlayVisible = true
@@ -257,6 +280,17 @@ struct WatchContentView: View {
                     isEventOverlayVisible = false
                     visibleEventType = nil
                 }
+            }
+        }
+    }
+
+    /// 비디오 재생 시작 훅. isPlayingVideo 가드를 켜고,
+    /// onFinished 누락 대비 watchdog 타이머를 설정.
+    private func beginVideoPlayback() {
+        isPlayingVideo = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + videoWatchdogDuration) {
+            if isPlayingVideo {
+                isPlayingVideo = false
             }
         }
     }
