@@ -454,6 +454,30 @@ def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str]]:
         return [(row.token, row.my_team, row.is_sandbox, row.platform) for row in rows]
 
 
+# 배포된 워치(2026-04-05 커밋 30720af 이후)는 home_team/away_team을 마스코트로
+# 변환(displayTeamName)해서 my_team(team code, "DOOSAN")과 단순 비교하는 회귀가 있음.
+# 앱 재배포 없이 해결하려면 백엔드가 APNs payload를 보낼 때 my_team을
+# 마스코트 형식("베어스")으로 미리 변환해서 비교가 일치하도록 만든다.
+_TEAM_CODE_TO_MASCOT: dict[str, str] = {
+    "DOOSAN": "베어스",
+    "LG": "트윈스",
+    "KIWOOM": "히어로즈",
+    "SAMSUNG": "라이온즈",
+    "LOTTE": "자이언츠",
+    "SSG": "랜더스",
+    "KT": "위즈",
+    "HANWHA": "이글스",
+    "KIA": "타이거즈",
+    "NC": "다이노스",
+}
+
+
+def _normalize_my_team_for_watch(raw: str | None) -> str:
+    if not raw:
+        return ""
+    return _TEAM_CODE_TO_MASCOT.get(raw.strip().upper(), raw)
+
+
 async def _send_push_for_game_events(
     game_id: str,
     state_payload: dict[str, Any],
@@ -490,7 +514,7 @@ async def _send_push_for_game_events(
         coros = []
         for token in tokens:
             info = token_info[token]
-            payload_with_team = {**push_payload, "my_team": info["my_team"] or ""}
+            payload_with_team = {**push_payload, "my_team": _normalize_my_team_for_watch(info["my_team"])}
             coros.append(send_push(
                 token,
                 payload_with_team,
