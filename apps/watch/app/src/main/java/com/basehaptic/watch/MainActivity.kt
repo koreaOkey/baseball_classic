@@ -208,6 +208,10 @@ fun WatchApp(isAmbient: Boolean = false) {
     var isVictoryTransitionVisible by remember { mutableStateOf(false) }
     var victoryTransitionToken by remember { mutableStateOf<Long?>(null) }
     var previousGameIsLive by remember { mutableStateOf<Boolean?>(null) }
+    // 비디오 재생 중 후속 이벤트로 화면이 끊기지 않도록 하는 가드.
+    // true 인 동안은 새 전환 토큰 발급을 막고, 각 LaunchedEffect 가 try/finally
+    // 로 종료 시점에 해제. onFinally 누락 대비 delay() 완료 후 자동 해제되는 구조.
+    var isPlayingVideo by remember { mutableStateOf(false) }
 
     // 영상 ExoPlayer 미리 초기화
     val hitPlayer = remember(context) {
@@ -319,6 +323,8 @@ fun WatchApp(isAmbient: Boolean = false) {
         val event = latestEvent ?: return@LaunchedEffect
         if (System.currentTimeMillis() - event.timestamp > EVENT_OVERLAY_FRESHNESS_MS) return@LaunchedEffect
         val game = gameData ?: return@LaunchedEffect
+        // 비디오 재생 중에는 후속 이벤트로 인한 전환 토큰 발급을 차단
+        if (isPlayingVideo) return@LaunchedEffect
         val isTestGame = game.gameId.startsWith("test_")
         val myTeam = game.myTeamName.uppercase()
         val isMyTeamHome = myTeam == game.homeTeam.uppercase()
@@ -337,61 +343,86 @@ fun WatchApp(isAmbient: Boolean = false) {
 
     LaunchedEffect(homeRunTransitionToken) {
         val token = homeRunTransitionToken ?: return@LaunchedEffect
-        homeRunPlayer.seekTo(0)
-        homeRunPlayer.play()
-        isHomeRunTransitionVisible = true
-        delay(HOMERUN_SCREEN_DURATION_MS)
-        if (homeRunTransitionToken == token) {
-            isHomeRunTransitionVisible = false
-            homeRunPlayer.pause()
+        isPlayingVideo = true
+        try {
+            homeRunPlayer.seekTo(0)
+            homeRunPlayer.play()
+            isHomeRunTransitionVisible = true
+            delay(HOMERUN_SCREEN_DURATION_MS)
+            if (homeRunTransitionToken == token) {
+                isHomeRunTransitionVisible = false
+                homeRunPlayer.pause()
+            }
+        } finally {
+            isPlayingVideo = false
         }
     }
 
     LaunchedEffect(hitTransitionToken) {
         val token = hitTransitionToken ?: return@LaunchedEffect
-        hitPlayer.seekTo(0)
-        hitPlayer.play()
-        isHitTransitionVisible = true
-        delay(HIT_SCREEN_DURATION_MS)
-        if (hitTransitionToken == token) {
-            isHitTransitionVisible = false
-            hitPlayer.pause()
+        isPlayingVideo = true
+        try {
+            hitPlayer.seekTo(0)
+            hitPlayer.play()
+            isHitTransitionVisible = true
+            delay(HIT_SCREEN_DURATION_MS)
+            if (hitTransitionToken == token) {
+                isHitTransitionVisible = false
+                hitPlayer.pause()
+            }
+        } finally {
+            isPlayingVideo = false
         }
     }
 
     LaunchedEffect(doublePlayTransitionToken) {
         val token = doublePlayTransitionToken ?: return@LaunchedEffect
-        doublePlayPlayer.seekTo(0)
-        doublePlayPlayer.play()
-        isDoublePlayTransitionVisible = true
-        delay(DOUBLE_PLAY_SCREEN_DURATION_MS)
-        if (doublePlayTransitionToken == token) {
-            isDoublePlayTransitionVisible = false
-            doublePlayPlayer.pause()
+        isPlayingVideo = true
+        try {
+            doublePlayPlayer.seekTo(0)
+            doublePlayPlayer.play()
+            isDoublePlayTransitionVisible = true
+            delay(DOUBLE_PLAY_SCREEN_DURATION_MS)
+            if (doublePlayTransitionToken == token) {
+                isDoublePlayTransitionVisible = false
+                doublePlayPlayer.pause()
+            }
+        } finally {
+            isPlayingVideo = false
         }
     }
 
     LaunchedEffect(scoreTransitionToken) {
         val token = scoreTransitionToken ?: return@LaunchedEffect
-        scorePlayer.seekTo(0)
-        scorePlayer.play()
-        isScoreTransitionVisible = true
-        delay(SCORE_SCREEN_DURATION_MS)
-        if (scoreTransitionToken == token) {
-            isScoreTransitionVisible = false
-            scorePlayer.pause()
+        isPlayingVideo = true
+        try {
+            scorePlayer.seekTo(0)
+            scorePlayer.play()
+            isScoreTransitionVisible = true
+            delay(SCORE_SCREEN_DURATION_MS)
+            if (scoreTransitionToken == token) {
+                isScoreTransitionVisible = false
+                scorePlayer.pause()
+            }
+        } finally {
+            isPlayingVideo = false
         }
     }
 
     LaunchedEffect(victoryTransitionToken) {
         val token = victoryTransitionToken ?: return@LaunchedEffect
-        victoryPlayer.seekTo(0)
-        victoryPlayer.play()
-        isVictoryTransitionVisible = true
-        delay(VICTORY_SCREEN_DURATION_MS)
-        if (victoryTransitionToken == token) {
-            isVictoryTransitionVisible = false
-            victoryPlayer.pause()
+        isPlayingVideo = true
+        try {
+            victoryPlayer.seekTo(0)
+            victoryPlayer.play()
+            isVictoryTransitionVisible = true
+            delay(VICTORY_SCREEN_DURATION_MS)
+            if (victoryTransitionToken == token) {
+                isVictoryTransitionVisible = false
+                victoryPlayer.pause()
+            }
+        } finally {
+            isPlayingVideo = false
         }
     }
 
@@ -405,12 +436,17 @@ fun WatchApp(isAmbient: Boolean = false) {
             val myTeamWon = (isMyTeamHome && game.homeScore > game.awayScore) ||
                             (isMyTeamAway && game.awayScore > game.homeScore)
             if (myTeamWon) {
-                victoryPlayer.seekTo(0)
-                victoryPlayer.play()
-                isVictoryTransitionVisible = true
-                delay(VICTORY_SCREEN_DURATION_MS)
-                isVictoryTransitionVisible = false
-                victoryPlayer.pause()
+                isPlayingVideo = true
+                try {
+                    victoryPlayer.seekTo(0)
+                    victoryPlayer.play()
+                    isVictoryTransitionVisible = true
+                    delay(VICTORY_SCREEN_DURATION_MS)
+                    isVictoryTransitionVisible = false
+                    victoryPlayer.pause()
+                } finally {
+                    isPlayingVideo = false
+                }
             }
         }
         previousGameIsLive = game.isLive
