@@ -1,4 +1,5 @@
 """APNs (Apple Push Notification service) HTTP/2 전송 모듈"""
+import asyncio
 import base64
 import json
 import logging
@@ -19,6 +20,21 @@ APNS_SANDBOX_URL = "https://api.sandbox.push.apple.com"
 _cached_jwt: str | None = None
 _cached_jwt_expires: float = 0
 JWT_LIFETIME_SECONDS = 50 * 60
+
+# HTTP/2 keep-alive 커넥션 재사용 전역 클라이언트.
+# 요청마다 새로 만들면 TLS handshake 비용이 누적돼 워치 푸시 지연으로 이어진다.
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            http2=True,
+            timeout=httpx.Timeout(10.0),
+            limits=httpx.Limits(max_keepalive_connections=50, max_connections=200),
+        )
+    return _http_client
 
 
 def _get_apns_key() -> str | None:
@@ -85,6 +101,8 @@ async def send_push(
         **payload,
     }
 
+    client = _get_http_client()
+
     # 먼저 지정된 환경으로 시도, 실패 시 반대 환경으로 폴백
     environments = [sandbox, not sandbox]
     for try_sandbox in environments:
@@ -92,13 +110,11 @@ async def send_push(
         url = f"{base_url}/3/device/{device_token}"
 
         try:
-            async with httpx.AsyncClient(http2=True) as client:
-                response = await client.post(
-                    url,
-                    content=json.dumps(apns_payload),
-                    headers={**headers, "content-type": "application/json"},
-                    timeout=10.0,
-                )
+            response = await client.post(
+                url,
+                content=json.dumps(apns_payload),
+                headers={**headers, "content-type": "application/json"},
+            )
 
             if response.status_code == 200:
                 # 환경이 바뀌었으면 DB 업데이트를 위해 로그
@@ -161,14 +177,14 @@ async def send_live_activity_push(
         },
     }
 
+    client = _get_http_client()
+
     try:
-        async with httpx.AsyncClient(http2=True) as client:
-            response = await client.post(
-                url,
-                content=json.dumps(apns_payload),
-                headers={**headers, "content-type": "application/json"},
-                timeout=10.0,
-            )
+        response = await client.post(
+            url,
+            content=json.dumps(apns_payload),
+            headers={**headers, "content-type": "application/json"},
+        )
 
         if response.status_code == 200:
             return True
@@ -188,10 +204,15 @@ async def send_push_to_tokens(
     tokens: list[str],
     payload: dict[str, Any],
 ) -> list[str]:
-    """여러 디바이스에 push 전송, 실패한 토큰 목록 반환"""
+    """여러 디바이스에 push 전송 (병렬), 실패한 토큰 목록 반환"""
+    if not tokens:
+        return []
+    results = await asyncio.gather(
+        *(send_push(token, payload) for token in tokens),
+        return_exceptions=True,
+    )
     failed_tokens: list[str] = []
-    for token in tokens:
-        success = await send_push(token, payload)
-        if not success:
+    for token, result in zip(tokens, results):
+        if isinstance(result, BaseException) or result is False:
             failed_tokens.append(token)
     return failed_tokens

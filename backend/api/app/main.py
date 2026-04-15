@@ -486,22 +486,28 @@ async def _send_push_for_game_events(
         "batter": state_payload.get("batter", ""),
     }
 
+    async def _fanout(push_payload: dict[str, Any]) -> None:
+        coros = []
+        for token in tokens:
+            info = token_info[token]
+            payload_with_team = {**push_payload, "my_team": info["my_team"] or ""}
+            coros.append(send_push(
+                token,
+                payload_with_team,
+                use_sandbox=info["is_sandbox"],
+                platform=info["platform"],
+            ))
+        await asyncio.gather(*coros, return_exceptions=True)
+
     if event_payloads:
         for event in event_payloads:
-            push_payload = {
+            await _fanout({
                 **base_payload,
                 "event_type": event.get("type", ""),
                 "event_cursor": event.get("cursor", 0),
-            }
-            for token in tokens:
-                info = token_info[token]
-                payload_with_team = {**push_payload, "my_team": info["my_team"] or ""}
-                await send_push(token, payload_with_team, use_sandbox=info["is_sandbox"], platform=info["platform"])
+            })
     else:
-        for token in tokens:
-            info = token_info[token]
-            payload_with_team = {**base_payload, "my_team": info["my_team"] or ""}
-            await send_push(token, payload_with_team, use_sandbox=info["is_sandbox"], platform=info["platform"])
+        await _fanout(base_payload)
 
 
 def _load_live_activity_tokens(game_id: str) -> list[str]:
@@ -540,8 +546,10 @@ async def _send_live_activity_update(
         "lastEventType": last_event_type,
     }
 
-    for token in tokens:
-        await send_live_activity_push(token, content_state, event_type=event_type)
+    await asyncio.gather(
+        *(send_live_activity_push(token, content_state, event_type=event_type) for token in tokens),
+        return_exceptions=True,
+    )
 
 
 @app.get("/team-records/{team_id}", response_model=TeamRecordOut)
@@ -637,16 +645,19 @@ def _ingest_crawler_snapshot_locked(
     if game is None or state_payload is None or response_status is None or response_updated_at is None:
         raise HTTPException(status_code=500, detail="snapshot ingest failed")
 
+    # NOTE: 배포된 iOS의 .update 경로가 state.homeTeamId.teamName(마스코트만)을
+    # 워치로 전달해 myTeam 비교가 깨지는 버그가 있어, 정상 동작하는 .state 경로로
+    # 흐르도록 events + state 두 메시지로 분리해서 broadcast.
+    if inserted_event_payload:
+        background_tasks.add_task(
+            _broadcast_live_message,
+            game_id,
+            {"type": "events", "payload": {"items": inserted_event_payload}},
+        )
     background_tasks.add_task(
         _broadcast_live_message,
         game_id,
-        {
-            "type": "update",
-            "payload": {
-                "state": state_payload,
-                "events": inserted_event_payload,
-            },
-        },
+        {"type": "state", "payload": state_payload},
     )
 
     # Cache state and recent events in Redis for fast WS on-connect
