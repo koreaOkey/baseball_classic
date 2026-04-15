@@ -1,8 +1,19 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PlainSerializer
+
+
+# iOS ISO8601DateFormatter 기본 옵션은 fractional seconds 를 파싱하지 못해서
+# 파싱 실패 시 fallback 으로 "T" 뒤 문자열 앞 5글자(UTC HH:mm)를 그대로
+# 화면에 노출하는 버그가 있다. 모든 응답 datetime 을 마이크로초 없는 정수초
+# ISO 로 내보내면 iOS 가 정상 파싱 후 KST 로 변환해서 표시한다.
+def _iso_no_microseconds(value: datetime) -> str:
+    return value.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+IsoDatetime = Annotated[datetime, PlainSerializer(_iso_no_microseconds, return_type=str)]
 
 
 class GameStatus(str, Enum):
@@ -181,7 +192,7 @@ class IngestResult(BaseModel):
     insertedEvents: int
     duplicateEvents: int
     status: GameStatus
-    updatedAt: datetime
+    updatedAt: IsoDatetime
 
 
 class TeamRecordIngestResult(BaseModel):
@@ -189,7 +200,7 @@ class TeamRecordIngestResult(BaseModel):
     seasonCode: str
     receivedRecords: int
     upsertedRecords: int
-    updatedAt: datetime
+    updatedAt: IsoDatetime
 
 
 class TeamRecordOut(BaseModel):
@@ -210,8 +221,8 @@ class TeamRecordOut(BaseModel):
     lastFiveGames: str | None = None
     offenseHra: float | None = None
     defenseEra: float | None = None
-    observedAt: datetime | None = None
-    updatedAt: datetime
+    observedAt: IsoDatetime | None = None
+    updatedAt: IsoDatetime
 
 
 class GameSummaryOut(BaseModel):
@@ -223,8 +234,8 @@ class GameSummaryOut(BaseModel):
     inning: str
     status: GameStatus
     startTime: str | None = None
-    observedAt: datetime | None = None
-    updatedAt: datetime
+    observedAt: IsoDatetime | None = None
+    updatedAt: IsoDatetime
 
 
 class GameStateOut(BaseModel):
@@ -242,8 +253,8 @@ class GameStateOut(BaseModel):
     pitcher: str | None = None
     batter: str | None = None
     lastEventType: EventType | None = None
-    lastEventAt: datetime | None = None
-    updatedAt: datetime
+    lastEventAt: IsoDatetime | None = None
+    updatedAt: IsoDatetime
 
 
 class GameEventOut(BaseModel):
@@ -251,7 +262,7 @@ class GameEventOut(BaseModel):
     id: str
     type: EventType
     description: str
-    time: datetime
+    time: IsoDatetime
     pitcher: str | None = None
     batter: str | None = None
     hapticPattern: str | None = None
