@@ -235,9 +235,13 @@ struct WatchContentView: View {
         let game = connectivity.gameData
         let isTestGame = game?.gameId.hasPrefix("test_") == true
 
-        let myTeam = game?.myTeamName.uppercased() ?? ""
-        let isMyTeamHome = myTeam == game?.homeTeam.uppercased()
-        let isMyTeamAway = myTeam == game?.awayTeam.uppercased()
+        // 팀 코드("DOOSAN")·백엔드 전체명("두산 베어스")·마스코트("베어스") 어느 형식이든
+        // 같은 canonical 마스코트로 정규화해서 비교 (displayTeamName은 멱등).
+        let myTeam = WatchConnectivityManager.displayTeamName(game?.myTeamName ?? "")
+        let homeTeamNorm = WatchConnectivityManager.displayTeamName(game?.homeTeam ?? "")
+        let awayTeamNorm = WatchConnectivityManager.displayTeamName(game?.awayTeam ?? "")
+        let isMyTeamHome = !myTeam.isEmpty && myTeam == homeTeamNorm
+        let isMyTeamAway = !myTeam.isEmpty && myTeam == awayTeamNorm
         let inning = game?.inning ?? ""
         let isMyTeamBatting = isTestGame || (isMyTeamHome && inning.contains("말")) ||
                               (isMyTeamAway && inning.contains("초"))

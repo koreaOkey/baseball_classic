@@ -403,8 +403,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             break
         }
     }
-    /// 백엔드 팀명("SSG 랜더스" 등)을 표시용 이름("랜더스")으로 변환
-    private static func displayTeamName(_ name: String) -> String {
+    /// 백엔드 팀명("SSG 랜더스"), 팀 코드("DOOSAN"), 마스코트("베어스") 등 어느 형식이든 canonical 마스코트로 변환.
+    /// 팀 비교/표시 양쪽에서 사용 — 멱등.
+    static func displayTeamName(_ name: String) -> String {
         let n = name.trimmingCharacters(in: .whitespaces).lowercased()
         if n.isEmpty { return name }
         if n.contains("doosan") || n.contains("두산") || n.contains("베어스") { return "베어스" }

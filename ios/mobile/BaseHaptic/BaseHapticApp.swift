@@ -508,8 +508,8 @@ struct ContentView: View {
                             let wasLive = lastWatchSignature.contains("|live|") || lastWatchSignature.contains("|LIVE|")
                             WatchGameSyncManager.shared.sendGameData(
                                 gameId: state.gameId,
-                                homeTeam: state.homeTeamId.teamName,
-                                awayTeam: state.awayTeamId.teamName,
+                                homeTeam: state.homeTeam,
+                                awayTeam: state.awayTeam,
                                 homeScore: state.homeScore,
                                 awayScore: state.awayScore,
                                 status: state.status.rawValue,

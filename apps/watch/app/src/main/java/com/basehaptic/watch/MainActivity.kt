@@ -326,9 +326,13 @@ fun WatchApp(isAmbient: Boolean = false) {
         // 비디오 재생 중에는 후속 이벤트로 인한 전환 토큰 발급을 차단
         if (isPlayingVideo) return@LaunchedEffect
         val isTestGame = game.gameId.startsWith("test_")
-        val myTeam = game.myTeamName.uppercase()
-        val isMyTeamHome = myTeam == game.homeTeam.uppercase()
-        val isMyTeamAway = myTeam == game.awayTeam.uppercase()
+        // 팀 코드("DOOSAN")·백엔드 전체명("두산 베어스")·마스코트("베어스") 어느 형식이든
+        // 같은 canonical 마스코트로 정규화해서 비교 (displayTeamName 은 멱등).
+        val myTeam = displayTeamName(game.myTeamName)
+        val homeTeamNorm = displayTeamName(game.homeTeam)
+        val awayTeamNorm = displayTeamName(game.awayTeam)
+        val isMyTeamHome = myTeam.isNotEmpty() && myTeam == homeTeamNorm
+        val isMyTeamAway = myTeam.isNotEmpty() && myTeam == awayTeamNorm
         val isMyTeamBatting = isTestGame || (isMyTeamHome && isBottomInning(game.inning)) ||
                               (isMyTeamAway && isTopInning(game.inning))
         val isMyTeamFielding = isTestGame || (!isMyTeamBatting && (isMyTeamHome || isMyTeamAway))
