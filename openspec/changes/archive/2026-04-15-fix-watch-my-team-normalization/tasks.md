@@ -1,0 +1,12 @@
+## Tasks
+- [x] `backend/api/app/main.py` — `_TEAM_CODE_TO_MASCOT` 매핑 + `_normalize_my_team_for_watch` 헬퍼 추가
+- [x] `backend/api/app/main.py` — `_send_push_for_game_events._fanout`에서 `my_team` 필드를 정규화 값으로 교체
+- [x] commit `b4d6616` → main 브랜치 push
+- [x] Railway 자동 배포 (deployment `3f0bbfd6`)
+- [x] 배포 후 실사용 환경에서 응원팀 안타 영상 재생 확인
+- [x] Non-Goal 3건 근본 수정 (commit `b65518a`, 2026-04-15):
+  - [x] iOS 워치 비교 로직 정규화 — `WatchConnectivityManager.displayTeamName` static 승격 + `BaseHapticWatchApp.showTransition`에서 `my_team/home/away` 세 값 모두 정규화 후 비교. 폰이 `selectedTeam.rawValue`("DOOSAN") 그대로 보내도 robust하게 동작. (원래 계획이었던 `BaseHapticApp.swift:445,525` 송신측 변환은 불필요해져 skip)
+  - [x] `ios/mobile/BaseHaptic/BaseHapticApp.swift` `.update` 케이스 `state.homeTeamId.teamName` → `state.homeTeam`로 교체 (`.state` 케이스와 통일)
+  - [x] Android Wear OS 동일 버그 발견·수정 — `TeamNameNormalizer.kt` 신규 (iOS displayTeamName의 Kotlin 포팅, 10개 구단 키워드 매핑, 멱등). `MainActivity.kt` 비교 로직에 적용.
+- [ ] iOS/Android Wear 앱 배포 + 구버전 앱 사용자 충분히 업데이트 확인 후 `_normalize_my_team_for_watch` 제거 검토
+- [ ] 히스토리 정리: `b4d6616`에 섞여 들어간 `build/reports/problems/problems-report.html`, `ios/BaseHaptic.xcodeproj/.../xcschememanagement.plist` → `.gitignore` 추가
