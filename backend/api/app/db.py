@@ -1,10 +1,12 @@
 import logging
 from collections.abc import Generator
+from typing import Any
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from .config import get_settings
 
@@ -30,13 +32,19 @@ GAME_EVENT_TYPE_VALUES = (
     "OTHER",
 )
 
-connect_args = {}
-if settings.database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+is_sqlite = settings.database_url.startswith("sqlite")
+# Supavisor Transaction 모드 풀러(6543)는 prepared statement 캐시와 충돌하므로
+# 클라이언트 풀을 끄고(NullPool) psycopg prepared statement 를 비활성화한다.
+is_transaction_pooler = (not is_sqlite) and (":6543" in settings.database_url)
+
+if is_sqlite:
+    connect_args: dict[str, Any] = {"check_same_thread": False}
 else:
     connect_args = {"connect_timeout": max(1, settings.db_connect_timeout_sec)}
+    if is_transaction_pooler:
+        connect_args["prepare_threshold"] = None
 
-engine_kwargs = {
+engine_kwargs: dict[str, Any] = {
     "future": True,
     "echo": False,
     "connect_args": connect_args,
@@ -44,7 +52,9 @@ engine_kwargs = {
     "pool_recycle": max(60, settings.db_pool_recycle_sec),
 }
 
-if not settings.database_url.startswith("sqlite"):
+if is_transaction_pooler:
+    engine_kwargs["poolclass"] = NullPool
+elif not is_sqlite:
     engine_kwargs.update(
         {
             "pool_size": max(1, settings.db_pool_size),

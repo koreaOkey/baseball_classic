@@ -341,24 +341,43 @@ def register_device_token(
     payload: DeviceTokenRequest,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    existing = db.execute(
-        select(DeviceToken).where(
-            DeviceToken.token == payload.token,
-            DeviceToken.game_id == payload.game_id,
-        )
-    ).scalar_one_or_none()
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-    if existing:
-        existing.my_team = payload.my_team
-        existing.is_sandbox = payload.is_sandbox
-    else:
-        db.add(DeviceToken(
+        stmt = pg_insert(DeviceToken).values(
             token=payload.token,
             game_id=payload.game_id,
             my_team=payload.my_team,
             platform=payload.platform,
             is_sandbox=payload.is_sandbox,
-        ))
+        ).on_conflict_do_update(
+            constraint="uq_device_token_game",
+            set_={
+                "my_team": payload.my_team,
+                "platform": payload.platform,
+                "is_sandbox": payload.is_sandbox,
+            },
+        )
+        db.execute(stmt)
+    else:
+        existing = db.execute(
+            select(DeviceToken).where(
+                DeviceToken.token == payload.token,
+                DeviceToken.game_id == payload.game_id,
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            existing.my_team = payload.my_team
+            existing.is_sandbox = payload.is_sandbox
+        else:
+            db.add(DeviceToken(
+                token=payload.token,
+                game_id=payload.game_id,
+                my_team=payload.my_team,
+                platform=payload.platform,
+                is_sandbox=payload.is_sandbox,
+            ))
     db.commit()
     return {"status": "ok"}
 
