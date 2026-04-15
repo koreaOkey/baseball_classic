@@ -510,17 +510,24 @@ final class BackendGamesRepository {
 
     private func formatBackendTime(_ raw: String) -> String {
         if raw.isEmpty { return "--:--" }
-        if let date = ISO8601DateFormatter().date(from: raw) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "HH:mm"
-            formatter.timeZone = .current
-            return formatter.string(from: date)
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fmt.date(from: raw) {
+            return Self.kstHourMinute.string(from: date)
         }
-        if let afterT = raw.split(separator: "T").last, afterT.count >= 5 {
-            return String(afterT.prefix(5))
+        fmt.formatOptions = [.withInternetDateTime]
+        if let date = fmt.date(from: raw) {
+            return Self.kstHourMinute.string(from: date)
         }
         return "--:--"
     }
+
+    private static let kstHourMinute: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.timeZone = .current
+        return f
+    }()
 
     private func parseGameTimeToSortKey(_ raw: String?) -> Int {
         guard let raw = raw, !raw.isEmpty else { return Int.max }
