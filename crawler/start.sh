@@ -7,4 +7,5 @@ exec python crawler/live_baseball_dispatcher.py \
   --schedule-target "${SCHEDULE_TARGET:-kbo}" \
   --dispatch-interval-sec "${DISPATCH_INTERVAL_SEC:-15}" \
   --crawler-interval-sec "${CRAWLER_INTERVAL_SEC:-15}" \
+  --schedule-import-days "${SCHEDULE_IMPORT_DAYS:-7}" \
   --log-dir log
