@@ -743,8 +743,14 @@ def build_snapshot_payload(
         summary["homeHomeRuns"] = batter_summary["homeHomeRuns"]
         summary["awayHomeRuns"] = batter_summary["awayHomeRuns"]
 
-    home_score = _safe_int(game_data.get("homeTeamScore"), default=_safe_int(latest_state.get("homeScore")))
-    away_score = _safe_int(game_data.get("awayTeamScore"), default=_safe_int(latest_state.get("awayScore")))
+    home_score = max(
+        _safe_int(game_data.get("homeTeamScore"), default=0),
+        _safe_int(latest_state.get("homeScore"), default=0),
+    )
+    away_score = max(
+        _safe_int(game_data.get("awayTeamScore"), default=0),
+        _safe_int(latest_state.get("awayScore"), default=0),
+    )
     start_time = _extract_start_time(game_data)
     game_date = _extract_game_date(game_data)
 
