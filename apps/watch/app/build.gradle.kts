@@ -31,7 +31,7 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
         targetSdk = 35
-        versionCode = 8
+        versionCode = 10
         versionName = "1.0.1"
 
         val backendBaseUrl = (

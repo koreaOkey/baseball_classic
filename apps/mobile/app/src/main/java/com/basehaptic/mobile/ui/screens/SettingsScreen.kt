@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -54,7 +55,6 @@ import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.ui.theme.Gray950
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 
-@Suppress("UNUSED_PARAMETER")
 @Composable
 fun SettingsScreen(
     selectedTeam: Team,
@@ -328,6 +328,20 @@ fun SettingsScreen(
                     ballStrikeEnabled = it
                     prefs.edit().putBoolean("ball_strike_haptic_enabled", it).apply()
                 }
+            )
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(AppSpacing.lg))
+            SettingsSection(title = "개발자")
+        }
+
+        item {
+            SettingsItem(
+                icon = Icons.Default.Watch,
+                title = "워치 테스트",
+                subtitle = "시뮬레이션 이벤트로 워치 동기화 테스트",
+                onClick = onOpenWatchTest
             )
         }
 
