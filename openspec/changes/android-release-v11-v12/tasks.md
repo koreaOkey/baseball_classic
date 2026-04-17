@@ -1,0 +1,9 @@
+## Tasks
+- [x] `apps/mobile/app/build.gradle.kts` — versionCode 9→11
+- [x] `apps/watch/app/build.gradle.kts` — versionCode 10→12
+- [x] `apps/mobile/app/src/main/AndroidManifest.xml` — AdMob APPLICATION_ID 프로덕션 전환
+- [x] `apps/mobile/app/src/main/java/.../BannerAd.kt` — 배너 광고 단위 ID 프로덕션 전환
+- [x] mobile release bundle 빌드 (versionCode 11)
+- [x] watch release bundle 빌드 (versionCode 12)
+- [ ] Play Console 모바일 앱 업로드
+- [ ] Play Console 워치 앱 업로드
