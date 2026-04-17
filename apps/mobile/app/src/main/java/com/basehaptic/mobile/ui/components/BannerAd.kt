@@ -8,8 +8,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 
-// 프로덕션: "ca-app-pub-7935544989894266/1331426409"
-private const val BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111" // Google 테스트용
+private const val BANNER_AD_UNIT_ID = "ca-app-pub-7935544989894266/1331426409"
 
 @Composable
 fun BannerAd(
