@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.basehaptic.mobile.ui.components.BannerAd
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.*
 import com.basehaptic.mobile.ui.components.TeamLogo
@@ -284,6 +285,13 @@ fun HomeScreen(
                     valueColor = Blue500
                 )
             }
+        }
+
+        // Ad Banner
+        item {
+            BannerAd(
+                modifier = Modifier.padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.sm)
+            )
         }
 
         // Games List Header

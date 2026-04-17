@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.basehaptic.mobile.ui.components.BannerAd
 import com.basehaptic.mobile.data.model.EventType
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.ui.theme.AppEventColors
@@ -269,6 +270,13 @@ fun WatchTestScreen(
                 .padding(horizontal = AppSpacing.lg),
             verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
         ) {
+            // Ad Banner
+            item {
+                BannerAd(
+                    modifier = Modifier.padding(vertical = AppSpacing.sm)
+                )
+            }
+
             item {
                 Surface(
                     shape = AppShapes.lg,

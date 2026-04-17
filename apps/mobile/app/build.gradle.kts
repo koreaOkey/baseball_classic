@@ -145,7 +145,10 @@ dependencies {
 
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
-    
+
+    // AdMob
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

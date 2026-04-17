@@ -43,6 +43,8 @@ import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.wear.WearThemeSyncManager
 import com.basehaptic.mobile.wear.WearWatchSyncBridge
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.RequestConfiguration
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -86,6 +88,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        MobileAds.initialize(this)
+        MobileAds.setRequestConfiguration(
+            RequestConfiguration.Builder()
+                .setTestDeviceIds(listOf(
+                    // Logcat에서 "Use new ConsentDebugSettings.Builder().addTestDeviceHashedId("XXXX")" 확인 후 추가
+                    // "여기에_기기_해시_ID_붙여넣기"
+                ))
+                .build()
+        )
         AuthManager.initialize()
         handleAuthDeeplink(intent)
         val savedTeam = loadSavedTeamOrNull()
