@@ -501,9 +501,7 @@ fun WatchApp(isAmbient: Boolean = false) {
                                         NoGameScreen()
                                     }
                                     WatchEventOverlay(
-                                        latestEvent = latestEvent,
-                                        hideTypes = setOf("HOMERUN", "HIT", "DOUBLE_PLAY", "VICTORY") +
-                                            (if (scoreTransitionToken != null) setOf("SCORE") else emptySet())
+                                        latestEvent = latestEvent
                                     )
                                 }
                             }
