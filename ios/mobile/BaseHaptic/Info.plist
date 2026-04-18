@@ -46,6 +46,8 @@
 	<string>https://baseballclassic-production.up.railway.app</string>
 	<key>BACKEND_WS_URL</key>
 	<string>wss://baseballclassic-production.up.railway.app</string>
+	<key>GADApplicationIdentifier</key>
+	<string>ca-app-pub-7935544989894266~4763404952</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSSupportsLiveActivities</key>

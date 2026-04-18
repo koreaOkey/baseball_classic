@@ -7,3 +7,5 @@
 - [x] watch release bundle 빌드 (versionCode 12)
 - [ ] Play Console 모바일 앱 업로드
 - [ ] Play Console 워치 앱 업로드
+- [ ] 상점 활성화
+- [ ] 애플워치에 만든 워치 테마들을 안드로이드 워치용으로 변환

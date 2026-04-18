@@ -4,7 +4,6 @@ import AuthenticationServices
 struct SettingsScreen: View {
     let selectedTeam: Team
     let onChangeTeam: (Team) -> Void
-    let purchasedThemes: [ThemeData]
     let activeTheme: ThemeData?
     let onSelectTheme: (ThemeData?) -> Void
     let onOpenWatchTest: () -> Void

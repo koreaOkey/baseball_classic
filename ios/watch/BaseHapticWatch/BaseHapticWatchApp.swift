@@ -6,11 +6,20 @@ struct BaseHapticWatchApp: App {
     @WKApplicationDelegateAdaptor(WatchAppDelegate.self) var appDelegate
     @StateObject private var connectivity = WatchConnectivityManager.shared
 
+    private var resolvedTheme: WatchTeamTheme {
+        if let storeId = connectivity.storeThemeId,
+           storeId != "default",
+           let storeTheme = WatchTeamThemes.theme(forStoreId: storeId) {
+            return storeTheme
+        }
+        return WatchTeamThemes.theme(for: connectivity.syncedTeamName)
+    }
+
     var body: some Scene {
         WindowGroup {
             WatchContentView()
                 .environmentObject(connectivity)
-                .environment(\.watchTeamTheme, WatchTeamThemes.theme(for: connectivity.syncedTeamName))
+                .environment(\.watchTeamTheme, resolvedTheme)
                 .onAppear {
                     connectivity.activate()
                 }

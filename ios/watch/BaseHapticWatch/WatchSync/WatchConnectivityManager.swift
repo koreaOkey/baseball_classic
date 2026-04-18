@@ -9,6 +9,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     @Published var gameData: GameData?
     @Published var syncedTeamName: String = "DEFAULT"
+    @Published var storeThemeId: String? = UserDefaults.standard.string(forKey: "store_theme_id")
     @Published var latestEventType: String?
     @Published var latestEventTimestamp: Date?
     @Published var watchSyncPrompt: WatchSyncPrompt?
@@ -61,6 +62,14 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 self.syncedTeamName = teamName
             }
         }
+
+        // applicationContext에서 상점 테마 복원
+        if let themeId = ctx["theme_id"] as? String {
+            DispatchQueue.main.async {
+                self.storeThemeId = themeId
+                UserDefaults.standard.set(themeId, forKey: "store_theme_id")
+            }
+        }
     }
 
     /// iPhone에서 보낸 메시지 수신
@@ -100,6 +109,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 self.handleGameData(message)
             case "theme_update":
                 self.handleThemeUpdate(message)
+            case "store_theme_update":
+                self.handleStoreThemeUpdate(message)
             case "haptic_event":
                 self.handleHapticEvent(message)
             case "watch_sync_prompt":
@@ -185,6 +196,14 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     private func handleThemeUpdate(_ message: [String: Any]) {
         if let teamName = message["my_team"] as? String, !teamName.isEmpty {
             syncedTeamName = teamName
+        }
+    }
+
+    private func handleStoreThemeUpdate(_ message: [String: Any]) {
+        if let themeId = message["theme_id"] as? String {
+            storeThemeId = themeId
+            UserDefaults.standard.set(themeId, forKey: "store_theme_id")
+            print("[WatchConnectivity] Store theme updated: \(themeId)")
         }
     }
 

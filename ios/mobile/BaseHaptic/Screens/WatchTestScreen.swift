@@ -171,6 +171,11 @@ struct WatchTestScreen: View {
 
             ScrollView {
                 LazyVStack(spacing: AppSpacing.md) {
+                    BannerAdView()
+                        .frame(width: 320, height: 50)
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, AppSpacing.md)
+
                     scoreCard
                     autoSimulationCard
                     manualEventCard

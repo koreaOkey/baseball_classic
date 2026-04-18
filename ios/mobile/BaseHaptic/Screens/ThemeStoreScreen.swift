@@ -1,138 +1,238 @@
 import SwiftUI
 
+enum ThemeStoreTab: String, CaseIterable {
+    case watch = "Watch Themes"
+    case phone = "Phone App Themes"
+}
+
 struct ThemeStoreScreen: View {
-    let selectedTeam: Team
     let activeTheme: ThemeData?
-    let purchasedThemes: [ThemeData]
+    let unlockedThemeIds: Set<String>
     let onApplyTheme: (ThemeData?) -> Void
+    let onUnlockTheme: (ThemeData) -> Void
     let onPurchaseTheme: (ThemeData) -> Void
 
     @Environment(\.teamTheme) private var teamTheme
+    @State private var selectedTab: ThemeStoreTab = .watch
 
-    private var storeItems: [ThemeStoreItem] {
-        Self.mockItems(for: selectedTeam)
+    private var freeThemes: [ThemeData] {
+        ThemeData.allThemes.filter { $0.category == .free }
     }
 
-    private var purchasedIds: Set<String> {
-        Set(purchasedThemes.map { $0.id })
+    private var adRewardThemes: [ThemeData] {
+        ThemeData.allThemes.filter { $0.category == .adReward }
+    }
+
+    private var premiumThemes: [ThemeData] {
+        ThemeData.allThemes.filter { $0.category == .premium }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
-
-                VStack(spacing: AppSpacing.sm) {
-                    ForEach(storeItems) { item in
-                        ThemeStoreItemCard(
-                            item: item,
-                            isPurchased: purchasedIds.contains(item.theme.id),
-                            isApplied: activeTheme?.id == item.theme.id,
-                            onPurchase: { onPurchaseTheme(item.theme) },
-                            onApply: { onApplyTheme(item.theme) }
-                        )
-                    }
-                }
-                .padding(.horizontal, AppSpacing.xxl)
-
-                Text("목업 데이터는 실제 결제/다운로드와 연결되어 있지 않습니다.")
-                    .font(AppFont.micro)
-                    .foregroundColor(AppColors.gray400)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, AppSpacing.xxl)
-                    .padding(.vertical, AppSpacing.xl)
-
-                Spacer().frame(height: AppSpacing.bottomSafeSpacer)
-            }
+        VStack(spacing: 0) {
+            header
+            tabBar
+            tabContent
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppColors.gray950)
     }
+
+    // MARK: - Header
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("테마 상점")
                 .font(AppFont.h3Bold)
                 .foregroundColor(.white)
-            Text("목업 데이터로 구성된 테마 프리뷰입니다.")
-                .font(AppFont.body)
-                .foregroundColor(AppColors.gray400)
-                .padding(.top, 6)
-            Text("현재 적용: \(activeTheme?.name ?? "기본 팀 테마")")
+            Text("현재 적용: \(activeTheme?.name ?? "기본형")")
                 .font(AppFont.caption)
                 .foregroundColor(teamTheme.primary)
                 .padding(.top, AppSpacing.sm)
-            Button(action: { onApplyTheme(nil) }) {
-                Text("기본 팀 테마 적용")
-                    .font(AppFont.labelMedium)
-                    .padding(.horizontal, AppSpacing.lg)
-                    .padding(.vertical, AppSpacing.sm)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppRadius.sm)
-                            .stroke(activeTheme == nil ? AppColors.gray600 : teamTheme.primary, lineWidth: 1)
-                    )
-                    .foregroundColor(activeTheme == nil ? AppColors.gray600 : teamTheme.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.vertical, AppSpacing.lg)
+    }
+
+    // MARK: - Tab Bar
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(ThemeStoreTab.allCases, id: \.self) { tab in
+                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab } }) {
+                    VStack(spacing: AppSpacing.sm) {
+                        Text(tab.rawValue)
+                            .font(AppFont.bodyBold)
+                            .foregroundColor(selectedTab == tab ? AppColors.red500 : AppColors.gray500)
+                        Rectangle()
+                            .fill(selectedTab == tab ? AppColors.red500 : Color.clear)
+                            .frame(height: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
-            .disabled(activeTheme == nil)
-            .padding(.top, AppSpacing.md)
         }
         .padding(.horizontal, AppSpacing.xxl)
-        .padding(.vertical, AppSpacing.xl)
+        .background(AppColors.gray950)
+    }
+
+    // MARK: - Tab Content
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .watch:
+            watchThemesTab
+        case .phone:
+            phoneThemesTab
+        }
+    }
+
+    private var watchThemesTab: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeader("기본")
+                themeGrid(freeThemes)
+
+                sectionHeader("무료 (광고 시청)")
+                themeGrid(adRewardThemes)
+
+                sectionHeader("프리미엄")
+                themeGrid(premiumThemes)
+
+                Spacer().frame(height: AppSpacing.bottomSafeSpacer)
+            }
+        }
+    }
+
+    private var phoneThemesTab: some View {
+        VStack {
+            Spacer()
+            Image(systemName: "iphone")
+                .font(.system(size: 40))
+                .foregroundColor(AppColors.gray600)
+            Text("준비 중")
+                .font(AppFont.bodyLgMedium)
+                .foregroundColor(AppColors.gray500)
+                .padding(.top, AppSpacing.md)
+            Text("폰 앱 테마는 곧 추가될 예정입니다.")
+                .font(AppFont.body)
+                .foregroundColor(AppColors.gray600)
+                .padding(.top, AppSpacing.xs)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Section
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(AppFont.h5Bold)
+            .foregroundColor(.white)
+            .padding(.horizontal, AppSpacing.xxl)
+            .padding(.top, AppSpacing.xl)
+            .padding(.bottom, AppSpacing.md)
+    }
+
+    private func themeGrid(_ themes: [ThemeData]) -> some View {
+        let columns = [GridItem(.flexible(), spacing: AppSpacing.md), GridItem(.flexible(), spacing: AppSpacing.md)]
+        return LazyVGrid(columns: columns, spacing: AppSpacing.md) {
+            ForEach(themes) { theme in
+                ThemeCard(
+                    theme: theme,
+                    isUnlocked: theme.category == .free || unlockedThemeIds.contains(theme.id),
+                    isApplied: activeTheme?.id == theme.id,
+                    onApply: { onApplyTheme(theme) },
+                    onUnlock: { onUnlockTheme(theme) },
+                    onPurchase: { onPurchaseTheme(theme) }
+                )
+            }
+        }
+        .padding(.horizontal, AppSpacing.xxl)
     }
 }
 
-private struct ThemeStoreItemCard: View {
-    let item: ThemeStoreItem
-    let isPurchased: Bool
+// MARK: - ThemeCard
+
+private struct ThemeCard: View {
+    let theme: ThemeData
+    let isUnlocked: Bool
     let isApplied: Bool
-    let onPurchase: () -> Void
     let onApply: () -> Void
+    let onUnlock: () -> Void
+    let onPurchase: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-            HStack {
-                HStack(spacing: AppSpacing.md) {
-                    TeamLogo(team: item.theme.teamId, size: 60)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.theme.name)
-                            .font(AppFont.bodyLgBold)
-                            .foregroundColor(.white)
-                        Text(item.subtitle)
-                            .font(AppFont.micro)
-                            .foregroundColor(AppColors.gray400)
+        VStack(spacing: 0) {
+            // Watch face preview
+            ZStack {
+                // Background
+                if let bgImage = theme.backgroundImage {
+                    Image(bgImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 130)
+                        .clipped()
+                        .overlay(Color.black.opacity(0.45))
+                } else if theme.id == "default" {
+                    Color(red: 10/255, green: 10/255, blue: 11/255)
+                        .frame(height: 130)
+                } else {
+                    LinearGradient(
+                        colors: [theme.colors.primary.opacity(0.25), Color(red: 10/255, green: 10/255, blue: 11/255)],
+                        startPoint: .top,
+                        endPoint: .center
+                    )
+                    .frame(height: 130)
+                }
+
+                // Mini watch UI
+                MiniWatchPreview(theme: theme)
+
+                // Badges
+                if isApplied {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.white)
+                                .font(.system(size: 18))
+                                .shadow(radius: 2)
+                                .padding(6)
+                        }
+                        Spacer()
                     }
                 }
-                Spacer()
-                Text("\(item.price)P")
-                    .font(AppFont.labelBold)
-                    .foregroundColor(isPurchased ? AppColors.gray300 : AppColors.yellow500)
-            }
 
-            ZStack {
-                LinearGradient(
-                    colors: [item.theme.colors.primary, item.theme.colors.secondary],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-
-                HStack {
-                    Spacer()
-                    Text("Accent")
-                        .font(AppFont.bodyLgBold)
-                        .foregroundColor(item.theme.colors.accent)
-                        .padding(.trailing, AppSpacing.lg)
+                if !isUnlocked {
+                    VStack {
+                        HStack {
+                            Image(systemName: "lock.fill")
+                                .foregroundColor(.white.opacity(0.8))
+                                .font(.system(size: 12))
+                                .padding(6)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
                 }
             }
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
 
-            HStack {
-                Spacer()
+            // Info + action
+            VStack(spacing: AppSpacing.sm) {
+                Text(theme.name)
+                    .font(AppFont.bodyBold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
                 actionButton
             }
+            .padding(.top, AppSpacing.md)
+            .padding(.bottom, AppSpacing.sm)
         }
-        .padding(AppSpacing.lg)
+        .padding(AppSpacing.md)
         .background(AppColors.gray900)
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
     }
@@ -140,117 +240,165 @@ private struct ThemeStoreItemCard: View {
     @ViewBuilder
     private var actionButton: some View {
         if isApplied {
-            HStack(spacing: AppSpacing.xs) {
-                Image(systemName: "checkmark")
-                    .font(AppFont.bodyBold)
-                Text("적용 중")
-                    .font(AppFont.labelMedium)
-            }
-            .foregroundColor(AppColors.gray300)
-            .padding(.horizontal, AppSpacing.lg)
-            .padding(.vertical, AppSpacing.sm)
-            .background(AppColors.gray800)
-            .clipShape(Capsule())
-        } else if isPurchased {
+            Text("적용 중")
+                .font(AppFont.micro)
+                .foregroundColor(AppColors.gray400)
+                .padding(.horizontal, AppSpacing.lg)
+                .padding(.vertical, AppSpacing.xs)
+                .background(AppColors.gray800)
+                .clipShape(Capsule())
+        } else if isUnlocked {
             Button(action: onApply) {
                 Text("적용하기")
-                    .font(AppFont.labelMedium)
+                    .font(AppFont.microBold)
                     .foregroundColor(.white)
                     .padding(.horizontal, AppSpacing.lg)
-                    .padding(.vertical, AppSpacing.sm)
+                    .padding(.vertical, AppSpacing.xs)
                     .background(AppColors.blue500)
-                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+                    .clipShape(Capsule())
+            }
+        } else if theme.category == .adReward {
+            Button(action: onUnlock) {
+                HStack(spacing: AppSpacing.xs) {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.system(size: 10))
+                    Text("광고 보고 받기")
+                        .font(AppFont.micro)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, AppSpacing.xs)
+                .background(AppColors.green500)
+                .clipShape(Capsule())
             }
         } else {
             Button(action: onPurchase) {
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "cart.fill")
-                        .font(AppFont.body)
-                    Text("구매하기")
-                        .font(AppFont.labelMedium)
+                        .font(.system(size: 10))
+                    Text(theme.price)
+                        .font(AppFont.micro)
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, AppSpacing.lg)
-                .padding(.vertical, AppSpacing.sm)
-                .background(AppColors.gray700)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, AppSpacing.xs)
+                .background(AppColors.orange500)
+                .clipShape(Capsule())
             }
         }
     }
 }
 
-private struct ThemeStoreItem: Identifiable {
-    let theme: ThemeData
-    let price: Int
-    let subtitle: String
+// MARK: - Mini Watch Preview
 
-    var id: String { theme.id }
+private struct MiniWatchPreview: View {
+    let theme: ThemeData
+
+    private var accentColor: Color {
+        theme.id == "default" ? AppColors.orange500 : theme.colors.accent
+    }
+
+    private var inningBg: Color {
+        theme.id == "default" ? Color.white.opacity(0.05) : theme.colors.primary.opacity(0.15)
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            // Score row
+            HStack(spacing: 0) {
+                // Away
+                VStack(spacing: 1) {
+                    Text("SSG")
+                        .font(.system(size: 7, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                    Text("5")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+
+                // Inning
+                VStack(spacing: 1) {
+                    Text("7회말")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(accentColor)
+                    Text("▼")
+                        .font(.system(size: 6))
+                        .foregroundColor(accentColor)
+                }
+                .frame(width: 32, height: 22)
+                .background(inningBg)
+                .cornerRadius(4)
+
+                // Home
+                VStack(spacing: 1) {
+                    Text("KIA")
+                        .font(.system(size: 7, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                    Text("4")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, 8)
+
+            // BSO row
+            HStack(spacing: 6) {
+                // Mini base diamond
+                ZStack {
+                    Diamond(size: 4, filled: true).offset(x: 0, y: -4)
+                    Diamond(size: 4, filled: false).offset(x: -5, y: 0)
+                    Diamond(size: 4, filled: true).offset(x: 5, y: 0)
+                    Diamond(size: 4, filled: false).offset(x: 0, y: 4)
+                }
+                .frame(width: 18, height: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    CountDots(label: "B", count: 2, max: 3, color: AppColors.green500)
+                    CountDots(label: "S", count: 1, max: 2, color: AppColors.orange500)
+                    CountDots(label: "O", count: 1, max: 2, color: AppColors.red500)
+                }
+            }
+
+            // Player info
+            Text("P 김광현  B 이대호")
+                .font(.system(size: 6))
+                .foregroundColor(.white.opacity(0.5))
+        }
+        .padding(.vertical, 6)
+    }
 }
 
-// Reason: 목업 테마 스토어 데이터. 각 테마가 고유 색 조합을 가지므로 토큰 팔레트 밖 색상 사용 허용.
-extension ThemeStoreScreen {
-    fileprivate static func mockItems(for selectedTeam: Team) -> [ThemeStoreItem] {
-        [
-            ThemeStoreItem(
-                theme: ThemeData(
-                    id: "theme_home_crowd",
-                    teamId: selectedTeam,
-                    name: "\(selectedTeam.teamName) 홈 크라우드",
-                    colors: ThemeColors(
-                        primary: selectedTeam.color,
-                        secondary: AppColors.gray800,
-                        accent: AppColors.yellow500
-                    ),
-                    animation: "crowd_wave"
-                ),
-                price: 1200,
-                subtitle: "응원단 중앙 하이라이트 + 응원가 무드"
-            ),
-            ThemeStoreItem(
-                theme: ThemeData(
-                    id: "theme_retro_sunset",
-                    teamId: .kia,
-                    name: "레트로 선셋",
-                    colors: ThemeColors(
-                        primary: AppColors.orange500,
-                        secondary: AppColors.red500,
-                        accent: AppColors.yellow500
-                    ),
-                    animation: "retro_scanline"
-                ),
-                price: 900,
-                subtitle: "복고 감성 컬러 + 아날로그 스캔 효과"
-            ),
-            ThemeStoreItem(
-                theme: ThemeData(
-                    id: "theme_ice_blue",
-                    teamId: .samsung,
-                    name: "아이스 블루",
-                    colors: ThemeColors(
-                        primary: AppColors.blue500,
-                        secondary: Color(hex: 0x0B1F3A),
-                        accent: Color(hex: 0xA5D8FF)
-                    ),
-                    animation: "ice_spark"
-                ),
-                price: 1000,
-                subtitle: "시원한 톤의 라인 + 타격 이펙트 강조"
-            ),
-            ThemeStoreItem(
-                theme: ThemeData(
-                    id: "theme_dark_monochrome",
-                    teamId: .lotte,
-                    name: "모노크롬 다크",
-                    colors: ThemeColors(
-                        primary: Color(hex: 0xE5E7EB),
-                        secondary: Color(hex: 0x111827),
-                        accent: Color(hex: 0x93C5FD)
-                    ),
-                    animation: "mono_pulse"
-                ),
-                price: 700,
-                subtitle: "미니멀 대비 + 점수 집중형 UI"
-            )
-        ]
+private struct Diamond: View {
+    let size: CGFloat
+    let filled: Bool
+
+    var body: some View {
+        Rectangle()
+            .fill(filled ? AppColors.yellow500 : Color.white.opacity(0.2))
+            .frame(width: size, height: size)
+            .rotationEffect(.degrees(45))
+    }
+}
+
+private struct CountDots: View {
+    let label: String
+    let count: Int
+    let max: Int
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Text(label)
+                .font(.system(size: 5, weight: .bold))
+                .foregroundColor(Color.white.opacity(0.5))
+                .frame(width: 6)
+            ForEach(0..<max, id: \.self) { i in
+                Circle()
+                    .fill(i < count ? color : Color.white.opacity(0.15))
+                    .frame(width: 4, height: 4)
+            }
+        }
     }
 }

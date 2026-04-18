@@ -91,6 +91,7 @@ struct ContentView: View {
     @State private var pendingWatchSyncNavigateToLive = false
     @State private var todayGames: [Game] = []
     @State private var purchasedThemes: [ThemeData] = []
+    @State private var unlockedThemeIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "unlocked_theme_ids") ?? ["default"])
     @State private var observedMyTeamGameStatus: [String: GameStatus] = [:]
     @State private var autoPromptedLiveGames: [String: Bool] = [:]
     @State private var gameStreamTask: Task<Void, Never>?
@@ -210,22 +211,31 @@ struct ContentView: View {
                     )
                 case .store:
                     ThemeStoreScreen(
-                        selectedTeam: selectedTeam,
                         activeTheme: activeTheme,
-                        purchasedThemes: purchasedThemes,
-                        onApplyTheme: { activeTheme = $0 },
-                        onPurchaseTheme: { theme in
-                            if !purchasedThemes.contains(where: { $0.id == theme.id }) {
-                                purchasedThemes.append(theme)
-                            }
+                        unlockedThemeIds: unlockedThemeIds,
+                        onApplyTheme: { theme in
                             activeTheme = theme
+                            WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme?.id ?? "default")
+                        },
+                        onUnlockTheme: { theme in
+                            // TODO: 리워드 광고 시청 완료 후 호출
+                            unlockedThemeIds.insert(theme.id)
+                            UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
+                            activeTheme = theme
+                            WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
+                        },
+                        onPurchaseTheme: { theme in
+                            // TODO: StoreKit 인앱 결제 완료 후 호출
+                            unlockedThemeIds.insert(theme.id)
+                            UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
+                            activeTheme = theme
+                            WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
                         }
                     )
                 case .settings:
                     SettingsScreen(
                         selectedTeam: selectedTeam,
                         onChangeTeam: onTeamChanged,
-                        purchasedThemes: purchasedThemes,
                         activeTheme: activeTheme,
                         onSelectTheme: { activeTheme = $0 },
                         onOpenWatchTest: { navigateTo(.watchTest) },

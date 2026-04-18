@@ -2,11 +2,24 @@ import SwiftUI
 
 struct WatchLiveGameScreen: View {
     let gameData: GameData
+    @Environment(\.watchTeamTheme) private var watchTheme
 
     private var uiProfile: WatchUiProfile { WatchUiProfile.current }
 
     private var isGameFinished: Bool {
         gameData.inning.contains("경기 종료") || gameData.inning.lowercased().contains("finished")
+    }
+
+    private var isDefaultTheme: Bool {
+        watchTheme.teamName == "DEFAULT"
+    }
+
+    private var inningColor: Color {
+        isDefaultTheme ? WatchColors.orange500 : watchTheme.accent
+    }
+
+    private var inningBoxBackground: Color {
+        isDefaultTheme ? Color.white.opacity(0.05) : watchTheme.primary.opacity(0.15)
     }
 
     var body: some View {
@@ -21,18 +34,18 @@ struct WatchLiveGameScreen: View {
                     if isGameFinished {
                         Text(gameData.inning)
                             .font(.system(size: uiProfile.inningSize, weight: .bold))
-                            .foregroundColor(WatchColors.orange500)
+                            .foregroundColor(inningColor)
                     } else {
                         Text(gameData.inning)
                             .font(.system(size: uiProfile.inningSize, weight: .bold))
-                            .foregroundColor(WatchColors.orange500)
+                            .foregroundColor(inningColor)
                         Text(inningHalfIcon(gameData.inning))
                             .font(.system(size: uiProfile.inningHalfSize))
-                            .foregroundColor(WatchColors.orange500)
+                            .foregroundColor(inningColor)
                     }
                 }
                 .frame(minWidth: 40, minHeight: 30)
-                .background(Color.white.opacity(0.05))
+                .background(inningBoxBackground)
                 .cornerRadius(WatchAppRadius.md10)
                 .padding(.horizontal, WatchAppSpacing.xs)
 
@@ -64,7 +77,23 @@ struct WatchLiveGameScreen: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(WatchColors.gray950)
+        .background {
+            if let bgImage = watchTheme.backgroundImage {
+                Image(bgImage)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(Color.black.opacity(0.45))
+                    .ignoresSafeArea()
+            } else if isDefaultTheme {
+                WatchColors.gray950.ignoresSafeArea()
+            } else {
+                LinearGradient(
+                    colors: [watchTheme.gradientStart.opacity(0.25), WatchColors.gray950],
+                    startPoint: .top,
+                    endPoint: .center
+                ).ignoresSafeArea()
+            }
+        }
     }
 
     private func inningHalfIcon(_ inning: String) -> String {
@@ -156,6 +185,89 @@ private struct BaseCell: View {
     }
 }
 
-#Preview {
+// MARK: - Previews
+
+private func mockGame(home: String, away: String, myTeam: String) -> GameData {
+    GameData(
+        gameId: "preview",
+        homeTeam: home,
+        awayTeam: away,
+        homeScore: 5,
+        awayScore: 4,
+        inning: "7회말",
+        isLive: true,
+        ballCount: 2,
+        strikeCount: 1,
+        outCount: 1,
+        bases: BaseStatus(first: true, third: true),
+        pitcher: "김광현",
+        batter: "이대호",
+        scoreDiff: 1,
+        myTeamName: myTeam
+    )
+}
+
+#Preview("LG") {
+    WatchLiveGameScreen(gameData: mockGame(home: "LG", away: "DOOSAN", myTeam: "LG"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.lg)
+}
+
+#Preview("두산") {
+    WatchLiveGameScreen(gameData: mockGame(home: "LG", away: "DOOSAN", myTeam: "DOOSAN"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.doosan)
+}
+
+#Preview("SSG") {
+    WatchLiveGameScreen(gameData: mockGame(home: "SSG", away: "KIA", myTeam: "SSG"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.ssg)
+}
+
+#Preview("삼성") {
+    WatchLiveGameScreen(gameData: mockGame(home: "SAMSUNG", away: "NC", myTeam: "SAMSUNG"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.samsung)
+}
+
+#Preview("한화") {
+    WatchLiveGameScreen(gameData: mockGame(home: "HANWHA", away: "LOTTE", myTeam: "HANWHA"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.hanwha)
+}
+
+#Preview("KIA") {
+    WatchLiveGameScreen(gameData: mockGame(home: "KIA", away: "KT", myTeam: "KIA"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.kia)
+}
+
+#Preview("키움") {
+    WatchLiveGameScreen(gameData: mockGame(home: "KIWOOM", away: "LG", myTeam: "KIWOOM"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.kiwoom)
+}
+
+#Preview("롯데") {
+    WatchLiveGameScreen(gameData: mockGame(home: "LOTTE", away: "HANWHA", myTeam: "LOTTE"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.lotte)
+}
+
+#Preview("KT") {
+    WatchLiveGameScreen(gameData: mockGame(home: "KT", away: "SSG", myTeam: "KT"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.kt)
+}
+
+#Preview("NC") {
+    WatchLiveGameScreen(gameData: mockGame(home: "NC", away: "SAMSUNG", myTeam: "NC"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.nc)
+}
+
+#Preview("멍멍이 테마") {
+    WatchLiveGameScreen(gameData: mockGame(home: "SSG", away: "KIA", myTeam: "SSG"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.puppy)
+}
+
+#Preview("멍멍이2 테마") {
+    WatchLiveGameScreen(gameData: mockGame(home: "SSG", away: "KIA", myTeam: "SSG"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.puppy2)
+}
+
+#Preview("기본") {
     WatchLiveGameScreen(gameData: getMockGameData())
+        .environment(\.watchTeamTheme, WatchTeamThemes.defaultTheme)
 }

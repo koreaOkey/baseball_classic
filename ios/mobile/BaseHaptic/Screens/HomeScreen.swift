@@ -24,6 +24,12 @@ struct HomeScreen: View {
             LazyVStack(spacing: 0) {
                 headerSection
                 quickStatsSection
+
+                BannerAdView()
+                    .frame(width: 320, height: 50)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.md)
+
                 gamesListHeader
                 gamesListSection
                 upcomingGamesSection

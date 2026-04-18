@@ -16,6 +16,7 @@
 		20BB5AEADC66CAB9F84293FA /* WatchGamePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB8E76083CCB66D81D3DDB0 /* WatchGamePoller.swift */; };
 		22CFCDF93CC60785D2F9D976 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = FC794738F764F7DB7F7E02DF /* Supabase */; };
 		2628F2E5B7BB9B737C94E2EA /* WatchAppEventColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFFFFE904FF5F1FBB6C5F14B /* WatchAppEventColors.swift */; };
+		2B38367BDC8E2EF23B0FC911 /* BannerAdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556231CCAAECD9A8FC9EF363 /* BannerAdView.swift */; };
 		2BE5DAB3C3841537A2B42622 /* BackgroundStreamManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2C36AE9775B75183F468F0 /* BackgroundStreamManager.swift */; };
 		2CE2482EE1940F973BD02827 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A4B68491596CE6E203408073 /* Assets.xcassets */; };
 		2E75C724CD95802AA0187E81 /* WatchColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6341FE954BB080F791122E81 /* WatchColors.swift */; };
@@ -38,20 +39,25 @@
 		835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44A3A560B1DD2E714A06DE2 /* LiveActivityManager.swift */; };
 		835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E499DB66D4A9838EB01A1F3B /* WatchTeamTheme.swift */; };
 		8C41D8D0834F7A17B0316920 /* ThemeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */; };
+		8DB04B37880799CA7F8AD85F /* 멍멍1.png in Resources */ = {isa = PBXBuildFile; fileRef = 6A10C95C891E577F029B1F21 /* 멍멍1.png */; };
 		907015EAE18498713E7F8480 /* AppEventColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96ADED84EFE3700C0719D8AA /* AppEventColors.swift */; };
 		90A9C96810B6F8C5485AB262 /* BaseHapticWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9AF51022D8BD38292A07DB21 /* AppFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEB3E15EEE97F3F80AF6CA1 /* AppFont.swift */; };
 		9FB7676A5E7D8C388D1C59AC /* BaseHapticWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */; };
+		A05D379C480DA13EDDA18706 /* 멍멍이 테마.png in Resources */ = {isa = PBXBuildFile; fileRef = 02B048B8F66719840C28B9D6 /* 멍멍이 테마.png */; };
 		A0B3889FA2840FDA0B6C8B89 /* PushTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8119EBAB8CA0381D5CB2E353 /* PushTokenManager.swift */; };
 		A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C0734BB3B091847ABD41DA /* Colors.swift */; };
 		A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */; };
 		A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF14835688DCF81CAB8F7F1 /* GameData.swift */; };
 		A8F8716965E7875ADD434E35 /* WatchAppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */; };
+		AE7625904A416811149F4333 /* 멍멍2.png in Resources */ = {isa = PBXBuildFile; fileRef = 5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */; };
+		B9AF8B53B38C59F41F4A1818 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = DD6A2509BC62180FFDD9D703 /* GoogleMobileAds */; };
 		BB4BE01B4AC16AC208AF0A97 /* Team.swift in Sources */ = {isa = PBXBuildFile; fileRef = D59061C8B8CAB2114F761D19 /* Team.swift */; };
 		BCEE9E4446DDD495E71BA162 /* HitTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02160EE92426CB6BBC5C5B0 /* HitTransitionScreen.swift */; };
 		BE593BBCE538DC9615518D92 /* WatchTestScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F73397A462741B40912C00 /* WatchTestScreen.swift */; };
 		BF822DCC3FA606EEBB63F946 /* ScoreTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55132F6EEEC4572A9184368B /* ScoreTransitionScreen.swift */; };
 		C68C35184F116A2F2B5B7498 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */; };
+		C758F6A2853A48FAB4B17CCD /* 멍멍.png in Resources */ = {isa = PBXBuildFile; fileRef = 9766814FF4A79880FAA5FA35 /* 멍멍.png */; };
 		D8BA20E9208A4DEA2D40597A /* WatchNoGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */; };
 		DBFDA134B4D3AC7821DD9E74 /* AppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937C6644F186143AF57CB796 /* AppSpacing.swift */; };
 		E59B8908D6EE113ABCE14285 /* DoublePlayTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BD360BFA65BD1D45DBFC4E /* DoublePlayTransitionScreen.swift */; };
@@ -86,6 +92,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		02B048B8F66719840C28B9D6 /* 멍멍이 테마.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍이 테마.png"; sourceTree = "<group>"; };
 		0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticWatchApp.swift; sourceTree = "<group>"; };
 		07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
 		0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeData.swift; sourceTree = "<group>"; };
@@ -99,11 +106,14 @@
 		47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEvent.swift; sourceTree = "<group>"; };
 		53BA5C62F0AE8C59D23DBEDD /* WatchAppRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppRadius.swift; sourceTree = "<group>"; };
 		55132F6EEEC4572A9184368B /* ScoreTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreTransitionScreen.swift; sourceTree = "<group>"; };
+		556231CCAAECD9A8FC9EF363 /* BannerAdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerAdView.swift; sourceTree = "<group>"; };
 		56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
 		59AA2B30AEA401A1C811ACF4 /* WatchTokenRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTokenRegistrar.swift; sourceTree = "<group>"; };
+		5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍2.png"; sourceTree = "<group>"; };
 		5DB8E76083CCB66D81D3DDB0 /* WatchGamePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGamePoller.swift; sourceTree = "<group>"; };
 		5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppSpacing.swift; sourceTree = "<group>"; };
 		6341FE954BB080F791122E81 /* WatchColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchColors.swift; sourceTree = "<group>"; };
+		6A10C95C891E577F029B1F21 /* 멍멍1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍1.png"; sourceTree = "<group>"; };
 		6B00FE3A8F64F89794DD742A /* AppRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRadius.swift; sourceTree = "<group>"; };
 		725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGameSyncManager.swift; sourceTree = "<group>"; };
 		745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveGameScreen.swift; sourceTree = "<group>"; };
@@ -113,6 +123,7 @@
 		87621A22EC5F286B844C8BF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		937C6644F186143AF57CB796 /* AppSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSpacing.swift; sourceTree = "<group>"; };
 		96ADED84EFE3700C0719D8AA /* AppEventColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEventColors.swift; sourceTree = "<group>"; };
+		9766814FF4A79880FAA5FA35 /* 멍멍.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍.png"; sourceTree = "<group>"; };
 		9FF14835688DCF81CAB8F7F1 /* GameData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameData.swift; sourceTree = "<group>"; };
 		A4B68491596CE6E203408073 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A8B319F21D1FF9D25A280185 /* BaseHaptic.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BaseHaptic.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -148,6 +159,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				22CFCDF93CC60785D2F9D976 /* Supabase in Frameworks */,
+				B9AF8B53B38C59F41F4A1818 /* GoogleMobileAds in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -229,6 +241,10 @@
 		70C2F968A384BCA87AD58FBE /* Theme */ = {
 			isa = PBXGroup;
 			children = (
+				9766814FF4A79880FAA5FA35 /* 멍멍.png */,
+				6A10C95C891E577F029B1F21 /* 멍멍1.png */,
+				5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */,
+				02B048B8F66719840C28B9D6 /* 멍멍이 테마.png */,
 				AFFFFE904FF5F1FBB6C5F14B /* WatchAppEventColors.swift */,
 				53BA5C62F0AE8C59D23DBEDD /* WatchAppRadius.swift */,
 				5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */,
@@ -321,6 +337,7 @@
 		DA08182291A96AFA1F3FB480 /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				556231CCAAECD9A8FC9EF363 /* BannerAdView.swift */,
 				E721EEBEAA513CB8E3DAEF00 /* TeamLogo.swift */,
 			);
 			path = Components;
@@ -357,6 +374,7 @@
 			name = BaseHaptic;
 			packageProductDependencies = (
 				FC794738F764F7DB7F7E02DF /* Supabase */,
+				DD6A2509BC62180FFDD9D703 /* GoogleMobileAds */,
 			);
 			productName = BaseHaptic;
 			productReference = A8B319F21D1FF9D25A280185 /* BaseHaptic.app */;
@@ -407,6 +425,7 @@
 			mainGroup = 956AFB35DA99A531C890EC99;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				ED313FF3D2856CA607379802 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 				75C6CCEC1FA52D094E941187 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -426,6 +445,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				F12E146A8B5209368A57DCF0 /* Assets.xcassets in Resources */,
+				C758F6A2853A48FAB4B17CCD /* 멍멍.png in Resources */,
+				8DB04B37880799CA7F8AD85F /* 멍멍1.png in Resources */,
+				AE7625904A416811149F4333 /* 멍멍2.png in Resources */,
+				A05D379C480DA13EDDA18706 /* 멍멍이 테마.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -452,6 +475,7 @@
 				4445D7D4D16681FE3A7B1490 /* AuthManager.swift in Sources */,
 				A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */,
 				2BE5DAB3C3841537A2B42622 /* BackgroundStreamManager.swift in Sources */,
+				2B38367BDC8E2EF23B0FC911 /* BannerAdView.swift in Sources */,
 				15887FB643D106BB387CDCB9 /* BaseHapticApp.swift in Sources */,
 				5181A08D9A144BDC8BED59BB /* BaseballGameAttributes.swift in Sources */,
 				A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */,
@@ -749,9 +773,22 @@
 				minimumVersion = 2.5.1;
 			};
 		};
+		ED313FF3D2856CA607379802 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.2.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		DD6A2509BC62180FFDD9D703 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = ED313FF3D2856CA607379802 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
 		FC794738F764F7DB7F7E02DF /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 75C6CCEC1FA52D094E941187 /* XCRemoteSwiftPackageReference "supabase-swift" */;

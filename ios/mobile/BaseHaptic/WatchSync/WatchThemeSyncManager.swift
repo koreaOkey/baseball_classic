@@ -5,23 +5,31 @@ import WatchConnectivity
 /// Android의 WearThemeSyncManager에 대응
 final class WatchThemeSyncManager {
     static func syncThemeToWatch(team: Team) {
-        guard WCSession.default.activationState == .activated else { return }
-
-        let context: [String: Any] = [
+        syncToWatch(context: [
             "type": "theme_update",
             "my_team": team.rawValue,
             "updated_at": Date().timeIntervalSince1970
-        ]
+        ])
+    }
 
-        // applicationContext는 워치가 연결될 때 자동으로 전달됨
+    static func syncStoreThemeToWatch(themeId: String) {
+        syncToWatch(context: [
+            "type": "store_theme_update",
+            "theme_id": themeId,
+            "updated_at": Date().timeIntervalSince1970
+        ])
+    }
+
+    private static func syncToWatch(context: [String: Any]) {
+        guard WCSession.default.activationState == .activated else { return }
+
         do {
             try WCSession.default.updateApplicationContext(context)
-            print("[WatchThemeSync] Theme synced: \(team.rawValue)")
+            print("[WatchThemeSync] Synced: \(context)")
         } catch {
-            print("[WatchThemeSync] Failed to sync theme: \(error.localizedDescription)")
+            print("[WatchThemeSync] Failed to sync: \(error.localizedDescription)")
         }
 
-        // 워치가 현재 reachable이면 즉시 전달도 시도
         if WCSession.default.isReachable {
             WCSession.default.sendMessage(context, replyHandler: nil) { _ in }
         }

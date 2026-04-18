@@ -15,6 +15,9 @@ packages:
   supabase-swift:
     url: https://github.com/supabase/supabase-swift
     minorVersion: 2.5.1
+  GoogleMobileAds:
+    url: https://github.com/googleads/swift-package-manager-google-mobile-ads
+    majorVersion: 13.2.0
 
 targets:
   BaseHaptic:
@@ -36,6 +39,8 @@ targets:
       - target: BaseHapticWatch Watch App
       - package: supabase-swift
         product: Supabase
+      - package: GoogleMobileAds
+        product: GoogleMobileAds
 
   BaseHapticWatch Watch App:
     type: application
