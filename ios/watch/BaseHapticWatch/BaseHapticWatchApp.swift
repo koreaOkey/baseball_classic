@@ -107,8 +107,7 @@ struct WatchContentView: View {
                 }
 
                 // Event overlay (홈런 제외)
-                if let eventType = visibleEventType, isEventOverlayVisible,
-                   !["HOMERUN", "HIT", "DOUBLE_PLAY", "VICTORY"].contains(eventType.uppercased()) {
+                if let eventType = visibleEventType, isEventOverlayVisible {
                     WatchEventOverlay(eventType: eventType)
                 }
 
@@ -198,9 +197,13 @@ struct WatchContentView: View {
                 return
             }
 
-            // 비디오 재생 중에는 후속 이벤트 무시 (사용자가 영상을 끝까지 보도록 보호)
+            // 비디오 재생 중에는 후속 이벤트 무시 (홈런은 예외: 득점보다 우선)
             if isPlayingVideo {
-                return
+                if upper == "HOMERUN" {
+                    dismissCurrentTransition()
+                } else {
+                    return
+                }
             }
 
             showTransition(for: upper)
@@ -231,6 +234,13 @@ struct WatchContentView: View {
         }
     }
 
+    private func dismissCurrentTransition() {
+        isHitVisible = false
+        isDoublePlayVisible = false
+        isScoreVisible = false
+        isPlayingVideo = false
+    }
+
     private func showTransition(for eventType: String) {
         let game = connectivity.gameData
         let isTestGame = game?.gameId.hasPrefix("test_") == true
@@ -243,9 +253,10 @@ struct WatchContentView: View {
         let isMyTeamHome = !myTeam.isEmpty && myTeam == homeTeamNorm
         let isMyTeamAway = !myTeam.isEmpty && myTeam == awayTeamNorm
         let inning = game?.inning ?? ""
-        let isMyTeamBatting = isTestGame || (isMyTeamHome && inning.contains("말")) ||
+        let isNeutralGame = !isMyTeamHome && !isMyTeamAway
+        let isMyTeamBatting = isTestGame || isNeutralGame || (isMyTeamHome && inning.contains("말")) ||
                               (isMyTeamAway && inning.contains("초"))
-        let isMyTeamFielding = isTestGame || (!isMyTeamBatting && (isMyTeamHome || isMyTeamAway))
+        let isMyTeamFielding = isTestGame || isNeutralGame || (!isMyTeamBatting && (isMyTeamHome || isMyTeamAway))
 
         if eventType == "VICTORY" {
             beginVideoPlayback()
