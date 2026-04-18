@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
@@ -307,6 +308,16 @@ fun WatchApp(isAmbient: Boolean = false) {
         }
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         onDispose { context.unregisterReceiver(receiver) }
+    }
+
+    // 경기 진행 중에만 화면 켜짐 유지 (배터리 절약)
+    val activity = context as? ComponentActivity
+    LaunchedEffect(gameData?.isLive) {
+        if (gameData?.isLive == true) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     // 워치 독립 경기 폴링 시작

@@ -41,6 +41,7 @@ import com.basehaptic.watch.ui.theme.Red500
 import com.basehaptic.watch.ui.theme.WatchAppShapes
 import com.basehaptic.watch.ui.theme.WatchAppSpacing
 import com.basehaptic.watch.ui.theme.WatchUiProfile
+import com.basehaptic.watch.displayTeamName
 import com.basehaptic.watch.ui.theme.Yellow400
 import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
 
@@ -248,7 +249,7 @@ private fun ScoreSide(
             textAlign = TextAlign.Center
         )
         Text(
-            text = team.uppercase(),
+            text = displayTeamName(team),
             modifier = Modifier.fillMaxWidth(),
             color = Color.White.copy(alpha = 0.76f),
             fontSize = uiProfile.teamNameSp.sp,
