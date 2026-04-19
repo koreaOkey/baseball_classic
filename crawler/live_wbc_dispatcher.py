@@ -319,6 +319,11 @@ def _relay_is_available(
     if status_code in TERMINAL_STATUS_CODES:
         return False, True
 
+    # statusCode가 terminal이 아니어도 statusInfo로 취소/연기 판별
+    mapped = _map_schedule_status(game.get("statusCode"), game.get("statusInfo"))
+    if mapped in ("CANCELED", "POSTPONED", "FINISHED"):
+        return False, True
+
     text_relays = relay_data.get("textRelays") or []
     if isinstance(text_relays, list) and len(text_relays) > 0:
         return True, False
@@ -375,7 +380,7 @@ def _safe_float(value: Any, default: float | None = None) -> float | None:
         return default
 
 
-def _map_schedule_status(status_code: Any) -> str:
+def _map_schedule_status(status_code: Any, status_info: str | None = None) -> str:
     raw = str(status_code or "").strip().upper()
     if raw in LIVE_STATUS_CODES:
         return "LIVE"
@@ -385,6 +390,18 @@ def _map_schedule_status(status_code: Any) -> str:
         return "CANCELED"
     if raw in POSTPONED_STATUS_CODES:
         return "POSTPONED"
+
+    # statusCode가 매핑되지 않는 경우, statusInfo 텍스트로 취소/연기 판별
+    info = str(status_info or "").strip()
+    if info:
+        info_upper = info.upper()
+        if any(kw in info for kw in ("우천취소", "우천 취소", "경기취소", "경기 취소", "노게임")) or \
+           any(kw in info_upper for kw in ("CANCEL", "RAIN", "NO_GAME", "NO GAME")):
+            return "CANCELED"
+        if any(kw in info for kw in ("경기연기", "경기 연기")) or \
+           any(kw in info_upper for kw in ("POSTPONE", "DELAY", "SUSPEND")):
+            return "POSTPONED"
+
     return "SCHEDULED"
 
 
@@ -781,7 +798,7 @@ def _schedule_game_to_snapshot(game: dict[str, Any], target_date: date) -> dict[
         "homeTeam": str(game.get("homeTeamName") or "").strip() or "HOME",
         "awayTeam": str(game.get("awayTeamName") or "").strip() or "AWAY",
         "gameDate": _extract_schedule_game_date(game) or target_date.isoformat(),
-        "status": _map_schedule_status(game.get("statusCode")),
+        "status": _map_schedule_status(game.get("statusCode"), game.get("statusInfo")),
         "inning": _extract_schedule_inning(game),
         "homeScore": _safe_int(game.get("homeTeamScore"), 0),
         "awayScore": _safe_int(game.get("awayTeamScore"), 0),
@@ -821,7 +838,7 @@ def _is_live_inning_text(inning_text: str) -> bool:
 def _should_skip_schedule_snapshot(game: dict[str, Any]) -> bool:
     # Live games are ingested by crawler.py in near real-time.
     # Skipping schedule-level snapshot for LIVE avoids DB row-lock contention.
-    status = _map_schedule_status(game.get("statusCode"))
+    status = _map_schedule_status(game.get("statusCode"), game.get("statusInfo"))
     if status == "LIVE":
         return True
 

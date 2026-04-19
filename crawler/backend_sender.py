@@ -118,7 +118,7 @@ def _is_base_occupied(value: Any) -> bool:
     return raw not in {"0", "false", "none", "null"}
 
 
-def _normalize_status(raw: Any) -> str:
+def _normalize_status(raw: Any, status_info: str | None = None) -> str:
     value = str(raw or "").strip().upper()
     if value in LIVE_STATUS:
         return "LIVE"
@@ -128,6 +128,18 @@ def _normalize_status(raw: Any) -> str:
         return "CANCELED"
     if value in POSTPONED_STATUS:
         return "POSTPONED"
+
+    # statusCode가 매핑되지 않는 경우, statusInfo 텍스트로 취소/연기 판별
+    info = str(status_info or "").strip()
+    if info:
+        info_upper = info.upper()
+        if any(kw in info for kw in ("우천취소", "우천 취소", "경기취소", "경기 취소", "노게임")) or \
+           any(kw in info_upper for kw in ("CANCEL", "RAIN", "NO_GAME", "NO GAME")):
+            return "CANCELED"
+        if any(kw in info for kw in ("경기연기", "경기 연기")) or \
+           any(kw in info_upper for kw in ("POSTPONE", "DELAY", "SUSPEND")):
+            return "POSTPONED"
+
     return "SCHEDULED"
 
 
@@ -757,7 +769,7 @@ def build_snapshot_payload(
     payload: Dict[str, Any] = {
         "homeTeam": home_team,
         "awayTeam": away_team,
-        "status": _normalize_status(game_data.get("statusCode")),
+        "status": _normalize_status(game_data.get("statusCode"), game_data.get("statusInfo")),
         "inning": inning_text,
         "homeScore": _clamp(home_score, 0, 99),
         "awayScore": _clamp(away_score, 0, 99),
