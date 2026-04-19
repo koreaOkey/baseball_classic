@@ -15,12 +15,8 @@ struct ThemeStoreScreen: View {
     @Environment(\.teamTheme) private var teamTheme
     @State private var selectedTab: ThemeStoreTab = .watch
 
-    private var freeThemes: [ThemeData] {
-        ThemeData.allThemes.filter { $0.category == .free }
-    }
-
-    private var adRewardThemes: [ThemeData] {
-        ThemeData.allThemes.filter { $0.category == .adReward }
+    private var freeAndAdThemes: [ThemeData] {
+        ThemeData.allThemes.filter { $0.category == .free || $0.category == .adReward }
     }
 
     private var premiumThemes: [ThemeData] {
@@ -91,14 +87,8 @@ struct ThemeStoreScreen: View {
     private var watchThemesTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                sectionHeader("기본")
-                themeGrid(freeThemes)
-
-                sectionHeader("무료 (광고 시청)")
-                themeGrid(adRewardThemes)
-
-                sectionHeader("프리미엄")
-                themeGrid(premiumThemes)
+                sectionHeader("베이직 테마")
+                themeGrid(freeAndAdThemes)
 
                 Spacer().frame(height: AppSpacing.bottomSafeSpacer)
             }
@@ -308,7 +298,7 @@ private struct MiniWatchPreview: View {
             HStack(spacing: 0) {
                 // Away
                 VStack(spacing: 1) {
-                    Text("SSG")
+                    Text("팀 1")
                         .font(.system(size: 7, weight: .medium))
                         .foregroundColor(.white.opacity(0.7))
                     Text("5")
@@ -332,7 +322,7 @@ private struct MiniWatchPreview: View {
 
                 // Home
                 VStack(spacing: 1) {
-                    Text("KIA")
+                    Text("팀 2")
                         .font(.system(size: 7, weight: .medium))
                         .foregroundColor(.white.opacity(0.7))
                     Text("4")

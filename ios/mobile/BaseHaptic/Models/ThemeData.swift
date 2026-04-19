@@ -44,7 +44,18 @@ extension ThemeData {
                 accent: Color(red: 96/255, green: 165/255, blue: 250/255)
             )
         ),
-        // 광고 시청 무료 테마 (10종)
+        // 광고 시청 무료 테마
+        ThemeData(
+            id: "baseball_love",
+            name: "야구가 좋아",
+            category: .adReward,
+            colors: ThemeColors(
+                primary: Color(red: 220/255, green: 20/255, blue: 30/255),
+                secondary: Color(red: 170/255, green: 10/255, blue: 20/255),
+                accent: Color(red: 255/255, green: 150/255, blue: 170/255)
+            ),
+            backgroundImage: "theme_baseball_love"
+        ),
         ThemeData(
             id: "midnight_indigo",
             name: "미드나이트 인디고",

@@ -39,6 +39,7 @@
 		835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44A3A560B1DD2E714A06DE2 /* LiveActivityManager.swift */; };
 		835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E499DB66D4A9838EB01A1F3B /* WatchTeamTheme.swift */; };
 		8C41D8D0834F7A17B0316920 /* ThemeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */; };
+		AB1234567890ABCDEF123456 /* ThemeRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1234567890ABCDEF654321 /* ThemeRepository.swift */; };
 		8DB04B37880799CA7F8AD85F /* 멍멍1.png in Resources */ = {isa = PBXBuildFile; fileRef = 6A10C95C891E577F029B1F21 /* 멍멍1.png */; };
 		907015EAE18498713E7F8480 /* AppEventColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96ADED84EFE3700C0719D8AA /* AppEventColors.swift */; };
 		90A9C96810B6F8C5485AB262 /* BaseHapticWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -95,6 +96,7 @@
 		02B048B8F66719840C28B9D6 /* 멍멍이 테마.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍이 테마.png"; sourceTree = "<group>"; };
 		0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticWatchApp.swift; sourceTree = "<group>"; };
 		07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
+		AB1234567890ABCDEF654321 /* ThemeRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeRepository.swift; sourceTree = "<group>"; };
 		0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeData.swift; sourceTree = "<group>"; };
 		0DE96A677E34F2CC49DE538E /* Game.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Game.swift; sourceTree = "<group>"; };
 		2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNoGameScreen.swift; sourceTree = "<group>"; };
@@ -192,6 +194,7 @@
 				8023EA4247935305BCC333F5 /* AuthManager.swift */,
 				EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */,
 				07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */,
+				AB1234567890ABCDEF654321 /* ThemeRepository.swift */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -493,6 +496,7 @@
 				1E120905C9B17E2723F00E1F /* TeamLogo.swift in Sources */,
 				17EDDCE4B419ECA41B8F9FD6 /* TeamTheme.swift in Sources */,
 				8C41D8D0834F7A17B0316920 /* ThemeData.swift in Sources */,
+				AB1234567890ABCDEF123456 /* ThemeRepository.swift in Sources */,
 				50EB22E9C3840FBC791B25C5 /* ThemeStoreScreen.swift in Sources */,
 				3DE65F4E9A3DB6A352F7A80E /* WatchGameSyncManager.swift in Sources */,
 				BE593BBCE538DC9615518D92 /* WatchTestScreen.swift in Sources */,

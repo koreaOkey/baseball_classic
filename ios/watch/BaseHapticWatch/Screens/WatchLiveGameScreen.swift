@@ -208,66 +208,71 @@ private func mockGame(home: String, away: String, myTeam: String) -> GameData {
 }
 
 #Preview("LG") {
-    WatchLiveGameScreen(gameData: mockGame(home: "LG", away: "DOOSAN", myTeam: "LG"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.lg)
 }
 
 #Preview("두산") {
-    WatchLiveGameScreen(gameData: mockGame(home: "LG", away: "DOOSAN", myTeam: "DOOSAN"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.doosan)
 }
 
 #Preview("SSG") {
-    WatchLiveGameScreen(gameData: mockGame(home: "SSG", away: "KIA", myTeam: "SSG"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.ssg)
 }
 
 #Preview("삼성") {
-    WatchLiveGameScreen(gameData: mockGame(home: "SAMSUNG", away: "NC", myTeam: "SAMSUNG"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.samsung)
 }
 
 #Preview("한화") {
-    WatchLiveGameScreen(gameData: mockGame(home: "HANWHA", away: "LOTTE", myTeam: "HANWHA"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.hanwha)
 }
 
 #Preview("KIA") {
-    WatchLiveGameScreen(gameData: mockGame(home: "KIA", away: "KT", myTeam: "KIA"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.kia)
 }
 
 #Preview("키움") {
-    WatchLiveGameScreen(gameData: mockGame(home: "KIWOOM", away: "LG", myTeam: "KIWOOM"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.kiwoom)
 }
 
 #Preview("롯데") {
-    WatchLiveGameScreen(gameData: mockGame(home: "LOTTE", away: "HANWHA", myTeam: "LOTTE"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.lotte)
 }
 
 #Preview("KT") {
-    WatchLiveGameScreen(gameData: mockGame(home: "KT", away: "SSG", myTeam: "KT"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.kt)
 }
 
 #Preview("NC") {
-    WatchLiveGameScreen(gameData: mockGame(home: "NC", away: "SAMSUNG", myTeam: "NC"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.nc)
 }
 
 #Preview("멍멍이 테마") {
-    WatchLiveGameScreen(gameData: mockGame(home: "SSG", away: "KIA", myTeam: "SSG"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.puppy)
 }
 
 #Preview("멍멍이2 테마") {
-    WatchLiveGameScreen(gameData: mockGame(home: "SSG", away: "KIA", myTeam: "SSG"))
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.puppy2)
 }
 
+#Preview("야구가 좋아 테마") {
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
+        .environment(\.watchTeamTheme, WatchTeamThemes.baseballLove)
+}
+
 #Preview("기본") {
-    WatchLiveGameScreen(gameData: getMockGameData())
+    WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.defaultTheme)
 }

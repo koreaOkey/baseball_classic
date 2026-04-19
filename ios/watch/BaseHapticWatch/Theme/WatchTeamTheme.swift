@@ -57,6 +57,8 @@ enum WatchTeamThemes {
 
     static let puppy2 = WatchTeamTheme(teamName: "PUPPY2", primary: Color(red: 220/255, green: 38/255, blue: 38/255), primaryDark: Color(red: 160/255, green: 20/255, blue: 20/255), secondary: Color(red: 255/255, green: 182/255, blue: 193/255), accent: Color(red: 255/255, green: 182/255, blue: 193/255), gradientStart: Color(red: 220/255, green: 38/255, blue: 38/255), gradientEnd: Color(red: 160/255, green: 20/255, blue: 20/255), backgroundImage: "theme_puppy2")
 
+    static let baseballLove = WatchTeamTheme(teamName: "BASEBALL_LOVE", primary: Color(red: 220/255, green: 20/255, blue: 30/255), primaryDark: Color(red: 170/255, green: 10/255, blue: 20/255), secondary: Color(red: 255/255, green: 150/255, blue: 170/255), accent: Color(red: 255/255, green: 150/255, blue: 170/255), gradientStart: Color(red: 220/255, green: 20/255, blue: 30/255), gradientEnd: Color(red: 170/255, green: 10/255, blue: 20/255), backgroundImage: "theme_baseball_love")
+
     static func theme(for teamName: String) -> WatchTeamTheme {
         switch teamName.uppercased() {
         case "DOOSAN": return doosan
@@ -110,6 +112,7 @@ enum WatchTeamThemes {
         case "slate_blue": return storeSlateBlue
         case "puppy": return puppy
         case "puppy2": return puppy2
+        case "baseball_love": return baseballLove
         default: return nil
         }
     }

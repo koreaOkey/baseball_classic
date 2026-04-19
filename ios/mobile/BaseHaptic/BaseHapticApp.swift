@@ -139,6 +139,11 @@ struct ContentView: View {
         .task(id: selectedTeam) {
             await pollGames()
         }
+        .onChange(of: authManager.authState) { _, newState in
+            if case .loggedIn = newState {
+                Task { await restoreThemesFromServer() }
+            }
+        }
         .onChange(of: syncedGameId) { oldId, newId in
             // UserDefaults에 저장 (워치 토큰 등록 시 참조)
             UserDefaults.standard.set(newId ?? "", forKey: "synced_game_id")
@@ -186,7 +191,7 @@ struct ContentView: View {
                     HomeScreen(
                         selectedTeam: selectedTeam,
                         todayGames: todayGames,
-                        activeTheme: activeTheme,
+                        activeTheme: nil,
                         syncedGameId: syncedGameId,
                         onSelectGame: { game in
                             selectedGameId = game.id
@@ -199,7 +204,7 @@ struct ContentView: View {
                     )
                 case .liveGame:
                     LiveGameScreen(
-                        activeTheme: activeTheme,
+                        activeTheme: nil,
                         gameId: selectedGameId,
                         syncedGameId: syncedGameId,
                         onBack: { navigateBack() }
@@ -216,6 +221,9 @@ struct ContentView: View {
                         onApplyTheme: { theme in
                             activeTheme = theme
                             WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme?.id ?? "default")
+                            Task {
+                                try? await ThemeRepository.shared.saveActiveTheme(themeId: theme?.id)
+                            }
                         },
                         onUnlockTheme: { theme in
                             // TODO: 리워드 광고 시청 완료 후 호출
@@ -223,6 +231,10 @@ struct ContentView: View {
                             UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
                             activeTheme = theme
                             WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
+                            Task {
+                                try? await ThemeRepository.shared.saveUnlock(themeId: theme.id)
+                                try? await ThemeRepository.shared.saveActiveTheme(themeId: theme.id)
+                            }
                         },
                         onPurchaseTheme: { theme in
                             // TODO: StoreKit 인앱 결제 완료 후 호출
@@ -230,6 +242,10 @@ struct ContentView: View {
                             UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
                             activeTheme = theme
                             WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
+                            Task {
+                                try? await ThemeRepository.shared.saveUnlock(themeId: theme.id)
+                                try? await ThemeRepository.shared.saveActiveTheme(themeId: theme.id)
+                            }
                         }
                     )
                 case .settings:
@@ -357,6 +373,21 @@ struct ContentView: View {
     }
 
     // MARK: - Data Loading
+    private func restoreThemesFromServer() async {
+        do {
+            let serverIds = try await ThemeRepository.shared.fetchUnlockedThemeIds()
+            unlockedThemeIds = unlockedThemeIds.union(serverIds)
+            UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
+
+            if let activeId = try await ThemeRepository.shared.fetchActiveThemeId() {
+                activeTheme = ThemeData.allThemes.first { $0.id == activeId }
+                WatchThemeSyncManager.syncStoreThemeToWatch(themeId: activeId)
+            }
+        } catch {
+            print("[ThemeRepository] restore failed: \(error)")
+        }
+    }
+
     private func loadTodayGames() async {
         guard selectedTeam != .none else {
             todayGames = []
