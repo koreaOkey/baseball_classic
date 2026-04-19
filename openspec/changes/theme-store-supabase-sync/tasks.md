@@ -31,3 +31,12 @@
 - [x] 5.5 로그인 시 restoreThemesFromServer() 호출 (onChange authState)
 - [x] 5.6 RLS 정책 확인 (기존 정책으로 충분)
 - [x] 5.7 Xcode 프로젝트에 ThemeRepository.swift 등록
+
+## 6. 응원팀 Supabase 동기화
+
+- [x] 6.1 user_theme_settings → user_settings 테이블 리네임
+- [x] 6.2 user_settings에 selected_team 컬럼 추가
+- [x] 6.3 ThemeRepository에 saveSelectedTeam, fetchUserSettings 추가
+- [x] 6.4 팀 변경/온보딩 시 서버에 응원팀 저장
+- [x] 6.5 로그인 시 서버에서 응원팀 복원
+- [x] 6.6 서버에 데이터 없으면 로컬→서버 업로드 (기존 유저 대응)
