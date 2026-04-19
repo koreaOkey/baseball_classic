@@ -27,12 +27,14 @@ struct BaseHapticApp: App {
                 onTeamChanged: { team in
                     selectedTeamRaw = team.rawValue
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
+                    Task { try? await ThemeRepository.shared.saveSelectedTeam(team.rawValue) }
                 },
                 showOnboarding: showOnboarding,
                 onOnboardingComplete: { team in
                     selectedTeamRaw = team.rawValue
                     showOnboarding = false
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
+                    Task { try? await ThemeRepository.shared.saveSelectedTeam(team.rawValue) }
                 },
                 authManager: authManager
             )
@@ -95,6 +97,7 @@ struct ContentView: View {
     @State private var observedMyTeamGameStatus: [String: GameStatus] = [:]
     @State private var autoPromptedLiveGames: [String: Bool] = [:]
     @State private var gameStreamTask: Task<Void, Never>?
+    @StateObject private var rewardedAdManager = RewardedAdManager.shared
 
     @ObservedObject private var connectivity = PhoneConnectivityManager.shared
     @Environment(\.teamTheme) private var teamTheme
@@ -226,14 +229,15 @@ struct ContentView: View {
                             }
                         },
                         onUnlockTheme: { theme in
-                            // TODO: 리워드 광고 시청 완료 후 호출
-                            unlockedThemeIds.insert(theme.id)
-                            UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
-                            activeTheme = theme
-                            WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
-                            Task {
-                                try? await ThemeRepository.shared.saveUnlock(themeId: theme.id)
-                                try? await ThemeRepository.shared.saveActiveTheme(themeId: theme.id)
+                            rewardedAdManager.loadAndShowAd {
+                                unlockedThemeIds.insert(theme.id)
+                                UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
+                                activeTheme = theme
+                                WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
+                                Task {
+                                    try? await ThemeRepository.shared.saveUnlock(themeId: theme.id)
+                                    try? await ThemeRepository.shared.saveActiveTheme(themeId: theme.id)
+                                }
                             }
                         },
                         onPurchaseTheme: { theme in
@@ -379,9 +383,32 @@ struct ContentView: View {
             unlockedThemeIds = unlockedThemeIds.union(serverIds)
             UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
 
-            if let activeId = try await ThemeRepository.shared.fetchActiveThemeId() {
-                activeTheme = ThemeData.allThemes.first { $0.id == activeId }
-                WatchThemeSyncManager.syncStoreThemeToWatch(themeId: activeId)
+            let settings = try await ThemeRepository.shared.fetchUserSettings()
+
+            if settings.activeThemeId != nil || settings.selectedTeam != nil {
+                // 서버에 데이터 있음 → 서버 기준으로 복원
+                if let activeId = settings.activeThemeId {
+                    activeTheme = ThemeData.allThemes.first { $0.id == activeId }
+                    WatchThemeSyncManager.syncStoreThemeToWatch(themeId: activeId)
+                }
+                if let teamRaw = settings.selectedTeam, !teamRaw.isEmpty {
+                    let team = Team.fromString(teamRaw)
+                    if team != .none {
+                        onTeamChanged(team)
+                    }
+                }
+            } else {
+                // 서버에 데이터 없음 → 로컬 데이터를 서버에 업로드
+                if selectedTeam != .none {
+                    try? await ThemeRepository.shared.saveSelectedTeam(selectedTeam.rawValue)
+                }
+                if let themeId = activeTheme?.id {
+                    try? await ThemeRepository.shared.saveActiveTheme(themeId: themeId)
+                }
+                // 로컬에서 잠금해제된 테마 중 default 제외하고 서버에 업로드
+                for themeId in unlockedThemeIds where themeId != "default" {
+                    try? await ThemeRepository.shared.saveUnlock(themeId: themeId)
+                }
             }
         } catch {
             print("[ThemeRepository] restore failed: \(error)")
