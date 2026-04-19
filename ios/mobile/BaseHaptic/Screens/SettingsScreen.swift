@@ -181,7 +181,7 @@ struct SettingsScreen: View {
                 Spacer().frame(height: AppSpacing.lg)
                 SettingsSection(title: "정보")
 
-                SettingsItem(icon: "info.circle.fill", title: "버전", subtitle: "1.0.0") {}
+                SettingsItem(icon: "info.circle.fill", title: "버전", subtitle: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-") {}
 
                 Spacer().frame(height: AppSpacing.bottomSafeSpacer)
             }
