@@ -123,11 +123,28 @@ struct HomeScreen: View {
         .padding(.vertical, AppSpacing.lg)
     }
 
+    @ViewBuilder
     private var gamesListSection: some View {
-        ForEach(games) { game in
-            let isWatchSynced = game.status == .live && syncedGameId == game.id
-            GameCard(game: game, primaryColor: primaryColor, isWatchSynced: isWatchSynced) {
-                onSelectGame(game)
+        if games.isEmpty {
+            VStack(spacing: AppSpacing.md) {
+                Text("⚾")
+                    .font(.system(size: 32))
+                Text("오늘은 경기가 없습니다")
+                    .font(AppFont.bodyLgMedium)
+                    .foregroundColor(AppColors.gray400)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.xxxl)
+            .background(AppColors.gray900)
+            .cornerRadius(AppRadius.lg)
+            .padding(.horizontal, AppSpacing.xxl)
+            .padding(.vertical, 6)
+        } else {
+            ForEach(games) { game in
+                let isWatchSynced = game.status == .live && syncedGameId == game.id
+                GameCard(game: game, primaryColor: primaryColor, isWatchSynced: isWatchSynced) {
+                    onSelectGame(game)
+                }
             }
         }
     }

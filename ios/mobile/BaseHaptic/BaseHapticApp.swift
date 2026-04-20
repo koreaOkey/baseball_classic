@@ -8,6 +8,8 @@ struct BaseHapticApp: App {
     @StateObject private var authManager = AuthManager.shared
     @AppStorage("selected_team") private var selectedTeamRaw: String = Team.none.rawValue
     @State private var showOnboarding: Bool
+    @State private var showAppUpdateAlert = false
+    @State private var appStoreVersion: String = ""
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -18,6 +20,30 @@ struct BaseHapticApp: App {
 
     private var selectedTeam: Team {
         Team.fromString(selectedTeamRaw)
+    }
+
+    private func checkForAppStoreUpdate() async {
+        guard let bundleId = Bundle.main.bundleIdentifier,
+              let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+              let url = URL(string: "https://itunes.apple.com/lookup?bundleId=\(bundleId)&country=kr")
+        else { return }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let results = json["results"] as? [[String: Any]],
+                  let storeVersion = results.first?["version"] as? String
+            else { return }
+
+            if storeVersion.compare(currentVersion, options: .numeric) == .orderedDescending {
+                await MainActor.run {
+                    appStoreVersion = storeVersion
+                    showAppUpdateAlert = true
+                }
+            }
+        } catch {
+            print("[AppUpdate] version check failed: \(error)")
+        }
     }
 
     var body: some Scene {
@@ -47,6 +73,19 @@ struct BaseHapticApp: App {
             }
             .task {
                 await authManager.initialize()
+            }
+            .task {
+                await checkForAppStoreUpdate()
+            }
+            .alert("업데이트 안내", isPresented: $showAppUpdateAlert) {
+                Button("업데이트") {
+                    if let url = URL(string: "itms-apps://itunes.apple.com/app/id6761336752") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("나중에", role: .cancel) {}
+            } message: {
+                Text("새 버전(\(appStoreVersion))이 출시되었습니다. 업데이트하시겠습니까?")
             }
             .onOpenURL { url in
                 authManager.handleOpenURL(url)

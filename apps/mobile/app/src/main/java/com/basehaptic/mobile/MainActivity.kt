@@ -4,9 +4,16 @@ import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.InstallStateUpdatedListener
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.InstallStatus
+import com.google.android.play.core.install.model.UpdateAvailability
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -53,6 +60,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private const val REQUEST_CODE_IN_APP_UPDATE = 9001
 private const val SHOW_COMMUNITY_TAB = false
 private const val SHOW_STORE_TAB = true
 private const val USER_PREFS_NAME = "basehaptic_user_prefs"
@@ -61,6 +69,33 @@ private const val KEY_UNLOCKED_THEME_IDS = "unlocked_theme_ids"
 private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
 
 class MainActivity : ComponentActivity() {
+    private val appUpdateManager by lazy { AppUpdateManagerFactory.create(this) }
+    private val installStateUpdatedListener = InstallStateUpdatedListener { state ->
+        if (state.installStatus() == InstallStatus.DOWNLOADED) {
+            // 다운로드 완료 — 앱 재시작으로 설치 완료
+            appUpdateManager.completeUpdate()
+        }
+    }
+
+    private fun checkForAppUpdate() {
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+            if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+                appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
+            ) {
+                try {
+                    appUpdateManager.startUpdateFlowForResult(
+                        appUpdateInfo,
+                        this,
+                        AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build(),
+                        REQUEST_CODE_IN_APP_UPDATE
+                    )
+                } catch (e: Exception) {
+                    Log.e("InAppUpdate", "Failed to start update flow", e)
+                }
+            }
+        }
+    }
+
     private fun loadSavedTeamOrNull(): Team? {
         val savedTeamName = getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
             .getString(KEY_SELECTED_TEAM, null)
@@ -117,8 +152,25 @@ class MainActivity : ComponentActivity() {
         handleAuthDeeplink(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 업데이트가 다운로드됐지만 설치 안 된 경우 재시도
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
+            if (info.installStatus() == InstallStatus.DOWNLOADED) {
+                appUpdateManager.completeUpdate()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        appUpdateManager.unregisterListener(installStateUpdatedListener)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        appUpdateManager.registerListener(installStateUpdatedListener)
+        checkForAppUpdate()
         MobileAds.initialize(this)
         MobileAds.setRequestConfiguration(
             RequestConfiguration.Builder()

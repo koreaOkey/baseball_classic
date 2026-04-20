@@ -60,7 +60,7 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
+        versionCode = 13
         versionName = "1.0.1"
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
@@ -146,6 +146,9 @@ dependencies {
 
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
+
+    // In-App Update
+    implementation("com.google.android.play:app-update:2.1.0")
 
     // AdMob
     implementation("com.google.android.gms:play-services-ads:23.6.0")
