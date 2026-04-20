@@ -18,9 +18,10 @@ val LocalWatchTeamTheme = compositionLocalOf { WatchTeamThemes.DEFAULT }
 @Composable
 fun BaseHapticWatchTheme(
     teamName: String = "DEFAULT",
+    storeThemeOverride: WatchTeamTheme? = null,
     content: @Composable () -> Unit
 ) {
-    val watchTeamTheme = WatchTeamThemes.getThemeForTeam(teamName)
+    val watchTeamTheme = storeThemeOverride ?: WatchTeamThemes.getThemeForTeam(teamName)
     val wearColors = watchTeamTheme.toWearColors()
 
     CompositionLocalProvider(LocalWatchTeamTheme provides watchTeamTheme) {

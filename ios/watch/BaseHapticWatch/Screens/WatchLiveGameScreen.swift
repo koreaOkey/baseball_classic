@@ -179,7 +179,7 @@ private struct BaseCell: View {
 
     var body: some View {
         Rectangle()
-            .fill(isOccupied ? WatchColors.yellow400 : (isHome ? Color.white.opacity(0.08) : WatchColors.gray800))
+            .fill(isOccupied ? WatchColors.yellow400 : WatchColors.gray800)
             .frame(width: uiProfile.baseCellSize, height: uiProfile.baseCellSize)
             .cornerRadius(WatchAppRadius.xxs)
     }

@@ -22,6 +22,10 @@ class DataLayerListenerService : WearableListenerService() {
         private const val TAG = "DataLayerListener"
         const val PREFS_NAME = "watch_theme_prefs"
         const val PREF_KEY_TEAM_NAME = "team_name"
+        const val PREF_KEY_STORE_THEME_ID = "store_theme_id"
+        const val PREF_KEY_STORE_PRIMARY = "store_primary"
+        const val PREF_KEY_STORE_SECONDARY = "store_secondary"
+        const val PREF_KEY_STORE_ACCENT = "store_accent"
         const val ACTION_THEME_UPDATED = "com.basehaptic.watch.ACTION_THEME_UPDATED"
 
         const val GAME_PREFS_NAME = "watch_game_prefs"
@@ -171,12 +175,23 @@ class DataLayerListenerService : WearableListenerService() {
     private fun handleThemeData(item: DataItem) {
         val dataMap = DataMapItem.fromDataItem(item).dataMap
         val teamName = dataMap.getString(KEY_MY_TEAM, "DEFAULT")
-        
-        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(PREF_KEY_TEAM_NAME, teamName)
-            .apply()
+        val storeThemeId = dataMap.getString("store_theme_id", "")
 
+        val editor = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+        editor.putString(PREF_KEY_TEAM_NAME, teamName)
+        editor.putString(PREF_KEY_STORE_THEME_ID, storeThemeId)
+
+        if (storeThemeId.isNotBlank() && dataMap.containsKey("store_primary")) {
+            editor.putInt(PREF_KEY_STORE_PRIMARY, dataMap.getInt("store_primary"))
+            editor.putInt(PREF_KEY_STORE_SECONDARY, dataMap.getInt("store_secondary"))
+            editor.putInt(PREF_KEY_STORE_ACCENT, dataMap.getInt("store_accent"))
+        } else {
+            editor.remove(PREF_KEY_STORE_PRIMARY)
+            editor.remove(PREF_KEY_STORE_SECONDARY)
+            editor.remove(PREF_KEY_STORE_ACCENT)
+        }
+
+        editor.apply()
         sendBroadcast(Intent(ACTION_THEME_UPDATED))
     }
     

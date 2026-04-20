@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.data.model.ThemeData
+
 import com.basehaptic.mobile.ui.theme.AppFont
 import com.basehaptic.mobile.ui.theme.AppShapes
 import com.basehaptic.mobile.ui.theme.AppSpacing
@@ -25,8 +25,7 @@ import com.basehaptic.mobile.ui.theme.Gray950
 @Suppress("UNUSED_PARAMETER")
 @Composable
 fun CommunityScreen(
-    selectedTeam: Team,
-    activeTheme: ThemeData?
+    selectedTeam: Team
 ) {
     Box(
         modifier = Modifier

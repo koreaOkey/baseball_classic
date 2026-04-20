@@ -41,7 +41,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.AppFont
 import com.basehaptic.mobile.ui.theme.AppShapes
@@ -59,9 +58,6 @@ import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 fun SettingsScreen(
     selectedTeam: Team,
     onChangeTeam: (Team) -> Unit,
-    purchasedThemes: List<ThemeData>,
-    activeTheme: ThemeData?,
-    onSelectTheme: (ThemeData?) -> Unit,
     onOpenWatchTest: () -> Unit,
     authState: AuthState = AuthState.LoggedOut,
     onSignInWithKakao: () -> Unit = {},

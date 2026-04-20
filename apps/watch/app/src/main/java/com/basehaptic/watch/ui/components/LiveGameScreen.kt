@@ -1,5 +1,6 @@
 package com.basehaptic.watch.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,9 +18,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -32,6 +37,7 @@ import com.basehaptic.watch.data.BaseStatus
 import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.data.getMockGameData
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
+import com.basehaptic.watch.ui.theme.LocalWatchTeamTheme
 import com.basehaptic.watch.ui.theme.Gray800
 import com.basehaptic.watch.ui.theme.Gray900
 import com.basehaptic.watch.ui.theme.Gray950
@@ -54,13 +60,57 @@ fun LiveGameScreen(
     val globalContentShiftDownDp = -16
     val isGameFinished = gameData.inning.contains("경기 종료") ||
         gameData.inning.contains("finished", ignoreCase = true)
+    val watchTheme = LocalWatchTeamTheme.current
+    val context = LocalContext.current
+    val inningColor = if (watchTheme.accent == Color.White) Color.White else Orange500
 
-    ConstraintLayout(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .offset(y = (uiProfile.contentOffsetYDp + globalContentShiftDownDp).dp)
-            .background(Gray950)
     ) {
+        // 테마 배경: 이미지 > 그라데이션 > 기본색
+        val bgImageName = watchTheme.backgroundImage
+        val bgResId = bgImageName?.let {
+            context.resources.getIdentifier(it, "drawable", context.packageName)
+        }?.takeIf { it != 0 }
+
+        if (bgResId != null) {
+            Image(
+                painter = painterResource(id = bgResId),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+            )
+        } else if (watchTheme.teamName == "STORE") {
+            // iOS: LinearGradient(startPoint: .top, endPoint: .center)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Gray950)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to watchTheme.gradientStart,
+                                0.4f to watchTheme.gradientEnd,
+                                0.7f to Gray950
+                            )
+                        )
+                    )
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize().background(Gray950))
+        }
+
+        ConstraintLayout(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset(y = (uiProfile.contentOffsetYDp + globalContentShiftDownDp).dp)
+        ) {
         val (topBanner, mainScoreCard, baseBso, playerInfo, tapHint) = createRefs()
         val scoreDiffRef = createRef()
 
@@ -79,7 +129,7 @@ fun LiveGameScreen(
                         bottomEnd = uiProfile.bannerBottomCornerDp.dp
                     )
                 )
-                .background(Gray950)
+                .background(if (watchTheme.teamName == "STORE") Color.Transparent else Gray950)
         )
 
         Row(
@@ -93,7 +143,7 @@ fun LiveGameScreen(
                 .offset(y = (-4).dp)
                 // Reason: 메인 스코어 카드 전용 18dp 둥근 모서리 (md(12)와 lg(14) 사이)
                 .clip(RoundedCornerShape(18.dp))
-                .background(Gray950)
+                .background(if (watchTheme.teamName == "STORE") Color.Transparent else Gray950)
                 .padding(
                     horizontal = uiProfile.scoreCardHorizontalPaddingDp.dp,
                     vertical = uiProfile.scoreCardVerticalPaddingDp.dp
@@ -124,7 +174,7 @@ fun LiveGameScreen(
                     Text(
                         text = gameData.inning,
                         modifier = Modifier.fillMaxWidth(),
-                        color = Orange500,
+                        color = inningColor,
                         fontSize = uiProfile.inningTextSp.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
@@ -132,13 +182,13 @@ fun LiveGameScreen(
                 } else {
                     Text(
                         text = gameData.inning,
-                        color = Orange500,
+                        color = inningColor,
                         fontSize = uiProfile.inningTextSp.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = inningHalfIcon(gameData.inning),
-                        color = Orange500,
+                        color = inningColor,
                         fontSize = uiProfile.inningHalfSp.sp
                     )
                 }
@@ -225,6 +275,7 @@ fun LiveGameScreen(
             top.linkTo(parent.top)
             start.linkTo(parent.start)
         })
+        }
     }
 }
 
@@ -333,7 +384,7 @@ private fun BaseCell(
             .size(uiProfile.baseCellSizeDp.dp)
             .clip(WatchAppShapes.xxs)
             .background(
-                if (isOccupied) accentColor else if (isHome) Color.White.copy(alpha = 0.08f) else Gray800,
+                if (isOccupied) accentColor else Gray800,
                 RectangleShape
             )
     )

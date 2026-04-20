@@ -14,7 +14,8 @@ data class WatchTeamTheme(
     val secondary: Color,
     val accent: Color,
     val gradientStart: Color,
-    val gradientEnd: Color
+    val gradientEnd: Color,
+    val backgroundImage: String? = null
 )
 
 object WatchTeamThemes {
@@ -140,6 +141,81 @@ object WatchTeamThemes {
         "KIA" -> KIA
         "NC" -> NC
         else -> DEFAULT
+    }
+
+    // MARK: - Store Themes (팀과 무관한 독립 테마)
+
+    private val storeBaseballLove = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFFDC141E), primaryDark = Color(0xFFAA0A14),
+        secondary = Color(0xFFFF96AA), accent = Color(0xFFFF96AA),
+        gradientStart = Color(0xFFDC141E), gradientEnd = Color(0xFFAA0A14),
+        backgroundImage = "theme_baseball_love"
+    )
+    private val storeMidnightIndigo = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFF131230), primaryDark = Color(0xFF0A0918),
+        secondary = Color(0xFF1E1C4B), accent = Color(0xFF60A5FA),
+        gradientStart = Color(0xFF1E1C4B), gradientEnd = Color(0xFF131230)
+    )
+    private val storeCherryRose = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFFC30452), primaryDark = Color(0xFF8E023B),
+        secondary = Color(0xFF8E023B), accent = Color(0xFFF472B6),
+        gradientStart = Color(0xFFC30452), gradientEnd = Color(0xFF8E023B)
+    )
+    private val storeBurgundyGold = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFF820024), primaryDark = Color(0xFF5C001A),
+        secondary = Color(0xFFD4A843), accent = Color(0xFFFCA5A5),
+        gradientStart = Color(0xFF820024), gradientEnd = Color(0xFF5C001A)
+    )
+    private val storeRoyalBlue = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFF074CA1), primaryDark = Color(0xFF053678),
+        secondary = Color(0xFFFFFFFF), accent = Color(0xFF93C5FD),
+        gradientStart = Color(0xFF074CA1), gradientEnd = Color(0xFF053678)
+    )
+    private val storeDeepNavy = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFF041E42), primaryDark = Color(0xFF021230),
+        secondary = Color(0xFFE31B23), accent = Color(0xFF93C5FD),
+        gradientStart = Color(0xFF0A3366), gradientEnd = Color(0xFF041E42)
+    )
+    private val storeCrimsonRed = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFFCE0E2D), primaryDark = Color(0xFF960A20),
+        secondary = Color(0xFFFFD700), accent = Color(0xFFFCA5A5),
+        gradientStart = Color(0xFFCE0E2D), gradientEnd = Color(0xFF960A20)
+    )
+    private val storeCharcoalBlack = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFF1A1A1A), primaryDark = Color(0xFF000000),
+        secondary = Color(0xFFED1C24), accent = Color(0xFFA3A3A3),
+        gradientStart = Color(0xFF1A1A1A), gradientEnd = Color(0xFF000000)
+    )
+    private val storeSunsetOrange = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFFFF6600), primaryDark = Color(0xFFCC5200),
+        secondary = Color(0xFF000000), accent = Color.White,
+        gradientStart = Color(0xFFFF6600), gradientEnd = Color(0xFFCC5200)
+    )
+    private val storeFireRed = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFFEA0029), primaryDark = Color(0xFFB5001F),
+        secondary = Color(0xFF000000), accent = Color.White,
+        gradientStart = Color(0xFFEA0029), gradientEnd = Color(0xFFB5001F)
+    )
+    private val storeSlateBlue = WatchTeamTheme(
+        teamName = "STORE", primary = Color(0xFF315288), primaryDark = Color(0xFF213A61),
+        secondary = Color(0xFFCFB53B), accent = Color(0xFF93C5FD),
+        gradientStart = Color(0xFF315288), gradientEnd = Color(0xFF213A61)
+    )
+
+    fun getThemeForStoreId(storeId: String): WatchTeamTheme? = when (storeId) {
+        "default" -> DEFAULT
+        "baseball_love" -> storeBaseballLove
+        "midnight_indigo" -> storeMidnightIndigo
+        "cherry_rose" -> storeCherryRose
+        "burgundy_gold" -> storeBurgundyGold
+        "royal_blue" -> storeRoyalBlue
+        "deep_navy" -> storeDeepNavy
+        "crimson_red" -> storeCrimsonRed
+        "charcoal_black" -> storeCharcoalBlack
+        "sunset_orange" -> storeSunsetOrange
+        "fire_red" -> storeFireRed
+        "slate_blue" -> storeSlateBlue
+        else -> null
     }
 }
 

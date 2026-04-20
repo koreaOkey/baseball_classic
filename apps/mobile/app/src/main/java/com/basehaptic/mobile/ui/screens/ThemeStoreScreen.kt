@@ -1,50 +1,73 @@
 package com.basehaptic.mobile.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.data.model.ThemeColors
+import androidx.compose.ui.unit.sp
+import com.basehaptic.mobile.data.model.ThemeCategory
 import com.basehaptic.mobile.data.model.ThemeData
-import com.basehaptic.mobile.ui.components.TeamLogo
+import com.basehaptic.mobile.data.model.ThemeStore
+import com.basehaptic.mobile.ui.components.RewardedAdManager
 import com.basehaptic.mobile.ui.theme.AppFont
 import com.basehaptic.mobile.ui.theme.AppShapes
 import com.basehaptic.mobile.ui.theme.AppSpacing
 import com.basehaptic.mobile.ui.theme.Blue500
-import com.basehaptic.mobile.ui.theme.Gray300
 import com.basehaptic.mobile.ui.theme.Gray400
+import com.basehaptic.mobile.ui.theme.Gray500
+import com.basehaptic.mobile.ui.theme.Gray600
 import com.basehaptic.mobile.ui.theme.Gray800
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.ui.theme.Gray950
+import com.basehaptic.mobile.ui.theme.Green500
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Orange500
 import com.basehaptic.mobile.ui.theme.Red500
@@ -52,190 +75,319 @@ import com.basehaptic.mobile.ui.theme.Yellow500
 
 @Composable
 fun ThemeStoreScreen(
-    selectedTeam: Team,
     activeTheme: ThemeData?,
+    unlockedThemeIds: Set<String>,
     onApplyTheme: (ThemeData?) -> Unit,
-    onPurchaseTheme: (ThemeData) -> Unit,
-    purchasedThemes: List<ThemeData>
+    onUnlockTheme: (ThemeData) -> Unit,
 ) {
-    val storeItems = remember(selectedTeam) { getMockThemeStoreItems(selectedTeam) }
-    val purchasedIds = remember(purchasedThemes) { purchasedThemes.map { it.id }.toSet() }
     val teamTheme = LocalTeamTheme.current
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Watch Themes", "Phone App Themes")
 
-    LazyColumn(
+    val freeAndAdThemes = remember {
+        ThemeStore.allThemes.filter {
+            it.category == ThemeCategory.FREE || it.category == ThemeCategory.AD_REWARD
+        }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Gray950)
     ) {
-        item {
-            Column(
-                modifier = Modifier.padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xl)
-            ) {
-                Text(
-                    text = "테마 상점",
-                    style = AppFont.h3Bold,
-                    color = Color.White
+        // Header
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.lg)
+        ) {
+            Text(
+                text = "테마 상점",
+                style = AppFont.h3Bold,
+                color = Color.White
+            )
+            Text(
+                text = "현재 적용: ${activeTheme?.name ?: "기본형"}",
+                style = AppFont.caption,
+                color = teamTheme.primary,
+                modifier = Modifier.padding(top = AppSpacing.sm)
+            )
+        }
+
+        // Tab Bar
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Gray950,
+            contentColor = Color.White,
+            indicator = { tabPositions ->
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                    color = Red500,
+                    height = 2.dp
                 )
-                Text(
-                    text = "목업 데이터로 구성된 테마 프리뷰입니다.",
-                    style = AppFont.body,
-                    color = Gray400,
-                    // Reason: 서브 텍스트 미세 조정 여백
-                    modifier = Modifier.padding(top = 6.dp)
+            },
+            divider = {},
+            modifier = Modifier.padding(horizontal = AppSpacing.xxl)
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = {
+                        Text(
+                            text = title,
+                            style = AppFont.bodyBold,
+                            color = if (selectedTab == index) Red500 else Gray500
+                        )
+                    }
                 )
-                Text(
-                    text = "현재 적용: ${activeTheme?.name ?: "기본 팀 테마"}",
-                    style = AppFont.caption,
-                    color = teamTheme.primary,
-                    modifier = Modifier.padding(top = AppSpacing.sm)
-                )
-                OutlinedButton(
-                    onClick = { onApplyTheme(null) },
-                    enabled = activeTheme != null,
-                    modifier = Modifier.padding(top = AppSpacing.md)
-                ) {
-                    Text("기본 팀 테마 적용")
-                }
             }
         }
 
-        items(storeItems, key = { it.theme.id }) { item ->
-            val isPurchased = item.theme.id in purchasedIds
-            val isApplied = activeTheme?.id == item.theme.id
-            ThemeStoreItemCard(
-                item = item,
-                isPurchased = isPurchased,
-                isApplied = isApplied,
-                onPurchase = { onPurchaseTheme(item.theme) },
-                onApply = { onApplyTheme(item.theme) }
+        // Tab Content
+        when (selectedTab) {
+            0 -> WatchThemesTab(
+                themes = freeAndAdThemes,
+                activeTheme = activeTheme,
+                unlockedThemeIds = unlockedThemeIds,
+                onApplyTheme = onApplyTheme,
+                onUnlockTheme = onUnlockTheme,
+            )
+            1 -> PhoneThemesTab()
+        }
+    }
+}
+
+@Composable
+private fun WatchThemesTab(
+    themes: List<ThemeData>,
+    activeTheme: ThemeData?,
+    unlockedThemeIds: Set<String>,
+    onApplyTheme: (ThemeData?) -> Unit,
+    onUnlockTheme: (ThemeData) -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(horizontal = AppSpacing.xxl, vertical = AppSpacing.md),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        item(span = { GridItemSpan(2) }) {
+            Text(
+                text = "베이직 테마",
+                style = AppFont.h5Bold,
+                color = Color.White,
+                modifier = Modifier.padding(top = AppSpacing.md, bottom = AppSpacing.xs)
             )
         }
 
-        item {
-            Text(
-                text = "목업 데이터는 실제 결제/다운로드와 연결되어 있지 않습니다.",
-                style = AppFont.micro,
-                color = Gray400,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xl)
+        items(themes, key = { it.id }) { theme ->
+            val isUnlocked = theme.category == ThemeCategory.FREE || theme.id in unlockedThemeIds
+            val isApplied = activeTheme?.id == theme.id
+
+            ThemeCard(
+                theme = theme,
+                isUnlocked = isUnlocked,
+                isApplied = isApplied,
+                onApply = { onApplyTheme(theme) },
+                onUnlock = { onUnlockTheme(theme) },
             )
-            // Reason: 하단 safe area (72dp: 네비게이션 바 높이 + 여유)
+        }
+
+        item(span = { GridItemSpan(2) }) {
             Spacer(modifier = Modifier.height(72.dp))
         }
     }
 }
 
 @Composable
-private fun ThemeStoreItemCard(
-    item: ThemeStoreItem,
-    isPurchased: Boolean,
-    isApplied: Boolean,
-    onPurchase: () -> Unit,
-    onApply: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.sm),
-        color = Gray900,
-        shape = AppShapes.lg,
-        tonalElevation = 1.dp
+private fun PhoneThemesTab() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(modifier = Modifier.padding(AppSpacing.lg)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Icon(
+            imageVector = Icons.Default.Lock,
+            contentDescription = null,
+            tint = Gray600,
+            modifier = Modifier.size(40.dp)
+        )
+        Spacer(modifier = Modifier.height(AppSpacing.md))
+        Text(
+            text = "준비 중",
+            style = AppFont.bodyLgMedium,
+            color = Gray500
+        )
+        Spacer(modifier = Modifier.height(AppSpacing.xs))
+        Text(
+            text = "폰 앱 테마는 곧 추가될 예정입니다.",
+            style = AppFont.body,
+            color = Gray600
+        )
+    }
+}
+
+// Reason: 워치 프리뷰 원형 크기 120dp — 카드 내부에서 최대한 큰 원을 그리되 여백 확보
+private val WATCH_FACE_SIZE = 120.dp
+
+@Composable
+private fun ThemeCard(
+    theme: ThemeData,
+    isUnlocked: Boolean,
+    isApplied: Boolean,
+    onApply: () -> Unit,
+    onUnlock: () -> Unit,
+) {
+    val context = LocalContext.current
+    val previewResId = theme.previewImage?.let { imageName ->
+        context.resources.getIdentifier(imageName, "drawable", context.packageName)
+    }?.takeIf { it != 0 }
+
+    Surface(
+        shape = AppShapes.lg,
+        color = Gray900
+    ) {
+        Column(
+            modifier = Modifier.padding(AppSpacing.md),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Watch face preview — 원형
+            Box(
+                modifier = Modifier.size(WATCH_FACE_SIZE),
+                contentAlignment = Alignment.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TeamLogo(team = item.theme.teamId, size = 60.dp)
-                    Spacer(modifier = Modifier.size(AppSpacing.md))
-                    Column {
-                        Text(
-                            text = item.theme.name,
-                            // Reason: 17sp는 h5(18)과 bodyLg(16) 사이, 디자인 상 중간값 필요
-                            style = AppFont.bodyLgMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = item.subtitle,
-                            style = AppFont.micro,
-                            color = Gray400
+                if (previewResId != null) {
+                    // 스크린샷 이미지 프리뷰
+                    Image(
+                        painter = painterResource(id = previewResId),
+                        contentDescription = theme.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                    )
+                } else {
+                    // 폴백: 코드 기반 미니 워치 UI
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(Color(0xFF0A0A0B))
+                    )
+                    MiniWatchPreview(theme = theme)
+                }
+
+                // Applied badge
+                if (isApplied) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-4).dp, y = 4.dp)
+                            .size(22.dp)
+                            .background(Green500, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "적용 중",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
-                Text(
-                    text = "${item.price}P",
-                    style = AppFont.labelBold,
-                    color = if (isPurchased) Gray300 else Yellow500
-                )
-            }
 
-            Spacer(modifier = Modifier.height(AppSpacing.md))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .background(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(item.theme.colors.primary, item.theme.colors.secondary)
-                        ),
-                        shape = AppShapes.md
-                    )
-            ) {
-                Text(
-                    text = "Accent",
-                    color = item.theme.colors.accent,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = AppSpacing.lg)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(AppSpacing.md))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                when {
-                    isApplied -> {
-                        AssistChip(
-                            onClick = { },
-                            enabled = false,
-                            label = { Text("적용 중") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
+                // Lock badge
+                if (!isUnlocked) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .offset(x = 4.dp, y = 4.dp)
+                            .size(20.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "잠김",
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(11.dp)
                         )
                     }
+                }
+            }
 
-                    isPurchased -> {
-                        Button(onClick = onApply) {
-                            Text("적용하기")
-                        }
-                    }
+            Spacer(modifier = Modifier.height(AppSpacing.md))
 
-                    else -> {
-                        FilledTonalButton(onClick = onPurchase) {
-                            Icon(
-                                imageVector = Icons.Default.ShoppingCart,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+            // Theme name
+            Text(
+                text = theme.name,
+                style = AppFont.bodyBold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(AppSpacing.sm))
+
+            // Action button — 모든 상태에서 동일한 높이 유지
+            val actionModifier = Modifier
+                .clip(AppShapes.pill)
+                .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.xs)
+            when {
+                isApplied -> {
+                    Text(
+                        text = "적용 중",
+                        style = AppFont.micro,
+                        color = Gray400,
+                        modifier = Modifier
+                            .background(Gray800, AppShapes.pill)
+                            .then(actionModifier)
+                    )
+                }
+                isUnlocked -> {
+                    Text(
+                        text = "적용하기",
+                        style = AppFont.microBold,
+                        color = Color.White,
+                        modifier = Modifier
+                            .clip(AppShapes.pill)
+                            .background(Blue500, AppShapes.pill)
+                            .clickable(onClick = onApply)
+                            .then(actionModifier)
+                    )
+                }
+                theme.category == ThemeCategory.AD_REWARD -> {
+                    val isLoading by RewardedAdManager.isLoading.collectAsState()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(AppShapes.pill)
+                            .background(Green500, AppShapes.pill)
+                            .clickable(enabled = !isLoading, onClick = onUnlock)
+                            .padding(horizontal = AppSpacing.md, vertical = AppSpacing.xs)
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(10.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
                             )
-                            Spacer(modifier = Modifier.size(AppSpacing.xs))
-                            Text("구매하기")
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(10.dp)
+                            )
                         }
+                        Spacer(modifier = Modifier.width(AppSpacing.xs))
+                        Text(
+                            text = "광고 보고 받기",
+                            style = AppFont.micro,
+                            color = Color.White
+                        )
                     }
                 }
             }
@@ -243,74 +395,160 @@ private fun ThemeStoreItemCard(
     }
 }
 
-private data class ThemeStoreItem(
-    val theme: ThemeData,
-    val price: Int,
-    val subtitle: String
-)
+// MARK: - Mini Watch Preview (원형 워치 안에 표시되는 미니 UI)
 
-// Reason: 목업 테마 스토어 데이터. 각 테마가 고유 색 조합을 가지므로 토큰 팔레트 밖의 색상 사용 허용.
-private fun getMockThemeStoreItems(selectedTeam: Team): List<ThemeStoreItem> {
-    return listOf(
-        ThemeStoreItem(
-            theme = ThemeData(
-                id = "theme_home_crowd",
-                teamId = selectedTeam,
-                name = "${selectedTeam.teamName} 홈 크라우드",
-                colors = ThemeColors(
-                    primary = selectedTeam.color,
-                    secondary = Gray800,
-                    accent = Yellow500
-                ),
-                animation = "crowd_wave"
-            ),
-            price = 1200,
-            subtitle = "응원단 중앙 하이라이트 + 응원가 무드"
-        ),
-        ThemeStoreItem(
-            theme = ThemeData(
-                id = "theme_retro_sunset",
-                teamId = Team.KIA,
-                name = "레트로 선셋",
-                colors = ThemeColors(
-                    primary = Orange500,
-                    secondary = Red500,
-                    accent = Yellow500
-                ),
-                animation = "retro_scanline"
-            ),
-            price = 900,
-            subtitle = "복고 감성 컬러 + 아날로그 스캔 효과"
-        ),
-        ThemeStoreItem(
-            theme = ThemeData(
-                id = "theme_ice_blue",
-                teamId = Team.SAMSUNG,
-                name = "아이스 블루",
-                colors = ThemeColors(
-                    primary = Blue500,
-                    secondary = Color(0xFF0B1F3A),
-                    accent = Color(0xFFA5D8FF)
-                ),
-                animation = "ice_spark"
-            ),
-            price = 1000,
-            subtitle = "시원한 톤의 라인 + 타격 이펙트 강조"
-        ),
-        ThemeStoreItem(
-            theme = ThemeData(
-                id = "theme_dark_monochrome",
-                teamId = Team.LOTTE,
-                name = "모노크롬 다크",
-                colors = ThemeColors(
-                    primary = Color(0xFFE5E7EB),
-                    secondary = Color(0xFF111827),
-                    accent = Color(0xFF93C5FD)
-                ),
-                animation = "mono_pulse"
-            ),
-            price = 700,
-            subtitle = "미니멀 대비 + 점수 집중형 UI"
+@Composable
+private fun MiniWatchPreview(
+    theme: ThemeData,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = if (theme.id == "default") Orange500 else theme.colors.accent
+    val inningBgColor = if (theme.id == "default") {
+        Color.White.copy(alpha = 0.05f)
+    } else {
+        theme.colors.primary.copy(alpha = 0.2f)
+    }
+
+    Column(
+        modifier = modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Score row
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Away
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "팀 1",
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = "5",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Inning
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .background(inningBgColor, AppShapes.sm)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "7회말",
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accentColor
+                )
+                Text(
+                    text = "▼",
+                    fontSize = 6.sp,
+                    color = accentColor
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Home
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "팀 2",
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = "4",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(3.dp))
+
+        // BSO row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            // Mini base diamond
+            Box(modifier = Modifier.size(16.dp, 14.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .align(Alignment.TopCenter)
+                        .background(Yellow500)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .align(Alignment.CenterStart)
+                        .background(Color.White.copy(alpha = 0.2f))
+                )
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .align(Alignment.CenterEnd)
+                        .background(Yellow500)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(Color.White.copy(alpha = 0.2f))
+                )
+            }
+
+            Spacer(modifier = Modifier.width(5.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                CountDots(label = "B", count = 2, max = 3, color = Green500)
+                CountDots(label = "S", count = 1, max = 2, color = Orange500)
+                CountDots(label = "O", count = 1, max = 2, color = Red500)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Text(
+            text = "P 김광현  B 이대호",
+            fontSize = 6.sp,
+            color = Color.White.copy(alpha = 0.5f)
         )
-    )
+    }
+}
+
+@Composable
+private fun CountDots(label: String, count: Int, max: Int, color: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = 5.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White.copy(alpha = 0.5f),
+            modifier = Modifier.width(6.dp),
+            textAlign = TextAlign.Center
+        )
+        repeat(max) { i ->
+            Box(
+                modifier = Modifier
+                    .size(4.dp)
+                    .background(
+                        if (i < count) color else Color.White.copy(alpha = 0.15f),
+                        CircleShape
+                    )
+            )
+        }
+    }
 }

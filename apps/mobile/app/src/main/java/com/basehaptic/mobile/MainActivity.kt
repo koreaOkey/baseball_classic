@@ -34,7 +34,10 @@ import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.data.model.ThemeCategory
 import com.basehaptic.mobile.data.model.ThemeData
+import com.basehaptic.mobile.data.model.ThemeStore
+import com.basehaptic.mobile.data.ThemeRepository
 import com.basehaptic.mobile.service.GameSyncForegroundService
 import com.basehaptic.mobile.service.GameSyncState
 import com.basehaptic.mobile.ui.screens.*
@@ -43,6 +46,7 @@ import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.wear.WearThemeSyncManager
 import com.basehaptic.mobile.wear.WearWatchSyncBridge
+import com.basehaptic.mobile.ui.components.RewardedAdManager
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.RequestConfiguration
 import java.time.LocalDate
@@ -50,9 +54,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val SHOW_COMMUNITY_TAB = false
-private const val SHOW_STORE_TAB = false
+private const val SHOW_STORE_TAB = true
 private const val USER_PREFS_NAME = "basehaptic_user_prefs"
 private const val KEY_SELECTED_TEAM = "selected_team"
+private const val KEY_UNLOCKED_THEME_IDS = "unlocked_theme_ids"
+private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
 
 class MainActivity : ComponentActivity() {
     private fun loadSavedTeamOrNull(): Team? {
@@ -70,6 +76,31 @@ class MainActivity : ComponentActivity() {
         getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
             .edit()
             .putString(KEY_SELECTED_TEAM, team.name)
+            .apply()
+    }
+
+    private fun loadUnlockedThemeIds(): Set<String> {
+        val saved = getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .getStringSet(KEY_UNLOCKED_THEME_IDS, null) ?: emptySet()
+        return saved + "default"
+    }
+
+    private fun persistUnlockedThemeIds(ids: Set<String>) {
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putStringSet(KEY_UNLOCKED_THEME_IDS, ids)
+            .apply()
+    }
+
+    private fun loadActiveThemeId(): String? {
+        return getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_ACTIVE_THEME_ID, null)
+    }
+
+    private fun persistActiveThemeId(themeId: String?) {
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(KEY_ACTIVE_THEME_ID, themeId)
             .apply()
     }
 
@@ -102,6 +133,11 @@ class MainActivity : ComponentActivity() {
         val savedTeam = loadSavedTeamOrNull()
         val initialTeam = savedTeam ?: Team.NONE
         val initialShowOnboarding = savedTeam == null
+        val initialUnlockedIds = loadUnlockedThemeIds()
+        val initialActiveThemeId = loadActiveThemeId()
+        val initialActiveTheme = initialActiveThemeId?.let { id ->
+            ThemeStore.allThemes.find { it.id == id }
+        }
 
         setContent {
             // ??猷⑦듃?먯꽌 ?좏깮 ? ?곹깭瑜?愿由ы븯怨??섏쐞 ?붾㈃?쇰줈 ?꾨떖
@@ -120,7 +156,11 @@ class MainActivity : ComponentActivity() {
                         selectedTeam = team
                         persistSelectedTeam(team)
                         showOnboarding = false
-                    }
+                    },
+                    initialUnlockedThemeIds = initialUnlockedIds,
+                    initialActiveTheme = initialActiveTheme,
+                    onPersistUnlockedThemeIds = ::persistUnlockedThemeIds,
+                    onPersistActiveThemeId = ::persistActiveThemeId
                 )
             }
         }
@@ -132,13 +172,17 @@ fun BaseHapticApp(
     selectedTeam: Team,
     onTeamChanged: (Team) -> Unit,
     showOnboarding: Boolean,
-    onOnboardingComplete: (Team) -> Unit
+    onOnboardingComplete: (Team) -> Unit,
+    initialUnlockedThemeIds: Set<String> = setOf("default"),
+    initialActiveTheme: ThemeData? = null,
+    onPersistUnlockedThemeIds: (Set<String>) -> Unit = {},
+    onPersistActiveThemeId: (String?) -> Unit = {}
 ) {
     val authState by AuthManager.authState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     var currentView by remember { mutableStateOf<Screen>(Screen.Home) }
     val navigationHistory = remember { mutableStateListOf<Screen>() }
-    var activeTheme by remember { mutableStateOf<ThemeData?>(null) }
+    var activeTheme by remember { mutableStateOf(initialActiveTheme) }
     var selectedGameId by remember { mutableStateOf<String?>(null) }
     var syncedGameId by remember { mutableStateOf<String?>(null) }
     var showWatchSyncDialog by remember { mutableStateOf(false) }
@@ -146,7 +190,7 @@ fun BaseHapticApp(
     var pendingWatchSyncNavigateToLive by remember { mutableStateOf(false) }
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
     val autoPromptedLiveGames = remember { mutableStateMapOf<String, Boolean>() }
-    var purchasedThemes by remember { mutableStateOf<List<ThemeData>>(emptyList()) }
+    var unlockedThemeIds by remember { mutableStateOf(initialUnlockedThemeIds) }
     var todayGamesSnapshot by remember(selectedTeam) { mutableStateOf<List<Game>>(emptyList()) }
     var todayGamesLoadedDate by remember(selectedTeam) { mutableStateOf<LocalDate?>(null) }
     var todayGamesReloadToken by remember(selectedTeam) { mutableStateOf(0) }
@@ -239,9 +283,34 @@ fun BaseHapticApp(
         }
     }
 
+    // Supabase 테마/설정 동기화 (로그인 시)
+    LaunchedEffect(authState) {
+        if (authState is AuthState.LoggedIn) {
+            try {
+                val ids = withContext(Dispatchers.IO) { ThemeRepository.fetchUnlockedThemeIds() }
+                unlockedThemeIds = ids
+                onPersistUnlockedThemeIds(ids)
+
+                val settings = withContext(Dispatchers.IO) { ThemeRepository.fetchUserSettings() }
+                if (settings.activeThemeId != null) {
+                    activeTheme = ThemeStore.allThemes.find { it.id == settings.activeThemeId }
+                    onPersistActiveThemeId(settings.activeThemeId)
+                }
+                if (settings.selectedTeam != null) {
+                    val serverTeam = Team.fromString(settings.selectedTeam)
+                    if (serverTeam != Team.NONE && serverTeam != selectedTeam) {
+                        onTeamChanged(serverTeam)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     LaunchedEffect(selectedTeam) {
         if (selectedTeam != Team.NONE) {
-            WearThemeSyncManager.syncThemeToWatch(context, selectedTeam)
+            WearThemeSyncManager.syncThemeToWatch(context, selectedTeam, activeTheme?.id)
         }
     }
 
@@ -373,7 +442,6 @@ fun BaseHapticApp(
                     Screen.Home -> HomeScreen(
                         selectedTeam = selectedTeam,
                         todayGames = todayGamesSnapshot,
-                        activeTheme = activeTheme,
                         syncedGameId = syncedGameId,
                         onSelectGame = { game ->
                             selectedGameId = game.id
@@ -385,32 +453,64 @@ fun BaseHapticApp(
                         }
                     )
                     Screen.LiveGame -> LiveGameScreen(
-                        activeTheme = activeTheme,
                         gameId = selectedGameId,
                         syncedGameId = syncedGameId,
                         onBack = { navigateBack() }
                     )
                     Screen.Community -> CommunityScreen(
-                        selectedTeam = selectedTeam,
-                        activeTheme = activeTheme
+                        selectedTeam = selectedTeam
                     )
                     Screen.Store -> ThemeStoreScreen(
-                        selectedTeam = selectedTeam,
                         activeTheme = activeTheme,
-                        onApplyTheme = { activeTheme = it },
-                        onPurchaseTheme = { theme ->
-                            purchasedThemes = purchasedThemes + theme
+                        unlockedThemeIds = unlockedThemeIds,
+                        onApplyTheme = { theme ->
+                            activeTheme = theme
+                            onPersistActiveThemeId(theme?.id)
+                            WearThemeSyncManager.syncThemeToWatch(context, selectedTeam, theme?.id)
+                            if (authState is AuthState.LoggedIn) {
+                                coroutineScope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            ThemeRepository.saveActiveTheme(theme?.id)
+                                        }
+                                    } catch (e: Exception) { e.printStackTrace() }
+                                }
+                            }
                         },
-                        purchasedThemes = purchasedThemes
+                        onUnlockTheme = { theme ->
+                            RewardedAdManager.loadAndShowAd(context) {
+                                unlockedThemeIds = unlockedThemeIds + theme.id
+                                activeTheme = theme
+                                onPersistUnlockedThemeIds(unlockedThemeIds)
+                                onPersistActiveThemeId(theme.id)
+                                WearThemeSyncManager.syncThemeToWatch(context, selectedTeam, theme.id)
+                                if (authState is AuthState.LoggedIn) {
+                                    coroutineScope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) {
+                                                ThemeRepository.saveUnlock(theme.id)
+                                                ThemeRepository.saveActiveTheme(theme.id)
+                                            }
+                                        } catch (e: Exception) { e.printStackTrace() }
+                                    }
+                                }
+                            }
+                        },
                     )
                     Screen.Settings -> SettingsScreen(
                         selectedTeam = selectedTeam,
                         onChangeTeam = { team ->
-                            onTeamChanged(team) // ? 蹂寃?利됱떆 ???뚮쭏?먮룄 諛섏쁺
+                            onTeamChanged(team)
+                            if (authState is AuthState.LoggedIn) {
+                                coroutineScope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            ThemeRepository.saveSelectedTeam(team.name)
+                                        }
+                                    } catch (e: Exception) { e.printStackTrace() }
+                                }
+                            }
                         },
-                        purchasedThemes = purchasedThemes,
-                        activeTheme = activeTheme,
-                        onSelectTheme = { activeTheme = it },
                         onOpenWatchTest = { navigateTo(Screen.WatchTest) },
                         authState = authState,
                         onSignInWithKakao = {

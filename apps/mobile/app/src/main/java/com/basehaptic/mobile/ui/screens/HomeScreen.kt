@@ -38,7 +38,6 @@ import kotlinx.coroutines.withContext
 fun HomeScreen(
     selectedTeam: Team,
     todayGames: List<Game>,
-    activeTheme: ThemeData?,
     syncedGameId: String?,
     onSelectGame: (Game) -> Unit
 ) {
@@ -148,7 +147,7 @@ fun HomeScreen(
     }
 
     val teamTheme = LocalTeamTheme.current
-    val primaryColor = activeTheme?.colors?.primary ?: teamTheme.primary
+    val primaryColor = teamTheme.primary
     val rankingText = teamRecordStats?.ranking?.let { "${it}위" } ?: "-"
     val wraText = teamRecordStats?.wra?.let { String.format(Locale.US, "%.3f", it) } ?: "-.--"
     val recentWinsText = teamRecordStats?.lastFiveGames?.let { games ->
@@ -311,17 +310,47 @@ fun HomeScreen(
         }
 
         // Games List
-        items(
-            items = games,
-            key = { it.id }
-        ) { game ->
-            val isWatchSynced = game.status == GameStatus.LIVE && syncedGameId == game.id
-            GameCard(
-                game = game,
-                primaryColor = primaryColor,
-                isWatchSynced = isWatchSynced,
-                onClick = { onSelectGame(game) }
-            )
+        if (games.isEmpty()) {
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xs),
+                    shape = AppShapes.lg,
+                    color = Gray900
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = AppSpacing.xxxl),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
+                    ) {
+                        Text(
+                            text = "\u26BE",
+                            style = AppFont.h2
+                        )
+                        Text(
+                            text = "\uC624\uB298\uC740 \uACBD\uAE30\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4",
+                            style = AppFont.bodyLgMedium,
+                            color = Gray400
+                        )
+                    }
+                }
+            }
+        } else {
+            items(
+                items = games,
+                key = { it.id }
+            ) { game ->
+                val isWatchSynced = game.status == GameStatus.LIVE && syncedGameId == game.id
+                GameCard(
+                    game = game,
+                    primaryColor = primaryColor,
+                    isWatchSynced = isWatchSynced,
+                    onClick = { onSelectGame(game) }
+                )
+            }
         }
 
         // Upcoming Games (next 3 my-team schedules after today)

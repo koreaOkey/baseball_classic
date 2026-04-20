@@ -68,6 +68,8 @@ import com.basehaptic.watch.ui.components.LiveGameScreen
 import com.basehaptic.watch.ui.components.NoGameScreen
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
 import com.basehaptic.watch.ui.theme.Gray950
+import com.basehaptic.watch.ui.theme.WatchTeamTheme
+import com.basehaptic.watch.ui.theme.WatchTeamThemes
 import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
 import kotlinx.coroutines.delay
 
@@ -183,16 +185,16 @@ class MainActivity : ComponentActivity() {
 fun WatchApp(isAmbient: Boolean = false) {
     val context = LocalContext.current
 
+    val themePrefs = remember {
+        context.getSharedPreferences(DataLayerListenerService.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
     var syncedTeamName by remember {
-        mutableStateOf(
-            context.getSharedPreferences(
-                DataLayerListenerService.PREFS_NAME,
-                Context.MODE_PRIVATE
-            ).getString(
-                DataLayerListenerService.PREF_KEY_TEAM_NAME,
-                "DEFAULT"
-            ) ?: "DEFAULT"
-        )
+        mutableStateOf(themePrefs.getString(DataLayerListenerService.PREF_KEY_TEAM_NAME, "DEFAULT") ?: "DEFAULT")
+    }
+
+    var storeThemeOverride by remember {
+        mutableStateOf(readStoreThemeFromPrefs(themePrefs))
     }
 
     var gameData by remember { mutableStateOf(readGameDataFromPrefs(context)) }
@@ -286,13 +288,15 @@ fun WatchApp(isAmbient: Boolean = false) {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 when (intent?.action) {
                     DataLayerListenerService.ACTION_THEME_UPDATED -> {
-                        syncedTeamName = context.getSharedPreferences(
+                        val prefs = context.getSharedPreferences(
                             DataLayerListenerService.PREFS_NAME,
                             Context.MODE_PRIVATE
-                        ).getString(
+                        )
+                        syncedTeamName = prefs.getString(
                             DataLayerListenerService.PREF_KEY_TEAM_NAME,
                             "DEFAULT"
                         ) ?: "DEFAULT"
+                        storeThemeOverride = readStoreThemeFromPrefs(prefs)
                     }
                     DataLayerListenerService.ACTION_GAME_UPDATED -> {
                         gameData = readGameDataFromPrefs(context)
@@ -477,7 +481,7 @@ fun WatchApp(isAmbient: Boolean = false) {
         previousGameIsLive = game.isLive
     }
 
-    BaseHapticWatchTheme(teamName = teamName) {
+    BaseHapticWatchTheme(teamName = teamName, storeThemeOverride = storeThemeOverride) {
         Scaffold(
             timeText = {
                 TimeText()
@@ -559,6 +563,12 @@ fun WatchApp(isAmbient: Boolean = false) {
             }
         }
     }
+}
+
+private fun readStoreThemeFromPrefs(prefs: android.content.SharedPreferences): WatchTeamTheme? {
+    val storeId = prefs.getString(DataLayerListenerService.PREF_KEY_STORE_THEME_ID, "") ?: ""
+    if (storeId.isBlank()) return null
+    return WatchTeamThemes.getThemeForStoreId(storeId)
 }
 
 private fun readGameDataFromPrefs(context: Context): GameData? {

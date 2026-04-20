@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.data.model.ThemeData
+
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.AppEventColors
 import com.basehaptic.mobile.ui.theme.AppFont
@@ -60,13 +60,12 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun LiveGameScreen(
-    activeTheme: ThemeData?,
     gameId: String?,
     syncedGameId: String?,
     onBack: () -> Unit
 ) {
     val teamTheme = LocalTeamTheme.current
-    val primaryColor = activeTheme?.colors?.primary ?: teamTheme.primary
+    val primaryColor = teamTheme.primary
 
     var gameState by remember(gameId) { mutableStateOf<BackendGamesRepository.LiveGameState?>(null) }
     var events by remember(gameId) { mutableStateOf<List<BackendGamesRepository.LiveEvent>>(emptyList()) }
