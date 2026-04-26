@@ -10,11 +10,11 @@ enum AppEventColors {
         switch eventType.uppercased() {
         case "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY":
             return AppColors.yellow500
-        case "HIT", "WALK", "STEAL":
+        case "HIT", "WALK", "STEAL", "TAG_UP_ADVANCE":
             return AppColors.green500
         case "DOUBLE_PLAY", "TRIPLE_PLAY", "STRIKE":
             return AppColors.orange500
-        case "OUT", "TAG_UP_ADVANCE":
+        case "OUT":
             return AppColors.red500
         case "BALL":
             return AppColors.gray400

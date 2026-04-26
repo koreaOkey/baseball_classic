@@ -11,9 +11,9 @@ import androidx.compose.ui.graphics.Color
 object AppEventColors {
     fun eventColor(eventType: String): Color = when (eventType.uppercase()) {
         "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY" -> Yellow500
-        "HIT", "WALK", "STEAL" -> Green500
+        "HIT", "WALK", "STEAL", "TAG_UP_ADVANCE" -> Green500
         "DOUBLE_PLAY", "TRIPLE_PLAY", "STRIKE" -> Orange500
-        "OUT", "TAG_UP_ADVANCE" -> Red500
+        "OUT" -> Red500
         "BALL" -> Gray400
         else -> Gray500
     }

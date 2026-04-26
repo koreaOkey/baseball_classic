@@ -11,6 +11,8 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
     }
 
     // MARK: - Send Game Data
+    private static let lastGameDataKey = "last_watch_game_data"
+
     func sendGameData(
         gameId: String,
         homeTeam: String,
@@ -30,12 +32,7 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
         myTeam: String,
         eventType: String? = nil
     ) {
-        guard WCSession.default.activationState == .activated else {
-            print("[WatchGameSync] Session not activated")
-            return
-        }
-
-        var message: [String: Any] = [
+        var payload: [String: Any] = [
             "type": "game_data",
             "game_id": gameId,
             "home_team": homeTeam,
@@ -52,18 +49,50 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
             "base_third": baseThird,
             "pitcher": pitcher,
             "batter": batter,
-            "my_team": myTeam,
-            "updated_at": Date().timeIntervalSince1970
+            "my_team": myTeam
         ]
-
         if let eventType = eventType {
-            message["event_type"] = eventType
+            payload["event_type"] = eventType
         }
+
+        // 마스터 OFF여도 phone-side 캐시는 항상 갱신 (ON 복원 시 즉시 push 용)
+        cacheLastGameData(payload)
+
+        guard WCSession.default.activationState == .activated else {
+            print("[WatchGameSync] Session not activated")
+            return
+        }
+
+        let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
+        guard liveHapticEnabled else {
+            print("[WatchGameSync] live_haptic_enabled=false, skipping game_data send")
+            return
+        }
+
+        deliverGameData(payload)
+    }
+
+    /// 토글 OFF→ON 복원 시 마지막 캐시된 game_data를 즉시 워치에 push
+    func resyncLastGameDataToWatch() {
+        guard let cached = UserDefaults.standard.dictionary(forKey: Self.lastGameDataKey) else {
+            print("[WatchGameSync] No cached game_data to resync")
+            return
+        }
+        guard WCSession.default.activationState == .activated else { return }
+        deliverGameData(cached)
+    }
+
+    private func cacheLastGameData(_ payload: [String: Any]) {
+        UserDefaults.standard.set(payload, forKey: Self.lastGameDataKey)
+    }
+
+    private func deliverGameData(_ basePayload: [String: Any]) {
+        var message = basePayload
+        message["updated_at"] = Date().timeIntervalSince1970
 
         if WCSession.default.isReachable {
             WCSession.default.sendMessage(message, replyHandler: nil) { error in
                 print("[WatchGameSync] sendMessage failed: \(error.localizedDescription)")
-                // sendMessage 실패 시 applicationContext로 폴백
                 self.updateApplicationContextWithGameData(message)
             }
         } else {

@@ -12,9 +12,9 @@ object WatchEventColors {
     /** 기본 매핑 (iPhone/Android Mobile과 동일 그룹) */
     fun eventColor(eventType: String): Color = when (eventType.uppercase()) {
         "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY" -> Yellow500
-        "HIT", "WALK", "STEAL" -> Green500
+        "HIT", "WALK", "STEAL", "TAG_UP_ADVANCE" -> Green500
         "DOUBLE_PLAY", "TRIPLE_PLAY", "STRIKE" -> Orange500
-        "OUT", "TAG_UP_ADVANCE" -> Red500
+        "OUT" -> Red500
         "BALL" -> Gray400
         else -> Gray500
     }
@@ -26,6 +26,7 @@ object WatchEventColors {
         "HIT" -> OverlayStyle("HIT", "bolt.fill", Green500)
         "WALK" -> OverlayStyle("WALK", "bolt.fill", Green400)
         "STEAL" -> OverlayStyle("STEAL", "bolt.fill", Cyan500)
+        "TAG_UP_ADVANCE" -> OverlayStyle("STEAL", "bolt.fill", Cyan500)
         "SCORE" -> OverlayStyle("SCORE", "trophy.fill", Yellow500)
         "HOMERUN" -> OverlayStyle("HOMERUN", "trophy.fill", Yellow500)
         "OUT" -> OverlayStyle("OUT", "xmark.circle.fill", Red500)

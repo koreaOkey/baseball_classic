@@ -60,9 +60,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // 햅틱 이벤트 워치로 전달
-        let cursor = userInfo["event_cursor"] as? Int64
-        WatchGameSyncManager.shared.sendHapticEvent(eventType: eventType, cursor: cursor)
+        // 햅틱 이벤트 워치로 전달 (마스터 스위치 OFF 시 차단)
+        let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
+        if liveHapticEnabled {
+            let cursor = userInfo["event_cursor"] as? Int64
+            WatchGameSyncManager.shared.sendHapticEvent(eventType: eventType, cursor: cursor)
+        }
 
         // 게임 상태도 함께 왔으면 워치 UI 업데이트
         sendGameDataToWatch(from: userInfo)

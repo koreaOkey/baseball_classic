@@ -197,6 +197,13 @@ fun WatchApp(isAmbient: Boolean = false) {
         mutableStateOf(readStoreThemeFromPrefs(themePrefs))
     }
 
+    val settingsPrefs = remember {
+        context.getSharedPreferences(DataLayerListenerService.SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var eventVideoEnabled by remember {
+        mutableStateOf(settingsPrefs.getBoolean(DataLayerListenerService.PREF_KEY_EVENT_VIDEO_ENABLED, true))
+    }
+
     var gameData by remember { mutableStateOf(readGameDataFromPrefs(context)) }
     var latestEvent by remember { mutableStateOf(readLatestEventFromPrefs(context)) }
     var watchSyncPrompt by remember { mutableStateOf(readWatchSyncPromptFromPrefs(context)) }
@@ -283,6 +290,7 @@ fun WatchApp(isAmbient: Boolean = false) {
             addAction(DataLayerListenerService.ACTION_THEME_UPDATED)
             addAction(DataLayerListenerService.ACTION_GAME_UPDATED)
             addAction(DataLayerListenerService.ACTION_WATCH_SYNC_PROMPT)
+            addAction(DataLayerListenerService.ACTION_SETTINGS_UPDATED)
         }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -306,6 +314,12 @@ fun WatchApp(isAmbient: Boolean = false) {
                     }
                     DataLayerListenerService.ACTION_WATCH_SYNC_PROMPT -> {
                         watchSyncPrompt = readWatchSyncPromptFromPrefs(context)
+                    }
+                    DataLayerListenerService.ACTION_SETTINGS_UPDATED -> {
+                        eventVideoEnabled = settingsPrefs.getBoolean(
+                            DataLayerListenerService.PREF_KEY_EVENT_VIDEO_ENABLED,
+                            true
+                        )
                     }
                 }
             }
@@ -361,6 +375,7 @@ fun WatchApp(isAmbient: Boolean = false) {
         val isMyTeamBatting = isTestGame || isNeutralGame || (isMyTeamHome && isBottomInning(game.inning)) ||
                               (isMyTeamAway && isTopInning(game.inning))
         val isMyTeamFielding = isTestGame || isNeutralGame || (!isMyTeamBatting && (isMyTeamHome || isMyTeamAway))
+        if (!eventVideoEnabled) return@LaunchedEffect
         when (event.type.uppercase()) {
             "HOMERUN" -> if (isMyTeamBatting) homeRunTransitionToken = event.timestamp
             "HIT" -> if (isMyTeamBatting) hitTransitionToken = event.timestamp
@@ -464,7 +479,7 @@ fun WatchApp(isAmbient: Boolean = false) {
             val isMyTeamAway = myTeam == game.awayTeam.uppercase()
             val myTeamWon = (isMyTeamHome && game.homeScore > game.awayScore) ||
                             (isMyTeamAway && game.awayScore > game.homeScore)
-            if (myTeamWon) {
+            if (myTeamWon && eventVideoEnabled) {
                 isPlayingVideo = true
                 try {
                     victoryPlayer.seekTo(0)
@@ -926,6 +941,7 @@ private fun eventUiFor(type: String): WatchEventUi? {
     return when (type.uppercase()) {
         "WALK" -> WatchEventUi("WALK", Icons.Default.Bolt, Color(0xFF4ADE80))
         "STEAL" -> WatchEventUi("STEAL", Icons.Default.Bolt, Color(0xFF06B6D4))
+        "TAG_UP_ADVANCE" -> WatchEventUi("STEAL", Icons.Default.Bolt, Color(0xFF06B6D4))
         "SCORE" -> WatchEventUi("SCORE", Icons.Default.EmojiEvents, Color(0xFFEAB308))
         "OUT" -> WatchEventUi("OUT", Icons.Default.HighlightOff, Color(0xFFEF4444))
         "TRIPLE_PLAY" -> WatchEventUi("TRIPLE PLAY", Icons.Default.HighlightOff, Color(0xFFDC2626))

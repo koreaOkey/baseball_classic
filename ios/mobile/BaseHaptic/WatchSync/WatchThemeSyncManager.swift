@@ -20,6 +20,22 @@ final class WatchThemeSyncManager {
         ])
     }
 
+    static func syncEventVideoEnabledToWatch(enabled: Bool) {
+        syncToWatch(context: [
+            "type": "settings_update",
+            "event_video_enabled": enabled,
+            "updated_at": Date().timeIntervalSince1970
+        ])
+    }
+
+    static func syncLiveHapticEnabledToWatch(enabled: Bool) {
+        syncToWatch(context: [
+            "type": "settings_update",
+            "live_haptic_enabled": enabled,
+            "updated_at": Date().timeIntervalSince1970
+        ])
+    }
+
     private static func syncToWatch(context: [String: Any]) {
         guard WCSession.default.activationState == .activated else { return }
 

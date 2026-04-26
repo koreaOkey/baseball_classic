@@ -48,6 +48,7 @@ struct WatchLiveGameScreen: View {
                 .background(inningBoxBackground)
                 .cornerRadius(WatchAppRadius.md10)
                 .padding(.horizontal, WatchAppSpacing.xs)
+                .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
 
                 // Home team
                 ScoreSide(team: gameData.homeTeam, score: gameData.homeScore, uiProfile: uiProfile)
@@ -75,6 +76,7 @@ struct WatchLiveGameScreen: View {
                 .font(.system(size: uiProfile.playerInfoSize))
                 .foregroundColor(.white.opacity(0.62))
                 .lineLimit(1)
+                .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
@@ -82,7 +84,7 @@ struct WatchLiveGameScreen: View {
                 Image(bgImage)
                     .resizable()
                     .scaledToFill()
-                    .overlay(Color.black.opacity(0.45))
+                    .overlay(Color.black.opacity(0.6))
                     .ignoresSafeArea()
             } else if isDefaultTheme {
                 WatchColors.gray950.ignoresSafeArea()
@@ -115,11 +117,13 @@ private struct ScoreSide: View {
                 .font(.system(size: uiProfile.scoreValueSize, weight: .black))
                 .foregroundColor(.white)
                 .minimumScaleFactor(0.7)
+                .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
 
             Text(team.uppercased())
                 .font(.system(size: uiProfile.teamNameSize, weight: .bold))
                 .foregroundColor(.white.opacity(0.76))
                 .lineLimit(1)
+                .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
         }
         .frame(maxWidth: .infinity)
     }
@@ -275,4 +279,19 @@ private func mockGame(home: String, away: String, myTeam: String) -> GameData {
 #Preview("기본") {
     WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
         .environment(\.watchTeamTheme, WatchTeamThemes.defaultTheme)
+}
+
+#Preview("미리보기: lock_watch") {
+    let previewTheme = WatchTeamTheme(
+        teamName: "PREVIEW",
+        primary: WatchColors.blue500,
+        primaryDark: WatchColors.blue600,
+        secondary: WatchColors.blue400,
+        accent: WatchColors.blue400,
+        gradientStart: WatchColors.blue500,
+        gradientEnd: WatchColors.blue600,
+        backgroundImage: "theme_lock_watch_preview"
+    )
+    return WatchLiveGameScreen(gameData: mockGame(home: "팀 1", away: "팀 2", myTeam: "팀 1"))
+        .environment(\.watchTeamTheme, previewTheme)
 }

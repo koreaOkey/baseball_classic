@@ -70,6 +70,14 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 UserDefaults.standard.set(themeId, forKey: "store_theme_id")
             }
         }
+
+        // applicationContext에서 영상 알림 설정 복원
+        if let enabled = ctx["event_video_enabled"] as? Bool {
+            UserDefaults.standard.set(enabled, forKey: "event_video_enabled")
+        }
+        if let enabled = ctx["live_haptic_enabled"] as? Bool {
+            UserDefaults.standard.set(enabled, forKey: "live_haptic_enabled")
+        }
     }
 
     /// iPhone에서 보낸 메시지 수신
@@ -111,6 +119,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 self.handleThemeUpdate(message)
             case "store_theme_update":
                 self.handleStoreThemeUpdate(message)
+            case "settings_update":
+                self.handleSettingsUpdate(message)
             case "haptic_event":
                 self.handleHapticEvent(message)
             case "watch_sync_prompt":
@@ -122,6 +132,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     }
 
     private func handleGameData(_ message: [String: Any]) {
+        let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
+        guard liveHapticEnabled else {
+            print("[WatchConnectivity] live_haptic_enabled=false, freezing game_data")
+            return
+        }
         let rawStatus = message["status"] as? String ?? ""
         let inning = message["inning"] as? String ?? ""
         let isFinished = rawStatus.uppercased() == "FINISHED" || inning.contains("경기 종료")
@@ -180,7 +195,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 guard let ts = message["timestamp"] as? TimeInterval else { return false }
                 return Date().timeIntervalSince1970 - ts > Self.staleEventThreshold
             }()
-            if !isStale {
+            let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
+            if !isStale && liveHapticEnabled {
                 triggerHaptic(eventType: eventType)
             }
         }
@@ -207,6 +223,17 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         }
     }
 
+    private func handleSettingsUpdate(_ message: [String: Any]) {
+        if let enabled = message["event_video_enabled"] as? Bool {
+            UserDefaults.standard.set(enabled, forKey: "event_video_enabled")
+            print("[WatchConnectivity] event_video_enabled = \(enabled)")
+        }
+        if let enabled = message["live_haptic_enabled"] as? Bool {
+            UserDefaults.standard.set(enabled, forKey: "live_haptic_enabled")
+            print("[WatchConnectivity] live_haptic_enabled = \(enabled)")
+        }
+    }
+
     /// 10초 이상 된 이벤트는 stale로 판정 (워치 재시작 시 이벤트 폭주 방지)
     private static let staleEventThreshold: TimeInterval = 10.0
 
@@ -222,6 +249,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         if let eventTimestamp = message["timestamp"] as? TimeInterval,
            Date().timeIntervalSince1970 - eventTimestamp > Self.staleEventThreshold {
             print("[WatchConnectivity] Skipping stale haptic event: \(eventType)")
+            return
+        }
+
+        // 마스터 스위치 OFF 시 차단
+        let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
+        guard liveHapticEnabled else {
+            print("[WatchConnectivity] live_haptic_enabled=false, skipping: \(eventType)")
             return
         }
 
@@ -258,6 +292,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         print("⌚ [WatchConn] Direct push haptic: \(upper) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
         latestEventType = upper
         latestEventTimestamp = Date()
+        let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
+        guard liveHapticEnabled else {
+            print("⌚ [WatchConn] live_haptic_enabled=false, skipping push haptic: \(upper)")
+            return
+        }
         triggerHaptic(eventType: eventType)
     }
 
@@ -395,7 +434,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 device.play(.click)
             }
-        case "STEAL":
+        case "STEAL", "TAG_UP_ADVANCE":
             device.play(.click)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 device.play(.click)

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Watch
@@ -297,13 +298,29 @@ fun SettingsScreen(
         }
 
         item {
-            var hapticEnabled by remember { mutableStateOf(true) }
+            val context = LocalContext.current
+            val prefs = remember {
+                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+            }
+            var hapticEnabled by remember {
+                mutableStateOf(prefs.getBoolean("live_haptic_enabled", true))
+            }
             SettingsItemWithSwitch(
                 icon = Icons.Default.Vibration,
                 title = "경기 라이브 알림",
                 subtitle = "실시간 경기 내용을 워치로 알림 받기",
                 checked = hapticEnabled,
-                onCheckedChange = { hapticEnabled = it }
+                onCheckedChange = {
+                    hapticEnabled = it
+                    prefs.edit().putBoolean("live_haptic_enabled", it).apply()
+                    com.basehaptic.mobile.wear.WearSettingsSyncManager
+                        .syncLiveHapticEnabledToWatch(context, it)
+                    if (it) {
+                        // OFF→ON 복원: 캐시된 마지막 game_data를 즉시 워치에 push
+                        com.basehaptic.mobile.wear.WearGameSyncManager
+                            .resyncLastGameDataToWatch(context)
+                    }
+                }
             )
         }
 
@@ -323,6 +340,27 @@ fun SettingsScreen(
                 onCheckedChange = {
                     ballStrikeEnabled = it
                     prefs.edit().putBoolean("ball_strike_haptic_enabled", it).apply()
+                }
+            )
+        }
+
+        item {
+            val context = LocalContext.current
+            val prefs = remember {
+                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+            }
+            var eventVideoEnabled by remember {
+                mutableStateOf(prefs.getBoolean("event_video_enabled", true))
+            }
+            SettingsItemWithSwitch(
+                icon = Icons.Default.PlayCircle,
+                title = "이벤트 영상 알림",
+                subtitle = "홈런·안타·득점 등 이벤트 발생 시 워치 영상 재생",
+                checked = eventVideoEnabled,
+                onCheckedChange = {
+                    eventVideoEnabled = it
+                    prefs.edit().putBoolean("event_video_enabled", it).apply()
+                    com.basehaptic.mobile.wear.WearSettingsSyncManager.syncEventVideoEnabledToWatch(context, it)
                 }
             )
         }

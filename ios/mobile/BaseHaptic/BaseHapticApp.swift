@@ -15,7 +15,11 @@ struct BaseHapticApp: App {
     init() {
         let savedTeam = UserDefaults.standard.string(forKey: "selected_team") ?? Team.none.rawValue
         _showOnboarding = State(initialValue: savedTeam == Team.none.rawValue)
-        UserDefaults.standard.register(defaults: ["ball_strike_haptic_enabled": true])
+        UserDefaults.standard.register(defaults: [
+            "live_haptic_enabled": true,
+            "ball_strike_haptic_enabled": true,
+            "event_video_enabled": true,
+        ])
     }
 
     private var selectedTeam: Team {
@@ -68,6 +72,13 @@ struct BaseHapticApp: App {
             .preferredColorScheme(.dark)
             .onAppear {
                 connectivityManager.activate()
+                // 워치에 사용자 설정 초기 동기화 (영상 알림 토글 등)
+                WatchThemeSyncManager.syncEventVideoEnabledToWatch(
+                    enabled: UserDefaults.standard.bool(forKey: "event_video_enabled")
+                )
+                WatchThemeSyncManager.syncLiveHapticEnabledToWatch(
+                    enabled: UserDefaults.standard.bool(forKey: "live_haptic_enabled")
+                )
                 // TODO: Live Activity 배포 시 활성화
                 // LiveActivityManager.shared.cleanupStaleActivities()
             }
@@ -572,12 +583,21 @@ struct ContentView: View {
                             let isMyTeamAway = selectedTeam != .none && state.awayTeamId == selectedTeam
                             let myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
                                             (isMyTeamAway && state.awayScore > state.homeScore)
-                            if myTeamWon {
+                            let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
+                            if myTeamWon && liveHapticEnabled {
                                 WatchGameSyncManager.shared.sendHapticEvent(eventType: "VICTORY")
                             }
                         }
                     }
                 case .events(let items):
+                    let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
+                    guard liveHapticEnabled else {
+                        let sortedItems = items.sorted(by: { $0.cursor < $1.cursor })
+                        if let maxCursor = sortedItems.last?.cursor {
+                            lastSentEventCursor = max(lastSentEventCursor, maxCursor)
+                        }
+                        break
+                    }
                     let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
                     let sortedItems = items.sorted(by: { $0.cursor < $1.cursor })
                     let newItems = sortedItems.filter { $0.cursor > lastSentEventCursor }
@@ -599,6 +619,7 @@ struct ContentView: View {
                     }
                 case .update(let state, let events):
                     // events 처리 (햅틱 먼저)
+                    let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
                     let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
                     let sortedEvents = events.sorted(by: { $0.cursor < $1.cursor })
                     let newEvents = sortedEvents.filter { $0.cursor > lastSentEventCursor }
@@ -606,7 +627,7 @@ struct ContentView: View {
                     let hasScore = batchTypes.contains("SCORE") || batchTypes.contains("HOMERUN")
                     for event in sortedEvents {
                         if event.cursor > lastSentEventCursor {
-                            if let mapped = mapToWatchEventType(event.type) {
+                            if liveHapticEnabled, let mapped = mapToWatchEventType(event.type) {
                                 if mapped == "HIT" && hasScore { /* skip HIT when SCORE present */ }
                                 else {
                                     let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
@@ -652,7 +673,7 @@ struct ContentView: View {
                                 let isMyTeamAway = selectedTeam != .none && state.awayTeamId == selectedTeam
                                 let myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
                                                 (isMyTeamAway && state.awayScore > state.homeScore)
-                                if myTeamWon {
+                                if myTeamWon && liveHapticEnabled {
                                     WatchGameSyncManager.shared.sendHapticEvent(eventType: "VICTORY")
                                 }
                             }
@@ -703,7 +724,7 @@ private func mapToWatchEventType(_ type: String) -> String? {
     case "SAC_FLY_SCORE":
         return "SCORE"
     case "TAG_UP_ADVANCE":
-        return "OUT"
+        return "STEAL"
     default:
         return nil
     }

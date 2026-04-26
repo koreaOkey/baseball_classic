@@ -286,7 +286,9 @@ class GameSyncForegroundService : Service() {
                         val isMyTeamAway = selectedTeam != Team.NONE && state.awayTeamId == selectedTeam
                         val myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
                             (isMyTeamAway && state.awayScore > state.homeScore)
-                        if (myTeamWon) {
+                        val liveHapticEnabled = getSharedPreferences("basehaptic_user_prefs", MODE_PRIVATE)
+                            .getBoolean("live_haptic_enabled", true)
+                        if (myTeamWon && liveHapticEnabled) {
                             WearGameSyncManager.sendHapticEvent(applicationContext, "VICTORY")
                         }
                     }
@@ -301,21 +303,24 @@ class GameSyncForegroundService : Service() {
 
                 val sorted = incoming.sortedBy { it.cursor }
                 if (sendHaptics) {
-                    val ballStrikeEnabled = getSharedPreferences("basehaptic_user_prefs", MODE_PRIVATE)
-                        .getBoolean("ball_strike_haptic_enabled", true)
+                    val prefs = getSharedPreferences("basehaptic_user_prefs", MODE_PRIVATE)
+                    val liveHapticEnabled = prefs.getBoolean("live_haptic_enabled", true)
+                    val ballStrikeEnabled = prefs.getBoolean("ball_strike_haptic_enabled", true)
                     val newEvents = sorted.filter { it.cursor > lastSentEventCursor }
                     val batchEventTypes = newEvents.mapNotNull { mapToWatchEventType(it.type) }.toSet()
                     val hasScore = "SCORE" in batchEventTypes || "HOMERUN" in batchEventTypes
                     newEvents.forEach { event ->
-                            mapToWatchEventType(event.type)?.let { mapped ->
-                                if (mapped == "HIT" && hasScore) return@let
-                                val isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
-                                if (!isBallOrStrike || ballStrikeEnabled) {
-                                    WearGameSyncManager.sendHapticEvent(
-                                        applicationContext,
-                                        mapped,
-                                        event.cursor
-                                    )
+                            if (liveHapticEnabled) {
+                                mapToWatchEventType(event.type)?.let { mapped ->
+                                    if (mapped == "HIT" && hasScore) return@let
+                                    val isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
+                                    if (!isBallOrStrike || ballStrikeEnabled) {
+                                        WearGameSyncManager.sendHapticEvent(
+                                            applicationContext,
+                                            mapped,
+                                            event.cursor
+                                        )
+                                    }
                                 }
                             }
                             lastSentEventCursor = max(lastSentEventCursor, event.cursor)
@@ -421,7 +426,7 @@ class GameSyncForegroundService : Service() {
             "BALL", "STRIKE", "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY",
             "HIT", "HOMERUN", "SCORE", "WALK", "STEAL" -> normalized
             "SAC_FLY_SCORE" -> "SCORE"
-            "TAG_UP_ADVANCE" -> "OUT"
+            "TAG_UP_ADVANCE" -> "STEAL"
             else -> null
         }
     }

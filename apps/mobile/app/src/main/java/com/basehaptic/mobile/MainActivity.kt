@@ -366,6 +366,15 @@ fun BaseHapticApp(
         }
     }
 
+    // 워치에 사용자 설정 초기 동기화 (영상 알림 토글, 라이브 알림 마스터 스위치)
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+        val videoEnabled = prefs.getBoolean("event_video_enabled", true)
+        val liveHapticEnabled = prefs.getBoolean("live_haptic_enabled", true)
+        com.basehaptic.mobile.wear.WearSettingsSyncManager.syncEventVideoEnabledToWatch(context, videoEnabled)
+        com.basehaptic.mobile.wear.WearSettingsSyncManager.syncLiveHapticEnabledToWatch(context, liveHapticEnabled)
+    }
+
     DisposableEffect(lifecycleOwner, selectedTeam, todayGamesLoadedDate) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {

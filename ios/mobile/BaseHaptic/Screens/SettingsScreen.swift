@@ -15,9 +15,10 @@ struct SettingsScreen: View {
 
     @Environment(\.teamTheme) private var teamTheme
     @State private var showTeamPicker = false
-    @State private var hapticEnabled = true
+    @AppStorage("live_haptic_enabled") private var hapticEnabled = true
     @State private var highFiveEnabled = true
     @AppStorage("ball_strike_haptic_enabled") private var ballStrikeHapticEnabled = true
+    @AppStorage("event_video_enabled") private var eventVideoEnabled = true
     @State private var showDeleteConfirm = false
     @State private var isDeletingAccount = false
 
@@ -162,6 +163,13 @@ struct SettingsScreen: View {
                     subtitle: "실시간 경기 내용을 워치로 알림 받기",
                     isOn: $hapticEnabled
                 )
+                .onChange(of: hapticEnabled) { _, newValue in
+                    WatchThemeSyncManager.syncLiveHapticEnabledToWatch(enabled: newValue)
+                    if newValue {
+                        // OFF→ON 복원: 캐시된 마지막 game_data를 즉시 워치에 push
+                        WatchGameSyncManager.shared.resyncLastGameDataToWatch()
+                    }
+                }
 
                 SettingsItemWithToggle(
                     icon: "baseball",
@@ -169,6 +177,16 @@ struct SettingsScreen: View {
                     subtitle: "볼, 스트라이크 이벤트를 워치에서 진동으로 받기",
                     isOn: $ballStrikeHapticEnabled
                 )
+
+                SettingsItemWithToggle(
+                    icon: "play.rectangle.fill",
+                    title: "이벤트 영상 알림",
+                    subtitle: "홈런·안타·득점 등 이벤트 발생 시 워치 영상 재생",
+                    isOn: $eventVideoEnabled
+                )
+                .onChange(of: eventVideoEnabled) { _, newValue in
+                    WatchThemeSyncManager.syncEventVideoEnabledToWatch(enabled: newValue)
+                }
 
                 // 개발자 섹션 - 배포 시 숨김
                 Spacer().frame(height: AppSpacing.lg)

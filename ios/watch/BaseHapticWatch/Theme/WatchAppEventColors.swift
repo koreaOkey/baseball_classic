@@ -9,11 +9,11 @@ enum WatchAppEventColors {
         switch eventType.uppercased() {
         case "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY":
             return WatchColors.yellow500
-        case "HIT", "WALK", "STEAL":
+        case "HIT", "WALK", "STEAL", "TAG_UP_ADVANCE":
             return WatchColors.green500
         case "DOUBLE_PLAY", "TRIPLE_PLAY", "STRIKE":
             return WatchColors.orange500
-        case "OUT", "TAG_UP_ADVANCE":
+        case "OUT":
             return WatchColors.red500
         case "BALL":
             return WatchColors.gray400
@@ -29,6 +29,7 @@ enum WatchAppEventColors {
         case "HIT": return ("HIT", "bolt.fill", WatchColors.green500)
         case "WALK": return ("WALK", "bolt.fill", WatchColors.green400)
         case "STEAL": return ("STEAL", "bolt.fill", WatchColors.cyan500)
+        case "TAG_UP_ADVANCE": return ("STEAL", "bolt.fill", WatchColors.cyan500)
         case "SCORE": return ("SCORE", "trophy.fill", WatchColors.yellow500)
         case "HOMERUN": return ("HOMERUN", "trophy.fill", WatchColors.yellow500)
         case "OUT": return ("OUT", "xmark.circle.fill", WatchColors.red500)

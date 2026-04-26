@@ -18,13 +18,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -37,7 +40,11 @@ import com.basehaptic.watch.data.BaseStatus
 import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.data.getMockGameData
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
+import com.basehaptic.watch.ui.theme.Blue400
+import com.basehaptic.watch.ui.theme.Blue500
+import com.basehaptic.watch.ui.theme.Blue600
 import com.basehaptic.watch.ui.theme.LocalWatchTeamTheme
+import com.basehaptic.watch.ui.theme.WatchTeamTheme
 import com.basehaptic.watch.ui.theme.Gray800
 import com.basehaptic.watch.ui.theme.Gray900
 import com.basehaptic.watch.ui.theme.Gray950
@@ -50,6 +57,14 @@ import com.basehaptic.watch.ui.theme.WatchUiProfile
 import com.basehaptic.watch.displayTeamName
 import com.basehaptic.watch.ui.theme.Yellow400
 import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
+
+private val TextShadowStyle = TextStyle(
+    shadow = Shadow(
+        color = Color.Black.copy(alpha = 0.7f),
+        offset = Offset(0f, 1f),
+        blurRadius = 4f
+    )
+)
 
 @Composable
 fun LiveGameScreen(
@@ -84,7 +99,7 @@ fun LiveGameScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(Color.Black.copy(alpha = 0.6f))
             )
         } else if (watchTheme.teamName == "STORE") {
             // iOS: LinearGradient(startPoint: .top, endPoint: .center)
@@ -177,19 +192,22 @@ fun LiveGameScreen(
                         color = inningColor,
                         fontSize = uiProfile.inningTextSp.sp,
                         fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        style = TextShadowStyle
                     )
                 } else {
                     Text(
                         text = gameData.inning,
                         color = inningColor,
                         fontSize = uiProfile.inningTextSp.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        style = TextShadowStyle
                     )
                     Text(
                         text = inningHalfIcon(gameData.inning),
                         color = inningColor,
-                        fontSize = uiProfile.inningHalfSp.sp
+                        fontSize = uiProfile.inningHalfSp.sp,
+                        style = TextShadowStyle
                     )
                 }
             }
@@ -255,7 +273,8 @@ fun LiveGameScreen(
                 .offset(y = (uiProfile.playerInfoOffsetYDp - globalContentShiftDownDp).dp),
             color = Color.White.copy(alpha = 0.62f),
             fontSize = uiProfile.playerInfoSp.sp,
-            maxLines = 1
+            maxLines = 1,
+            style = TextShadowStyle
         )
 
         Text(
@@ -297,7 +316,8 @@ private fun ScoreSide(
             fontSize = uiProfile.scoreValueSp.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = (-1).sp,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            style = TextShadowStyle
         )
         Text(
             text = displayTeamName(team),
@@ -306,7 +326,8 @@ private fun ScoreSide(
             fontSize = uiProfile.teamNameSp.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            style = TextShadowStyle
         )
     }
 }
@@ -418,6 +439,24 @@ fun LiveGameScreenPreviewLargeRound() {
 @Composable
 fun LiveGameScreenPreviewSquare() {
     BaseHapticWatchTheme(teamName = "SSG") {
+        LiveGameScreen(gameData = getMockGameData())
+    }
+}
+
+@Preview(name = "미리보기: lock_watch", device = "id:wearos_large_round")
+@Composable
+fun LiveGameScreenPreviewLockWatch() {
+    val previewTheme = WatchTeamTheme(
+        teamName = "PREVIEW",
+        primary = Blue500,
+        primaryDark = Blue600,
+        secondary = Blue400,
+        accent = Blue400,
+        gradientStart = Blue500,
+        gradientEnd = Blue600,
+        backgroundImage = "theme_lock_watch_preview"
+    )
+    BaseHapticWatchTheme(storeThemeOverride = previewTheme) {
         LiveGameScreen(gameData = getMockGameData())
     }
 }

@@ -31,11 +31,17 @@ class DataLayerListenerService : WearableListenerService() {
         const val GAME_PREFS_NAME = "watch_game_prefs"
         const val ACTION_GAME_UPDATED = "com.basehaptic.watch.ACTION_GAME_UPDATED"
         const val ACTION_WATCH_SYNC_PROMPT = "com.basehaptic.watch.ACTION_WATCH_SYNC_PROMPT"
+        const val ACTION_SETTINGS_UPDATED = "com.basehaptic.watch.ACTION_SETTINGS_UPDATED"
+
+        const val SETTINGS_PREFS_NAME = "watch_user_prefs"
+        const val PREF_KEY_EVENT_VIDEO_ENABLED = "event_video_enabled"
+        const val PREF_KEY_LIVE_HAPTIC_ENABLED = "live_haptic_enabled"
 
         const val PATH_GAME = "/game"
         const val PATH_THEME = "/theme"
         const val PATH_HAPTIC = "/haptic"
         const val PATH_WATCH_PROMPT = "/watch/prompt"
+        const val PATH_SETTINGS = "/settings"
         
         const val KEY_GAME_ID = "game_id"
         const val KEY_HOME_TEAM = "home_team"
@@ -79,6 +85,7 @@ class DataLayerListenerService : WearableListenerService() {
                     path?.startsWith(PATH_THEME) == true -> handleThemeData(item)
                     path?.startsWith(PATH_HAPTIC) == true -> handleHapticEvent(item)
                     path?.startsWith(PATH_WATCH_PROMPT) == true -> handleWatchSyncPrompt(item)
+                    path?.startsWith(PATH_SETTINGS) == true -> handleSettingsUpdate(item)
                 }
             }
         }
@@ -88,6 +95,12 @@ class DataLayerListenerService : WearableListenerService() {
      * 경기 데이터 수신 → UI 업데이트
      */
     private fun handleGameData(item: DataItem) {
+        val liveHapticEnabled = getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)
+        if (!liveHapticEnabled) {
+            Log.d(TAG, "live_haptic_enabled=false, freezing game_data")
+            return
+        }
         val dataMap = DataMapItem.fromDataItem(item).dataMap
         val rawStatus = dataMap.getString(KEY_STATUS, "")
         val incomingInning = dataMap.getString(KEY_INNING, "") ?: ""
@@ -268,6 +281,30 @@ class DataLayerListenerService : WearableListenerService() {
         wakeScreenForPrompt(gameId)
     }
 
+    /**
+     * 사용자 설정 수신 → SharedPreferences 저장 + 브로드캐스트
+     */
+    private fun handleSettingsUpdate(item: DataItem) {
+        val dataMap = DataMapItem.fromDataItem(item).dataMap
+        val prefs = getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+        var changed = false
+        if (dataMap.containsKey(PREF_KEY_EVENT_VIDEO_ENABLED)) {
+            val enabled = dataMap.getBoolean(PREF_KEY_EVENT_VIDEO_ENABLED, true)
+            prefs.edit().putBoolean(PREF_KEY_EVENT_VIDEO_ENABLED, enabled).apply()
+            Log.d(TAG, "event_video_enabled = $enabled")
+            changed = true
+        }
+        if (dataMap.containsKey(PREF_KEY_LIVE_HAPTIC_ENABLED)) {
+            val enabled = dataMap.getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)
+            prefs.edit().putBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, enabled).apply()
+            Log.d(TAG, "live_haptic_enabled = $enabled")
+            changed = true
+        }
+        if (changed) {
+            sendBroadcast(Intent(ACTION_SETTINGS_UPDATED))
+        }
+    }
+
     private fun saveLatestEvent(eventType: String, eventCursor: Long?) {
         getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -282,6 +319,14 @@ class DataLayerListenerService : WearableListenerService() {
     }
     
     private fun triggerHapticFeedback(eventType: String) {
+        // 마스터 스위치 OFF 시 햅틱·화면 깨우기 모두 차단
+        val liveHapticEnabled = getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)
+        if (!liveHapticEnabled) {
+            Log.d(TAG, "live_haptic_enabled=false, skipping: $eventType")
+            return
+        }
+
         @Suppress("DEPRECATION")
         val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         if (vibrator == null || !vibrator.hasVibrator()) {
@@ -307,7 +352,7 @@ class DataLayerListenerService : WearableListenerService() {
                     intArrayOf(0, 180, 0, 180)
             "WALK" -> longArrayOf(0, 150, 100, 150) to
                     intArrayOf(0, 180, 0, 180)
-            "STEAL" -> longArrayOf(0, 150, 100, 150) to
+            "STEAL", "TAG_UP_ADVANCE" -> longArrayOf(0, 150, 100, 150) to
                     intArrayOf(0, 180, 0, 180)
             "OUT" -> longArrayOf(0, 100) to
                     intArrayOf(0, 210)

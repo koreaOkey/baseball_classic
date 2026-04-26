@@ -48,6 +48,7 @@ struct WatchContentView: View {
     // true 인 동안은 후속 이벤트를 전부 무시. 각 영상 onFinished 에서 false
     // 로 복구하고, 혹시 onFinished 가 누락돼도 watchdog 타이머로 자동 해제.
     @State private var isPlayingVideo = false
+    @AppStorage("event_video_enabled") private var eventVideoEnabled = true
 
     private let eventOverlayDuration: TimeInterval = 2.2
     private let eventFreshness: TimeInterval = 5.0
@@ -182,7 +183,7 @@ struct WatchContentView: View {
                 let isMyTeamAway = myTeam == game.awayTeam.uppercased()
                 let myTeamWon = (isMyTeamHome && game.homeScore > game.awayScore) ||
                                 (isMyTeamAway && game.awayScore > game.homeScore)
-                if myTeamWon {
+                if myTeamWon, eventVideoEnabled {
                     beginVideoPlayback()
                     withAnimation(.easeInOut(duration: 0.3)) {
                         isVictoryVisible = true
@@ -251,6 +252,10 @@ struct WatchContentView: View {
     }
 
     private func showTransition(for eventType: String) {
+        let videoEvents: Set<String> = ["VICTORY", "HOMERUN", "HIT", "DOUBLE_PLAY", "SCORE"]
+        if !eventVideoEnabled, videoEvents.contains(eventType) {
+            return
+        }
         let game = connectivity.gameData
         let isTestGame = game?.gameId.hasPrefix("test_") == true
 
