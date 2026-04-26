@@ -22,8 +22,13 @@ class GameEventBus:
             "broadcast_no_targets": 0,
         }
 
-    async def connect(self, websocket: WebSocket) -> None:
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket) -> bool:
+        try:
+            await websocket.accept()
+            return True
+        except Exception as exc:
+            logger.info("ws accept aborted (client disconnected during handshake): %s", exc)
+            return False
 
     async def register(self, game_id: str, websocket: WebSocket) -> None:
         async with self._lock:
@@ -53,7 +58,7 @@ class GameEventBus:
                 return True
             except Exception as exc:
                 self.stats["send_fail"] += 1
-                logger.warning("ws send_json failed: %s", exc)
+                logger.debug("ws send_json failed (client gone): %s", exc)
                 return False
 
     async def broadcast(self, game_id: str, message: dict) -> None:

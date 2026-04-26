@@ -834,18 +834,18 @@ async def _load_game_initial_data_cached(game_id: str) -> tuple[dict[str, Any] |
 
 @app.websocket("/ws/games/{game_id}")
 async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
-    await event_bus.connect(websocket)
+    if not await event_bus.connect(websocket):
+        return
     await event_bus.register(game_id, websocket)
-
-    state_payload, events_payload = await _load_game_initial_data_cached(game_id)
-    if state_payload is not None:
-        await event_bus.safe_send(websocket, {"type": "state", "payload": state_payload})
-    if events_payload:
-        await event_bus.safe_send(
-            websocket, {"type": "events", "payload": {"items": events_payload}}
-        )
-
     try:
+        state_payload, events_payload = await _load_game_initial_data_cached(game_id)
+        if state_payload is not None:
+            await event_bus.safe_send(websocket, {"type": "state", "payload": state_payload})
+        if events_payload:
+            await event_bus.safe_send(
+                websocket, {"type": "events", "payload": {"items": events_payload}}
+            )
+
         while True:
             await websocket.receive_text()
             await event_bus.safe_send(
@@ -853,6 +853,10 @@ async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
                 {"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}},
             )
     except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.warning("ws game stream aborted game_id=%s: %s", game_id, exc)
+    finally:
         await event_bus.disconnect(game_id, websocket)
 
 
@@ -895,16 +899,16 @@ async def websocket_team_record_stream(
         season_code=normalized_season_code,
         team_id=normalized_team_id,
     )
-    await event_bus.connect(websocket)
+    if not await event_bus.connect(websocket):
+        return
     await event_bus.register(channel, websocket)
-
-    message = await _load_team_record_initial_data_cached(
-        normalized_category_id, normalized_season_code, normalized_team_id,
-    )
-    if message is not None:
-        await event_bus.safe_send(websocket, message)
-
     try:
+        message = await _load_team_record_initial_data_cached(
+            normalized_category_id, normalized_season_code, normalized_team_id,
+        )
+        if message is not None:
+            await event_bus.safe_send(websocket, message)
+
         while True:
             await websocket.receive_text()
             await event_bus.safe_send(
@@ -912,4 +916,8 @@ async def websocket_team_record_stream(
                 {"type": "pong", "payload": {"at": datetime.now(UTC).isoformat()}},
             )
     except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        logger.warning("ws team-record stream aborted channel=%s: %s", channel, exc)
+    finally:
         await event_bus.disconnect(channel, websocket)
