@@ -111,7 +111,12 @@ class DataLayerListenerService : WearableListenerService() {
         val normalizedOut = if (isFinished) 0 else rawOut
         val normalizedBall = if (isFinished || rawOut >= 3) 0 else dataMap.getInt(KEY_BALL, 0).coerceAtLeast(0)
         val normalizedStrike = if (isFinished || rawOut >= 3) 0 else dataMap.getInt(KEY_STRIKE, 0).coerceAtLeast(0)
-        val normalizedInning = if (isFinished) "경기 종료" else incomingInning
+        // 1~8회 3out → 다음 이닝으로 즉시 전진. 9회 이상은 점수/연장 판정이 필요해 백엔드 값 사용.
+        val normalizedInning = when {
+            isFinished -> "경기 종료"
+            rawOut >= 3 -> advanceInningBeforeNinth(incomingInning)
+            else -> incomingInning
+        }
 
         getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -426,5 +431,20 @@ class DataLayerListenerService : WearableListenerService() {
         }
         runCatching { startActivity(wakeIntent) }
             .onFailure(onFailure)
+    }
+
+    /**
+     * 3out 시 워치에서 이닝을 즉시 전진. 9회말은 점수/연장 판정 필요해 그대로 두고 백엔드 대기.
+     * "N회초" → "N회말", "N회말" (N<9) → "(N+1)회초". 그 외는 원본 유지.
+     */
+    private fun advanceInningBeforeNinth(inning: String): String {
+        val match = Regex("^(\\d+)회(초|말)$").matchEntire(inning) ?: return inning
+        val number = match.groupValues[1].toIntOrNull() ?: return inning
+        val half = match.groupValues[2]
+        return when {
+            half == "초" -> "${number}회말"
+            half == "말" && number < 9 -> "${number + 1}회초"
+            else -> inning
+        }
     }
 }

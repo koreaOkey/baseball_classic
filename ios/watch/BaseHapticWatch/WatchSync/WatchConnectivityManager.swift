@@ -145,7 +145,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         let normalizedOut = isFinished ? 0 : rawOut
         let normalizedBall = (isFinished || rawOut >= 3) ? 0 : max(message["ball"] as? Int ?? 0, 0)
         let normalizedStrike = (isFinished || rawOut >= 3) ? 0 : max(message["strike"] as? Int ?? 0, 0)
-        let normalizedInning = isFinished ? "경기 종료" : inning
+        let normalizedInning: String = {
+            if isFinished { return "경기 종료" }
+            // 1~8회 3out → 다음 이닝으로 즉시 전진 (백엔드 state 도착 전 갭 메움).
+            // 9회 이상은 점수/연장 판정이 필요해 백엔드 값을 그대로 사용.
+            if rawOut >= 3 { return Self.advanceInningBeforeNinth(inning) }
+            return inning
+        }()
 
         gameData = GameData(
             gameId: message["game_id"] as? String ?? "",
@@ -463,6 +469,31 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     }
     /// 백엔드 팀명("SSG 랜더스"), 팀 코드("DOOSAN"), 마스코트("베어스") 등 어느 형식이든 canonical 마스코트로 변환.
     /// 팀 비교/표시 양쪽에서 사용 — 멱등.
+    /// 3out 시 워치에서 이닝을 즉시 전진. 9회말은 그대로 두고 백엔드 판정 대기.
+    /// "N회초" → "N회말", "N회말" (N<9) → "(N+1)회초". 그 외(9회초/9회말/연장/형식 불일치)는 원본 유지.
+    static func advanceInningBeforeNinth(_ inning: String) -> String {
+        let pattern = "^([0-9]+)회(초|말)$"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return inning }
+        let range = NSRange(inning.startIndex..<inning.endIndex, in: inning)
+        guard let match = regex.firstMatch(in: inning, range: range), match.numberOfRanges == 3,
+              let numberRange = Range(match.range(at: 1), in: inning),
+              let halfRange = Range(match.range(at: 2), in: inning),
+              let number = Int(inning[numberRange]) else {
+            return inning
+        }
+        let half = String(inning[halfRange])
+        if half == "초" {
+            // 초가 끝나면 항상 같은 이닝의 말로 진행 (9회초 → 9회말도 포함; 종료 판정은 백엔드의 isFinished 신호로)
+            return "\(number)회말"
+        }
+        // 말 + 3out
+        if number < 9 {
+            return "\(number + 1)회초"
+        }
+        // 9회말 이상은 자체 전진 안 함
+        return inning
+    }
+
     static func displayTeamName(_ name: String) -> String {
         let n = name.trimmingCharacters(in: .whitespaces).lowercased()
         if n.isEmpty { return name }
