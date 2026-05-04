@@ -36,6 +36,40 @@ final class WatchThemeSyncManager {
         ])
     }
 
+    /// TODO(stadium-cheer): 활성화 시 응원 시각 도래 시 호출. 다크 머지 단계에서는 호출부 없음.
+    /// - Parameters:
+    ///   - teamCode: 사용자 응원팀 코드 (예: "DOOSAN")
+    ///   - stadiumCode: 구장 코드 (예: "JAMSIL")
+    ///   - cheerText: 응원 문구
+    ///   - primaryColorHex: 팀 컬러 헥스 (예: "#13274F")
+    ///   - hapticPatternId: 워치측 햅틱 패턴 식별자
+    ///   - fireAtUnixMs: 정시 발화 시각 (워치 측 NTP 보정용)
+    static func sendCheerTrigger(
+        teamCode: String,
+        stadiumCode: String,
+        cheerText: String,
+        primaryColorHex: String,
+        hapticPatternId: String,
+        fireAtUnixMs: Int64
+    ) {
+        let payload: [String: Any] = [
+            "type": "stadium_cheer_trigger",
+            "team_code": teamCode,
+            "stadium_code": stadiumCode,
+            "cheer_text": cheerText,
+            "primary_color_hex": primaryColorHex,
+            "haptic_pattern_id": hapticPatternId,
+            "fire_at_unix_ms": fireAtUnixMs,
+            "sent_at": Date().timeIntervalSince1970
+        ]
+        guard WCSession.default.activationState == .activated else { return }
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(payload, replyHandler: nil) { _ in }
+        } else {
+            WCSession.default.transferUserInfo(payload)
+        }
+    }
+
     private static func syncToWatch(context: [String: Any]) {
         guard WCSession.default.activationState == .activated else { return }
 

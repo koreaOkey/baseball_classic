@@ -125,10 +125,32 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 self.handleHapticEvent(message)
             case "watch_sync_prompt":
                 self.handleWatchSyncPrompt(message)
+            case "stadium_cheer_trigger":
+                // TODO(stadium-cheer): 활성화 시 아래 dispatch 주석 해제. 다크 단계에서는 수신해도 무시.
+                // self.handleStadiumCheerTrigger(message)
+                break
             default:
                 break
             }
         }
+    }
+
+    // TODO(stadium-cheer): 활성화 시 호출 주석 해제 + StadiumCheerScreen overlay 트리거.
+    private func handleStadiumCheerTrigger(_ message: [String: Any]) {
+        guard
+            UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool ?? true,
+            let teamCode = message["team_code"] as? String,
+            let cheerText = message["cheer_text"] as? String,
+            let primaryColorHex = message["primary_color_hex"] as? String
+        else { return }
+        let payload = StadiumCheerPayload(
+            teamCode: teamCode,
+            cheerText: cheerText,
+            primaryColorHex: primaryColorHex,
+            hapticPatternId: (message["haptic_pattern_id"] as? String) ?? "default",
+            fireAtUnixMs: (message["fire_at_unix_ms"] as? Int64) ?? 0
+        )
+        StadiumCheerCoordinator.shared.dispatch(payload)
     }
 
     private func handleGameData(_ message: [String: Any]) {
@@ -445,6 +467,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 device.play(.click)
             }
+        case "PITCHER_CHANGE":
+            device.play(.click)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                device.play(.click)
+            }
+        case "MOUND_VISIT":
+            break
         case "OUT":
             device.play(.directionDown)
         case "DOUBLE_PLAY":

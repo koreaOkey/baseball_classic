@@ -31,6 +31,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.HighlightOff
+import androidx.compose.material.icons.filled.Sports
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -724,6 +726,8 @@ private fun WatchEventOverlay(latestEvent: WatchEventInfo?, hideTypes: Set<Strin
         }
         if (event.type.uppercase() in hideTypes) return@LaunchedEffect
         visibleEvent = event
+        // MOUND_VISIT은 다음 이벤트가 들어올 때까지 계속 표시 — 다음 LaunchedEffect 재실행 시 visibleEvent가 새 이벤트로 덮임
+        if (event.type.uppercase() == "MOUND_VISIT") return@LaunchedEffect
         delay(EVENT_OVERLAY_DURATION_MS)
         if (visibleEvent?.timestamp == event.timestamp) {
             visibleEvent = null
@@ -939,12 +943,14 @@ private fun PlayerTransitionScreen(player: ExoPlayer) {
 
 private fun eventUiFor(type: String): WatchEventUi? {
     return when (type.uppercase()) {
-        "WALK" -> WatchEventUi("WALK", Icons.Default.Bolt, Color(0xFF4ADE80))
-        "STEAL" -> WatchEventUi("STEAL", Icons.Default.Bolt, Color(0xFF06B6D4))
-        "TAG_UP_ADVANCE" -> WatchEventUi("STEAL", Icons.Default.Bolt, Color(0xFF06B6D4))
+        "WALK" -> WatchEventUi("볼넷", Icons.Default.Bolt, Color(0xFF4ADE80))
+        "STEAL" -> WatchEventUi("도루", Icons.Default.Bolt, Color(0xFF06B6D4))
+        "TAG_UP_ADVANCE" -> WatchEventUi("도루", Icons.Default.Bolt, Color(0xFF06B6D4))
         "SCORE" -> WatchEventUi("SCORE", Icons.Default.EmojiEvents, Color(0xFFEAB308))
         "OUT" -> WatchEventUi("OUT", Icons.Default.HighlightOff, Color(0xFFEF4444))
         "TRIPLE_PLAY" -> WatchEventUi("TRIPLE PLAY", Icons.Default.HighlightOff, Color(0xFFDC2626))
+        "MOUND_VISIT" -> WatchEventUi("마운드 방문중...", Icons.Default.Sports, Color(0xFFFCD34D))
+        "PITCHER_CHANGE" -> WatchEventUi("투수 교체", Icons.Default.SwapHoriz, Color(0xFF60A5FA))
         else -> null
     }
 }

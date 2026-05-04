@@ -1,0 +1,22 @@
+# 실행 결과물
+packs/
+
+# 가상환경
+.venv/
+venv/
+
+# 환경변수
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/

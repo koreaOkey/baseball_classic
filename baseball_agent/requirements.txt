@@ -1,0 +1,16 @@
+# 야구봄 이미지 생성 Agent — 의존성.
+# 설치: pip install -r requirements.txt
+
+# 핵심
+langgraph>=0.2.0       # StateGraph, 조건부 엣지, 서브그래프
+pydantic>=2.0          # State 타입 안전성 + Annotated reducer
+openai>=1.40           # DALL-E 3, GPT-4o-mini, Vision, Responses API
+python-dotenv>=1.0     # .env 로드
+
+# 이미지 처리 (color_extractor)
+pillow>=10.0
+numpy>=1.26
+scikit-learn>=1.4
+
+# (선택) CLI UX
+rich>=13.0

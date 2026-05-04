@@ -40,6 +40,7 @@ import io.github.jan.supabase.auth.handleDeeplinks
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
+import com.basehaptic.mobile.data.model.StadiumCheerThemeStore
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.ThemeCategory
 import com.basehaptic.mobile.data.model.ThemeData
@@ -63,10 +64,14 @@ import kotlinx.coroutines.withContext
 private const val REQUEST_CODE_IN_APP_UPDATE = 9001
 private const val SHOW_COMMUNITY_TAB = false
 private const val SHOW_STORE_TAB = true
+// TODO(my-team-tab): 활성화 시 true로 변경. 다크 머지 단계에서는 탭 미노출.
+private const val SHOW_MY_TEAM_TAB = false
 private const val USER_PREFS_NAME = "basehaptic_user_prefs"
 private const val KEY_SELECTED_TEAM = "selected_team"
 private const val KEY_UNLOCKED_THEME_IDS = "unlocked_theme_ids"
 private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
+// 워치 페이스 테마와 무관하게 응원 시 풀스크린에 적용될 테마. ThemeStore와 별도로 StadiumCheerThemeStore에서 매칭.
+private const val KEY_ACTIVE_CHEER_THEME_ID = "active_cheer_theme_id"
 
 class MainActivity : ComponentActivity() {
     private val appUpdateManager by lazy { AppUpdateManagerFactory.create(this) }
@@ -139,6 +144,18 @@ class MainActivity : ComponentActivity() {
             .apply()
     }
 
+    private fun loadActiveCheerThemeId(): String? {
+        return getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_ACTIVE_CHEER_THEME_ID, null)
+    }
+
+    private fun persistActiveCheerThemeId(themeId: String?) {
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(KEY_ACTIVE_CHEER_THEME_ID, themeId)
+            .apply()
+    }
+
     private fun handleAuthDeeplink(intent: Intent) {
         try {
             SupabaseClientProvider.client.handleDeeplinks(intent) {}
@@ -190,6 +207,10 @@ class MainActivity : ComponentActivity() {
         val initialActiveTheme = initialActiveThemeId?.let { id ->
             ThemeStore.allThemes.find { it.id == id }
         }
+        val initialActiveCheerThemeId = loadActiveCheerThemeId()
+        val initialActiveCheerTheme = initialActiveCheerThemeId?.let { id ->
+            StadiumCheerThemeStore.allThemes.find { it.id == id }
+        }
 
         setContent {
             // ??猷⑦듃?먯꽌 ?좏깮 ? ?곹깭瑜?愿由ы븯怨??섏쐞 ?붾㈃?쇰줈 ?꾨떖
@@ -211,8 +232,10 @@ class MainActivity : ComponentActivity() {
                     },
                     initialUnlockedThemeIds = initialUnlockedIds,
                     initialActiveTheme = initialActiveTheme,
+                    initialActiveCheerTheme = initialActiveCheerTheme,
                     onPersistUnlockedThemeIds = ::persistUnlockedThemeIds,
-                    onPersistActiveThemeId = ::persistActiveThemeId
+                    onPersistActiveThemeId = ::persistActiveThemeId,
+                    onPersistActiveCheerThemeId = ::persistActiveCheerThemeId,
                 )
             }
         }
@@ -227,14 +250,17 @@ fun BaseHapticApp(
     onOnboardingComplete: (Team) -> Unit,
     initialUnlockedThemeIds: Set<String> = setOf("default"),
     initialActiveTheme: ThemeData? = null,
+    initialActiveCheerTheme: ThemeData? = null,
     onPersistUnlockedThemeIds: (Set<String>) -> Unit = {},
-    onPersistActiveThemeId: (String?) -> Unit = {}
+    onPersistActiveThemeId: (String?) -> Unit = {},
+    onPersistActiveCheerThemeId: (String?) -> Unit = {},
 ) {
     val authState by AuthManager.authState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     var currentView by remember { mutableStateOf<Screen>(Screen.Home) }
     val navigationHistory = remember { mutableStateListOf<Screen>() }
     var activeTheme by remember { mutableStateOf(initialActiveTheme) }
+    var activeCheerTheme by remember { mutableStateOf(initialActiveCheerTheme) }
     var selectedGameId by remember { mutableStateOf<String?>(null) }
     var syncedGameId by remember { mutableStateOf<String?>(null) }
     var showWatchSyncDialog by remember { mutableStateOf(false) }
@@ -523,6 +549,7 @@ fun BaseHapticApp(
                     )
                     Screen.Store -> ThemeStoreScreen(
                         activeTheme = activeTheme,
+                        activeCheerTheme = activeCheerTheme,
                         unlockedThemeIds = unlockedThemeIds,
                         onApplyTheme = { theme ->
                             activeTheme = theme
@@ -538,19 +565,32 @@ fun BaseHapticApp(
                                 }
                             }
                         },
+                        onApplyCheerTheme = { theme ->
+                            // 응원 테마는 워치 페이스 테마와 무관하게 별도 영속화. WearThemeSyncManager 호출 X.
+                            // TODO(stadium-cheer): 활성화 시 워치에 active_cheer_theme_id 동기화 + 풀스크린 응원 화면이 이 테마로 렌더링되도록 연결.
+                            activeCheerTheme = theme
+                            onPersistActiveCheerThemeId(theme?.id)
+                        },
                         onUnlockTheme = { theme ->
                             RewardedAdManager.loadAndShowAd(context) {
                                 unlockedThemeIds = unlockedThemeIds + theme.id
-                                activeTheme = theme
                                 onPersistUnlockedThemeIds(unlockedThemeIds)
-                                onPersistActiveThemeId(theme.id)
-                                WearThemeSyncManager.syncThemeToWatch(context, selectedTeam, theme.id)
+                                if (theme.id.startsWith("cheer_")) {
+                                    activeCheerTheme = theme
+                                    onPersistActiveCheerThemeId(theme.id)
+                                } else {
+                                    activeTheme = theme
+                                    onPersistActiveThemeId(theme.id)
+                                    WearThemeSyncManager.syncThemeToWatch(context, selectedTeam, theme.id)
+                                }
                                 if (authState is AuthState.LoggedIn) {
                                     coroutineScope.launch {
                                         try {
                                             withContext(Dispatchers.IO) {
                                                 ThemeRepository.saveUnlock(theme.id)
-                                                ThemeRepository.saveActiveTheme(theme.id)
+                                                if (!theme.id.startsWith("cheer_")) {
+                                                    ThemeRepository.saveActiveTheme(theme.id)
+                                                }
                                             }
                                         } catch (e: Exception) { e.printStackTrace() }
                                     }
@@ -587,6 +627,10 @@ fun BaseHapticApp(
                     Screen.WatchTest -> WatchTestScreen(
                         selectedTeam = selectedTeam,
                         onBack = { navigateBack() }
+                    )
+                    // TODO(my-team-tab): 활성화 시 SHOW_MY_TEAM_TAB=true. 컨테이너에 응원 랭킹·향후 팀별 뉴스 임베드.
+                    Screen.MyTeam -> MyTeamScreen(
+                        selectedTeam = selectedTeam,
                     )
                 }
             }
@@ -658,6 +702,17 @@ fun BottomNavigationBar(
             )
         }
 
+        // TODO(my-team-tab): 활성화 시 SHOW_MY_TEAM_TAB=true. 1차 콘텐츠는 응원팀 랭킹, 향후 팀별 뉴스 추가.
+        if (SHOW_MY_TEAM_TAB) {
+            BottomNavItem(
+                icon = Icons.Default.Star,
+                label = "내 팀",
+                selected = currentView == Screen.MyTeam,
+                onClick = { onNavigate(Screen.MyTeam) },
+                activeColor = teamTheme.navIndicator
+            )
+        }
+
         BottomNavItem(
             icon = Icons.Default.Settings,
             label = "설정",
@@ -709,5 +764,7 @@ sealed class Screen {
     object Store : Screen()
     object Settings : Screen()
     object WatchTest : Screen()
+    // TODO(my-team-tab): 활성화 시 BottomNavigationBar에 진입점 노출. 다크 머지 상태에서는 SHOW_MY_TEAM_TAB=false로 미노출.
+    object MyTeam : Screen()
 }
 

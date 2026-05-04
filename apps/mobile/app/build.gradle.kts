@@ -14,12 +14,31 @@ val localProperties = Properties().apply {
     }
 }
 
-val backendBaseUrl = (
+val backendBaseUrlValue = (
     (project.findProperty("backendBaseUrl") as String?)
         ?: localProperties.getProperty("backendBaseUrl")
         ?: System.getenv("BACKEND_BASE_URL")
-        ?: "http://10.0.2.2:8080"
-    ).replace("\"", "\\\"")
+        ?: "https://baseballclassic-production.up.railway.app"
+    )
+val backendBaseUrl = backendBaseUrlValue.replace("\"", "\\\"")
+
+fun isLocalBackendUrl(url: String): Boolean {
+    val normalizedUrl = url.trim().lowercase()
+    return normalizedUrl.contains("://10.0.2.2") ||
+        normalizedUrl.contains("://localhost") ||
+        normalizedUrl.contains("://127.0.0.1") ||
+        normalizedUrl.contains("://0.0.0.0")
+}
+
+gradle.taskGraph.whenReady {
+    val buildsRelease = allTasks.any { task -> task.name.contains("Release") }
+    if (buildsRelease && isLocalBackendUrl(backendBaseUrlValue)) {
+        throw GradleException(
+            "Release builds must use a public backend URL, but backendBaseUrl is '$backendBaseUrlValue'. " +
+                "Pass -PbackendBaseUrl=https://baseballclassic-production.up.railway.app or set BACKEND_BASE_URL."
+        )
+    }
+}
 
 val supabaseUrl = (
     localProperties.getProperty("supabaseUrl")
@@ -60,8 +79,8 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.0.1"
+        versionCode = 17
+        versionName = "1.0.2"
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")

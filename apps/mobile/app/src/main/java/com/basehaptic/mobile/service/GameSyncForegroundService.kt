@@ -424,7 +424,8 @@ class GameSyncForegroundService : Service() {
         val normalized = type?.uppercase() ?: return null
         return when (normalized) {
             "BALL", "STRIKE", "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY",
-            "HIT", "HOMERUN", "SCORE", "WALK", "STEAL" -> normalized
+            "HIT", "HOMERUN", "SCORE", "WALK", "STEAL",
+            "PITCHER_CHANGE", "MOUND_VISIT" -> normalized
             "SAC_FLY_SCORE" -> "SCORE"
             "TAG_UP_ADVANCE" -> "STEAL"
             else -> null

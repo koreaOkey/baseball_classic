@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.basehaptic.mobile.data.model.StadiumCheerThemeStore
 import com.basehaptic.mobile.data.model.ThemeCategory
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.data.model.ThemeStore
@@ -73,11 +74,15 @@ import com.basehaptic.mobile.ui.theme.Orange500
 import com.basehaptic.mobile.ui.theme.Red500
 import com.basehaptic.mobile.ui.theme.Yellow500
 
+private const val SHOW_STADIUM_CHEER_THEMES = false
+
 @Composable
 fun ThemeStoreScreen(
     activeTheme: ThemeData?,
+    activeCheerTheme: ThemeData?,
     unlockedThemeIds: Set<String>,
     onApplyTheme: (ThemeData?) -> Unit,
+    onApplyCheerTheme: (ThemeData?) -> Unit,
     onUnlockTheme: (ThemeData) -> Unit,
 ) {
     val teamTheme = LocalTeamTheme.current
@@ -112,6 +117,13 @@ fun ThemeStoreScreen(
                 color = teamTheme.primary,
                 modifier = Modifier.padding(top = AppSpacing.sm)
             )
+            if (SHOW_STADIUM_CHEER_THEMES) {
+                Text(
+                    text = "응원 테마: ${activeCheerTheme?.name ?: "기본 응원"}",
+                    style = AppFont.caption,
+                    color = Gray400,
+                )
+            }
         }
 
         // Tab Bar
@@ -149,8 +161,10 @@ fun ThemeStoreScreen(
             0 -> WatchThemesTab(
                 themes = freeAndAdThemes,
                 activeTheme = activeTheme,
+                activeCheerTheme = activeCheerTheme,
                 unlockedThemeIds = unlockedThemeIds,
                 onApplyTheme = onApplyTheme,
+                onApplyCheerTheme = onApplyCheerTheme,
                 onUnlockTheme = onUnlockTheme,
             )
             1 -> PhoneThemesTab()
@@ -158,14 +172,28 @@ fun ThemeStoreScreen(
     }
 }
 
+private enum class WatchThemeSection { BASIC, STADIUM_CHEER }
+
 @Composable
 private fun WatchThemesTab(
     themes: List<ThemeData>,
     activeTheme: ThemeData?,
+    activeCheerTheme: ThemeData?,
     unlockedThemeIds: Set<String>,
     onApplyTheme: (ThemeData?) -> Unit,
+    onApplyCheerTheme: (ThemeData?) -> Unit,
     onUnlockTheme: (ThemeData) -> Unit,
 ) {
+    var section by remember { androidx.compose.runtime.mutableStateOf(WatchThemeSection.BASIC) }
+    val effectiveSection = if (SHOW_STADIUM_CHEER_THEMES) section else WatchThemeSection.BASIC
+    val cheerThemes = if (SHOW_STADIUM_CHEER_THEMES) {
+        remember { StadiumCheerThemeStore.allThemes }
+    } else {
+        emptyList()
+    }
+    val displayThemes = if (effectiveSection == WatchThemeSection.BASIC) themes else cheerThemes
+    val activeForSection = if (effectiveSection == WatchThemeSection.BASIC) activeTheme else activeCheerTheme
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         contentPadding = PaddingValues(horizontal = AppSpacing.xxl, vertical = AppSpacing.md),
@@ -173,24 +201,38 @@ private fun WatchThemesTab(
         verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
         modifier = Modifier.fillMaxSize()
     ) {
-        item(span = { GridItemSpan(2) }) {
-            Text(
-                text = "베이직 테마",
-                style = AppFont.h5Bold,
-                color = Color.White,
-                modifier = Modifier.padding(top = AppSpacing.md, bottom = AppSpacing.xs)
-            )
+        if (SHOW_STADIUM_CHEER_THEMES) {
+            item(span = { GridItemSpan(2) }) {
+                WatchThemeSectionToggle(
+                    current = section,
+                    onChange = { section = it },
+                )
+            }
         }
 
-        items(themes, key = { it.id }) { theme ->
+        if (SHOW_STADIUM_CHEER_THEMES && effectiveSection == WatchThemeSection.STADIUM_CHEER) {
+            item(span = { GridItemSpan(2) }) {
+                Text(
+                    text = "응원 시각에 워치 풀스크린에 적용됩니다 (목업)",
+                    style = AppFont.caption,
+                    color = Gray500,
+                    modifier = Modifier.padding(bottom = AppSpacing.xs)
+                )
+            }
+        }
+
+        items(displayThemes, key = { "${effectiveSection.name}_${it.id}" }) { theme ->
             val isUnlocked = theme.category == ThemeCategory.FREE || theme.id in unlockedThemeIds
-            val isApplied = activeTheme?.id == theme.id
+            val isApplied = activeForSection?.id == theme.id
 
             ThemeCard(
                 theme = theme,
                 isUnlocked = isUnlocked,
                 isApplied = isApplied,
-                onApply = { onApplyTheme(theme) },
+                onApply = {
+                    if (effectiveSection == WatchThemeSection.BASIC) onApplyTheme(theme)
+                    else onApplyCheerTheme(theme)
+                },
                 onUnlock = { onUnlockTheme(theme) },
             )
         }
@@ -198,6 +240,49 @@ private fun WatchThemesTab(
         item(span = { GridItemSpan(2) }) {
             Spacer(modifier = Modifier.height(72.dp))
         }
+    }
+}
+
+@Composable
+private fun WatchThemeSectionToggle(
+    current: WatchThemeSection,
+    onChange: (WatchThemeSection) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = AppSpacing.md, bottom = AppSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+    ) {
+        SectionChip(
+            label = "베이직 테마",
+            selected = current == WatchThemeSection.BASIC,
+            onClick = { onChange(WatchThemeSection.BASIC) },
+        )
+        SectionChip(
+            label = "현장 응원 테마",
+            selected = current == WatchThemeSection.STADIUM_CHEER,
+            onClick = { onChange(WatchThemeSection.STADIUM_CHEER) },
+        )
+    }
+}
+
+@Composable
+private fun SectionChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val bg = if (selected) Red500 else Gray800
+    val fg = if (selected) Color.White else Gray500
+    Box(
+        modifier = Modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = AppSpacing.lg, vertical = 8.dp)
+    ) {
+        Text(text = label, style = AppFont.bodyBold, color = fg)
     }
 }
 

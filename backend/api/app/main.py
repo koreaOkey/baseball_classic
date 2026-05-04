@@ -21,7 +21,15 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
-from .models import DeviceToken, Game, GameEvent, LiveActivityToken
+from .models import (
+    CheerEvent,
+    DeviceToken,
+    Game,
+    GameEvent,
+    LiveActivityToken,
+    TeamCheckinDaily,
+    TeamCheckinSeason,
+)
 from .redis_bus import RedisBroadcastRelay
 from .apns import send_live_activity_push, send_push, send_push_to_tokens
 from .schemas import (
@@ -921,3 +929,184 @@ async def websocket_team_record_stream(
         logger.warning("ws team-record stream aborted channel=%s: %s", channel, exc)
     finally:
         await event_bus.disconnect(channel, websocket)
+
+
+# ============================================================================
+# TODO(stadium-cheer): 다크 머지 — 활성화 시 아래 데코레이터 주석 해제
+# 1. db/migrations/20260502_009_add_cheer_events_and_aggregates.sql 적용
+# 2. 아래 @app.post / @app.get 라인 주석 해제
+# 3. cheer_signals 발행 잡 + 검증 워커 스케줄러 등록
+# ============================================================================
+
+
+def _record_cheer_event(
+    db: Session,
+    *,
+    user_id: str,
+    team_code: str,
+    stadium_code: str,
+    game_id: str | None,
+    client_ts: datetime,
+    lat: float | None,
+    lng: float | None,
+    accuracy_m: float | None,
+    mock_location: bool,
+    app_version: str | None,
+    device_id_hash: str | None,
+    ip_hash: str | None,
+    is_home_team: bool | None,
+    opponent_team_code: str | None,
+    platform: str,
+) -> CheerEvent:
+    event = CheerEvent(
+        user_id=user_id,
+        team_code=team_code,
+        stadium_code=stadium_code,
+        game_id=game_id,
+        client_ts=client_ts,
+        lat=lat,
+        lng=lng,
+        accuracy_m=accuracy_m,
+        mock_location=mock_location,
+        app_version=app_version,
+        device_id_hash=device_id_hash,
+        ip_hash=ip_hash,
+        is_home_team=is_home_team,
+        opponent_team_code=opponent_team_code,
+        platform=platform,
+        validity_status="pending",
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event
+
+
+# @app.post("/cheer-events")  # TODO(stadium-cheer): 활성화 시 주석 해제
+def post_cheer_event(
+    payload: dict[str, Any],
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    user_id = str(payload.get("user_id") or "").strip()
+    team_code = str(payload.get("team_code") or "").strip()
+    stadium_code = str(payload.get("stadium_code") or "").strip()
+    if not (user_id and team_code and stadium_code):
+        raise HTTPException(status_code=400, detail="user_id, team_code, stadium_code required")
+
+    client_ts_raw = payload.get("client_ts")
+    try:
+        client_ts = datetime.fromisoformat(str(client_ts_raw).replace("Z", "+00:00")) if client_ts_raw else datetime.now(UTC)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="client_ts must be ISO8601")
+
+    platform_raw = str(payload.get("platform") or "unknown").lower()
+    platform = platform_raw if platform_raw in ("ios", "android") else "unknown"
+    event = _record_cheer_event(
+        db,
+        user_id=user_id,
+        team_code=team_code,
+        stadium_code=stadium_code,
+        game_id=payload.get("game_id"),
+        client_ts=client_ts,
+        lat=payload.get("lat"),
+        lng=payload.get("lng"),
+        accuracy_m=payload.get("accuracy_m"),
+        mock_location=bool(payload.get("mock_location") or False),
+        app_version=payload.get("app_version"),
+        device_id_hash=payload.get("device_id_hash"),
+        ip_hash=None,  # 활성화 시점에 request.client.host 해시
+        is_home_team=payload.get("is_home_team"),
+        opponent_team_code=payload.get("opponent_team_code"),
+        platform=platform,
+    )
+    return {"id": event.id, "status": event.validity_status, "platform": platform}
+
+
+# @app.get("/rankings/teams")  # TODO(stadium-cheer): 활성화 시 주석 해제
+def get_team_rankings(
+    db: Annotated[Session, Depends(get_db)],
+    period: str = Query("season", pattern="^(season|weekly)$"),
+    season: str = Query("2026"),
+) -> dict[str, Any]:
+    if period == "season":
+        rows = (
+            db.execute(
+                select(TeamCheckinSeason)
+                .where(TeamCheckinSeason.season == season)
+                .order_by(TeamCheckinSeason.count.desc())
+            )
+            .scalars()
+            .all()
+        )
+        items = [
+            {"team_code": r.team_code, "count": r.count, "rank": idx + 1}
+            for idx, r in enumerate(rows)
+        ]
+    else:
+        from datetime import timedelta
+
+        today = date.today()
+        since = today - timedelta(days=7)
+        rows = (
+            db.execute(
+                select(TeamCheckinDaily.team_code, TeamCheckinDaily.count)
+                .where(TeamCheckinDaily.date >= since.isoformat())
+            )
+            .all()
+        )
+        agg: dict[str, int] = defaultdict(int)
+        for team_code, count in rows:
+            agg[team_code] += count
+        sorted_items = sorted(agg.items(), key=lambda x: x[1], reverse=True)
+        items = [
+            {"team_code": team_code, "count": count, "rank": idx + 1}
+            for idx, (team_code, count) in enumerate(sorted_items)
+        ]
+    # 집계는 iOS + Android raw 이벤트를 합산한 값. 분리 응답이 필요하면 별도 엔드포인트로 추가.
+    return {
+        "period": period,
+        "season": season,
+        "platforms_aggregated": ["ios", "android"],
+        "items": items,
+    }
+
+
+# @app.get("/cheer-events/me")  # TODO(stadium-cheer): 활성화 시 주석 해제. 달력 UI/개인 체크인 기록 화면 전용.
+def get_my_cheer_events(
+    db: Annotated[Session, Depends(get_db)],
+    user_id: str = Query(..., description="auth subject. 활성화 시 토큰에서 추출 권장."),
+    since: str | None = Query(None, description="ISO8601 또는 YYYY-MM-DD. 시즌 시작 등 하한."),
+    until: str | None = Query(None, description="ISO8601 또는 YYYY-MM-DD. 상한."),
+    only_valid: bool = Query(True, description="false 시 invalid/suspicious도 포함."),
+) -> dict[str, Any]:
+    stmt = select(CheerEvent).where(CheerEvent.user_id == user_id)
+    if only_valid:
+        stmt = stmt.where(CheerEvent.validity_status == "valid")
+    if since:
+        try:
+            stmt = stmt.where(CheerEvent.client_ts >= datetime.fromisoformat(since.replace("Z", "+00:00")))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="since must be ISO8601 or YYYY-MM-DD")
+    if until:
+        try:
+            stmt = stmt.where(CheerEvent.client_ts <= datetime.fromisoformat(until.replace("Z", "+00:00")))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="until must be ISO8601 or YYYY-MM-DD")
+    stmt = stmt.order_by(CheerEvent.client_ts.desc())
+
+    rows = db.execute(stmt).scalars().all()
+    items = [
+        {
+            "id": r.id,
+            "client_ts": r.client_ts.isoformat(),
+            "stadium_code": r.stadium_code,
+            "team_code": r.team_code,
+            "game_id": r.game_id,
+            "is_home_team": r.is_home_team,
+            "opponent_team_code": r.opponent_team_code,
+            "validity_status": r.validity_status,
+        }
+        for r in rows
+    ]
+    return {"user_id": user_id, "count": len(items), "items": items}

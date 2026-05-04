@@ -303,6 +303,9 @@ struct WatchContentView: View {
             visibleEventTimestamp = Date()
             isEventOverlayVisible = true
 
+            // MOUND_VISIT은 다음 이벤트 도달까지 계속 표시 — 자동 dismiss 스킵
+            if eventType == "MOUND_VISIT" { return }
+
             let ts = visibleEventTimestamp
             DispatchQueue.main.asyncAfter(deadline: .now() + eventOverlayDuration) {
                 if visibleEventTimestamp == ts {

@@ -5,15 +5,30 @@ enum ThemeStoreTab: String, CaseIterable {
     case phone = "Phone App Themes"
 }
 
+enum WatchThemeSection: String, CaseIterable, Identifiable {
+    case basic
+    case stadiumCheer
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .basic: return "베이직 테마"
+        case .stadiumCheer: return "현장 응원 테마"
+        }
+    }
+}
+
 struct ThemeStoreScreen: View {
     let activeTheme: ThemeData?
+    let activeCheerTheme: ThemeData?
     let unlockedThemeIds: Set<String>
     let onApplyTheme: (ThemeData?) -> Void
+    let onApplyCheerTheme: (ThemeData?) -> Void
     let onUnlockTheme: (ThemeData) -> Void
     let onPurchaseTheme: (ThemeData) -> Void
 
     @Environment(\.teamTheme) private var teamTheme
     @State private var selectedTab: ThemeStoreTab = .watch
+    @State private var watchThemeSection: WatchThemeSection = .basic
 
     private var freeAndAdThemes: [ThemeData] {
         ThemeData.allThemes.filter { $0.category == .free || $0.category == .adReward }
@@ -44,6 +59,9 @@ struct ThemeStoreScreen: View {
                 .font(AppFont.caption)
                 .foregroundColor(teamTheme.primary)
                 .padding(.top, AppSpacing.sm)
+            Text("응원 테마: \(activeCheerTheme?.name ?? "기본 응원")")
+                .font(AppFont.caption)
+                .foregroundColor(AppColors.gray400)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, AppSpacing.xxl)
@@ -87,12 +105,50 @@ struct ThemeStoreScreen: View {
     private var watchThemesTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                sectionHeader("베이직 테마")
-                themeGrid(freeAndAdThemes)
+                sectionToggle
+                if watchThemeSection == .stadiumCheer {
+                    Text("응원 시각에 워치 풀스크린에 적용됩니다 (목업)")
+                        .font(AppFont.caption)
+                        .foregroundColor(AppColors.gray500)
+                        .padding(.horizontal, AppSpacing.xxl)
+                        .padding(.bottom, AppSpacing.sm)
+                }
+                themeGrid(currentSectionThemes)
 
                 Spacer().frame(height: AppSpacing.bottomSafeSpacer)
             }
         }
+    }
+
+    private var currentSectionThemes: [ThemeData] {
+        switch watchThemeSection {
+        case .basic: return freeAndAdThemes
+        case .stadiumCheer: return StadiumCheerThemes.allThemes
+        }
+    }
+
+    private var sectionToggle: some View {
+        HStack(spacing: AppSpacing.sm) {
+            ForEach(WatchThemeSection.allCases) { section in
+                let selected = watchThemeSection == section
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.15)) { watchThemeSection = section }
+                }) {
+                    Text(section.label)
+                        .font(AppFont.bodyBold)
+                        .foregroundColor(selected ? .white : AppColors.gray500)
+                        .padding(.horizontal, AppSpacing.lg)
+                        .padding(.vertical, 8)
+                        .background(selected ? AppColors.red500 : AppColors.gray800)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.top, AppSpacing.md)
+        .padding(.bottom, AppSpacing.md)
     }
 
     private var phoneThemesTab: some View {
@@ -127,13 +183,18 @@ struct ThemeStoreScreen: View {
 
     private func themeGrid(_ themes: [ThemeData]) -> some View {
         let columns = [GridItem(.flexible(), spacing: AppSpacing.md), GridItem(.flexible(), spacing: AppSpacing.md)]
+        let isCheerSection = watchThemeSection == .stadiumCheer
+        let activeForSection = isCheerSection ? activeCheerTheme : activeTheme
         return LazyVGrid(columns: columns, spacing: AppSpacing.md) {
             ForEach(themes) { theme in
                 ThemeCard(
                     theme: theme,
                     isUnlocked: theme.category == .free || unlockedThemeIds.contains(theme.id),
-                    isApplied: activeTheme?.id == theme.id,
-                    onApply: { onApplyTheme(theme) },
+                    isApplied: activeForSection?.id == theme.id,
+                    onApply: {
+                        if isCheerSection { onApplyCheerTheme(theme) }
+                        else { onApplyTheme(theme) }
+                    },
                     onUnlock: { onUnlockTheme(theme) },
                     onPurchase: { onPurchaseTheme(theme) }
                 )

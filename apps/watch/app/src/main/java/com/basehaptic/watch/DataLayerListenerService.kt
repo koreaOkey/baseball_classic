@@ -8,6 +8,8 @@ import android.os.Vibrator
 import android.util.Log
 import androidx.wear.tiles.TileService
 import com.basehaptic.watch.tile.GameTileService
+import com.basehaptic.watch.ui.StadiumCheerOverlayCoordinator
+import com.basehaptic.watch.ui.StadiumCheerPayload
 import com.google.android.gms.wearable.*
 
 /**
@@ -42,6 +44,8 @@ class DataLayerListenerService : WearableListenerService() {
         const val PATH_HAPTIC = "/haptic"
         const val PATH_WATCH_PROMPT = "/watch/prompt"
         const val PATH_SETTINGS = "/settings"
+        // TODO(stadium-cheer): 활성화 시 phone WearGameSyncManager.PATH_CHEER_TRIGGER 와 일치 유지.
+        const val PATH_CHEER_TRIGGER = "/cheer/trigger"
         
         const val KEY_GAME_ID = "game_id"
         const val KEY_HOME_TEAM = "home_team"
@@ -86,6 +90,8 @@ class DataLayerListenerService : WearableListenerService() {
                     path?.startsWith(PATH_HAPTIC) == true -> handleHapticEvent(item)
                     path?.startsWith(PATH_WATCH_PROMPT) == true -> handleWatchSyncPrompt(item)
                     path?.startsWith(PATH_SETTINGS) == true -> handleSettingsUpdate(item)
+                    // TODO(stadium-cheer): 활성화 시 아래 분기 주석 해제. 다크 단계에서는 미전달이라 도달 X.
+                    // path?.startsWith(PATH_CHEER_TRIGGER) == true -> handleCheerTrigger(item)
                 }
             }
         }
@@ -359,6 +365,12 @@ class DataLayerListenerService : WearableListenerService() {
                     intArrayOf(0, 180, 0, 180)
             "STEAL", "TAG_UP_ADVANCE" -> longArrayOf(0, 150, 100, 150) to
                     intArrayOf(0, 180, 0, 180)
+            "PITCHER_CHANGE" -> longArrayOf(0, 150, 100, 150) to
+                    intArrayOf(0, 180, 0, 180)
+            "MOUND_VISIT" -> {
+                Log.d(TAG, "MOUND_VISIT: skip haptic (overlay only)")
+                return
+            }
             "OUT" -> longArrayOf(0, 100) to
                     intArrayOf(0, 210)
             "DOUBLE_PLAY" -> longArrayOf(0, 100) to
@@ -446,5 +458,28 @@ class DataLayerListenerService : WearableListenerService() {
             half == "말" && number < 9 -> "${number + 1}회초"
             else -> inning
         }
+    }
+
+    // TODO(stadium-cheer): 활성화 시 onDataChanged when 분기 주석 해제 + StadiumCheerOverlay UI 트리거.
+    // 다크 머지 단계에서는 함수 정의만 두고 호출되지 않음.
+    @Suppress("unused")
+    private fun handleCheerTrigger(item: com.google.android.gms.wearable.DataItem) {
+        val prefs = getSharedPreferences(SETTINGS_PREFS_NAME, MODE_PRIVATE)
+        if (!prefs.getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)) return
+
+        val map = com.google.android.gms.wearable.DataMapItem.fromDataItem(item).dataMap
+        val teamCode = map.getString("team_code") ?: return
+        val cheerText = map.getString("cheer_text") ?: return
+        val primaryColorHex = map.getString("primary_color_hex") ?: "#3B82F6"
+        val hapticPatternId = map.getString("haptic_pattern_id") ?: "default"
+        val fireAtMs = map.getLong("fire_at_unix_ms", 0L)
+
+        val delay = (fireAtMs - System.currentTimeMillis()).coerceAtLeast(0L)
+        android.os.Handler(mainLooper).postDelayed({
+            StadiumCheerOverlayCoordinator.dispatch(
+                applicationContext,
+                StadiumCheerPayload(teamCode, cheerText, primaryColorHex, hapticPatternId)
+            )
+        }, delay)
     }
 }

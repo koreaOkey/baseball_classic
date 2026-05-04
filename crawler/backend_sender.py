@@ -273,6 +273,14 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
             "video review",
         ],
     )
+    has_mound_visit = _contains_any(
+        text,
+        [
+            "마운드 방문",
+            "코칭스태프 마운드",
+            "mound visit",
+        ],
+    )
     has_pitcher_change = _is_pitcher_change(option, option_type, text)
     has_half_inning_change = _is_half_inning_change(text)
     review_result_is_out = has_video_review and _video_review_result_is_out(text)
@@ -324,6 +332,8 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
         return "TAG_UP_ADVANCE"
     if has_pitcher_change:
         return "PITCHER_CHANGE"
+    if has_mound_visit:
+        return "MOUND_VISIT"
     if has_half_inning_change:
         return "HALF_INNING_CHANGE"
     if review_result_is_out:
@@ -735,10 +745,22 @@ def build_snapshot_payload(
         if last_batter_name:
             metadata["batter"] = last_batter_name
 
+        event_type = _classify_event_type(option)
+        if event_type == "PITCHER_CHANGE":
+            player_change = option.get("playerChange") or {}
+            in_player = player_change.get("inPlayer") or {}
+            out_player = player_change.get("outPlayer") or {}
+            in_name = (in_player.get("playerName") or "").strip()
+            out_name = (out_player.get("playerName") or "").strip()
+            if in_name:
+                metadata["inName"] = in_name
+            if out_name:
+                metadata["outName"] = out_name
+
         events.append(
             {
                 "sourceEventId": f"{inning:02d}-{relay_no:03d}-{seqno:04d}",
-                "type": _classify_event_type(option),
+                "type": event_type,
                 "description": (option.get("text") or "").strip(),
                 "occurredAt": event_time_iso,
                 "metadata": metadata,

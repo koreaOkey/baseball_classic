@@ -9,7 +9,7 @@ enum WatchAppEventColors {
         switch eventType.uppercased() {
         case "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY":
             return WatchColors.yellow500
-        case "HIT", "WALK", "STEAL", "TAG_UP_ADVANCE":
+        case "HIT", "WALK", "STEAL", "TAG_UP_ADVANCE", "PITCHER_CHANGE":
             return WatchColors.green500
         case "DOUBLE_PLAY", "TRIPLE_PLAY", "STRIKE":
             return WatchColors.orange500
@@ -17,6 +17,8 @@ enum WatchAppEventColors {
             return WatchColors.red500
         case "BALL":
             return WatchColors.gray400
+        case "MOUND_VISIT":
+            return WatchColors.yellow400
         default:
             return WatchColors.gray500
         }
@@ -27,14 +29,16 @@ enum WatchAppEventColors {
     static func overlayStyle(for eventType: String) -> (label: String, icon: String, color: Color)? {
         switch eventType.uppercased() {
         case "HIT": return ("HIT", "bolt.fill", WatchColors.green500)
-        case "WALK": return ("WALK", "bolt.fill", WatchColors.green400)
-        case "STEAL": return ("STEAL", "bolt.fill", WatchColors.cyan500)
-        case "TAG_UP_ADVANCE": return ("STEAL", "bolt.fill", WatchColors.cyan500)
+        case "WALK": return ("볼넷", "bolt.fill", WatchColors.green400)
+        case "STEAL": return ("도루", "bolt.fill", WatchColors.cyan500)
+        case "TAG_UP_ADVANCE": return ("도루", "bolt.fill", WatchColors.cyan500)
         case "SCORE": return ("SCORE", "trophy.fill", WatchColors.yellow500)
         case "HOMERUN": return ("HOMERUN", "trophy.fill", WatchColors.yellow500)
         case "OUT": return ("OUT", "xmark.circle.fill", WatchColors.red500)
         case "DOUBLE_PLAY": return ("DOUBLE PLAY", "xmark.circle.fill", WatchColors.orange500)
         case "TRIPLE_PLAY": return ("TRIPLE PLAY", "xmark.circle.fill", WatchColors.red600)
+        case "MOUND_VISIT": return ("마운드 방문중...", "figure.baseball", WatchColors.yellow400)
+        case "PITCHER_CHANGE": return ("투수 교체", "arrow.left.arrow.right.circle.fill", WatchColors.blue400)
         default: return nil
         }
     }

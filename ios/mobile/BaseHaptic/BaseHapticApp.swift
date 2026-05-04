@@ -123,7 +123,12 @@ enum Screen: Hashable {
     case store
     case settings
     case watchTest
+    // TODO(my-team-tab): 활성화 시 ContentView switch + bottomNavigationBar 주석 해제. 다크 머지 상태에서는 case만 정의.
+    case myTeam
 }
+
+// TODO(my-team-tab): 활성화 시 true. 다크 머지 단계에서는 탭 미노출.
+private let SHOW_MY_TEAM_TAB = false
 
 // MARK: - ContentView
 struct ContentView: View {
@@ -136,6 +141,8 @@ struct ContentView: View {
     @State private var currentView: Screen = .home
     @State private var navigationHistory: [Screen] = []
     @State private var activeTheme: ThemeData?
+    // 워치 페이스 테마와 무관하게 응원 발화 풀스크린에 적용될 테마.
+    @State private var activeCheerTheme: ThemeData? = StadiumCheerThemes.allThemes.first { $0.id == UserDefaults.standard.string(forKey: "active_cheer_theme_id") }
     @State private var selectedGameId: String?
     @State private var syncedGameId: String?
     @State private var showWatchSyncDialog = false
@@ -284,6 +291,7 @@ struct ContentView: View {
                 case .store:
                     ThemeStoreScreen(
                         activeTheme: activeTheme,
+                        activeCheerTheme: activeCheerTheme,
                         unlockedThemeIds: unlockedThemeIds,
                         onApplyTheme: { theme in
                             activeTheme = theme
@@ -292,28 +300,44 @@ struct ContentView: View {
                                 try? await ThemeRepository.shared.saveActiveTheme(themeId: theme?.id)
                             }
                         },
+                        onApplyCheerTheme: { theme in
+                            // 응원 테마는 워치 페이스와 무관하게 별도 영속화. WatchThemeSyncManager 호출 X.
+                            // TODO(stadium-cheer): 활성화 시 워치에 active_cheer_theme_id 동기화 + 풀스크린 응원 화면이 이 테마로 렌더링되도록 연결.
+                            activeCheerTheme = theme
+                            UserDefaults.standard.set(theme?.id, forKey: "active_cheer_theme_id")
+                        },
                         onUnlockTheme: { theme in
                             rewardedAdManager.loadAndShowAd {
                                 unlockedThemeIds.insert(theme.id)
                                 UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
-                                activeTheme = theme
-                                WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
-                                Task {
-                                    try? await ThemeRepository.shared.saveUnlock(themeId: theme.id)
-                                    try? await ThemeRepository.shared.saveActiveTheme(themeId: theme.id)
+                                if theme.id.hasPrefix("cheer_") {
+                                    activeCheerTheme = theme
+                                    UserDefaults.standard.set(theme.id, forKey: "active_cheer_theme_id")
+                                } else {
+                                    activeTheme = theme
+                                    WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
+                                    Task {
+                                        try? await ThemeRepository.shared.saveActiveTheme(themeId: theme.id)
+                                    }
                                 }
+                                Task { try? await ThemeRepository.shared.saveUnlock(themeId: theme.id) }
                             }
                         },
                         onPurchaseTheme: { theme in
                             // TODO: StoreKit 인앱 결제 완료 후 호출
                             unlockedThemeIds.insert(theme.id)
                             UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
-                            activeTheme = theme
-                            WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
-                            Task {
-                                try? await ThemeRepository.shared.saveUnlock(themeId: theme.id)
-                                try? await ThemeRepository.shared.saveActiveTheme(themeId: theme.id)
+                            if theme.id.hasPrefix("cheer_") {
+                                activeCheerTheme = theme
+                                UserDefaults.standard.set(theme.id, forKey: "active_cheer_theme_id")
+                            } else {
+                                activeTheme = theme
+                                WatchThemeSyncManager.syncStoreThemeToWatch(themeId: theme.id)
+                                Task {
+                                    try? await ThemeRepository.shared.saveActiveTheme(themeId: theme.id)
+                                }
                             }
+                            Task { try? await ThemeRepository.shared.saveUnlock(themeId: theme.id) }
                         }
                     )
                 case .settings:
@@ -357,6 +381,9 @@ struct ContentView: View {
                             }
                         }
                     )
+                // TODO(my-team-tab): 활성화 시 아래 case 주석 해제 + SHOW_MY_TEAM_TAB=true.
+                // case .myTeam:
+                //     MyTeamScreen(selectedTeam: selectedTeam)
                 default:
                     Text("준비 중")
                         .foregroundColor(.white)
@@ -391,6 +418,12 @@ struct ContentView: View {
             }
             BottomNavItem(icon: "bag.fill", label: "상점", isSelected: currentView == .store) {
                 navigateTo(.store)
+            }
+            // TODO(my-team-tab): 활성화 시 SHOW_MY_TEAM_TAB=true. 1차 콘텐츠는 응원팀 랭킹, 향후 팀별 뉴스.
+            if SHOW_MY_TEAM_TAB {
+                BottomNavItem(icon: "star.fill", label: "내 팀", isSelected: currentView == .myTeam) {
+                    navigateTo(.myTeam)
+                }
             }
             BottomNavItem(icon: "gearshape.fill", label: "설정", isSelected: currentView == .settings) {
                 navigateTo(.settings)
@@ -719,7 +752,8 @@ private struct BottomNavItem: View {
 private func mapToWatchEventType(_ type: String) -> String? {
     switch type.uppercased() {
     case "BALL", "STRIKE", "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY",
-         "HIT", "HOMERUN", "SCORE", "WALK", "STEAL":
+         "HIT", "HOMERUN", "SCORE", "WALK", "STEAL",
+         "PITCHER_CHANGE", "MOUND_VISIT":
         return type.uppercased()
     case "SAC_FLY_SCORE":
         return "SCORE"

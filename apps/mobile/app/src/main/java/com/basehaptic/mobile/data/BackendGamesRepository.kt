@@ -159,7 +159,7 @@ object BackendGamesRepository {
             }
         }
 
-        if (!cachedPayload.isNullOrBlank()) {
+        if (cachedDate == today && !cachedPayload.isNullOrBlank()) {
             return parseGamesPayload(cachedPayload, selectedTeam)
         }
 
@@ -206,7 +206,7 @@ object BackendGamesRepository {
             return fresh
         }
 
-        if (!cachedPayload.isNullOrBlank()) {
+        if (cachedDate == today && cachedTeam == selectedTeam.name && !cachedPayload.isNullOrBlank()) {
             return parseTeamRecordPayload(cachedPayload)
         }
 

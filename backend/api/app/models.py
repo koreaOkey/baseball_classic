@@ -296,3 +296,60 @@ class TeamRecord(Base):
     observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+# TODO(stadium-cheer): 활성화 시 db/migrations/20260502_009_add_cheer_events_and_aggregates.sql 적용 필요.
+# 다크 머지 단계에서는 모델만 정의되어 있고 ORM 사용은 라우터 데코레이터 주석 해제 시 비로소 일어남.
+class CheerEvent(Base):
+    __tablename__ = "cheer_events"
+    __table_args__ = (
+        Index("idx_cheer_events_team_status", "team_code", "validity_status"),
+        Index("idx_cheer_events_stadium_ts", "stadium_code", "client_ts"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    team_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    stadium_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    game_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    client_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    server_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lng: Mapped[float | None] = mapped_column(Float, nullable=True)
+    accuracy_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mock_location: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    app_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    device_id_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    ip_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # raw 레벨에서만 platform 보존. 집계 테이블(team_checkin_daily/season)은 iOS+Android 합산.
+    platform: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    validity_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    invalidity_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_home_team: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    opponent_team_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class TeamCheckinDaily(Base):
+    __tablename__ = "team_checkin_daily"
+    __table_args__ = (
+        Index("idx_team_checkin_daily_date", "date"),
+    )
+
+    team_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    date: Mapped[str] = mapped_column(String(10), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class TeamCheckinSeason(Base):
+    __tablename__ = "team_checkin_season"
+    __table_args__ = (
+        Index("idx_team_checkin_season_season_count", "season", "count"),
+    )
+
+    team_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    season: Mapped[str] = mapped_column(String(8), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

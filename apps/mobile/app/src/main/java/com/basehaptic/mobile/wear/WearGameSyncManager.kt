@@ -11,6 +11,8 @@ object WearGameSyncManager {
     private const val PATH_GAME = "/game/current"
     private const val PATH_HAPTIC = "/haptic"
     private const val PATH_WATCH_PROMPT = "/watch/prompt/current"
+    // TODO(stadium-cheer): 활성화 시 워치측 DataLayerListenerService에서 동일 path 핸들러 등록 주석 해제
+    private const val PATH_CHEER_TRIGGER = "/cheer/trigger"
     private const val KEY_UPDATED_AT = "updated_at"
     private const val CACHE_PREFS = "basehaptic_user_prefs"
     private const val KEY_LAST_GAME_DATA = "last_watch_game_data"
@@ -219,6 +221,44 @@ object WearGameSyncManager {
                 Log.d(TAG, "Watch sync prompt sent for game: $gameId")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send watch sync prompt", e)
+            }
+        }.start()
+    }
+
+    // TODO(stadium-cheer): 활성화 시 응원 시각 도래 시 호출. 다크 머지 단계에서는 호출부 없음.
+    // 백엔드 POST /cheer-events 호출부(별도 컴포넌트)에서 platform="android"를 함께 송신할 것.
+    // 백엔드 집계는 iOS+Android 합산.
+    fun sendCheerTrigger(
+        context: Context,
+        teamCode: String,
+        stadiumCode: String,
+        cheerText: String,
+        primaryColorHex: String,
+        hapticPatternId: String,
+        fireAtUnixMs: Long
+    ) {
+        val liveHapticEnabled = context
+            .getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
+            .getBoolean("live_haptic_enabled", true)
+        if (!liveHapticEnabled) {
+            Log.d(TAG, "live_haptic_enabled=false, skipping cheer trigger")
+            return
+        }
+        Thread {
+            try {
+                val request = PutDataMapRequest.create(PATH_CHEER_TRIGGER).apply {
+                    dataMap.putString("team_code", teamCode)
+                    dataMap.putString("stadium_code", stadiumCode)
+                    dataMap.putString("cheer_text", cheerText)
+                    dataMap.putString("primary_color_hex", primaryColorHex)
+                    dataMap.putString("haptic_pattern_id", hapticPatternId)
+                    dataMap.putLong("fire_at_unix_ms", fireAtUnixMs)
+                    dataMap.putLong(KEY_UPDATED_AT, System.currentTimeMillis())
+                }.asPutDataRequest().setUrgent()
+                Tasks.await(Wearable.getDataClient(context).putDataItem(request))
+                Log.d(TAG, "Cheer trigger sent: team=$teamCode stadium=$stadiumCode")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send cheer trigger", e)
             }
         }.start()
     }
