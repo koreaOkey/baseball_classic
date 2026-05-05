@@ -1,7 +1,6 @@
 import Foundation
 import CoreLocation
 
-// TODO(stadium-cheer): 활성화 시 시즌 시작 전 좌표·반경 검증. 원격 stadiums.json 갱신은 Phase 1.5.
 struct Stadium: Identifiable, Codable, Hashable {
     let code: String
     let name: String
@@ -14,6 +13,13 @@ struct Stadium: Identifiable, Codable, Hashable {
     var id: String { code }
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    func matchesHomeTeam(_ team: Team) -> Bool {
+        if code == "JAMSIL" {
+            return team == .doosan || team == .lg
+        }
+        return homeTeam == team.rawValue
     }
 }
 

@@ -33,6 +33,7 @@ struct WatchContentView: View {
     @Environment(\.watchTeamTheme) private var watchTheme
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var stadiumCheer = StadiumCheerCoordinator.shared
 
     @State private var isEventOverlayVisible = false
     @State private var visibleEventType: String?
@@ -142,6 +143,12 @@ struct WatchContentView: View {
                         }
                     )
                 }
+            }
+
+            if let payload = stadiumCheer.current {
+                StadiumCheerScreen(payload: payload)
+                    .transition(.opacity)
+                    .zIndex(10)
             }
         }
         .onAppear {

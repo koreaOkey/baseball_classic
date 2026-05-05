@@ -37,21 +37,21 @@ private data class CheerRankRow(
 )
 
 private val MOCK_SEASON: List<CheerRankRow> = listOf(
-    CheerRankRow(1, "DOOSAN", "두산 베어스", 0),
-    CheerRankRow(2, "LG", "LG 트윈스", 0),
-    CheerRankRow(3, "KIA", "KIA 타이거즈", 0),
-    CheerRankRow(4, "SAMSUNG", "삼성 라이온즈", 0),
-    CheerRankRow(5, "LOTTE", "롯데 자이언츠", 0),
-    CheerRankRow(6, "SSG", "SSG 랜더스", 0),
-    CheerRankRow(7, "HANWHA", "한화 이글스", 0),
-    CheerRankRow(8, "NC", "NC 다이노스", 0),
-    CheerRankRow(9, "KT", "KT 위즈", 0),
-    CheerRankRow(10, "KIWOOM", "키움 히어로즈", 0),
+    CheerRankRow(1, "DOOSAN", "베어스", 0),
+    CheerRankRow(2, "LG", "트윈스", 0),
+    CheerRankRow(3, "KIA", "타이거즈", 0),
+    CheerRankRow(4, "SAMSUNG", "라이온즈", 0),
+    CheerRankRow(5, "LOTTE", "자이언츠", 0),
+    CheerRankRow(6, "SSG", "랜더스", 0),
+    CheerRankRow(7, "HANWHA", "이글스", 0),
+    CheerRankRow(8, "NC", "다이노스", 0),
+    CheerRankRow(9, "KT", "위즈", 0),
+    CheerRankRow(10, "KIWOOM", "히어로즈", 0),
 )
 
 @Composable
 fun TeamCheckinRankingScreen(selectedTeam: Team) {
-    var period by remember { mutableStateOf("season") }
+    var period by remember { mutableStateOf("weekly") }
     val rows = MOCK_SEASON
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -59,8 +59,8 @@ fun TeamCheckinRankingScreen(selectedTeam: Team) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            PeriodChip(label = "시즌", selected = period == "season") { period = "season" }
             PeriodChip(label = "주간", selected = period == "weekly") { period = "weekly" }
+            PeriodChip(label = "시즌", selected = period == "season") { period = "season" }
         }
         Text(
             text = "Android · iOS 합산 집계",

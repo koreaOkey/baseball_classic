@@ -126,16 +126,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             case "watch_sync_prompt":
                 self.handleWatchSyncPrompt(message)
             case "stadium_cheer_trigger":
-                // TODO(stadium-cheer): 활성화 시 아래 dispatch 주석 해제. 다크 단계에서는 수신해도 무시.
-                // self.handleStadiumCheerTrigger(message)
-                break
+                self.handleStadiumCheerTrigger(message)
             default:
                 break
             }
         }
     }
 
-    // TODO(stadium-cheer): 활성화 시 호출 주석 해제 + StadiumCheerScreen overlay 트리거.
     private func handleStadiumCheerTrigger(_ message: [String: Any]) {
         guard
             UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool ?? true,

@@ -1,34 +1,38 @@
 import SwiftUI
 
-// TODO(stadium-cheer): 활성화 시 mock 데이터를 백엔드 GET /rankings/teams 응답으로 교체.
 struct TeamCheckinRankingView: View {
     let selectedTeam: Team
 
-    @State private var period: RankingPeriod = .season
+    @State private var period: RankingPeriod = .weekly
+    @State private var fetchedRows: [TeamCheckinRank] = []
 
     enum RankingPeriod: String, CaseIterable, Identifiable {
-        case season
         case weekly
+        case season
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .season: return "시즌"
             case .weekly: return "주간"
+            case .season: return "시즌"
             }
         }
     }
 
-    private struct CheerRankRow: Identifiable {
-        let rank: Int
-        let team: Team
-        let count: Int
-        var id: String { team.rawValue }
-    }
-
-    private var rows: [CheerRankRow] {
+    private var rows: [TeamCheckinRank] {
         let order: [Team] = [.doosan, .lg, .kia, .samsung, .lotte, .ssg, .hanwha, .nc, .kt, .kiwoom]
+        if fetchedRows.isEmpty {
+            return order.enumerated().map { idx, team in
+                TeamCheckinRank(rank: idx + 1, team: team, count: 0)
+            }
+        }
+        let fetchedByTeam = Dictionary(uniqueKeysWithValues: fetchedRows.map { ($0.team, $0) })
         return order.enumerated().map { idx, team in
-            CheerRankRow(rank: idx + 1, team: team, count: 0)
+            fetchedByTeam[team] ?? TeamCheckinRank(rank: idx + 1, team: team, count: 0)
+        }.sorted { lhs, rhs in
+            if lhs.count == rhs.count { return lhs.rank < rhs.rank }
+            return lhs.count > rhs.count
+        }.enumerated().map { idx, row in
+            TeamCheckinRank(rank: idx + 1, team: row.team, count: row.count)
         }
     }
 
@@ -57,17 +61,20 @@ struct TeamCheckinRankingView: View {
                 }
             }
         }
+        .task(id: period) {
+            await loadRankings()
+        }
     }
 
     @ViewBuilder
-    private func rowView(_ row: CheerRankRow) -> some View {
+    private func rowView(_ row: TeamCheckinRank) -> some View {
         let isMine = row.team == selectedTeam
         HStack {
             Text("#\(row.rank)")
                 .font(AppFont.label)
                 .foregroundColor(AppColors.gray300)
                 .frame(width: 36, alignment: .leading)
-            Text("\(row.team.rawValue) \(row.team.teamName)")
+            Text(row.team.teamName)
                 .font(isMine ? AppFont.labelBold : AppFont.label)
                 .foregroundColor(.white)
             Spacer()
@@ -78,5 +85,11 @@ struct TeamCheckinRankingView: View {
         .padding(AppSpacing.md)
         .background(isMine ? row.team.color.opacity(0.35) : AppColors.gray800)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func loadRankings() async {
+        if let rows = await CheerSignalsLoader.shared.fetchTeamRankings(period: period.rawValue) {
+            fetchedRows = rows
+        }
     }
 }

@@ -228,10 +228,15 @@ class DataLayerListenerService : WearableListenerService() {
         if (eventType.isBlank()) return
 
         // 오래된 이벤트는 햅틱 무시 (워치 재시작 시 이벤트 폭주 방지)
-        if (dataMap.containsKey("updated_at")) {
-            val eventTimestamp = dataMap.getLong("updated_at", 0L)
-            if (System.currentTimeMillis() - eventTimestamp > STALE_EVENT_THRESHOLD_MS) {
-                Log.d(TAG, "Skipping stale haptic event: $eventType (age=${System.currentTimeMillis() - eventTimestamp}ms)")
+        val eventTimestamp = dataMap.getLong("updated_at", 0L)
+            .takeIf { it > 0L }
+            ?: item.uri.path
+                ?.substringAfterLast("/")
+                ?.toLongOrNull()
+        if (eventTimestamp != null) {
+            val ageMs = System.currentTimeMillis() - eventTimestamp
+            if (ageMs > STALE_EVENT_THRESHOLD_MS) {
+                Log.d(TAG, "Skipping stale haptic event: $eventType (age=${ageMs}ms)")
                 return
             }
         }

@@ -36,7 +36,7 @@ final class WatchThemeSyncManager {
         ])
     }
 
-    /// TODO(stadium-cheer): 활성화 시 응원 시각 도래 시 호출. 다크 머지 단계에서는 호출부 없음.
+    /// 응원 시각 도래 시 iPhone에서 Watch로 현장 응원 페이로드를 전달한다.
     /// - Parameters:
     ///   - teamCode: 사용자 응원팀 코드 (예: "DOOSAN")
     ///   - stadiumCode: 구장 코드 (예: "JAMSIL")

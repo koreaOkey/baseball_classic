@@ -5,7 +5,7 @@
 
 #### Scenario: 체크인 성공
 - **WHEN** 사용자가 잠실 반경 내에서 [확인] 버튼을 탭한다
-- **THEN** 클라이언트는 `user_id`, `team_code`, `stadium_code`, 좌표, 정확도, mock_location 플래그, 앱 버전을 백엔드에 POST한다
+- **THEN** 클라이언트는 인증 토큰과 함께 `team_code`, `stadium_code`, 좌표, 정확도, mock_location 플래그, 앱 버전을 백엔드에 POST한다
 - **AND** 백엔드는 이벤트를 `pending` 상태로 저장한다
 
 #### Scenario: 90일 익명화
@@ -59,7 +59,7 @@
 
 #### Scenario: 합산 라벨 노출
 - **WHEN** 사용자가 응원 랭킹 화면을 본다
-- **THEN** "iOS · Android 합산 집계" 류 라벨이 시즌/주간 토글 근처에 노출된다
+- **THEN** "iOS · Android 합산 집계" 류 라벨이 주간/시즌 토글 근처에 노출된다
 
 ### Requirement: 팀별 응원 랭킹 조회
 클라이언트는 백엔드로부터 팀별 누적 체크인 랭킹을 시즌·주간 단위로 조회할 수 있어야 한다(SHALL).
@@ -76,7 +76,7 @@
 시스템은 사용자가 본인의 valid 체크인 이력을 기간 필터로 조회할 수 있는 엔드포인트를 제공해야 한다(SHALL). 응답에는 날짜·구장·팀·경기 식별자가 포함되어 달력 UI / 개인 통계 화면이 클라이언트 단에서 렌더링 가능해야 한다.
 
 #### Scenario: 시즌 단위 본인 이력 조회
-- **WHEN** 클라이언트가 본인 user_id로 시즌 시작 ~ 현재 범위를 요청한다
+- **WHEN** 클라이언트가 인증된 사용자로 시즌 시작 ~ 현재 범위를 요청한다
 - **THEN** valid 체크인 row 리스트가 client_ts 내림차순으로 반환된다
 - **AND** 각 row는 client_ts, stadium_code, team_code, game_id, is_home_team, opponent_team_code를 포함한다
 

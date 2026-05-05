@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0A2EE9240C436B71C1B1997C /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE96A677E34F2CC49DE538E /* Game.swift */; };
+		0D302E8DEB5BA5C927CFA47F /* CheerSignalsLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1293C9C9C3EAC95E9B948A48 /* CheerSignalsLoader.swift */; };
 		0D6A47E4F1A834887215F7A8 /* VictoryTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */; };
 		15887FB643D106BB387CDCB9 /* BaseHapticApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */; };
 		15AE36C23A5E7E394F13C981 /* PhoneConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCEDEF5F6EAC1E19BA575A /* PhoneConnectivityManager.swift */; };
@@ -19,6 +20,7 @@
 		2B38367BDC8E2EF23B0FC911 /* BannerAdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556231CCAAECD9A8FC9EF363 /* BannerAdView.swift */; };
 		2BE5DAB3C3841537A2B42622 /* BackgroundStreamManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2C36AE9775B75183F468F0 /* BackgroundStreamManager.swift */; };
 		2CE2482EE1940F973BD02827 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A4B68491596CE6E203408073 /* Assets.xcassets */; };
+		2D0ECD50E2CF9899B886E607 /* MyTeamScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48CAEC1ACB1D95BABD8620BB /* MyTeamScreen.swift */; };
 		2E75C724CD95802AA0187E81 /* WatchColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6341FE954BB080F791122E81 /* WatchColors.swift */; };
 		3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */; };
 		3DE65F4E9A3DB6A352F7A80E /* WatchGameSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */; };
@@ -33,8 +35,10 @@
 		5C35221BA6986D70720B25D7 /* WatchUiProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E991C41C1A2E1BA5484914C /* WatchUiProfile.swift */; };
 		62E56EC524620B79ECF0BA61 /* WatchThemeSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F152131C406034E1B3EF86E9 /* WatchThemeSyncManager.swift */; };
 		667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */; };
+		6739CEFF7FF6E2D478640CB4 /* TeamCheckinRankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C98E8AC48570ED64EC6CE77 /* TeamCheckinRankingView.swift */; };
 		6C83A7D53BBC3ECE7ABBA223 /* RewardedAdManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CB78FA5792AFDC17056B15 /* RewardedAdManager.swift */; };
 		717442959BABBD4ADE5E26A6 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */; };
+		735D83BB6EF1DA3BA9EEF37D /* StadiumRegionMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92557ABFA815EF3A9E554EBA /* StadiumRegionMonitor.swift */; };
 		7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */; };
 		8073FF78A82DE637FB79DFFE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4700C8F4E6DAF0F281FB70B /* AppDelegate.swift */; };
 		80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */; };
@@ -48,11 +52,14 @@
 		9FB7676A5E7D8C388D1C59AC /* BaseHapticWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */; };
 		A05D379C480DA13EDDA18706 /* 멍멍이 테마.png in Resources */ = {isa = PBXBuildFile; fileRef = 02B048B8F66719840C28B9D6 /* 멍멍이 테마.png */; };
 		A0B3889FA2840FDA0B6C8B89 /* PushTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8119EBAB8CA0381D5CB2E353 /* PushTokenManager.swift */; };
+		A0C9662CE8593BB55A41E683 /* StadiumCheerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1FA6639ABE5D86E35AA452 /* StadiumCheerScreen.swift */; };
 		A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C0734BB3B091847ABD41DA /* Colors.swift */; };
 		A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */; };
 		A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF14835688DCF81CAB8F7F1 /* GameData.swift */; };
 		A8F8716965E7875ADD434E35 /* WatchAppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */; };
+		AD669D21D21BE6ED05C668EE /* Stadiums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A9E61F3C6F0555030D4ABB /* Stadiums.swift */; };
 		AE7625904A416811149F4333 /* 멍멍2.png in Resources */ = {isa = PBXBuildFile; fileRef = 5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */; };
+		B467D204EE48FE539D883A8E /* CheerCheckinCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53716117F7CB8A7631F7CBB6 /* CheerCheckinCard.swift */; };
 		B9AF8B53B38C59F41F4A1818 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = DD6A2509BC62180FFDD9D703 /* GoogleMobileAds */; };
 		BA80BDE55FA0E15C35828602 /* 야구가 좋아.png in Resources */ = {isa = PBXBuildFile; fileRef = AA8986E8EB82F1698A53C4AA /* 야구가 좋아.png */; };
 		BB4BE01B4AC16AC208AF0A97 /* Team.swift in Sources */ = {isa = PBXBuildFile; fileRef = D59061C8B8CAB2114F761D19 /* Team.swift */; };
@@ -61,6 +68,7 @@
 		BF822DCC3FA606EEBB63F946 /* ScoreTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55132F6EEEC4572A9184368B /* ScoreTransitionScreen.swift */; };
 		C68C35184F116A2F2B5B7498 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */; };
 		C758F6A2853A48FAB4B17CCD /* 멍멍.png in Resources */ = {isa = PBXBuildFile; fileRef = 9766814FF4A79880FAA5FA35 /* 멍멍.png */; };
+		C9CBE99594B9CF19481695B5 /* StadiumCheerThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81854AC725B2650C74AD594D /* StadiumCheerThemes.swift */; };
 		D8BA20E9208A4DEA2D40597A /* WatchNoGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */; };
 		DBFDA134B4D3AC7821DD9E74 /* AppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937C6644F186143AF57CB796 /* AppSpacing.swift */; };
 		E59B8908D6EE113ABCE14285 /* DoublePlayTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BD360BFA65BD1D45DBFC4E /* DoublePlayTransitionScreen.swift */; };
@@ -100,14 +108,19 @@
 		07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
 		0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeData.swift; sourceTree = "<group>"; };
 		0DE96A677E34F2CC49DE538E /* Game.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Game.swift; sourceTree = "<group>"; };
+		1293C9C9C3EAC95E9B948A48 /* CheerSignalsLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheerSignalsLoader.swift; sourceTree = "<group>"; };
+		1C98E8AC48570ED64EC6CE77 /* TeamCheckinRankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamCheckinRankingView.swift; sourceTree = "<group>"; };
 		2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNoGameScreen.swift; sourceTree = "<group>"; };
 		2E937F5BCECEABDBDF2D9E4C /* ThemeRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeRepository.swift; sourceTree = "<group>"; };
 		2E991C41C1A2E1BA5484914C /* WatchUiProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchUiProfile.swift; sourceTree = "<group>"; };
 		34253CBAC793835241B2ED99 /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
 		355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BaseHapticWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingScreen.swift; sourceTree = "<group>"; };
+		43A9E61F3C6F0555030D4ABB /* Stadiums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stadiums.swift; sourceTree = "<group>"; };
 		45C0734BB3B091847ABD41DA /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
 		47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEvent.swift; sourceTree = "<group>"; };
+		48CAEC1ACB1D95BABD8620BB /* MyTeamScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyTeamScreen.swift; sourceTree = "<group>"; };
+		53716117F7CB8A7631F7CBB6 /* CheerCheckinCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheerCheckinCard.swift; sourceTree = "<group>"; };
 		53BA5C62F0AE8C59D23DBEDD /* WatchAppRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppRadius.swift; sourceTree = "<group>"; };
 		55132F6EEEC4572A9184368B /* ScoreTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreTransitionScreen.swift; sourceTree = "<group>"; };
 		556231CCAAECD9A8FC9EF363 /* BannerAdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerAdView.swift; sourceTree = "<group>"; };
@@ -119,12 +132,15 @@
 		6341FE954BB080F791122E81 /* WatchColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchColors.swift; sourceTree = "<group>"; };
 		6A10C95C891E577F029B1F21 /* 멍멍1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍1.png"; sourceTree = "<group>"; };
 		6B00FE3A8F64F89794DD742A /* AppRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRadius.swift; sourceTree = "<group>"; };
+		6C1FA6639ABE5D86E35AA452 /* StadiumCheerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StadiumCheerScreen.swift; sourceTree = "<group>"; };
 		725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGameSyncManager.swift; sourceTree = "<group>"; };
 		745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveGameScreen.swift; sourceTree = "<group>"; };
 		8023EA4247935305BCC333F5 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthManager.swift; sourceTree = "<group>"; };
 		8119EBAB8CA0381D5CB2E353 /* PushTokenManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushTokenManager.swift; sourceTree = "<group>"; };
+		81854AC725B2650C74AD594D /* StadiumCheerThemes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StadiumCheerThemes.swift; sourceTree = "<group>"; };
 		8419E3A8AD866D20F930D497 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		87621A22EC5F286B844C8BF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		92557ABFA815EF3A9E554EBA /* StadiumRegionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StadiumRegionMonitor.swift; sourceTree = "<group>"; };
 		937C6644F186143AF57CB796 /* AppSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSpacing.swift; sourceTree = "<group>"; };
 		96ADED84EFE3700C0719D8AA /* AppEventColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEventColors.swift; sourceTree = "<group>"; };
 		9766814FF4A79880FAA5FA35 /* 멍멍.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍.png"; sourceTree = "<group>"; };
@@ -180,6 +196,16 @@
 			path = LiveActivity;
 			sourceTree = "<group>";
 		};
+		06AE25D9C67EDA6264BA7467 /* Stadium */ = {
+			isa = PBXGroup;
+			children = (
+				1293C9C9C3EAC95E9B948A48 /* CheerSignalsLoader.swift */,
+				92557ABFA815EF3A9E554EBA /* StadiumRegionMonitor.swift */,
+				43A9E61F3C6F0555030D4ABB /* Stadiums.swift */,
+			);
+			path = Stadium;
+			sourceTree = "<group>";
+		};
 		097D61D492C9F37250B9C7D6 /* WatchSync */ = {
 			isa = PBXGroup;
 			children = (
@@ -222,10 +248,13 @@
 		21888E54F84B3869253B319D /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				53716117F7CB8A7631F7CBB6 /* CheerCheckinCard.swift */,
 				34253CBAC793835241B2ED99 /* HomeScreen.swift */,
 				B7DA9E7CF2523E80A298664E /* LiveGameScreen.swift */,
+				48CAEC1ACB1D95BABD8620BB /* MyTeamScreen.swift */,
 				40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */,
 				56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */,
+				1C98E8AC48570ED64EC6CE77 /* TeamCheckinRankingView.swift */,
 				CA2BDD4EB0C675A029499451 /* ThemeStoreScreen.swift */,
 				C7F73397A462741B40912C00 /* WatchTestScreen.swift */,
 			);
@@ -280,6 +309,7 @@
 				F02160EE92426CB6BBC5C5B0 /* HitTransitionScreen.swift */,
 				AF0BFD94627C9204BFDBCF7A /* HomeRunTransitionScreen.swift */,
 				55132F6EEEC4572A9184368B /* ScoreTransitionScreen.swift */,
+				6C1FA6639ABE5D86E35AA452 /* StadiumCheerScreen.swift */,
 				E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */,
 				745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */,
 				2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */,
@@ -299,6 +329,7 @@
 				001C106B2DD826BEFAC71EF4 /* LiveActivity */,
 				F16734B8C9AFD3F0B9610A70 /* Models */,
 				21888E54F84B3869253B319D /* Screens */,
+				06AE25D9C67EDA6264BA7467 /* Stadium */,
 				578BF075E2FD9C2A4821192E /* Theme */,
 				097D61D492C9F37250B9C7D6 /* WatchSync */,
 			);
@@ -357,6 +388,7 @@
 			children = (
 				0DE96A677E34F2CC49DE538E /* Game.swift */,
 				47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */,
+				81854AC725B2650C74AD594D /* StadiumCheerThemes.swift */,
 				D59061C8B8CAB2114F761D19 /* Team.swift */,
 				0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */,
 			);
@@ -488,19 +520,26 @@
 				2B38367BDC8E2EF23B0FC911 /* BannerAdView.swift in Sources */,
 				15887FB643D106BB387CDCB9 /* BaseHapticApp.swift in Sources */,
 				5181A08D9A144BDC8BED59BB /* BaseballGameAttributes.swift in Sources */,
+				B467D204EE48FE539D883A8E /* CheerCheckinCard.swift in Sources */,
+				0D302E8DEB5BA5C927CFA47F /* CheerSignalsLoader.swift in Sources */,
 				A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */,
 				0A2EE9240C436B71C1B1997C /* Game.swift in Sources */,
 				7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */,
 				FF04F10F375D614182ACC91E /* HomeScreen.swift in Sources */,
 				835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */,
 				5149C6E8A8F4998C32890151 /* LiveGameScreen.swift in Sources */,
+				2D0ECD50E2CF9899B886E607 /* MyTeamScreen.swift in Sources */,
 				3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */,
 				15AE36C23A5E7E394F13C981 /* PhoneConnectivityManager.swift in Sources */,
 				A0B3889FA2840FDA0B6C8B89 /* PushTokenManager.swift in Sources */,
 				6C83A7D53BBC3ECE7ABBA223 /* RewardedAdManager.swift in Sources */,
 				C68C35184F116A2F2B5B7498 /* SettingsScreen.swift in Sources */,
+				C9CBE99594B9CF19481695B5 /* StadiumCheerThemes.swift in Sources */,
+				735D83BB6EF1DA3BA9EEF37D /* StadiumRegionMonitor.swift in Sources */,
+				AD669D21D21BE6ED05C668EE /* Stadiums.swift in Sources */,
 				717442959BABBD4ADE5E26A6 /* SupabaseClient.swift in Sources */,
 				BB4BE01B4AC16AC208AF0A97 /* Team.swift in Sources */,
+				6739CEFF7FF6E2D478640CB4 /* TeamCheckinRankingView.swift in Sources */,
 				1E120905C9B17E2723F00E1F /* TeamLogo.swift in Sources */,
 				17EDDCE4B419ECA41B8F9FD6 /* TeamTheme.swift in Sources */,
 				8C41D8D0834F7A17B0316920 /* ThemeData.swift in Sources */,
@@ -522,6 +561,7 @@
 				BCEE9E4446DDD495E71BA162 /* HitTransitionScreen.swift in Sources */,
 				FD3779F6DF3FD699477A9E47 /* HomeRunTransitionScreen.swift in Sources */,
 				BF822DCC3FA606EEBB63F946 /* ScoreTransitionScreen.swift in Sources */,
+				A0C9662CE8593BB55A41E683 /* StadiumCheerScreen.swift in Sources */,
 				0D6A47E4F1A834887215F7A8 /* VictoryTransitionScreen.swift in Sources */,
 				4FBA8E06C6FAA75EE4136F22 /* WatchAppDelegate.swift in Sources */,
 				2628F2E5B7BB9B737C94E2EA /* WatchAppEventColors.swift in Sources */,
@@ -676,14 +716,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = BaseHaptic.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = mobile/BaseHaptic/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -696,14 +736,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = BaseHaptic.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = mobile/BaseHaptic/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -715,10 +755,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "BaseHapticWatch Watch App.entitlements";
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -732,10 +772,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "BaseHapticWatch Watch App.entitlements";
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
-				MARKETING_VERSION = 1.1.1;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;

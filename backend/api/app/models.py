@@ -298,8 +298,6 @@ class TeamRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
 
-# TODO(stadium-cheer): 활성화 시 db/migrations/20260502_009_add_cheer_events_and_aggregates.sql 적용 필요.
-# 다크 머지 단계에서는 모델만 정의되어 있고 ORM 사용은 라우터 데코레이터 주석 해제 시 비로소 일어남.
 class CheerEvent(Base):
     __tablename__ = "cheer_events"
     __table_args__ = (

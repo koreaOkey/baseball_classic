@@ -1,7 +1,6 @@
 import SwiftUI
 
-// TODO(stadium-cheer): 활성화 시 응원 발화 풀스크린(워치)에 선택된 테마 컬러/배경 반영.
-// 현재는 상점 mock 데이터만 제공. 구매·적용 콜백은 기존 ThemeData 흐름과 동일.
+// 현장 응원 풀스크린 전용 테마 목록. 구매·적용 콜백은 기존 ThemeData 흐름과 동일.
 enum StadiumCheerThemes {
     static let allThemes: [ThemeData] = [
         ThemeData(

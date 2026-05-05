@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @main
 struct BaseHapticApp: App {
@@ -19,6 +20,7 @@ struct BaseHapticApp: App {
             "live_haptic_enabled": true,
             "ball_strike_haptic_enabled": true,
             "event_video_enabled": true,
+            "stadium_cheer_enabled": true,
         ])
     }
 
@@ -123,12 +125,10 @@ enum Screen: Hashable {
     case store
     case settings
     case watchTest
-    // TODO(my-team-tab): 활성화 시 ContentView switch + bottomNavigationBar 주석 해제. 다크 머지 상태에서는 case만 정의.
     case myTeam
 }
 
-// TODO(my-team-tab): 활성화 시 true. 다크 머지 단계에서는 탭 미노출.
-private let SHOW_MY_TEAM_TAB = false
+private let SHOW_MY_TEAM_TAB = true
 
 // MARK: - ContentView
 struct ContentView: View {
@@ -154,6 +154,9 @@ struct ContentView: View {
     @State private var unlockedThemeIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "unlocked_theme_ids") ?? ["default"])
     @State private var observedMyTeamGameStatus: [String: GameStatus] = [:]
     @State private var autoPromptedLiveGames: [String: Bool] = [:]
+    @State private var pendingCheckinStadium: Stadium?
+    @State private var dismissedCheckinStadiumCodes: Set<String> = []
+    @State private var scheduledCheerSignalIds: Set<String> = []
     @State private var gameStreamTask: Task<Void, Never>?
     @StateObject private var rewardedAdManager = RewardedAdManager.shared
 
@@ -267,6 +270,13 @@ struct ContentView: View {
                         todayGames: todayGames,
                         activeTheme: nil,
                         syncedGameId: syncedGameId,
+                        checkinStadium: pendingCheckinStadium,
+                        onConfirmCheckin: {
+                            confirmPendingCheckin()
+                        },
+                        onDismissCheckin: {
+                            dismissPendingCheckin()
+                        },
                         onSelectGame: { game in
                             selectedGameId = game.id
                             if game.status == .live && syncedGameId != game.id {
@@ -301,8 +311,7 @@ struct ContentView: View {
                             }
                         },
                         onApplyCheerTheme: { theme in
-                            // 응원 테마는 워치 페이스와 무관하게 별도 영속화. WatchThemeSyncManager 호출 X.
-                            // TODO(stadium-cheer): 활성화 시 워치에 active_cheer_theme_id 동기화 + 풀스크린 응원 화면이 이 테마로 렌더링되도록 연결.
+                            // 응원 테마는 워치 페이스와 무관하게 별도 영속화한다.
                             activeCheerTheme = theme
                             UserDefaults.standard.set(theme?.id, forKey: "active_cheer_theme_id")
                         },
@@ -381,9 +390,8 @@ struct ContentView: View {
                             }
                         }
                     )
-                // TODO(my-team-tab): 활성화 시 아래 case 주석 해제 + SHOW_MY_TEAM_TAB=true.
-                // case .myTeam:
-                //     MyTeamScreen(selectedTeam: selectedTeam)
+                case .myTeam:
+                    MyTeamScreen(selectedTeam: selectedTeam)
                 default:
                     Text("준비 중")
                         .foregroundColor(.white)
@@ -408,6 +416,9 @@ struct ContentView: View {
         } message: {
             Text("경기를 관람하겠습니까?")
         }
+        .onAppear {
+            activateStadiumCheer()
+        }
     }
 
     // MARK: - Bottom Navigation
@@ -419,7 +430,6 @@ struct ContentView: View {
             BottomNavItem(icon: "bag.fill", label: "상점", isSelected: currentView == .store) {
                 navigateTo(.store)
             }
-            // TODO(my-team-tab): 활성화 시 SHOW_MY_TEAM_TAB=true. 1차 콘텐츠는 응원팀 랭킹, 향후 팀별 뉴스.
             if SHOW_MY_TEAM_TAB {
                 BottomNavItem(icon: "star.fill", label: "내 팀", isSelected: currentView == .myTeam) {
                     navigateTo(.myTeam)
@@ -471,6 +481,116 @@ struct ContentView: View {
             selectedGameId = response.gameId
             syncedGameId = response.gameId
         }
+    }
+
+    // MARK: - Stadium Cheer
+    private func activateStadiumCheer() {
+        guard UserDefaults.standard.bool(forKey: "stadium_cheer_enabled") else { return }
+        StadiumRegionMonitor.shared.onEnterStadium = { stadium in
+            Task { @MainActor in
+                handleEnteredStadium(stadium)
+            }
+        }
+        StadiumRegionMonitor.shared.start()
+        Task {
+            await CheerSignalsLoader.shared.refresh()
+        }
+    }
+
+    private func handleEnteredStadium(_ stadium: Stadium) {
+        guard selectedTeam != .none,
+              UserDefaults.standard.bool(forKey: "live_haptic_enabled"),
+              UserDefaults.standard.bool(forKey: "stadium_cheer_enabled"),
+              let game = myTeamGame(at: stadium) else { return }
+
+        if !dismissedCheckinStadiumCodes.contains(stadium.code) {
+            pendingCheckinStadium = stadium
+            scheduleLocalCheckinNotification(stadium: stadium)
+        }
+
+        Task {
+            await CheerSignalsLoader.shared.refresh()
+            await scheduleCheerTriggerIfAvailable(stadium: stadium, game: game)
+        }
+    }
+
+    private func confirmPendingCheckin() {
+        guard let stadium = pendingCheckinStadium else { return }
+        let game = myTeamGame(at: stadium)
+        Task {
+            do {
+                try await CheerSignalsLoader.shared.postCheckin(
+                    stadium: stadium,
+                    selectedTeam: selectedTeam,
+                    game: game
+                )
+                await MainActor.run {
+                    pendingCheckinStadium = nil
+                }
+            } catch {
+                print("[StadiumCheer] check-in failed: \(error)")
+            }
+        }
+    }
+
+    private func dismissPendingCheckin() {
+        if let stadium = pendingCheckinStadium {
+            dismissedCheckinStadiumCodes.insert(stadium.code)
+        }
+        pendingCheckinStadium = nil
+    }
+
+    private func scheduleCheerTriggerIfAvailable(stadium: Stadium, game: Game) async {
+        guard let pair = CheerSignalsLoader.shared.signal(forStadium: stadium.code, team: selectedTeam) else { return }
+        let signalId = "\(pair.entry.gameId):\(pair.signal.teamCode):\(pair.entry.fireAtIso)"
+        guard !scheduledCheerSignalIds.contains(signalId) else { return }
+        await MainActor.run {
+            scheduledCheerSignalIds.insert(signalId)
+        }
+
+        let fireAtMs = Self.fireAtUnixMs(pair.entry.fireAtIso)
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        WatchThemeSyncManager.sendCheerTrigger(
+            teamCode: pair.signal.teamCode,
+            stadiumCode: stadium.code,
+            cheerText: pair.signal.cheerText,
+            primaryColorHex: pair.signal.primaryColorHex,
+            hapticPatternId: pair.signal.hapticPatternId,
+            fireAtUnixMs: max(fireAtMs, nowMs + 500)
+        )
+        print("[StadiumCheer] scheduled trigger for \(game.id) \(signalId)")
+    }
+
+    private func myTeamGame(at stadium: Stadium) -> Game? {
+        todayGames.first { game in
+            guard game.isMyTeam else { return false }
+            return stadium.matchesHomeTeam(game.homeTeamId)
+        }
+    }
+
+    private func scheduleLocalCheckinNotification(stadium: Stadium) {
+        let content = UNMutableNotificationContent()
+        content.title = "경기장 응원 체크인"
+        content.body = "\(stadium.name)에서 \(selectedTeam.teamName) 응원을 시작해요."
+        content.sound = .default
+        content.userInfo = ["stadium_code": stadium.code]
+
+        let request = UNNotificationRequest(
+            identifier: "stadium-cheer-\(stadium.code)-\(Int(Date().timeIntervalSince1970))",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private static func fireAtUnixMs(_ iso: String) -> Int64 {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = formatter.date(from: iso) ?? {
+            formatter.formatOptions = [.withInternetDateTime]
+            return formatter.date(from: iso)
+        }() ?? Date()
+        return Int64(date.timeIntervalSince1970 * 1000)
     }
 
     // MARK: - Data Loading
@@ -579,6 +699,7 @@ struct ContentView: View {
         var reconnectAttempt = 0
 
         while !Task.isCancelled {
+            var hasConsumedInitialEventsSnapshot = false
             for await message in BackendGamesRepository.shared.streamGame(gameId: targetGameId) {
                 switch message {
                 case .connected:
@@ -623,16 +744,23 @@ struct ContentView: View {
                         }
                     }
                 case .events(let items):
+                    let sortedItems = items.sorted(by: { $0.cursor < $1.cursor })
+                    if !hasConsumedInitialEventsSnapshot {
+                        if let maxCursor = sortedItems.last?.cursor {
+                            lastSentEventCursor = max(lastSentEventCursor, maxCursor)
+                        }
+                        hasConsumedInitialEventsSnapshot = true
+                        break
+                    }
+
                     let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
                     guard liveHapticEnabled else {
-                        let sortedItems = items.sorted(by: { $0.cursor < $1.cursor })
                         if let maxCursor = sortedItems.last?.cursor {
                             lastSentEventCursor = max(lastSentEventCursor, maxCursor)
                         }
                         break
                     }
                     let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
-                    let sortedItems = items.sorted(by: { $0.cursor < $1.cursor })
                     let newItems = sortedItems.filter { $0.cursor > lastSentEventCursor }
                     let batchTypes = Set(newItems.compactMap { mapToWatchEventType($0.type) })
                     let hasScore = batchTypes.contains("SCORE") || batchTypes.contains("HOMERUN")

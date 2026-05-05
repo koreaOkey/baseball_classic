@@ -1,9 +1,6 @@
 import SwiftUI
 import WatchKit
 
-// TODO(stadium-cheer): 활성화 시 BaseHapticWatchApp 진입 트리에 overlay 트리거 연결.
-// 다크 머지 단계에서는 화면 정의만 두고 표시되지 않음.
-
 struct StadiumCheerPayload: Equatable {
     let teamCode: String
     let cheerText: String
@@ -34,7 +31,6 @@ final class StadiumCheerCoordinator: ObservableObject {
 
 enum StadiumCheerHapticPlayer {
     static func play(patternId: String) {
-        // TODO(stadium-cheer): 활성화 시 patternId별 재생 분기. 현재는 generic notification 1회.
         WKInterfaceDevice.current().play(.notification)
     }
 }

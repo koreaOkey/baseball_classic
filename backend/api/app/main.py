@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import UTC, date, datetime
 from typing import Annotated, Any
 import asyncio
+import hashlib
 import httpx
 import jwt
 import logging
@@ -19,6 +20,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
+from .cheer_signals import build_cheer_signals, stadium_payloads
 from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
 from .models import (
@@ -57,6 +59,7 @@ from .services import (
     upsert_team_records,
     upsert_game_from_snapshot,
 )
+from .workers.cheer_validator import validate_pending_cheer_events
 
 
 settings = get_settings()
@@ -931,14 +934,6 @@ async def websocket_team_record_stream(
         await event_bus.disconnect(channel, websocket)
 
 
-# ============================================================================
-# TODO(stadium-cheer): 다크 머지 — 활성화 시 아래 데코레이터 주석 해제
-# 1. db/migrations/20260502_009_add_cheer_events_and_aggregates.sql 적용
-# 2. 아래 @app.post / @app.get 라인 주석 해제
-# 3. cheer_signals 발행 잡 + 검증 워커 스케줄러 등록
-# ============================================================================
-
-
 def _record_cheer_event(
     db: Session,
     *,
@@ -982,17 +977,39 @@ def _record_cheer_event(
     return event
 
 
-# @app.post("/cheer-events")  # TODO(stadium-cheer): 활성화 시 주석 해제
+@app.get("/stadiums")
+def get_stadiums() -> dict[str, Any]:
+    return {"items": stadium_payloads()}
+
+
+@app.get("/cheer-signals")
+def get_cheer_signals(
+    db: Annotated[Session, Depends(get_db)],
+    target_date: date | None = Query(default=None, alias="date"),
+) -> dict[str, Any]:
+    resolved_date = target_date or datetime.now(UTC).date()
+    return {
+        "date": resolved_date.isoformat(),
+        "items": build_cheer_signals(db, target_date=resolved_date),
+    }
+
+
+@app.post("/cheer-events")
 def post_cheer_event(
     payload: dict[str, Any],
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
+    authorization: Annotated[str | None, Header()] = None,
 ) -> dict[str, Any]:
-    user_id = str(payload.get("user_id") or "").strip()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="authorization header required")
+
+    user_id = _extract_user_id_from_token(authorization)
     team_code = str(payload.get("team_code") or "").strip()
     stadium_code = str(payload.get("stadium_code") or "").strip()
-    if not (user_id and team_code and stadium_code):
-        raise HTTPException(status_code=400, detail="user_id, team_code, stadium_code required")
+    if not (team_code and stadium_code):
+        raise HTTPException(status_code=400, detail="team_code, stadium_code required")
 
     client_ts_raw = payload.get("client_ts")
     try:
@@ -1015,15 +1032,39 @@ def post_cheer_event(
         mock_location=bool(payload.get("mock_location") or False),
         app_version=payload.get("app_version"),
         device_id_hash=payload.get("device_id_hash"),
-        ip_hash=None,  # 활성화 시점에 request.client.host 해시
+        ip_hash=_hash_ip(request.client.host if request.client else None),
         is_home_team=payload.get("is_home_team"),
         opponent_team_code=payload.get("opponent_team_code"),
         platform=platform,
     )
+    background_tasks.add_task(_validate_pending_cheer_events_background)
     return {"id": event.id, "status": event.validity_status, "platform": platform}
 
 
-# @app.get("/rankings/teams")  # TODO(stadium-cheer): 활성화 시 주석 해제
+def _hash_ip(ip: str | None) -> str | None:
+    if not ip:
+        return None
+    return hashlib.sha256(f"{settings.instance_id or 'basehaptic'}:{ip}".encode()).hexdigest()
+
+
+def _validate_pending_cheer_events_background() -> None:
+    with SessionLocal() as db:
+        validate_pending_cheer_events(db, limit=100)
+
+
+@app.post("/cheer-events/validate-pending")
+def validate_pending_cheer_events_now(
+    db: Annotated[Session, Depends(get_db)],
+    authorization: Annotated[str | None, Header()] = None,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="authorization header required")
+    _extract_user_id_from_token(authorization)
+    return {"updated": validate_pending_cheer_events(db, limit=limit)}
+
+
+@app.get("/rankings/teams")
 def get_team_rankings(
     db: Annotated[Session, Depends(get_db)],
     period: str = Query("season", pattern="^(season|weekly)$"),
@@ -1072,14 +1113,17 @@ def get_team_rankings(
     }
 
 
-# @app.get("/cheer-events/me")  # TODO(stadium-cheer): 활성화 시 주석 해제. 달력 UI/개인 체크인 기록 화면 전용.
+@app.get("/cheer-events/me")
 def get_my_cheer_events(
     db: Annotated[Session, Depends(get_db)],
-    user_id: str = Query(..., description="auth subject. 활성화 시 토큰에서 추출 권장."),
+    authorization: Annotated[str | None, Header()] = None,
     since: str | None = Query(None, description="ISO8601 또는 YYYY-MM-DD. 시즌 시작 등 하한."),
     until: str | None = Query(None, description="ISO8601 또는 YYYY-MM-DD. 상한."),
     only_valid: bool = Query(True, description="false 시 invalid/suspicious도 포함."),
 ) -> dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="authorization header required")
+    user_id = _extract_user_id_from_token(authorization)
     stmt = select(CheerEvent).where(CheerEvent.user_id == user_id)
     if only_valid:
         stmt = stmt.where(CheerEvent.validity_status == "valid")

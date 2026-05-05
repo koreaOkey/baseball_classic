@@ -338,6 +338,7 @@ class GameSyncForegroundService : Service() {
             }
 
             while (currentCoroutineContext().isActive) {
+                var hasConsumedInitialEventsSnapshot = false
                 runCatching {
                     BackendGamesRepository.streamGame(gameId).collect { message ->
                         when (message) {
@@ -354,7 +355,11 @@ class GameSyncForegroundService : Service() {
                             }
 
                             is BackendGamesRepository.LiveStreamMessage.Events -> {
-                                applyIncomingEvents(message.items, sendHaptics = true)
+                                applyIncomingEvents(
+                                    incoming = message.items,
+                                    sendHaptics = hasConsumedInitialEventsSnapshot
+                                )
+                                hasConsumedInitialEventsSnapshot = true
                             }
 
                             is BackendGamesRepository.LiveStreamMessage.State -> {

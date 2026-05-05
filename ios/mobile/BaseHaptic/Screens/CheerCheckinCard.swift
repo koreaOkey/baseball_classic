@@ -1,6 +1,5 @@
 import SwiftUI
 
-// TODO(stadium-cheer): 활성화 시 HomeScreen에 임베드. 다크 머지 단계에서는 호출부 없음.
 // 사용자가 자동 알림을 못 봤거나 권한 거부 사용자에게도 앱 내에서 체크인 진입점 제공.
 struct CheerCheckinCard: View {
     let stadiumName: String

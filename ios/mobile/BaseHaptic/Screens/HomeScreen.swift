@@ -5,6 +5,9 @@ struct HomeScreen: View {
     let todayGames: [Game]
     let activeTheme: ThemeData?
     let syncedGameId: String?
+    let checkinStadium: Stadium?
+    let onConfirmCheckin: () -> Void
+    let onDismissCheckin: () -> Void
     let onSelectGame: (Game) -> Void
 
     @Environment(\.teamTheme) private var teamTheme
@@ -31,6 +34,16 @@ struct HomeScreen: View {
                     .padding(.vertical, AppSpacing.md)
 
                 gamesListHeader
+                if let checkinStadium {
+                    CheerCheckinCard(
+                        stadiumName: checkinStadium.name,
+                        teamLabel: selectedTeam.teamName,
+                        onConfirm: onConfirmCheckin,
+                        onDismiss: onDismissCheckin
+                    )
+                    .padding(.horizontal, AppSpacing.xxl)
+                    .padding(.bottom, AppSpacing.md)
+                }
                 gamesListSection
                 upcomingGamesSection
                 Spacer().frame(height: AppSpacing.bottomSafeSpacer)

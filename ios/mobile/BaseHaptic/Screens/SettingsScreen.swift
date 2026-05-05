@@ -19,6 +19,7 @@ struct SettingsScreen: View {
     @State private var highFiveEnabled = true
     @AppStorage("ball_strike_haptic_enabled") private var ballStrikeHapticEnabled = true
     @AppStorage("event_video_enabled") private var eventVideoEnabled = true
+    @AppStorage("stadium_cheer_enabled") private var stadiumCheerEnabled = true
     @State private var showDeleteConfirm = false
     @State private var isDeletingAccount = false
 
@@ -187,6 +188,13 @@ struct SettingsScreen: View {
                 .onChange(of: eventVideoEnabled) { _, newValue in
                     WatchThemeSyncManager.syncEventVideoEnabledToWatch(enabled: newValue)
                 }
+
+                SettingsItemWithToggle(
+                    icon: "figure.baseball",
+                    title: "경기장 응원",
+                    subtitle: "구장 체크인과 시작 응원을 워치로 받기",
+                    isOn: $stadiumCheerEnabled
+                )
 
                 // 개발자 섹션 - 배포 시 숨김
                 Spacer().frame(height: AppSpacing.lg)

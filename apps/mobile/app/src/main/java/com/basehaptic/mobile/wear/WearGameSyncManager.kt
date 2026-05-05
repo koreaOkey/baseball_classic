@@ -9,7 +9,7 @@ import com.google.android.gms.wearable.Wearable
 object WearGameSyncManager {
     private const val TAG = "WearGameSync"
     private const val PATH_GAME = "/game/current"
-    private const val PATH_HAPTIC = "/haptic"
+    private const val PATH_HAPTIC = "/haptic/current"
     private const val PATH_WATCH_PROMPT = "/watch/prompt/current"
     // TODO(stadium-cheer): 활성화 시 워치측 DataLayerListenerService에서 동일 path 핸들러 등록 주석 해제
     private const val PATH_CHEER_TRIGGER = "/cheer/trigger"
@@ -184,8 +184,9 @@ object WearGameSyncManager {
         Thread {
             try {
                 val timestamp = System.currentTimeMillis()
-                val request = PutDataMapRequest.create("$PATH_HAPTIC/$timestamp").apply {
+                val request = PutDataMapRequest.create(PATH_HAPTIC).apply {
                     dataMap.putString("event_type", eventType)
+                    dataMap.putLong(KEY_UPDATED_AT, timestamp)
                     if (cursor != null) {
                         dataMap.putLong("event_cursor", cursor)
                     }
