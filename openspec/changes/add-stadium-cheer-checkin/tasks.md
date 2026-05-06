@@ -24,11 +24,13 @@
 - [x] 2.8 `ios/mobile/BaseHaptic/Stadium/Stadiums.swift` 신규 — KBO 9구장 좌표/반경/홈팀 정적 데이터
 - [x] 2.9 SettingsScreen에 `stadium_cheer_enabled` `@AppStorage` 토글 (활성화 단계에서 추가)
 - [x] 2.10 권한 매니페스트(`Info.plist`)에 위치 권한 문구와 `location` background mode 추가
+- [x] 2.11 `ios/mobile/BaseHaptic/Screens/WatchTestScreen.swift`에 현장 응원 풀스크린 테스트 버튼 추가
 
 ## 3. iOS Watch (실테스트 활성화)
 
 - [x] 3.1 `ios/watch/BaseHapticWatch/Screens/StadiumCheerScreen.swift` 신규 (StadiumCheerPayload + Coordinator + Screen)
 - [x] 3.2 `WatchConnectivityManager`에 `stadium_cheer_trigger` case 추가 및 dispatch 활성화, watch app overlay 연결
+- [x] 3.3 현장 응원 풀스크린 표시 시 홈런 이벤트처럼 강한 3회 탭틱 패턴 재생
 
 ## 4. Android Phone (다크 머지)
 
@@ -46,12 +48,15 @@
 - [ ] 4.8 `apps/mobile/app/src/main/java/com/basehaptic/mobile/ui/screens/SettingsScreen.kt`에 `stadium_cheer_enabled` SharedPreferences 토글 추가하되 UI는 `// TODO(stadium-cheer):` 주석 처리.
 - [ ] 4.9 `apps/mobile/app/src/main/res/values/strings.xml`에 `tab_my_team`, `cheer_checkin_card_title` 등 문자열 리소스 추가.
 - [ ] 4.10 `AndroidManifest.xml`은 변경하지 않음 — 활성화 시점에 `ACCESS_BACKGROUND_LOCATION`, `POST_NOTIFICATIONS` 추가.
+- [x] 4.11 `apps/mobile/app/src/main/java/com/basehaptic/mobile/ui/screens/WatchTestScreen.kt`에 현장 응원 풀스크린 테스트 버튼 추가.
 
 ## 5. Android Wear OS (다크 머지)
 
 - [x] 5.1 `apps/watch/app/src/main/java/com/basehaptic/watch/ui/StadiumCheerScreen.kt` 신규 (Payload + Coordinator + Screen, Vibrator 패턴 포함)
-- [x] 5.2 `DataLayerListenerService`에 `PATH_CHEER_TRIGGER` 추가 + `handleCheerTrigger` 메서드 추가 (when 분기 주석 처리)
+- [x] 5.2 `DataLayerListenerService`에 `PATH_CHEER_TRIGGER` 추가 + `handleCheerTrigger` 메서드 추가 및 when 분기 활성화
 - [x] 5.3 `WearGameSyncManager.sendCheerTrigger(...)` 추가 + `PATH_CHEER_TRIGGER` 상수
+- [x] 5.4 Wear OS root UI에 현장 응원 overlay mount
+- [x] 5.5 현장 응원 풀스크린 표시 시 홈런 이벤트 수준의 강한 진동 패턴 유지
 
 ## 6. 검증 & 정리
 

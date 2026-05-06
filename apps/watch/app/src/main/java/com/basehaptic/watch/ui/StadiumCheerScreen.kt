@@ -37,26 +37,37 @@ object StadiumCheerOverlayCoordinator {
 
     fun dispatch(context: Context, payload: StadiumCheerPayload) {
         current.value = payload
-        playHaptic(context)
+        playHaptic(context, payload.hapticPatternId)
         android.os.Handler(context.mainLooper).postDelayed({
             if (current.value == payload) current.value = null
         }, 6_000L)
     }
 
-    private fun playHaptic(context: Context) {
+    private fun playHaptic(context: Context, patternId: String) {
         val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
         } else {
             @Suppress("DEPRECATION")
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }
-        val pattern = longArrayOf(0, 200, 150, 200, 150, 200)
-        val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255)
+        val (pattern, amplitudes) = cheerPattern(patternId)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator?.vibrate(VibrationEffect.createWaveform(pattern, amplitudes, -1))
         } else {
             @Suppress("DEPRECATION")
             vibrator?.vibrate(pattern, -1)
+        }
+    }
+
+    private fun cheerPattern(patternId: String): Pair<LongArray, IntArray> {
+        return when {
+            patternId.contains("silent", ignoreCase = true) -> {
+                longArrayOf(0) to intArrayOf(0)
+            }
+            else -> {
+                longArrayOf(0, 200, 150, 200, 150, 200) to
+                    intArrayOf(0, 255, 0, 255, 0, 255)
+            }
         }
     }
 }

@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -242,6 +243,21 @@ fun WatchTestScreen(
         )
     }
 
+    fun sendCheerTest() {
+        val team = if (selectedTeam == Team.NONE) Team.DOOSAN else selectedTeam
+        val cheerText = "${team.teamName} 팬들, 지금 함께 응원해요!"
+        WearGameSyncManager.sendCheerTrigger(
+            context = context,
+            teamCode = team.name,
+            stadiumCode = "TEST",
+            cheerText = cheerText,
+            primaryColorHex = team.color.toRgbHex(),
+            hapticPatternId = "watch_test_v1",
+            fireAtUnixMs = System.currentTimeMillis()
+        )
+        addLog("[CHEER] ${team.teamName} 응원 화면 테스트 전송")
+    }
+
     Scaffold(
         topBar = {
             Row(
@@ -400,6 +416,35 @@ fun WatchTestScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                        Text("현장 응원 테스트", style = AppFont.bodyBold, color = Gray300)
+                        Spacer(Modifier.height(AppSpacing.xs))
+                        Text(
+                            text = "워치에 풀스크린 응원 문구와 팀 컬러, 햅틱을 즉시 전송합니다.",
+                            style = AppFont.caption,
+                            color = Gray500
+                        )
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        Button(
+                            onClick = { sendCheerTest() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(AppSpacing.buttonHeight),
+                            colors = ButtonDefaults.buttonColors(containerColor = teamTheme.primary),
+                            shape = AppShapes.sm
+                        ) {
+                            Text("응원 화면 테스트", style = AppFont.bodyBold)
+                        }
+                    }
+                }
+            }
+
+            item {
+                Surface(
+                    shape = AppShapes.md,
+                    color = Gray900,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
                         Text("수동 이벤트 전송", style = AppFont.bodyBold, color = Gray300)
                         Spacer(Modifier.height(AppSpacing.sm))
 
@@ -490,4 +535,8 @@ fun WatchTestScreen(
             item { Spacer(Modifier.height(AppSpacing.bottomSafeSpacer)) }
         }
     }
+}
+
+private fun Color.toRgbHex(): String {
+    return "#%06X".format(toArgb() and 0x00FFFFFF)
 }

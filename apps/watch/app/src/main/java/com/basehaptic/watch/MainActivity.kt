@@ -68,6 +68,8 @@ import com.basehaptic.watch.data.BaseStatus
 import com.basehaptic.watch.data.GameData
 import com.basehaptic.watch.ui.components.LiveGameScreen
 import com.basehaptic.watch.ui.components.NoGameScreen
+import com.basehaptic.watch.ui.StadiumCheerOverlayCoordinator
+import com.basehaptic.watch.ui.StadiumCheerScreen
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
 import com.basehaptic.watch.ui.theme.Gray950
 import com.basehaptic.watch.ui.theme.WatchTeamTheme
@@ -219,6 +221,7 @@ fun WatchApp(isAmbient: Boolean = false) {
     var scoreTransitionToken by remember { mutableStateOf<Long?>(null) }
     var isVictoryTransitionVisible by remember { mutableStateOf(false) }
     var victoryTransitionToken by remember { mutableStateOf<Long?>(null) }
+    val stadiumCheerPayload by StadiumCheerOverlayCoordinator.current
     var previousGameIsLive by remember { mutableStateOf<Boolean?>(null) }
     // 비디오 재생 중 후속 이벤트로 화면이 끊기지 않도록 하는 가드.
     // true 인 동안은 새 전환 토큰 발급을 막고, 각 LaunchedEffect 가 try/finally
@@ -553,6 +556,8 @@ fun WatchApp(isAmbient: Boolean = false) {
             }
 
             if (!isAmbient) {
+                stadiumCheerPayload?.let { StadiumCheerScreen(payload = it) }
+
                 val prompt = watchSyncPrompt
                 if (prompt != null) {
                     WatchSyncPromptDialog(

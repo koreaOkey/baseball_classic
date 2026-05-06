@@ -698,6 +698,28 @@ struct ContentView: View {
         let reconnectDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 5_000_000_000, 10_000_000_000]
         var reconnectAttempt = 0
 
+        if let initialState = await BackendGamesRepository.shared.fetchGameState(gameId: targetGameId) {
+            WatchGameSyncManager.shared.sendGameData(
+                gameId: initialState.gameId,
+                homeTeam: initialState.homeTeam,
+                awayTeam: initialState.awayTeam,
+                homeScore: initialState.homeScore,
+                awayScore: initialState.awayScore,
+                status: initialState.status.rawValue,
+                inning: initialState.inning,
+                ball: initialState.ball,
+                strike: initialState.strike,
+                out: initialState.out,
+                baseFirst: initialState.baseFirst,
+                baseSecond: initialState.baseSecond,
+                baseThird: initialState.baseThird,
+                pitcher: initialState.pitcher,
+                batter: initialState.batter,
+                myTeam: selectedTeam.rawValue
+            )
+            lastWatchSignature = "\(initialState.gameId)|\(initialState.status)|\(initialState.inning)|\(initialState.homeScore)|\(initialState.awayScore)|\(initialState.ball)|\(initialState.strike)|\(initialState.out)"
+        }
+
         while !Task.isCancelled {
             var hasConsumedInitialEventsSnapshot = false
             for await message in BackendGamesRepository.shared.streamGame(gameId: targetGameId) {

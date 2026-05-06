@@ -30,8 +30,19 @@ final class StadiumCheerCoordinator: ObservableObject {
 }
 
 enum StadiumCheerHapticPlayer {
-    static func play(patternId: String) {
-        WKInterfaceDevice.current().play(.notification)
+    static func play(patternId _: String) {
+        playHomeRunLikePattern()
+    }
+
+    private static func playHomeRunLikePattern() {
+        let device = WKInterfaceDevice.current()
+        device.play(.notification)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            device.play(.notification)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            device.play(.notification)
+        }
     }
 }
 

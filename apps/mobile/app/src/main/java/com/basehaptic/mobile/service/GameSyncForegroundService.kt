@@ -295,6 +295,12 @@ class GameSyncForegroundService : Service() {
                 }
             }
 
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.fetchGameState(gameId)
+            }?.let { initialState ->
+                pushStateToWatch(initialState)
+            }
+
             fun applyIncomingEvents(
                 incoming: List<BackendGamesRepository.LiveEvent>,
                 sendHaptics: Boolean

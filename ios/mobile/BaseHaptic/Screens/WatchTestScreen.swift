@@ -179,6 +179,7 @@ struct WatchTestScreen: View {
                     scoreCard
                     autoSimulationCard
                     manualEventCard
+                    cheerTestCard
                     logCard
                     Spacer().frame(height: AppSpacing.bottomSafeSpacer)
                 }
@@ -343,6 +344,39 @@ struct WatchTestScreen: View {
         .cornerRadius(AppRadius.md)
     }
 
+    // MARK: - Cheer Test
+    private var cheerTestCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("현장 응원 테스트")
+                .font(AppFont.bodyBold)
+                .foregroundColor(AppColors.gray300)
+
+            Text("워치에 풀스크린 응원 문구와 팀 컬러, 햅틱을 즉시 전송합니다.")
+                .font(AppFont.caption)
+                .foregroundColor(AppColors.gray500)
+
+            Button {
+                sendCheerTest()
+            } label: {
+                HStack(spacing: AppSpacing.xs) {
+                    Image(systemName: "figure.baseball")
+                        .font(AppFont.body)
+                    Text("응원 화면 테스트")
+                        .font(AppFont.bodyBold)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: AppSpacing.buttonHeight)
+                .background(selectedTeam == .none ? AppColors.blue600 : teamTheme.primary)
+                .cornerRadius(AppRadius.sm)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(AppSpacing.lg)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.md)
+    }
+
     // MARK: - Log Card
     private var logCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
@@ -409,6 +443,36 @@ struct WatchTestScreen: View {
             myTeam: selectedTeam.rawValue,
             eventType: filteredEventType
         )
+    }
+
+    private func sendCheerTest() {
+        let team = selectedTeam == .none ? Team.doosan : selectedTeam
+        let cheerText = "\(team.teamName) 팬들, 지금 함께 응원해요!"
+        WatchThemeSyncManager.sendCheerTrigger(
+            teamCode: team.rawValue,
+            stadiumCode: "TEST",
+            cheerText: cheerText,
+            primaryColorHex: cheerPrimaryColorHex(for: team),
+            hapticPatternId: "watch_test_v1",
+            fireAtUnixMs: Int64(Date().timeIntervalSince1970 * 1000)
+        )
+        addLog("[CHEER] \(team.teamName) 응원 화면 테스트 전송")
+    }
+
+    private func cheerPrimaryColorHex(for team: Team) -> String {
+        switch team {
+        case .none: return "#3B82F6"
+        case .doosan: return "#131230"
+        case .lg: return "#C30452"
+        case .kiwoom: return "#820024"
+        case .samsung: return "#074CA1"
+        case .lotte: return "#041E42"
+        case .ssg: return "#CE0E2D"
+        case .kt: return "#000000"
+        case .hanwha: return "#FF6600"
+        case .kia: return "#EA0029"
+        case .nc: return "#315288"
+        }
     }
 
     private func startSimulation() {

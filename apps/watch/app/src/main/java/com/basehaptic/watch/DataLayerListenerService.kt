@@ -90,8 +90,7 @@ class DataLayerListenerService : WearableListenerService() {
                     path?.startsWith(PATH_HAPTIC) == true -> handleHapticEvent(item)
                     path?.startsWith(PATH_WATCH_PROMPT) == true -> handleWatchSyncPrompt(item)
                     path?.startsWith(PATH_SETTINGS) == true -> handleSettingsUpdate(item)
-                    // TODO(stadium-cheer): 활성화 시 아래 분기 주석 해제. 다크 단계에서는 미전달이라 도달 X.
-                    // path?.startsWith(PATH_CHEER_TRIGGER) == true -> handleCheerTrigger(item)
+                    path?.startsWith(PATH_CHEER_TRIGGER) == true -> handleCheerTrigger(item)
                 }
             }
         }
@@ -465,9 +464,6 @@ class DataLayerListenerService : WearableListenerService() {
         }
     }
 
-    // TODO(stadium-cheer): 활성화 시 onDataChanged when 분기 주석 해제 + StadiumCheerOverlay UI 트리거.
-    // 다크 머지 단계에서는 함수 정의만 두고 호출되지 않음.
-    @Suppress("unused")
     private fun handleCheerTrigger(item: com.google.android.gms.wearable.DataItem) {
         val prefs = getSharedPreferences(SETTINGS_PREFS_NAME, MODE_PRIVATE)
         if (!prefs.getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)) return
