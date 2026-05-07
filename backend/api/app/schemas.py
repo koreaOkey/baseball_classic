@@ -252,6 +252,7 @@ class GameStateOut(BaseModel):
     bases: BaseStatus
     pitcher: str | None = None
     batter: str | None = None
+    pitcherPitchCount: int | None = None
     lastEventType: EventType | None = None
     lastEventAt: IsoDatetime | None = None
     updatedAt: IsoDatetime

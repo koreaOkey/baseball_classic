@@ -62,6 +62,7 @@ class DataLayerListenerService : WearableListenerService() {
         const val KEY_BASE_THIRD = "base_third"
         const val KEY_PITCHER = "pitcher"
         const val KEY_BATTER = "batter"
+        const val KEY_PITCHER_PITCH_COUNT = "pitcher_pitch_count"
         const val KEY_MY_TEAM = "my_team"
         const val KEY_EVENT_TYPE = "event_type"
         const val KEY_EVENT_CURSOR = "event_cursor"
@@ -140,6 +141,8 @@ class DataLayerListenerService : WearableListenerService() {
             .putBoolean(KEY_BASE_THIRD, dataMap.getBoolean(KEY_BASE_THIRD))
             .putString(KEY_PITCHER, dataMap.getString(KEY_PITCHER, ""))
             .putString(KEY_BATTER, dataMap.getString(KEY_BATTER, ""))
+            // -1 = "값 없음" sentinel. UI 에서 음수면 미표시 처리한다.
+            .putInt(KEY_PITCHER_PITCH_COUNT, dataMap.getInt(KEY_PITCHER_PITCH_COUNT, -1))
             .putString(KEY_MY_TEAM, dataMap.getString(KEY_MY_TEAM, ""))
             .putLong(KEY_GAME_UPDATED_AT, System.currentTimeMillis())
             .apply()

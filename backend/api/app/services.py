@@ -1301,6 +1301,18 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
             game.away_score,
         )
 
+    pitcher_pitch_count: int | None = None
+    if game.pitcher and game_status == GameStatus.LIVE:
+        # 동명이인 가능성에 대비해 가장 최근 등판(appearance_order desc)을 활성 투수로 본다.
+        active = db.execute(
+            select(GamePitcherStat.pitches_thrown)
+            .where(GamePitcherStat.game_id == game.id, GamePitcherStat.player_name == game.pitcher)
+            .order_by(GamePitcherStat.appearance_order.desc().nullslast())
+            .limit(1)
+        ).scalar_one_or_none()
+        if active is not None:
+            pitcher_pitch_count = active
+
     return GameStateOut(
         gameId=game.id,
         homeTeam=game.home_team,
@@ -1315,6 +1327,7 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         bases=BaseStatus(first=base_first, second=base_second, third=base_third),
         pitcher=game.pitcher,
         batter=game.batter,
+        pitcherPitchCount=pitcher_pitch_count,
         lastEventType=normalize_event_type(latest_event.event_type) if latest_event else None,
         lastEventAt=latest_event.event_time if latest_event else None,
         updatedAt=game.updated_at,

@@ -40,6 +40,7 @@ struct LiveGameState {
     let baseThird: Bool
     let pitcher: String
     let batter: String
+    let pitcherPitchCount: Int?
     let lastEventType: String?
 }
 
@@ -326,6 +327,7 @@ final class BackendGamesRepository {
             baseThird: bases["third"] as? Bool ?? false,
             pitcher: json["pitcher"] as? String ?? "",
             batter: json["batter"] as? String ?? "",
+            pitcherPitchCount: json["pitcherPitchCount"] as? Int,
             lastEventType: (json["lastEventType"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         )
     }

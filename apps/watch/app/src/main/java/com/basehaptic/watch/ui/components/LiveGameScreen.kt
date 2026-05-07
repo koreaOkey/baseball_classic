@@ -1,5 +1,11 @@
 package com.basehaptic.watch.ui.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -262,8 +268,11 @@ fun LiveGameScreen(
             }
         }
 
-        Text(
-            text = "P ${gameData.pitcher}  B ${gameData.batter}",
+        // Player info: 안드로이드 워치는 폭이 좁아 한 줄에 "P 김재윤·12구  B 김성욱" 가 잘리므로
+        // 2줄로 분리 (P + 투구수 / B). 투구수만 AnimatedContent 로 위쪽 슬라이드 인 → 아래쪽 슬라이드 아웃.
+        // AnimatedContent 의 내부 state 는 contentKey = pitcher 로 두기 때문에, 투수가 바뀌면
+        // 새 컴포지션으로 교체되어 다운카운트 애니메이션이 발생하지 않는다.
+        Column(
             modifier = Modifier
                 .constrainAs(playerInfo) {
                     bottom.linkTo(tapHint.top)
@@ -271,11 +280,56 @@ fun LiveGameScreen(
                     end.linkTo(parent.end)
                 }
                 .offset(y = (uiProfile.playerInfoOffsetYDp - globalContentShiftDownDp).dp),
-            color = Color.White.copy(alpha = 0.62f),
-            fontSize = uiProfile.playerInfoSp.sp,
-            maxLines = 1,
-            style = TextShadowStyle
-        )
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val showPitchCount = gameData.isLive && gameData.pitcherPitchCount != null
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "P ${gameData.pitcher}",
+                    color = Color.White.copy(alpha = 0.62f),
+                    fontSize = uiProfile.playerInfoSp.sp,
+                    maxLines = 1,
+                    style = TextShadowStyle
+                )
+                if (showPitchCount) {
+                    Text(
+                        text = " · ",
+                        color = Color.White.copy(alpha = 0.62f),
+                        fontSize = uiProfile.playerInfoSp.sp,
+                        style = TextShadowStyle
+                    )
+                    AnimatedContent(
+                        targetState = gameData.pitcherPitchCount ?: 0,
+                        transitionSpec = {
+                            (slideInVertically { h -> h } + fadeIn()) togetherWith
+                                (slideOutVertically { h -> -h } + fadeOut())
+                        },
+                        contentKey = { gameData.pitcher },
+                        label = "pitch-count"
+                    ) { count ->
+                        Text(
+                            text = "$count",
+                            color = Color.White.copy(alpha = 0.62f),
+                            fontSize = uiProfile.playerInfoSp.sp,
+                            style = TextShadowStyle
+                        )
+                    }
+                    Text(
+                        text = "구",
+                        color = Color.White.copy(alpha = 0.62f),
+                        fontSize = uiProfile.playerInfoSp.sp,
+                        style = TextShadowStyle
+                    )
+                }
+            }
+            Text(
+                text = "B ${gameData.batter}",
+                color = Color.White.copy(alpha = 0.62f),
+                fontSize = uiProfile.playerInfoSp.sp,
+                maxLines = 1,
+                style = TextShadowStyle
+            )
+        }
 
         Text(
             text = "TAP FOR DETAILS",

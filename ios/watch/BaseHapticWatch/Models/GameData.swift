@@ -14,6 +14,8 @@ struct GameData {
     let bases: BaseStatus
     let pitcher: String
     let batter: String
+    /// 활성 투수의 투구수. 백엔드에서 못 받았을 때는 nil → UI 에서 "· N구" 부분을 숨긴다.
+    let pitcherPitchCount: Int?
     let scoreDiff: Int
     let myTeamName: String
 }
@@ -46,6 +48,7 @@ func getMockGameData() -> GameData {
         bases: BaseStatus(first: true, third: true),
         pitcher: "KIM",
         batter: "LEE",
+        pitcherPitchCount: 87,
         scoreDiff: 1,
         myTeamName: "SSG"
     )

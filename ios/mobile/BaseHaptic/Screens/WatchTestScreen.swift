@@ -15,7 +15,14 @@ private struct SimGameState {
     var baseThird = false
     var pitcher = "김광현"
     var batter = "추신수"
+    // pitchCount 는 시나리오 클로저가 손대지 않고 runner 가 이벤트 종류로 자동 누적/리셋한다.
+    var pitchCount = 0
 }
+
+// 시뮬레이터에서 한 구로 카운트되는 이벤트 종류
+private let pitchEventTypes: Set<String> = [
+    "BALL", "STRIKE", "HIT", "HOMERUN", "WALK", "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY"
+]
 
 private struct SimEvent {
     let eventType: String
@@ -235,7 +242,7 @@ struct WatchTestScreen: View {
             let bases = [gameState.baseFirst ? "1루" : nil, gameState.baseSecond ? "2루" : nil, gameState.baseThird ? "3루" : nil].compactMap { $0 }
             Text(bases.isEmpty ? "주자 없음" : "주자: \(bases.joined(separator: ", "))")
                 .font(AppFont.micro).foregroundColor(AppColors.gray400)
-            Text("투수: \(gameState.pitcher)  타자: \(gameState.batter)")
+            Text("투수: \(gameState.pitcher) · \(gameState.pitchCount)구  타자: \(gameState.batter)")
                 .font(AppFont.micro).foregroundColor(AppColors.gray400)
         }
         .padding(AppSpacing.lg)
@@ -440,6 +447,7 @@ struct WatchTestScreen: View {
             baseThird: gameState.baseThird,
             pitcher: gameState.pitcher,
             batter: gameState.batter,
+            pitcherPitchCount: gameState.pitchCount,
             myTeam: selectedTeam.rawValue,
             eventType: filteredEventType
         )
@@ -488,7 +496,17 @@ struct WatchTestScreen: View {
                 guard !Task.isCancelled, isSimulating else { break }
                 simIndex = i
                 let event = simulationScenario[i]
-                gameState = event.stateUpdate(gameState)
+                let prevPitcher = gameState.pitcher
+                var next = event.stateUpdate(gameState)
+                // pitchCount: 투수가 바뀌면 0 으로 리셋, 같으면 한 구짜리 이벤트일 때만 +1
+                if next.pitcher != prevPitcher {
+                    next.pitchCount = 0
+                } else if pitchEventTypes.contains(event.eventType) {
+                    next.pitchCount = gameState.pitchCount + 1
+                } else {
+                    next.pitchCount = gameState.pitchCount
+                }
+                gameState = next
                 addLog("[\(event.eventType)] \(event.description)")
                 sendCurrentState(eventType: event.eventType)
                 try? await Task.sleep(nanoseconds: event.delayMs * 1_000_000)

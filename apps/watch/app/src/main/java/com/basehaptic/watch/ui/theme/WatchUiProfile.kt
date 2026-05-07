@@ -70,7 +70,8 @@ fun rememberWatchUiProfile(): WatchUiProfile {
             countDotSizeDp = 6,
             countLabelWidthDp = 10,
             countLabelSp = 8,
-            playerInfoOffsetYDp = 20,
+            // 2줄 (P+투구수 / B) 로 늘었으므로 6dp 정도 아래로 더 밀어 위쪽 BSO 와 간격 유지
+            playerInfoOffsetYDp = 26,
             playerInfoSp = 7,
             tapHintBottomMarginDp = 6,
             tapHintSp = 6,
@@ -104,7 +105,8 @@ fun rememberWatchUiProfile(): WatchUiProfile {
             countDotSizeDp = 7,
             countLabelWidthDp = 11,
             countLabelSp = 8,
-            playerInfoOffsetYDp = 28,
+            // 2줄 (P+투구수 / B) 로 늘었으므로 6dp 정도 아래로 더 밀어 위쪽 BSO 와 간격 유지
+            playerInfoOffsetYDp = 34,
             playerInfoSp = 8,
             tapHintBottomMarginDp = 7,
             tapHintSp = 7,
@@ -138,7 +140,8 @@ fun rememberWatchUiProfile(): WatchUiProfile {
             countDotSizeDp = 8,
             countLabelWidthDp = 12,
             countLabelSp = 9,
-            playerInfoOffsetYDp = 35,
+            // 2줄 (P+투구수 / B) 로 늘었으므로 6dp 정도 아래로 더 밀어 위쪽 BSO 와 간격 유지
+            playerInfoOffsetYDp = 41,
             playerInfoSp = 8,
             tapHintBottomMarginDp = 8,
             tapHintSp = 7,

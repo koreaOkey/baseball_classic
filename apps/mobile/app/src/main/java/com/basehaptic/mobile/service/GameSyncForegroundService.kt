@@ -253,6 +253,7 @@ class GameSyncForegroundService : Service() {
                     state.baseFirst.toString(),
                     state.baseSecond.toString(),
                     state.baseThird.toString(),
+                    state.pitcherPitchCount?.toString().orEmpty(),
                     latestEventType.orEmpty()
                 ).joinToString("|")
 
@@ -275,6 +276,7 @@ class GameSyncForegroundService : Service() {
                         baseThird = state.baseThird,
                         pitcher = state.pitcher,
                         batter = state.batter,
+                        pitcherPitchCount = state.pitcherPitchCount,
                         myTeam = resolveMyTeamName(selectedTeam, state),
                         eventType = null
                     )

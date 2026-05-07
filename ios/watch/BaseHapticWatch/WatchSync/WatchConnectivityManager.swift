@@ -190,6 +190,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             ),
             pitcher: message["pitcher"] as? String ?? "",
             batter: message["batter"] as? String ?? "",
+            pitcherPitchCount: {
+                guard let raw = message["pitcher_pitch_count"] as? Int, raw >= 0 else { return nil }
+                return raw
+            }(),
             scoreDiff: 0,
             myTeamName: message["my_team"] as? String ?? ""
         )

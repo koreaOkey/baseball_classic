@@ -71,12 +71,24 @@ struct WatchLiveGameScreen: View {
 
             Spacer().frame(height: uiProfile.bsoPlayerSpacing)
 
-            // Player info
-            Text("P \(gameData.pitcher)  B \(gameData.batter)")
-                .font(.system(size: uiProfile.playerInfoSize))
-                .foregroundColor(.white.opacity(0.62))
-                .lineLimit(1)
-                .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
+            // Player info — 투수 이름 + (선택적) "· N구" 애니메이션 + 타자 이름.
+            // 투수가 바뀌면 .id(gameData.pitcher) 가 새 뷰로 인식돼 다운카운트 애니메이션이 발생하지 않는다.
+            HStack(spacing: 0) {
+                Text("P \(gameData.pitcher)")
+                if let count = gameData.pitcherPitchCount, gameData.isLive {
+                    Text(" · ")
+                    Text("\(count)")
+                        .contentTransition(.numericText(value: Double(count)))
+                        .animation(.snappy, value: count)
+                        .id(gameData.pitcher)
+                    Text("구")
+                }
+                Text("  B \(gameData.batter)")
+            }
+            .font(.system(size: uiProfile.playerInfoSize))
+            .foregroundColor(.white.opacity(0.62))
+            .lineLimit(1)
+            .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
@@ -206,6 +218,7 @@ private func mockGame(home: String, away: String, myTeam: String) -> GameData {
         bases: BaseStatus(first: true, third: true),
         pitcher: "김광현",
         batter: "이대호",
+        pitcherPitchCount: 87,
         scoreDiff: 1,
         myTeamName: myTeam
     )

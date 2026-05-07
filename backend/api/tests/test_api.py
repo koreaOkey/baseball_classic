@@ -255,6 +255,9 @@ def test_ingest_and_query_flow() -> None:
         assert state_body["homeScore"] == 3
         assert state_body["awayScore"] == 2
         assert state_body["lastEventType"] == "SCORE"
+        # 활성 투수("Kim Starter")의 pitchesThrown 이 game-state 에 노출된다
+        assert state_body["pitcher"] == "Kim Starter"
+        assert state_body["pitcherPitchCount"] == 88
 
         events = client.get("/games/20250501SSSK02025/events")
         assert events.status_code == 200

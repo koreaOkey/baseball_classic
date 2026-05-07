@@ -29,6 +29,7 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
         baseThird: Bool,
         pitcher: String,
         batter: String,
+        pitcherPitchCount: Int? = nil,
         myTeam: String,
         eventType: String? = nil
     ) {
@@ -49,6 +50,7 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
             "base_third": baseThird,
             "pitcher": pitcher,
             "batter": batter,
+            "pitcher_pitch_count": pitcherPitchCount ?? -1,
             "my_team": myTeam
         ]
         if let eventType = eventType {

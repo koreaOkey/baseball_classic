@@ -715,9 +715,10 @@ struct ContentView: View {
                 baseThird: initialState.baseThird,
                 pitcher: initialState.pitcher,
                 batter: initialState.batter,
+                pitcherPitchCount: initialState.pitcherPitchCount,
                 myTeam: selectedTeam.rawValue
             )
-            lastWatchSignature = "\(initialState.gameId)|\(initialState.status)|\(initialState.inning)|\(initialState.homeScore)|\(initialState.awayScore)|\(initialState.ball)|\(initialState.strike)|\(initialState.out)"
+            lastWatchSignature = "\(initialState.gameId)|\(initialState.status)|\(initialState.inning)|\(initialState.homeScore)|\(initialState.awayScore)|\(initialState.ball)|\(initialState.strike)|\(initialState.out)|\(initialState.pitcherPitchCount ?? -1)"
         }
 
         while !Task.isCancelled {
@@ -731,7 +732,7 @@ struct ContentView: View {
                 case .error:
                     break
                 case .state(let state):
-                    let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)"
+                    let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)|\(state.pitcherPitchCount ?? -1)"
                     if signature != lastWatchSignature {
                         let wasLive = lastWatchSignature.contains("|live|") || lastWatchSignature.contains("|LIVE|")
                         WatchGameSyncManager.shared.sendGameData(
@@ -750,6 +751,7 @@ struct ContentView: View {
                             baseThird: state.baseThird,
                             pitcher: state.pitcher,
                             batter: state.batter,
+                            pitcherPitchCount: state.pitcherPitchCount,
                             myTeam: selectedTeam.rawValue
                         )
                         lastWatchSignature = signature
@@ -828,7 +830,7 @@ struct ContentView: View {
                         if isInningChange && events.isEmpty {
                             try? await Task.sleep(nanoseconds: 1_500_000_000)
                         }
-                        let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)"
+                        let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)|\(state.pitcherPitchCount ?? -1)"
                         if signature != lastWatchSignature {
                             let wasLive = lastWatchSignature.contains("|live|") || lastWatchSignature.contains("|LIVE|")
                             WatchGameSyncManager.shared.sendGameData(
@@ -847,6 +849,7 @@ struct ContentView: View {
                                 baseThird: state.baseThird,
                                 pitcher: state.pitcher,
                                 batter: state.batter,
+                                pitcherPitchCount: state.pitcherPitchCount,
                                 myTeam: selectedTeam.rawValue
                             )
                             lastWatchSignature = signature

@@ -97,6 +97,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             baseThird: userInfo["base_third"] as? Bool ?? false,
             pitcher: userInfo["pitcher"] as? String ?? "",
             batter: userInfo["batter"] as? String ?? "",
+            pitcherPitchCount: userInfo["pitcher_pitch_count"] as? Int,
             myTeam: userInfo["my_team"] as? String ?? ""
         )
     }

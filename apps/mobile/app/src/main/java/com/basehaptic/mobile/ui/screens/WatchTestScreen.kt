@@ -75,7 +75,21 @@ data class SimGameState(
     val baseSecond: Boolean = false,
     val baseThird: Boolean = false,
     val pitcher: String = "김광현",
-    val batter: String = "추신수"
+    val batter: String = "추신수",
+    // pitchCount 는 시나리오 클로저가 손대지 않고 runner 가 이벤트 종류로 자동 누적/리셋한다.
+    val pitchCount: Int = 0
+)
+
+// 시뮬레이터에서 한 구로 카운트되는 이벤트 종류
+private val PITCH_EVENT_TYPES = setOf(
+    EventType.BALL,
+    EventType.STRIKE,
+    EventType.HIT,
+    EventType.HOMERUN,
+    EventType.WALK,
+    EventType.OUT,
+    EventType.DOUBLE_PLAY,
+    EventType.TRIPLE_PLAY
 )
 
 data class SimEvent(
@@ -238,6 +252,7 @@ fun WatchTestScreen(
             baseThird = gameState.baseThird,
             pitcher = gameState.pitcher,
             batter = gameState.batter,
+            pitcherPitchCount = gameState.pitchCount,
             myTeam = selectedTeam.teamName,
             eventType = filteredEventType
         )
@@ -338,7 +353,7 @@ fun WatchTestScreen(
                             style = AppFont.micro,
                             color = Gray400
                         )
-                        Text("투수: ${gameState.pitcher}  타자: ${gameState.batter}", style = AppFont.micro, color = Gray400)
+                        Text("투수: ${gameState.pitcher} · ${gameState.pitchCount}구  타자: ${gameState.batter}", style = AppFont.micro, color = Gray400)
                     }
                 }
             }
@@ -367,7 +382,15 @@ fun WatchTestScreen(
                                                 if (!isSimulating) break
                                                 simIndex = i
                                                 val event = simulationScenario[i]
-                                                gameState = event.stateUpdate(gameState)
+                                                val prevPitcher = gameState.pitcher
+                                                val updated = event.stateUpdate(gameState)
+                                                // pitchCount: 투수 교체 시 0 으로 리셋, 같은 투수면 한 구짜리 이벤트일 때만 +1
+                                                val nextPitchCount = when {
+                                                    updated.pitcher != prevPitcher -> 0
+                                                    event.eventType in PITCH_EVENT_TYPES -> gameState.pitchCount + 1
+                                                    else -> gameState.pitchCount
+                                                }
+                                                gameState = updated.copy(pitchCount = nextPitchCount)
                                                 addLog("[${event.eventType}] ${event.description}")
                                                 sendCurrentState(event.eventType.name)
                                                 delay(event.delayMs)

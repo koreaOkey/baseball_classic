@@ -34,13 +34,14 @@ object WearGameSyncManager {
         baseThird: Boolean,
         pitcher: String,
         batter: String,
+        pitcherPitchCount: Int? = null,
         myTeam: String,
         eventType: String? = null
     ) {
         val payload = GameDataPayload(
             gameId, homeTeam, awayTeam, homeScore, awayScore, status,
             inning, ball, strike, out, baseFirst, baseSecond, baseThird,
-            pitcher, batter, myTeam, eventType
+            pitcher, batter, pitcherPitchCount, myTeam, eventType
         )
         // 마스터 OFF여도 phone-side 캐시는 항상 갱신 (ON 복원 시 즉시 push 용)
         cacheLastGameData(context, payload)
@@ -81,6 +82,7 @@ object WearGameSyncManager {
         val baseThird: Boolean,
         val pitcher: String,
         val batter: String,
+        val pitcherPitchCount: Int?,
         val myTeam: String,
         val eventType: String?
     )
@@ -105,6 +107,8 @@ object WearGameSyncManager {
                     dataMap.putBoolean("base_third", p.baseThird)
                     dataMap.putString("pitcher", p.pitcher)
                     dataMap.putString("batter", p.batter)
+                    // null 은 -1 로 직렬화 → 워치측에서 -1 이면 미표시 처리.
+                    dataMap.putInt("pitcher_pitch_count", p.pitcherPitchCount ?: -1)
                     dataMap.putString("my_team", p.myTeam)
                     dataMap.putLong(KEY_UPDATED_AT, timestamp)
                     if (p.eventType != null) {
@@ -137,6 +141,7 @@ object WearGameSyncManager {
             put("base_third", p.baseThird)
             put("pitcher", p.pitcher)
             put("batter", p.batter)
+            put("pitcher_pitch_count", p.pitcherPitchCount ?: -1)
             put("my_team", p.myTeam)
             if (p.eventType != null) put("event_type", p.eventType)
         }
@@ -167,6 +172,7 @@ object WearGameSyncManager {
                 baseThird = j.optBoolean("base_third"),
                 pitcher = j.optString("pitcher"),
                 batter = j.optString("batter"),
+                pitcherPitchCount = j.optInt("pitcher_pitch_count", -1).takeIf { it >= 0 },
                 myTeam = j.optString("my_team"),
                 eventType = if (j.has("event_type")) j.optString("event_type") else null
             )

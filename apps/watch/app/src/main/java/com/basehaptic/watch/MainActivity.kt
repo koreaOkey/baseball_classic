@@ -631,6 +631,7 @@ private fun readGameDataFromPrefs(context: Context): GameData? {
         ),
         pitcher = prefs.getString(DataLayerListenerService.KEY_PITCHER, "") ?: "",
         batter = prefs.getString(DataLayerListenerService.KEY_BATTER, "") ?: "",
+        pitcherPitchCount = prefs.getInt(DataLayerListenerService.KEY_PITCHER_PITCH_COUNT, -1).takeIf { it >= 0 },
         scoreDiff = 0,
         myTeamName = prefs.getString(DataLayerListenerService.KEY_MY_TEAM, "") ?: ""
     )

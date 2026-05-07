@@ -68,6 +68,7 @@ object BackendGamesRepository {
         val baseThird: Boolean,
         val pitcher: String,
         val batter: String,
+        val pitcherPitchCount: Int?,
         val lastEventType: String?
     )
 
@@ -636,6 +637,7 @@ object BackendGamesRepository {
             baseThird = bases.optBoolean("third", false),
             pitcher = optString("pitcher"),
             batter = optString("batter"),
+            pitcherPitchCount = if (isNull("pitcherPitchCount")) null else optInt("pitcherPitchCount").takeIf { has("pitcherPitchCount") },
             lastEventType = optString("lastEventType").ifBlank { null }
         )
     }
