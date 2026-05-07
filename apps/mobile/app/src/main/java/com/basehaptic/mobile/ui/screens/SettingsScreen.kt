@@ -40,9 +40,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.ui.components.TeamLogo
+import com.basehaptic.mobile.ui.components.WatchInstallCard
+import com.basehaptic.mobile.wear.WatchCompanionStatus
+import com.basehaptic.mobile.wear.WatchCompanionStatusRepository
+import com.basehaptic.mobile.wear.WatchInstallLauncher
 import com.basehaptic.mobile.ui.theme.AppFont
 import com.basehaptic.mobile.ui.theme.AppShapes
 import com.basehaptic.mobile.ui.theme.AppSpacing
@@ -85,6 +94,42 @@ fun SettingsScreen(
                 color = Color.White,
                 modifier = Modifier.padding(bottom = AppSpacing.lg)
             )
+        }
+
+        item {
+            val context = LocalContext.current
+            val lifecycleOwner = LocalLifecycleOwner.current
+            var watchStatus by remember {
+                mutableStateOf<WatchCompanionStatus>(WatchCompanionStatus.Loading)
+            }
+            val refreshScope = androidx.compose.runtime.rememberCoroutineScope()
+            val refreshStatus = remember<() -> Unit>(context) {
+                {
+                    refreshScope.launch {
+                        watchStatus = WatchCompanionStatusRepository.getStatus(context)
+                    }
+                }
+            }
+            LaunchedEffect(Unit) { refreshStatus() }
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) refreshStatus()
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+            WatchInstallCard(
+                status = watchStatus,
+                onInstall = { WatchInstallLauncher.openPlayStoreForWatch(context) },
+                onRecheck = { refreshStatus() },
+                onOpenWatchApp = { WatchInstallLauncher.openWearOsCompanion(context) },
+                onWatchTest = onOpenWatchTest
+            )
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(AppSpacing.lg))
+            SettingsSection(title = "팀 설정")
         }
 
         item {
@@ -362,20 +407,6 @@ fun SettingsScreen(
                     prefs.edit().putBoolean("event_video_enabled", it).apply()
                     com.basehaptic.mobile.wear.WearSettingsSyncManager.syncEventVideoEnabledToWatch(context, it)
                 }
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(AppSpacing.lg))
-            SettingsSection(title = "개발자")
-        }
-
-        item {
-            SettingsItem(
-                icon = Icons.Default.Watch,
-                title = "워치 테스트",
-                subtitle = "시뮬레이션 이벤트로 워치 동기화 테스트",
-                onClick = onOpenWatchTest
             )
         }
 

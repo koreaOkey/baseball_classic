@@ -7,6 +7,7 @@ final class PhoneConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     static let shared = PhoneConnectivityManager()
 
     @Published var watchSyncResponse: WatchSyncResponse?
+    @Published var watchCompanionStatus: WatchCompanionStatus = .loading
 
     struct WatchSyncResponse {
         let gameId: String
@@ -31,12 +32,40 @@ final class PhoneConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         } else {
             print("[PhoneConnectivity] Activated: \(activationState.rawValue)")
         }
+        refreshCompanionStatus()
     }
 
     func sessionDidBecomeInactive(_ session: WCSession) {}
 
     func sessionDidDeactivate(_ session: WCSession) {
         session.activate()
+    }
+
+    func sessionWatchStateDidChange(_ session: WCSession) {
+        refreshCompanionStatus()
+    }
+
+    func refreshCompanionStatus() {
+        guard WCSession.isSupported() else {
+            DispatchQueue.main.async { self.watchCompanionStatus = .pairedNone }
+            return
+        }
+        let session = WCSession.default
+        let next: WatchCompanionStatus
+        if session.activationState != .activated {
+            next = .loading
+        } else if !session.isPaired {
+            next = .pairedNone
+        } else if !session.isWatchAppInstalled {
+            next = .pairedNoApp
+        } else {
+            next = .installed
+        }
+        DispatchQueue.main.async {
+            if self.watchCompanionStatus != next {
+                self.watchCompanionStatus = next
+            }
+        }
     }
 
     /// 워치에서 보낸 메시지 수신 (sync response 등)

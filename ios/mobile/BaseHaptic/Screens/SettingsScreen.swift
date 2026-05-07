@@ -14,6 +14,8 @@ struct SettingsScreen: View {
     var onDeleteAccount: () async -> Bool = { false }
 
     @Environment(\.teamTheme) private var teamTheme
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var connectivity = PhoneConnectivityManager.shared
     @State private var showTeamPicker = false
     @AppStorage("live_haptic_enabled") private var hapticEnabled = true
     @State private var highFiveEnabled = true
@@ -30,6 +32,17 @@ struct SettingsScreen: View {
                     .font(AppFont.h2)
                     .foregroundColor(.white)
                     .padding(.bottom, AppSpacing.lg)
+
+                WatchInstallCard(
+                    status: connectivity.watchCompanionStatus,
+                    onInstall: { connectivity.refreshCompanionStatus() },
+                    onRecheck: { connectivity.refreshCompanionStatus() },
+                    onOpenWatchApp: { _ = WatchInstallLauncher.openCompanionWatchApp() },
+                    onWatchTest: onOpenWatchTest
+                )
+
+                Spacer().frame(height: AppSpacing.lg)
+                SettingsSection(title: "팀 설정")
 
                 SettingsItem(icon: "person.2.fill", title: "응원 팀", subtitle: selectedTeam.teamName) {
                     showTeamPicker.toggle()
@@ -196,13 +209,6 @@ struct SettingsScreen: View {
                     isOn: $stadiumCheerEnabled
                 )
 
-                // 개발자 섹션 - 배포 시 숨김
-                Spacer().frame(height: AppSpacing.lg)
-                SettingsSection(title: "개발자")
-                SettingsItem(icon: "applewatch.radiowaves.left.and.right", title: "워치 테스트", subtitle: "시뮬레이션 이벤트로 워치 동기화 테스트") {
-                    onOpenWatchTest()
-                }
-
                 // 정보 섹션
                 Spacer().frame(height: AppSpacing.lg)
                 SettingsSection(title: "정보")
@@ -214,6 +220,10 @@ struct SettingsScreen: View {
             .padding(AppSpacing.xxl)
         }
         .background(AppColors.gray950)
+        .onAppear { connectivity.refreshCompanionStatus() }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active { connectivity.refreshCompanionStatus() }
+        }
         .alert("계정 삭제", isPresented: $showDeleteConfirm) {
             Button("취소", role: .cancel) {}
             Button("삭제", role: .destructive) {

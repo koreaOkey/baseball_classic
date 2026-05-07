@@ -165,6 +165,7 @@ dependencies {
 
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     // In-App Update
     implementation("com.google.android.play:app-update:2.1.0")
