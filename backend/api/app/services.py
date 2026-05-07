@@ -257,7 +257,8 @@ def _has_game_end_signal(payload: CrawlerSnapshotRequest) -> bool:
 
 def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> Game:
     game = db.get(Game, game_id)
-    if game is None:
+    is_new_game = game is None
+    if is_new_game:
         game = Game(id=game_id, home_team=payload.homeTeam, away_team=payload.awayTeam)
         db.add(game)
 
@@ -272,20 +273,99 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
         incoming_status = GameStatus.FINISHED
     next_status = _resolve_next_game_status(game.status, incoming_status)
 
+    prev_inning = None if is_new_game else game.inning
+    prev_out = None if is_new_game else game.out_count
+
+    incoming_inning = payload.inning
+    incoming_ball = payload.ball
+    incoming_strike = payload.strike
+    incoming_out = payload.out
+    incoming_b1 = payload.bases.first
+    incoming_b2 = payload.bases.second
+    incoming_b3 = payload.bases.third
+    inning_advanced = False
+
+    if next_status is GameStatus.LIVE:
+        # B안: out>=3 즉시 advance 또는 종료
+        if incoming_out >= 3:
+            new_inning, should_finish = _resolve_inning_after_three_outs(
+                incoming_inning or "", payload.homeScore, payload.awayScore
+            )
+            if should_finish:
+                logger.info(
+                    "[three-outs-finish] gameId=%s inning=%s home=%s away=%s",
+                    game_id, incoming_inning, payload.homeScore, payload.awayScore,
+                )
+                next_status = GameStatus.FINISHED
+                incoming_ball = incoming_strike = incoming_out = 0
+                incoming_b1 = incoming_b2 = incoming_b3 = False
+            else:
+                if new_inning != incoming_inning:
+                    logger.info(
+                        "[three-outs-advance] gameId=%s %s -> %s",
+                        game_id, incoming_inning, new_inning,
+                    )
+                    inning_advanced = True
+                incoming_inning = new_inning
+                incoming_ball = incoming_strike = incoming_out = 0
+                incoming_b1 = incoming_b2 = incoming_b3 = False
+        # A안: 이전 out>=2 + 현재 out=0 + inning 동일 → transition advance
+        elif (
+            prev_out is not None and prev_out >= 2
+            and incoming_out == 0
+            and prev_inning is not None
+            and incoming_inning == prev_inning
+        ):
+            new_inning, should_finish = _resolve_inning_after_three_outs(
+                prev_inning, payload.homeScore, payload.awayScore
+            )
+            if should_finish:
+                logger.info(
+                    "[three-outs-finish-transition] gameId=%s inning=%s home=%s away=%s",
+                    game_id, prev_inning, payload.homeScore, payload.awayScore,
+                )
+                next_status = GameStatus.FINISHED
+            elif new_inning != prev_inning:
+                logger.info(
+                    "[three-outs-advance-transition] gameId=%s %s -> %s",
+                    game_id, prev_inning, new_inning,
+                )
+                incoming_inning = new_inning
+                inning_advanced = True
+
+    # 가드: inning 후퇴 방지 (LIVE 상태에서만, advance 직후에는 적용 안 함)
+    if (
+        next_status is GameStatus.LIVE
+        and not inning_advanced
+        and prev_inning
+        and incoming_inning
+    ):
+        prev_key = _inning_progress_key(prev_inning)
+        new_key = _inning_progress_key(incoming_inning)
+        if prev_key is not None and new_key is not None and new_key < prev_key:
+            logger.info(
+                "[inning-regress-guard] gameId=%s prev=%s incoming=%s 보존",
+                game_id, prev_inning, incoming_inning,
+            )
+            incoming_inning = prev_inning
+
     game.home_team = payload.homeTeam
     game.away_team = payload.awayTeam
     game.status = next_status.value
-    # FINISHED 전이 시 inning 텍스트도 "경기 종료" 로 일관성 확보.
+    # FINISHED 전이 시 inning 텍스트도 일관 라벨로 강제 (무승부 분기 포함).
     # (네이버가 잠깐 "10회초" 같은 중간 상태를 찍어도 플리커 방지)
-    game.inning = "경기 종료" if next_status is GameStatus.FINISHED else payload.inning
+    if next_status is GameStatus.FINISHED:
+        game.inning = _finished_inning_label(payload.homeScore, payload.awayScore)
+    else:
+        game.inning = incoming_inning
     game.home_score = payload.homeScore
     game.away_score = payload.awayScore
-    game.ball_count = payload.ball
-    game.strike_count = payload.strike
-    game.out_count = payload.out
-    game.base_first = payload.bases.first
-    game.base_second = payload.bases.second
-    game.base_third = payload.bases.third
+    game.ball_count = incoming_ball
+    game.strike_count = incoming_strike
+    game.out_count = incoming_out
+    game.base_first = incoming_b1
+    game.base_second = incoming_b2
+    game.base_third = incoming_b3
     game.pitcher = payload.pitcher
     game.batter = payload.batter
     normalized_game_date = _game_date_from_game_id(game_id)
@@ -1114,24 +1194,92 @@ def to_event_out(event: GameEvent) -> GameEventOut:
     )
 
 
-def _advance_inning(inning: str) -> str:
-    match = re.match(r"^(\d+)회(초|말)$", inning or "")
+# KBO 정규/연장 회차 룰 (시즌 룰 변경 시 이 두 상수만 수정)
+MAX_REGULATION_INNING = 9
+MAX_EXTRA_INNING = 11
+FINISHED_INNING_TEXT = "경기 종료"
+DRAW_INNING_TEXT = "경기 종료 (무승부)"
+
+_INNING_RE = re.compile(r"^(\d+)회(초|말)$")
+
+
+def _parse_inning(inning: str) -> tuple[int, str] | None:
+    match = _INNING_RE.match((inning or "").strip())
     if not match:
-        return inning or ""
-    number = int(match.group(1))
-    half = match.group(2)
+        return None
+    return int(match.group(1)), match.group(2)
+
+
+def _inning_progress_key(inning: str) -> int | None:
+    """inning 진행 순서 비교 키. 값이 클수록 더 진행된 상태."""
+    parsed = _parse_inning(inning)
+    if parsed is None:
+        return None
+    number, half = parsed
+    return number * 2 + (0 if half == "초" else 1)
+
+
+def _finished_inning_label(home_score: int | None, away_score: int | None) -> str:
+    if (home_score or 0) == (away_score or 0):
+        return DRAW_INNING_TEXT
+    return FINISHED_INNING_TEXT
+
+
+def _resolve_inning_after_three_outs(
+    inning: str,
+    home_score: int | None,
+    away_score: int | None,
+) -> tuple[str, bool]:
+    """3아웃 발생 시 다음 inning 판정.
+
+    Returns:
+        (new_inning, should_finish)
+        - should_finish=True: 경기 종료 처리 권고. inning은 그대로 반환됨(호출부에서 종료 라벨로 덮어씀).
+        - should_finish=False: new_inning으로 advance.
+    """
+    parsed = _parse_inning(inning)
+    if parsed is None:
+        return inning or "", False
+    number, half = parsed
+    home = home_score or 0
+    away = away_score or 0
+
+    # 11회말은 점수 무관 종료 (KBO 무승부 가능)
+    if number >= MAX_EXTRA_INNING and half == "말":
+        return inning, True
+    # 9~10회 종료 판정 (정규 9회 이상 + 연장 룰)
+    if number >= MAX_REGULATION_INNING:
+        # N회초 종료 시 홈팀 리드면 N회말 생략 → 종료
+        if half == "초" and home > away:
+            return inning, True
+        # N회말 종료 시 점수 결정나면 종료, 동점이면 다음 연장으로
+        if half == "말" and home != away:
+            return inning, True
+    # 정상 advance
     if half == "초":
-        return f"{number}회말"
-    return f"{number + 1}회초"
+        return f"{number}회말", False
+    return f"{number + 1}회초", False
 
 
 def _normalize_state_for_three_outs(
     ball: int, strike: int, out: int,
     base_first: bool, base_second: bool, base_third: bool,
     inning: str,
+    home_score: int | None = None,
+    away_score: int | None = None,
 ) -> tuple[int, int, int, bool, bool, bool, str]:
+    """3아웃 상태를 응답용으로 정규화 (DB는 변경하지 않음).
+
+    upsert 단계에서 이미 정규화/advance 된 상태가 DB에 저장되므로 이 함수는
+    안전망(legacy/스냅샷 직접 주입 등)으로만 동작한다.
+    """
     if out >= 3:
-        return 0, 0, 0, False, False, False, _advance_inning(inning)
+        new_inning, should_finish = _resolve_inning_after_three_outs(
+            inning or "", home_score, away_score
+        )
+        if should_finish:
+            return 0, 0, 0, False, False, False, _finished_inning_label(home_score, away_score)
+        return 0, 0, 0, False, False, False, new_inning
     return ball, strike, out, base_first, base_second, base_third, inning
 
 
@@ -1149,6 +1297,8 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
             game.ball_count, game.strike_count, game.out_count,
             game.base_first, game.base_second, game.base_third,
             game.inning,
+            game.home_score,
+            game.away_score,
         )
 
     return GameStateOut(

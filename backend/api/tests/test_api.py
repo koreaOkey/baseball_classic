@@ -388,6 +388,7 @@ def test_status_mapping_includes_canceled_and_postponed() -> None:
 
 
 def test_game_state_resets_ball_strike_when_three_outs() -> None:
+    """파싱 불가 inning('7B') + out=3: BSO만 0으로 리셋, inning 텍스트 유지."""
     with TestClient(app) as client:
         payload = sample_snapshot()
         payload["ball"] = 2
@@ -404,9 +405,272 @@ def test_game_state_resets_ball_strike_when_three_outs() -> None:
         state = client.get("/games/20250501SSSK02025/state")
         assert state.status_code == 200
         body = state.json()
-        assert body["out"] == 3
+        assert body["out"] == 0
         assert body["ball"] == 0
         assert body["strike"] == 0
+
+
+def test_three_outs_advances_inning_in_regulation() -> None:
+    """KBO 한국어 inning에서 out=3 들어오면 즉시 다음 회로 advance + BSO=0."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "3회초"
+        payload["ball"] = 1
+        payload["strike"] = 2
+        payload["out"] = 3
+        payload["homeScore"] = 1
+        payload["awayScore"] = 1
+
+        ingest = client.post(
+            "/internal/crawler/games/20250501SSSK02025_ADV1/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        body = client.get("/games/20250501SSSK02025_ADV1/state").json()
+        assert body["inning"] == "3회말"
+        assert body["out"] == 0
+        assert body["ball"] == 0
+        assert body["strike"] == 0
+        assert body["bases"] == {"first": False, "second": False, "third": False}
+
+
+def test_three_outs_transition_advances_when_payload_resets_only_bso() -> None:
+    """이전 out=2, payload out=0 + inning 동일 → transition으로 advance."""
+    with TestClient(app) as client:
+        game_id = "20250501SSSK02025_TRANS"
+        payload = sample_snapshot()
+        payload["inning"] = "5회말"
+        payload["out"] = 2
+        payload["ball"] = 1
+        payload["strike"] = 2
+
+        client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        # 다음 폴링: 네이버가 BSO만 리셋, inning 텍스트는 그대로
+        payload["out"] = 0
+        payload["ball"] = 0
+        payload["strike"] = 0
+        payload["bases"] = {"first": False, "second": False, "third": False}
+        client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get(f"/games/{game_id}/state").json()
+        assert body["inning"] == "6회초"
+        assert body["out"] == 0
+
+
+def test_inning_regress_guard_keeps_advanced_inning() -> None:
+    """백엔드가 advance한 후, 네이버가 옛 inning 보내도 후퇴 안 함 (BSO/score는 갱신)."""
+    with TestClient(app) as client:
+        game_id = "20250501SSSK02025_GUARD"
+        # 1차: out=3 → 백엔드 advance "3회초" → "3회말"
+        payload = sample_snapshot()
+        payload["inning"] = "3회초"
+        payload["out"] = 3
+        payload["homeScore"] = 0
+        payload["awayScore"] = 0
+        client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        # 2차: 네이버가 아직 "3회초" 텍스트로 옴 (BSO만 리셋된 새 타석)
+        payload["inning"] = "3회초"
+        payload["out"] = 0
+        payload["ball"] = 1
+        payload["strike"] = 0
+        payload["homeScore"] = 1
+        client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get(f"/games/{game_id}/state").json()
+        assert body["inning"] == "3회말"  # 후퇴 방지
+        assert body["ball"] == 1
+        assert body["homeScore"] == 1
+
+
+def test_ninth_top_three_outs_finishes_when_home_leads() -> None:
+    """9회초 3아웃 + 홈팀 리드 → 9회말 생략, 경기 종료."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "9회초"
+        payload["out"] = 3
+        payload["homeScore"] = 5
+        payload["awayScore"] = 2
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_9T/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_9T/state").json()
+        assert body["status"] == "FINISHED"
+        assert body["inning"] == "경기 종료"
+
+
+def test_ninth_top_three_outs_advances_when_tied() -> None:
+    """9회초 3아웃 + 동점 → 9회말 진행."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "9회초"
+        payload["out"] = 3
+        payload["homeScore"] = 2
+        payload["awayScore"] = 2
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_9TT/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_9TT/state").json()
+        assert body["status"] == "LIVE"
+        assert body["inning"] == "9회말"
+
+
+def test_ninth_bottom_three_outs_advances_to_extra_when_tied() -> None:
+    """9회말 3아웃 + 동점 → 10회초 (연장)."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "9회말"
+        payload["out"] = 3
+        payload["homeScore"] = 4
+        payload["awayScore"] = 4
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_9B/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_9B/state").json()
+        assert body["status"] == "LIVE"
+        assert body["inning"] == "10회초"
+
+
+def test_ninth_bottom_three_outs_finishes_when_score_diff() -> None:
+    """9회말 3아웃 + 점수차 → 경기 종료."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "9회말"
+        payload["out"] = 3
+        payload["homeScore"] = 3
+        payload["awayScore"] = 5
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_9BF/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_9BF/state").json()
+        assert body["status"] == "FINISHED"
+        assert body["inning"] == "경기 종료"
+
+
+def test_tenth_top_three_outs_finishes_when_home_leads() -> None:
+    """10회초 3아웃 + 홈리드 → 종료 (연장 끝내기)."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "10회초"
+        payload["out"] = 3
+        payload["homeScore"] = 6
+        payload["awayScore"] = 4
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_10T/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_10T/state").json()
+        assert body["status"] == "FINISHED"
+        assert body["inning"] == "경기 종료"
+
+
+def test_tenth_bottom_three_outs_advances_when_tied() -> None:
+    """10회말 3아웃 + 동점 → 11회초 (연장 계속)."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "10회말"
+        payload["out"] = 3
+        payload["homeScore"] = 5
+        payload["awayScore"] = 5
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_10B/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_10B/state").json()
+        assert body["status"] == "LIVE"
+        assert body["inning"] == "11회초"
+
+
+def test_tenth_bottom_three_outs_finishes_when_score_diff() -> None:
+    """10회말 3아웃 + 점수차 → 종료."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "10회말"
+        payload["out"] = 3
+        payload["homeScore"] = 7
+        payload["awayScore"] = 5
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_10BF/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_10BF/state").json()
+        assert body["status"] == "FINISHED"
+        assert body["inning"] == "경기 종료"
+
+
+def test_eleventh_bottom_three_outs_draw_label() -> None:
+    """11회말 3아웃 + 동점 → 경기 종료 (무승부) 라벨."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "11회말"
+        payload["out"] = 3
+        payload["homeScore"] = 3
+        payload["awayScore"] = 3
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_DRAW/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_DRAW/state").json()
+        assert body["status"] == "FINISHED"
+        assert body["inning"] == "경기 종료 (무승부)"
+
+
+def test_eleventh_bottom_three_outs_finishes_with_score_diff() -> None:
+    """11회말 3아웃 + 점수차 → 경기 종료."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["inning"] = "11회말"
+        payload["out"] = 3
+        payload["homeScore"] = 5
+        payload["awayScore"] = 3
+        client.post(
+            "/internal/crawler/games/20250501SSSK02025_11W/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        body = client.get("/games/20250501SSSK02025_11W/state").json()
+        assert body["status"] == "FINISHED"
+        assert body["inning"] == "경기 종료"
 
 
 def test_event_pitcher_batter_prefers_metadata_values() -> None:
