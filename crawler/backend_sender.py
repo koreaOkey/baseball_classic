@@ -602,7 +602,8 @@ def _extract_lineup_and_boxscore(
                     "homeRunsAllowed": _pick_int(pitcher, ["hr", "homeRun", "homeRuns", "homeRunsAllowed"]),
                     "battersFaced": _pick_int(pitcher, ["bf", "tb", "battersFaced"]),
                     "atBatsAgainst": _pick_int(pitcher, ["ab", "atBatsAgainst"]),
-                    "pitchesThrown": _pick_int(pitcher, ["np", "pc", "pitchCount", "pitchesThrown"]),
+                    # Naver relay 의 lineup.pitcher 레코드는 누적 투구수를 ballCount 로 노출. 다른 별칭은 fallback.
+                    "pitchesThrown": _pick_int(pitcher, ["ballCount", "np", "pc", "pitchCount", "pitchesThrown"]),
                 }
             )
 

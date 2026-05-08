@@ -104,6 +104,40 @@ def test_snapshot_payload_includes_offense_and_defense_team_metadata() -> None:
     assert metadata["defenseTeam"] == "Korea"
 
 
+def test_pitcher_stats_pick_up_ballcount_as_pitches_thrown() -> None:
+    game_data = {
+        "homeTeamName": "Hanwha",
+        "awayTeamName": "LG",
+        "statusCode": "STARTED",
+        "currentInning": "1회초",
+        "homeTeamScore": 0,
+        "awayTeamScore": 0,
+        "gameDateTime": "2026-05-08T18:30:00+09:00",
+    }
+    relays_by_inning = {
+        1: {
+            "homeLineup": {
+                "pitcher": [
+                    {"name": "박준영", "pcode": "52731", "seqno": 1, "ballCount": 16, "inn": "1.0"}
+                ],
+                "batter": [],
+            },
+            "awayLineup": {
+                "pitcher": [
+                    {"name": "송승기", "pcode": "51111", "seqno": 1, "ballCount": 0, "inn": "0.0"}
+                ],
+                "batter": [],
+            },
+            "textRelays": [],
+        }
+    }
+
+    payload = build_snapshot_payload(game_data=game_data, relays_by_inning=relays_by_inning)
+    by_name = {p["playerName"]: p for p in payload["pitcherStats"]}
+    assert by_name["박준영"]["pitchesThrown"] == 16
+    assert by_name["송승기"]["pitchesThrown"] == 0
+
+
 def test_normalize_status_supports_canceled_and_postponed() -> None:
     assert _normalize_status("ENDED") == "FINISHED"
     assert _normalize_status("CANCELED") == "CANCELED"
