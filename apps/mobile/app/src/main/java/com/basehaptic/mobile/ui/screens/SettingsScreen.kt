@@ -45,6 +45,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import com.basehaptic.mobile.BuildConfig
 import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.ui.components.TeamLogo
@@ -78,6 +79,7 @@ fun SettingsScreen(
     var showTeamPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
+    var manuallyOpenedReleaseNote by remember { mutableStateOf<com.basehaptic.mobile.data.model.ReleaseNote?>(null) }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
@@ -419,14 +421,23 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Default.Info,
                 title = "버전",
-                subtitle = "1.0.0",
-                onClick = {}
+                subtitle = BuildConfig.VERSION_NAME,
+                onClick = {
+                    manuallyOpenedReleaseNote = com.basehaptic.mobile.data.model.ReleaseNotes.notes(BuildConfig.VERSION_NAME)
+                }
             )
         }
 
         item {
             Spacer(modifier = Modifier.height(AppSpacing.bottomSafeSpacer))
         }
+    }
+
+    manuallyOpenedReleaseNote?.let { note ->
+        com.basehaptic.mobile.ui.components.WhatsNewDialog(
+            note = note,
+            onConfirm = { manuallyOpenedReleaseNote = null }
+        )
     }
 
     if (showDeleteConfirm) {

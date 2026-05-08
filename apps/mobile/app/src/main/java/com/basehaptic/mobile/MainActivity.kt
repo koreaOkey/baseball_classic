@@ -72,6 +72,7 @@ private const val KEY_UNLOCKED_THEME_IDS = "unlocked_theme_ids"
 private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
 // 워치 페이스 테마와 무관하게 응원 시 풀스크린에 적용될 테마. ThemeStore와 별도로 StadiumCheerThemeStore에서 매칭.
 private const val KEY_ACTIVE_CHEER_THEME_ID = "active_cheer_theme_id"
+private const val KEY_LAST_SEEN_UPDATE_VERSION = "last_seen_update_version"
 
 class MainActivity : ComponentActivity() {
     private val appUpdateManager by lazy { AppUpdateManagerFactory.create(this) }
@@ -156,6 +157,18 @@ class MainActivity : ComponentActivity() {
             .apply()
     }
 
+    private fun loadLastSeenUpdateVersion(): String =
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_LAST_SEEN_UPDATE_VERSION, null)
+            .orEmpty()
+
+    private fun persistLastSeenUpdateVersion(version: String) {
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_SEEN_UPDATE_VERSION, version)
+            .apply()
+    }
+
     private fun handleAuthDeeplink(intent: Intent) {
         try {
             SupabaseClientProvider.client.handleDeeplinks(intent) {}
@@ -236,6 +249,8 @@ class MainActivity : ComponentActivity() {
                     onPersistUnlockedThemeIds = ::persistUnlockedThemeIds,
                     onPersistActiveThemeId = ::persistActiveThemeId,
                     onPersistActiveCheerThemeId = ::persistActiveCheerThemeId,
+                    loadLastSeenUpdateVersion = ::loadLastSeenUpdateVersion,
+                    onPersistLastSeenUpdateVersion = ::persistLastSeenUpdateVersion,
                 )
             }
         }
@@ -254,6 +269,8 @@ fun BaseHapticApp(
     onPersistUnlockedThemeIds: (Set<String>) -> Unit = {},
     onPersistActiveThemeId: (String?) -> Unit = {},
     onPersistActiveCheerThemeId: (String?) -> Unit = {},
+    loadLastSeenUpdateVersion: () -> String = { "" },
+    onPersistLastSeenUpdateVersion: (String) -> Unit = {},
 ) {
     val authState by AuthManager.authState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -269,6 +286,7 @@ fun BaseHapticApp(
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
     val autoPromptedLiveGames = remember { mutableStateMapOf<String, Boolean>() }
     var unlockedThemeIds by remember { mutableStateOf(initialUnlockedThemeIds) }
+    var pendingReleaseNote by remember { mutableStateOf<com.basehaptic.mobile.data.model.ReleaseNote?>(null) }
     var todayGamesSnapshot by remember(selectedTeam) { mutableStateOf<List<Game>>(emptyList()) }
     var todayGamesLoadedDate by remember(selectedTeam) { mutableStateOf<LocalDate?>(null) }
     var todayGamesReloadToken by remember(selectedTeam) { mutableStateOf(0) }
@@ -660,6 +678,31 @@ fun BaseHapticApp(
                 }
             )
         }
+
+        pendingReleaseNote?.let { note ->
+            com.basehaptic.mobile.ui.components.WhatsNewDialog(
+                note = note,
+                onConfirm = { pendingReleaseNote = null }
+            )
+        }
+    }
+
+    LaunchedEffect(showOnboarding) {
+        if (showOnboarding) return@LaunchedEffect
+        val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
+        if (currentVersion.isEmpty()) return@LaunchedEffect
+
+        val lastSeen = loadLastSeenUpdateVersion()
+        if (lastSeen.isEmpty()) {
+            onPersistLastSeenUpdateVersion(currentVersion)
+            return@LaunchedEffect
+        }
+        if (lastSeen == currentVersion) return@LaunchedEffect
+
+        onPersistLastSeenUpdateVersion(currentVersion)
+
+        val note = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion) ?: return@LaunchedEffect
+        pendingReleaseNote = note
     }
 }
 

@@ -79,8 +79,8 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.0.2"
+        versionCode = 19
+        versionName = "1.0.3"
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")

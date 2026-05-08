@@ -23,6 +23,7 @@ struct SettingsScreen: View {
     @AppStorage("event_video_enabled") private var eventVideoEnabled = true
     @AppStorage("stadium_cheer_enabled") private var stadiumCheerEnabled = true
     @State private var showDeleteConfirm = false
+    @State private var manuallyOpenedReleaseNote: ReleaseNote?
     @State private var isDeletingAccount = false
 
     var body: some View {
@@ -213,7 +214,10 @@ struct SettingsScreen: View {
                 Spacer().frame(height: AppSpacing.lg)
                 SettingsSection(title: "정보")
 
-                SettingsItem(icon: "info.circle.fill", title: "버전", subtitle: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-") {}
+                SettingsItem(icon: "info.circle.fill", title: "버전", subtitle: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-") {
+                    let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+                    manuallyOpenedReleaseNote = ReleaseNotes.notes(for: currentVersion)
+                }
 
                 Spacer().frame(height: AppSpacing.bottomSafeSpacer)
             }
@@ -223,6 +227,12 @@ struct SettingsScreen: View {
         .onAppear { connectivity.refreshCompanionStatus() }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active { connectivity.refreshCompanionStatus() }
+        }
+        .sheet(item: $manuallyOpenedReleaseNote) { note in
+            WhatsNewSheet(
+                note: note,
+                onConfirm: { manuallyOpenedReleaseNote = nil }
+            )
         }
         .alert("계정 삭제", isPresented: $showDeleteConfirm) {
             Button("취소", role: .cancel) {}

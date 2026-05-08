@@ -146,7 +146,7 @@ struct ContentView: View {
     @State private var selectedGameId: String?
     @State private var syncedGameId: String?
     @State private var showWatchSyncDialog = false
-    @State private var showUpdateAnnouncement = false
+    @State private var pendingReleaseNote: ReleaseNote?
     @State private var pendingWatchSyncGameId: String?
     @State private var pendingWatchSyncNavigateToLive = false
     @State private var todayGames: [Game] = []
@@ -198,17 +198,13 @@ struct ContentView: View {
             consumePendingWatchSyncResponse()
         }
         .onAppear {
-            let lastSeenVersion = UserDefaults.standard.string(forKey: "last_seen_update_version") ?? ""
-            let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-            if !currentVersion.isEmpty && lastSeenVersion != currentVersion && !showOnboarding {
-                showUpdateAnnouncement = true
-                UserDefaults.standard.set(currentVersion, forKey: "last_seen_update_version")
-            }
+            evaluateWhatsNewTrigger()
         }
-        .alert("업데이트 안내", isPresented: $showUpdateAnnouncement) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text("테마 상점이 오픈되었습니다!\n다양한 워치 테마를 만나보세요.")
+        .sheet(item: $pendingReleaseNote) { note in
+            WhatsNewSheet(
+                note: note,
+                onConfirm: { pendingReleaseNote = nil }
+            )
         }
         .task(id: selectedTeam) {
             await loadTodayGames()
@@ -456,6 +452,27 @@ struct ContentView: View {
         } else if currentView != .home {
             currentView = .home
         }
+    }
+
+    // MARK: - What's New
+    private func evaluateWhatsNewTrigger() {
+        guard !showOnboarding else { return }
+        let defaults = UserDefaults.standard
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        guard !currentVersion.isEmpty else { return }
+
+        let lastSeen = defaults.string(forKey: "last_seen_update_version") ?? ""
+        if lastSeen.isEmpty {
+            defaults.set(currentVersion, forKey: "last_seen_update_version")
+            return
+        }
+        guard lastSeen != currentVersion else { return }
+
+        defer { defaults.set(currentVersion, forKey: "last_seen_update_version") }
+
+        guard let note = ReleaseNotes.notes(for: currentVersion) else { return }
+
+        pendingReleaseNote = note
     }
 
     // MARK: - Watch Sync

@@ -16,6 +16,8 @@
 		934FFB052E44A23E6C5C0F60 /* WatchInstallLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AC45530B59AE7FEECBA496 /* WatchInstallLauncher.swift */; };
 		3A76DC079D6638C561A39B0D /* WatchInstallCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41B73FA4ED865ACE74D79CB0 /* WatchInstallCard.swift */; };
 		A3075E17F15EFF60CC1873F6 /* WatchInstallInstructionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 259585618C2C10AA0E689562 /* WatchInstallInstructionsSheet.swift */; };
+		FACADE00010000000000A001 /* WhatsNewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACADE00020000000000A002 /* WhatsNewSheet.swift */; };
+		FACADE00010000000000B001 /* ReleaseNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACADE00020000000000B002 /* ReleaseNotes.swift */; };
 		17EDDCE4B419ECA41B8F9FD6 /* TeamTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */; };
 		1E120905C9B17E2723F00E1F /* TeamLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E721EEBEAA513CB8E3DAEF00 /* TeamLogo.swift */; };
 		20BB5AEADC66CAB9F84293FA /* WatchGamePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB8E76083CCB66D81D3DDB0 /* WatchGamePoller.swift */; };
@@ -181,6 +183,8 @@
 		42AC45530B59AE7FEECBA496 /* WatchInstallLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchInstallLauncher.swift; sourceTree = "<group>"; };
 		41B73FA4ED865ACE74D79CB0 /* WatchInstallCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchInstallCard.swift; sourceTree = "<group>"; };
 		259585618C2C10AA0E689562 /* WatchInstallInstructionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchInstallInstructionsSheet.swift; sourceTree = "<group>"; };
+		FACADE00020000000000A002 /* WhatsNewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewSheet.swift; sourceTree = "<group>"; };
+		FACADE00020000000000B002 /* ReleaseNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotes.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -391,6 +395,7 @@
 				E721EEBEAA513CB8E3DAEF00 /* TeamLogo.swift */,
 				41B73FA4ED865ACE74D79CB0 /* WatchInstallCard.swift */,
 				259585618C2C10AA0E689562 /* WatchInstallInstructionsSheet.swift */,
+				FACADE00020000000000A002 /* WhatsNewSheet.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -400,6 +405,7 @@
 			children = (
 				0DE96A677E34F2CC49DE538E /* Game.swift */,
 				47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */,
+				FACADE00020000000000B002 /* ReleaseNotes.swift */,
 				81854AC725B2650C74AD594D /* StadiumCheerThemes.swift */,
 				D59061C8B8CAB2114F761D19 /* Team.swift */,
 				0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */,
@@ -547,6 +553,8 @@
 				934FFB052E44A23E6C5C0F60 /* WatchInstallLauncher.swift in Sources */,
 				3A76DC079D6638C561A39B0D /* WatchInstallCard.swift in Sources */,
 				A3075E17F15EFF60CC1873F6 /* WatchInstallInstructionsSheet.swift in Sources */,
+				FACADE00010000000000A001 /* WhatsNewSheet.swift in Sources */,
+				FACADE00010000000000B001 /* ReleaseNotes.swift in Sources */,
 				A0B3889FA2840FDA0B6C8B89 /* PushTokenManager.swift in Sources */,
 				6C83A7D53BBC3ECE7ABBA223 /* RewardedAdManager.swift in Sources */,
 				C68C35184F116A2F2B5B7498 /* SettingsScreen.swift in Sources */,
@@ -732,14 +740,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = BaseHaptic.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = mobile/BaseHaptic/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -752,14 +760,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = BaseHaptic.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = mobile/BaseHaptic/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -771,10 +779,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "BaseHapticWatch Watch App.entitlements";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -788,10 +796,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "BaseHapticWatch Watch App.entitlements";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
