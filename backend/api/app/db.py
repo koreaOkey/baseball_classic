@@ -75,12 +75,31 @@ class Base(DeclarativeBase):
 def init_db() -> None:
     from . import models  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
-    _ensure_game_columns()
-    _ensure_game_event_columns()
-    _ensure_boxscore_context_columns()
-    _ensure_game_event_type_check_constraint()
-    _ensure_device_token_columns()
+    # Reason: uvicorn --workers N 으로 다중 워커가 동시에 startup 하면 SQLAlchemy 의
+    # create_all(checkfirst=True) 가 race 를 일으켜 일부 워커가 pg_type/pg_class
+    # UniqueViolation 으로 실패한다. 첫 새 테이블 추가 시 startup 이 길어지거나
+    # 영구 실패할 수 있으므로 PostgreSQL advisory lock 으로 init 을 직렬화한다.
+    if engine.dialect.name == "postgresql":
+        with engine.connect() as lock_conn:
+            lock_conn.execute(text("SELECT pg_advisory_lock(hashtext('basehaptic_init_db'))"))
+            lock_conn.commit()
+            try:
+                Base.metadata.create_all(bind=engine)
+                _ensure_game_columns()
+                _ensure_game_event_columns()
+                _ensure_boxscore_context_columns()
+                _ensure_game_event_type_check_constraint()
+                _ensure_device_token_columns()
+            finally:
+                lock_conn.execute(text("SELECT pg_advisory_unlock(hashtext('basehaptic_init_db'))"))
+                lock_conn.commit()
+    else:
+        Base.metadata.create_all(bind=engine)
+        _ensure_game_columns()
+        _ensure_game_event_columns()
+        _ensure_boxscore_context_columns()
+        _ensure_game_event_type_check_constraint()
+        _ensure_device_token_columns()
 
 
 def _ensure_game_columns() -> None:
