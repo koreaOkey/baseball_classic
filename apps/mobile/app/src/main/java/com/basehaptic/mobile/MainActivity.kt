@@ -184,7 +184,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
-        val gameId = intent?.getStringExtra(BaseHapticMessagingService.EXTRA_GAME_ID).orEmpty()
+        if (intent == null) return
+        val gameId = intent.getStringExtra(BaseHapticMessagingService.EXTRA_GAME_ID).orEmpty()
         if (gameId.isBlank()) return
         NotificationIntentBus.post(
             gameId = gameId,

@@ -45,7 +45,7 @@ object TeamSubscriptionRegistrar {
         val team = readSelectedTeam(appCtx)
 
         if (token.isBlank()) {
-            Log.d(TAG, "skip sync: no FCM token yet")
+            Log.i(TAG, "skip sync: no FCM token yet")
             return
         }
 
@@ -54,6 +54,7 @@ object TeamSubscriptionRegistrar {
         val lastTeam = prefs.getString(KEY_LAST_REGISTERED_TEAM, null)
 
         if (team.isBlank()) {
+            Log.i(TAG, "skip sync: no team selected (clearing registration if any)")
             if (!lastToken.isNullOrBlank()) {
                 unregisterAsync(appCtx, lastToken)
             }
@@ -61,10 +62,11 @@ object TeamSubscriptionRegistrar {
         }
 
         if (token == lastToken && team == lastTeam) {
-            Log.d(TAG, "skip sync: already registered token=${token.take(8)}... team=$team")
+            Log.i(TAG, "skip sync: already registered team=$team token=${token.take(8)}...")
             return
         }
 
+        Log.i(TAG, "syncing team=$team token=${token.take(8)}...")
         registerAsync(appCtx, token, team)
     }
 
