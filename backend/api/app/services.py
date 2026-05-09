@@ -256,8 +256,15 @@ def _has_game_end_signal(payload: CrawlerSnapshotRequest) -> bool:
 
 
 def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> Game:
+    """게임 스냅샷 upsert.
+
+    SCHEDULED→LIVE 전환을 감지하면 game.live_started_at 을 1회 set 하고,
+    caller 가 transient 속성 game._just_became_live 로 그 사실을 확인할 수 있다.
+    이 속성은 ORM 영속성 외부의 단순 보조 값이다.
+    """
     game = db.get(Game, game_id)
     is_new_game = game is None
+    prev_status_value = None if is_new_game else game.status
     if is_new_game:
         game = Game(id=game_id, home_team=payload.homeTeam, away_team=payload.awayTeam)
         db.add(game)
@@ -403,6 +410,17 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
         game.last_event_at = ensure_utc(latest_event.occurredAt)
 
     game.updated_at = ensure_utc(payload.observedAt) if payload.observedAt else now_utc()
+
+    # SCHEDULED → LIVE 전환을 1회 한정 시그널로 표시 (game-start 알림 트리거용)
+    became_live = (
+        next_status is GameStatus.LIVE
+        and normalize_status(prev_status_value or "") is not GameStatus.LIVE
+        and game.live_started_at is None
+    )
+    if became_live:
+        game.live_started_at = now_utc()
+    game._just_became_live = became_live  # type: ignore[attr-defined]
+
     db.flush()
     return game
 

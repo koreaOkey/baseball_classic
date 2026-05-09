@@ -15,7 +15,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Qu
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -31,9 +31,16 @@ from .models import (
     LiveActivityToken,
     TeamCheckinDaily,
     TeamCheckinSeason,
+    TeamSubscriptionToken,
 )
 from .redis_bus import RedisBroadcastRelay
-from .apns import send_live_activity_push, send_push, send_push_to_tokens
+from .apns import (
+    send_live_activity_push,
+    send_push,
+    send_push_to_tokens,
+    send_visible_push_to_tokens as send_apns_visible_push_to_tokens,
+)
+from .fcm import send_visible_push_to_tokens as send_fcm_visible_push_to_tokens
 from .schemas import (
     CrawlerSnapshotRequest,
     CrawlerTeamRecordRequest,
@@ -46,6 +53,7 @@ from .schemas import (
     IngestResult,
     TeamRecordIngestResult,
     TeamRecordOut,
+    TeamSubscriptionRequest,
 )
 from .services import (
     build_game_state,
@@ -463,6 +471,63 @@ def unregister_live_activity_token(
     return {"status": "ok"}
 
 
+@app.post("/team-subscriptions")
+def register_team_subscription(
+    payload: TeamSubscriptionRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """응원팀 단위 글로벌 푸시 구독 등록.
+
+    한 디바이스(=token) 가 응원팀을 변경하면 my_team 만 갱신.
+    """
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        stmt = pg_insert(TeamSubscriptionToken).values(
+            token=payload.token,
+            my_team=payload.my_team,
+            platform=payload.platform,
+            is_sandbox=payload.is_sandbox,
+        ).on_conflict_do_update(
+            constraint="uq_team_subscription_token",
+            set_={
+                "my_team": payload.my_team,
+                "platform": payload.platform,
+                "is_sandbox": payload.is_sandbox,
+            },
+        )
+        db.execute(stmt)
+    else:
+        existing = db.execute(
+            select(TeamSubscriptionToken).where(TeamSubscriptionToken.token == payload.token)
+        ).scalar_one_or_none()
+        if existing:
+            existing.my_team = payload.my_team
+            existing.platform = payload.platform
+            existing.is_sandbox = payload.is_sandbox
+        else:
+            db.add(TeamSubscriptionToken(
+                token=payload.token,
+                my_team=payload.my_team,
+                platform=payload.platform,
+                is_sandbox=payload.is_sandbox,
+            ))
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.delete("/team-subscriptions/{token}")
+def unregister_team_subscription(
+    token: str,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    db.execute(
+        delete(TeamSubscriptionToken).where(TeamSubscriptionToken.token == token)
+    )
+    db.commit()
+    return {"status": "ok"}
+
+
 def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str]]:
     """게임에 구독된 디바이스 토큰 목록 조회 (sync DB work)"""
     with SessionLocal() as db:
@@ -548,6 +613,115 @@ def _normalize_my_team_for_watch(raw: str | None) -> str:
     if not raw:
         return ""
     return _TEAM_CODE_TO_MASCOT.get(raw.strip().upper(), raw)
+
+
+def _team_display_name(raw: str | None) -> str:
+    """home_team / away_team 의 백엔드 코드("DOOSAN") 또는 원본 라벨을
+    사용자 노출용 표시명으로 변환. 알 수 없는 값은 원본 그대로.
+    """
+    if not raw:
+        return ""
+    return _TEAM_CODE_TO_MASCOT.get(raw.strip().upper(), raw)
+
+
+def _team_codes_for_match(raw: str | None) -> set[str]:
+    """home/away 팀 라벨로부터 매칭에 쓸 응원팀 코드 후보 집합."""
+    if not raw:
+        return set()
+    upper = raw.strip().upper()
+    candidates = {upper}
+    for code, mascot in _TEAM_CODE_TO_MASCOT.items():
+        if mascot == raw or code == upper:
+            candidates.add(code)
+    return candidates
+
+
+def _load_team_subscriptions(my_teams: set[str]) -> list[tuple[str, str, str, bool]]:
+    """응원팀이 my_teams 에 포함된 구독 토큰 조회. (token, my_team, platform, is_sandbox)"""
+    if not my_teams:
+        return []
+    with SessionLocal() as db:
+        rows = db.execute(
+            select(
+                TeamSubscriptionToken.token,
+                TeamSubscriptionToken.my_team,
+                TeamSubscriptionToken.platform,
+                TeamSubscriptionToken.is_sandbox,
+            ).where(TeamSubscriptionToken.my_team.in_(list(my_teams)))
+        ).all()
+        return [(r.token, r.my_team, r.platform, bool(r.is_sandbox)) for r in rows]
+
+
+async def _send_game_start_notification(
+    game_id: str,
+    home_team: str,
+    away_team: str,
+) -> None:
+    """경기 시작(SCHEDULED→LIVE) 시점에 응원팀 구독자에게 visible push 발송.
+
+    제목은 양 팀 마스코트 ("[트윈스] vs [베어스]"), 본문은 수신자 응원팀을
+    강조 ("베어스 경기가 시작되었습니다!"). 응원팀별로 그룹화해 전송한다.
+    """
+    target_codes = _team_codes_for_match(home_team) | _team_codes_for_match(away_team)
+    if not target_codes:
+        return
+
+    subscriptions = await asyncio.to_thread(_load_team_subscriptions, target_codes)
+    if not subscriptions:
+        return
+
+    home_display = _team_display_name(home_team)
+    away_display = _team_display_name(away_team)
+    title = f"[{away_display}] vs [{home_display}]"
+    data = {
+        "game_id": game_id,
+        "kind": "game_start",
+        "home_team": home_display,
+        "away_team": away_display,
+    }
+
+    grouped: dict[str, list[tuple[str, str, bool]]] = defaultdict(list)
+    for token, my_team, platform, is_sandbox in subscriptions:
+        grouped[my_team].append((token, (platform or "ios").lower(), bool(is_sandbox)))
+
+    tasks: list[Any] = []
+    total_ios = 0
+    total_android = 0
+    for my_team, group in grouped.items():
+        team_display = _team_display_name(my_team)
+        body = f"{team_display} 경기가 시작되었습니다!"
+
+        ios_targets: list[tuple[str, bool]] = []
+        android_tokens: list[str] = []
+        for token, platform, is_sandbox in group:
+            if platform == "android":
+                android_tokens.append(token)
+            else:
+                ios_targets.append((token, is_sandbox))
+
+        if ios_targets:
+            tasks.append(
+                send_apns_visible_push_to_tokens(
+                    ios_targets,
+                    title=title,
+                    body=body,
+                    data=data,
+                    category="OPEN_LIVE_GAME",
+                )
+            )
+            total_ios += len(ios_targets)
+        if android_tokens:
+            tasks.append(
+                send_fcm_visible_push_to_tokens(android_tokens, title=title, body=body, data=data)
+            )
+            total_android += len(android_tokens)
+
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+    logger.info(
+        "[game-start-push] gameId=%s ios=%d android=%d teams=%s",
+        game_id, total_ios, total_android, sorted(grouped.keys()),
+    )
 
 
 async def _send_push_for_game_events(
@@ -765,6 +939,15 @@ def _ingest_crawler_snapshot_locked(
     if inserted_event_payload:
         background_tasks.add_task(
             _send_push_for_game_events, game_id, state_payload, inserted_event_payload,
+        )
+
+    # 경기 시작(SCHEDULED→LIVE) 1회 한정 visible push (응원팀 구독자에게)
+    if getattr(game, "_just_became_live", False):
+        background_tasks.add_task(
+            _send_game_start_notification,
+            game_id,
+            state_payload.get("homeTeam", "") or "",
+            state_payload.get("awayTeam", "") or "",
         )
 
     # Live Activity push 전송 (잠금화면 실시간 업데이트)

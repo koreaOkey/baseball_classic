@@ -51,6 +51,7 @@ class Game(Base):
     batter: Mapped[str | None] = mapped_column(String(128), nullable=True)
     start_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
     observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    live_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     home_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     away_hits: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -244,6 +245,29 @@ class DeviceToken(Base):
     token: Mapped[str] = mapped_column(String(256), nullable=False)
     game_id: Mapped[str] = mapped_column(String(64), nullable=False)
     my_team: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False, default="ios")
+    is_sandbox: Mapped[bool] = mapped_column(nullable=False, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class TeamSubscriptionToken(Base):
+    """응원팀 단위 글로벌 푸시 구독.
+
+    device_tokens 가 (token, game_id) 단위 임시 구독인 반면,
+    이 테이블은 token 1개 = 응원팀 1개로 영속 구독. 경기 시작 같은
+    경기-수명-독립 알림에 사용한다.
+    """
+
+    __tablename__ = "team_subscription_tokens"
+    __table_args__ = (
+        UniqueConstraint("token", name="uq_team_subscription_token"),
+        Index("idx_team_subscription_tokens_my_team", "my_team"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    token: Mapped[str] = mapped_column(String(256), nullable=False)
+    my_team: Mapped[str] = mapped_column(String(64), nullable=False)
     platform: Mapped[str] = mapped_column(String(16), nullable=False, default="ios")
     is_sandbox: Mapped[bool] = mapped_column(nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

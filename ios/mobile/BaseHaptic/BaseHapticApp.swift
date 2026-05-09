@@ -60,6 +60,7 @@ struct BaseHapticApp: App {
                     selectedTeamRaw = team.rawValue
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
                     Task { try? await ThemeRepository.shared.saveSelectedTeam(team.rawValue) }
+                    Task { await TeamSubscriptionManager.syncIfNeeded() }
                 },
                 showOnboarding: showOnboarding,
                 onOnboardingComplete: { team in
@@ -67,6 +68,7 @@ struct BaseHapticApp: App {
                     showOnboarding = false
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
                     Task { try? await ThemeRepository.shared.saveSelectedTeam(team.rawValue) }
+                    Task { await TeamSubscriptionManager.syncIfNeeded() }
                 },
                 authManager: authManager
             )
@@ -81,6 +83,7 @@ struct BaseHapticApp: App {
                 WatchThemeSyncManager.syncLiveHapticEnabledToWatch(
                     enabled: UserDefaults.standard.bool(forKey: "live_haptic_enabled")
                 )
+                Task { await TeamSubscriptionManager.syncIfNeeded() }
                 // TODO: Live Activity 배포 시 활성화
                 // LiveActivityManager.shared.cleanupStaleActivities()
             }
@@ -149,6 +152,8 @@ struct ContentView: View {
     @State private var pendingReleaseNote: ReleaseNote?
     @State private var pendingWatchSyncGameId: String?
     @State private var pendingWatchSyncNavigateToLive = false
+    @State private var pendingWatchSyncHomeTeam: String = ""
+    @State private var pendingWatchSyncAwayTeam: String = ""
     @State private var todayGames: [Game] = []
     @State private var purchasedThemes: [ThemeData] = []
     @State private var unlockedThemeIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "unlocked_theme_ids") ?? ["default"])
@@ -196,6 +201,24 @@ struct ContentView: View {
         }
         .onChange(of: connectivity.watchSyncResponse?.gameId) {
             consumePendingWatchSyncResponse()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openLiveGameRequested)) { notification in
+            guard let gameId = notification.userInfo?["game_id"] as? String, !gameId.isEmpty else { return }
+            // 온보딩 중이거나 응원팀 미설정 상태면 무시
+            guard !showOnboarding else { return }
+            let homeTeam = notification.userInfo?["home_team"] as? String ?? ""
+            let awayTeam = notification.userInfo?["away_team"] as? String ?? ""
+            // 워치 앱 설치된 사용자에게만 다이얼로그 노출. 그 외는 직진.
+            if connectivity.watchCompanionStatus == .installed {
+                pendingWatchSyncHomeTeam = homeTeam
+                pendingWatchSyncAwayTeam = awayTeam
+                requestWatchSyncPrompt(gameId: gameId, navigateToLive: true)
+            } else {
+                selectedGameId = gameId
+                if currentView != .liveGame {
+                    navigateTo(.liveGame)
+                }
+            }
         }
         .onAppear {
             evaluateWhatsNewTrigger()
@@ -410,7 +433,11 @@ struct ContentView: View {
                 closeWatchSyncDialog()
             }
         } message: {
-            Text("경기를 관람하겠습니까?")
+            if !pendingWatchSyncHomeTeam.isEmpty && !pendingWatchSyncAwayTeam.isEmpty {
+                Text("\(pendingWatchSyncAwayTeam) vs \(pendingWatchSyncHomeTeam) 경기를 워치로 관람하시겠습니까?")
+            } else {
+                Text("경기를 관람하겠습니까?")
+            }
         }
         .onAppear {
             activateStadiumCheer()
@@ -486,6 +513,8 @@ struct ContentView: View {
     private func closeWatchSyncDialog() {
         showWatchSyncDialog = false
         pendingWatchSyncGameId = nil
+        pendingWatchSyncHomeTeam = ""
+        pendingWatchSyncAwayTeam = ""
         if pendingWatchSyncNavigateToLive {
             navigateTo(.liveGame)
         }

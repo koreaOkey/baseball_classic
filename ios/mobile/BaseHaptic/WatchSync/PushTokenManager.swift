@@ -179,3 +179,77 @@ enum PushTokenManager {
         }
     }
 }
+
+/// 응원팀 단위 글로벌 푸시 구독을 백엔드와 동기화한다.
+/// 트리거: APNs 토큰 수신, 응원팀 변경, 앱 시작.
+enum TeamSubscriptionManager {
+    private static let lastTokenKey = "team_subscription_last_token"
+    private static let lastTeamKey = "team_subscription_last_team"
+
+    /// 현재 token + selected_team 을 백엔드에 동기화. 직전과 동일하면 생략.
+    static func syncIfNeeded() async {
+        guard let token = UserDefaults.standard.string(forKey: "apns_device_token"),
+              !token.isEmpty else { return }
+
+        let raw = UserDefaults.standard.string(forKey: "selected_team") ?? ""
+        let myTeam = (raw.lowercased() == "none" || raw.isEmpty) ? "" : raw
+
+        let lastToken = UserDefaults.standard.string(forKey: lastTokenKey)
+        let lastTeam = UserDefaults.standard.string(forKey: lastTeamKey)
+
+        if myTeam.isEmpty {
+            if let prev = lastToken, !prev.isEmpty {
+                await unregister(token: prev)
+            }
+            return
+        }
+
+        if token == lastToken && myTeam == lastTeam { return }
+
+        await register(token: token, myTeam: myTeam)
+    }
+
+    private static func register(token: String, myTeam: String) async {
+        let url = URL(string: "\(BackendConfig.baseURL)/team-subscriptions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "token": token,
+            "my_team": myTeam,
+            "platform": "ios",
+            "is_sandbox": PushTokenManager.isApnsSandbox()
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(statusCode) {
+                UserDefaults.standard.set(token, forKey: lastTokenKey)
+                UserDefaults.standard.set(myTeam, forKey: lastTeamKey)
+                print("[TeamSubscription] Registered team=\(myTeam) status=\(statusCode)")
+            } else {
+                print("[TeamSubscription] Register failed status=\(statusCode)")
+            }
+        } catch {
+            print("[TeamSubscription] Register error: \(error.localizedDescription)")
+        }
+    }
+
+    private static func unregister(token: String) async {
+        let url = URL(string: "\(BackendConfig.baseURL)/team-subscriptions/\(token)")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(statusCode) {
+                UserDefaults.standard.removeObject(forKey: lastTokenKey)
+                UserDefaults.standard.removeObject(forKey: lastTeamKey)
+                print("[TeamSubscription] Unregistered status=\(statusCode)")
+            }
+        } catch {
+            print("[TeamSubscription] Unregister error: \(error.localizedDescription)")
+        }
+    }
+}

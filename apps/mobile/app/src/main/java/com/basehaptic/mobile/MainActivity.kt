@@ -46,12 +46,17 @@ import com.basehaptic.mobile.data.model.ThemeCategory
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.data.model.ThemeStore
 import com.basehaptic.mobile.data.ThemeRepository
+import com.basehaptic.mobile.push.BaseHapticMessagingService
+import com.basehaptic.mobile.push.NotificationIntentBus
+import com.basehaptic.mobile.push.PushSetup
+import com.basehaptic.mobile.push.TeamSubscriptionRegistrar
 import com.basehaptic.mobile.service.GameSyncForegroundService
-import com.basehaptic.mobile.service.GameSyncState
 import com.basehaptic.mobile.ui.screens.*
 import com.basehaptic.mobile.ui.theme.BaseHapticTheme
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
+import com.basehaptic.mobile.wear.WatchCompanionStatus
+import com.basehaptic.mobile.wear.WatchCompanionStatusRepository
 import com.basehaptic.mobile.wear.WearThemeSyncManager
 import com.basehaptic.mobile.wear.WearWatchSyncBridge
 import com.basehaptic.mobile.ui.components.RewardedAdManager
@@ -118,6 +123,7 @@ class MainActivity : ComponentActivity() {
             .edit()
             .putString(KEY_SELECTED_TEAM, team.name)
             .apply()
+        TeamSubscriptionRegistrar.syncIfNeeded(this)
     }
 
     private fun loadUnlockedThemeIds(): Set<String> {
@@ -177,9 +183,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun handleNotificationIntent(intent: Intent?) {
+        val gameId = intent?.getStringExtra(BaseHapticMessagingService.EXTRA_GAME_ID).orEmpty()
+        if (gameId.isBlank()) return
+        NotificationIntentBus.post(
+            gameId = gameId,
+            homeTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_HOME_TEAM),
+            awayTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_AWAY_TEAM),
+        )
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleAuthDeeplink(intent)
+        handleNotificationIntent(intent)
     }
 
     override fun onResume() {
@@ -212,6 +230,8 @@ class MainActivity : ComponentActivity() {
         )
         AuthManager.initialize()
         handleAuthDeeplink(intent)
+        PushSetup.initialize(this)
+        handleNotificationIntent(intent)
         val savedTeam = loadSavedTeamOrNull()
         val initialTeam = savedTeam ?: Team.NONE
         val initialShowOnboarding = savedTeam == null
@@ -283,6 +303,8 @@ fun BaseHapticApp(
     var showWatchSyncDialog by remember { mutableStateOf(false) }
     var pendingWatchSyncGameId by remember { mutableStateOf<String?>(null) }
     var pendingWatchSyncNavigateToLive by remember { mutableStateOf(false) }
+    var pendingWatchSyncHomeTeam by remember { mutableStateOf("") }
+    var pendingWatchSyncAwayTeam by remember { mutableStateOf("") }
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
     val autoPromptedLiveGames = remember { mutableStateMapOf<String, Boolean>() }
     var unlockedThemeIds by remember { mutableStateOf(initialUnlockedThemeIds) }
@@ -293,10 +315,17 @@ fun BaseHapticApp(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    fun requestWatchSyncPrompt(gameId: String, navigateToLive: Boolean) {
+    fun requestWatchSyncPrompt(
+        gameId: String,
+        navigateToLive: Boolean,
+        homeTeam: String = "",
+        awayTeam: String = "",
+    ) {
         if (syncedGameId == gameId) return
         pendingWatchSyncGameId = gameId
         pendingWatchSyncNavigateToLive = navigateToLive
+        pendingWatchSyncHomeTeam = homeTeam
+        pendingWatchSyncAwayTeam = awayTeam
         showWatchSyncDialog = true
     }
 
@@ -309,6 +338,8 @@ fun BaseHapticApp(
     fun closeWatchSyncDialog() {
         showWatchSyncDialog = false
         pendingWatchSyncGameId = null
+        pendingWatchSyncHomeTeam = ""
+        pendingWatchSyncAwayTeam = ""
         if (pendingWatchSyncNavigateToLive) {
             navigateTo(Screen.LiveGame)
         }
@@ -466,21 +497,8 @@ fun BaseHapticApp(
         }
     }
 
-    // Start/stop the foreground service for background polling
-    LaunchedEffect(selectedTeam) {
-        if (selectedTeam != Team.NONE) {
-            val intent = Intent(context, GameSyncForegroundService::class.java).apply {
-                action = GameSyncForegroundService.ACTION_START_POLLING
-                putExtra(GameSyncForegroundService.EXTRA_SELECTED_TEAM, selectedTeam.name)
-            }
-            ContextCompat.startForegroundService(context, intent)
-        } else {
-            val intent = Intent(context, GameSyncForegroundService::class.java).apply {
-                action = GameSyncForegroundService.ACTION_STOP_SERVICE
-            }
-            context.startService(intent)
-        }
-    }
+    // 폴링 service 는 제거됨 (백엔드 visible push 가 응원팀 경기 시작 알림 대체).
+    // Service 는 워치 관람 시작 시점부터만 가동 (아래 LaunchedEffect).
 
     // Start/stop streaming via service when syncedGameId changes
     LaunchedEffect(syncedGameId, selectedTeam) {
@@ -500,21 +518,32 @@ fun BaseHapticApp(
         }
     }
 
-    // Collect today games updates from the service
-    val serviceGames by GameSyncState.todayGames.collectAsState()
-    LaunchedEffect(serviceGames) {
-        if (serviceGames.isNotEmpty()) {
-            todayGamesSnapshot = serviceGames
-            todayGamesLoadedDate = LocalDate.now()
+    // 푸시 알림 탭 → MainActivity 진입 시 NotificationIntentBus 로 게임 정보 전달.
+    // 워치 컴패니언 앱이 설치된 경우 다이얼로그, 그 외 라이브 화면 직진.
+    val pendingNotificationIntent by NotificationIntentBus.pending.collectAsState()
+    LaunchedEffect(pendingNotificationIntent) {
+        val pending = pendingNotificationIntent ?: return@LaunchedEffect
+        if (showOnboarding) {
+            NotificationIntentBus.consume()
+            return@LaunchedEffect
         }
-    }
-
-    // React to game-went-live events from the service
-    val gameWentLiveEvent by GameSyncState.gameWentLive.collectAsState()
-    LaunchedEffect(gameWentLiveEvent) {
-        val event = gameWentLiveEvent ?: return@LaunchedEffect
-        selectedGameId = event.gameId
-        GameSyncState.consumeGameWentLive()
+        val status = withContext(Dispatchers.IO) {
+            WatchCompanionStatusRepository.getStatus(context.applicationContext)
+        }
+        if (status is WatchCompanionStatus.Installed) {
+            requestWatchSyncPrompt(
+                gameId = pending.gameId,
+                navigateToLive = true,
+                homeTeam = pending.homeTeam.orEmpty(),
+                awayTeam = pending.awayTeam.orEmpty(),
+            )
+        } else {
+            selectedGameId = pending.gameId
+            if (currentView != Screen.LiveGame) {
+                navigateTo(Screen.LiveGame)
+            }
+        }
+        NotificationIntentBus.consume()
     }
 
     if (showOnboarding) {
@@ -655,10 +684,17 @@ fun BaseHapticApp(
         }
 
         if (showWatchSyncDialog && pendingWatchSyncGameId != null) {
+            val dialogMessage = if (
+                pendingWatchSyncHomeTeam.isNotEmpty() && pendingWatchSyncAwayTeam.isNotEmpty()
+            ) {
+                "$pendingWatchSyncAwayTeam vs $pendingWatchSyncHomeTeam 경기를 워치로 관람하시겠습니까?"
+            } else {
+                "경기를 관람하겠습니까?"
+            }
             AlertDialog(
                 onDismissRequest = { closeWatchSyncDialog() },
                 title = { Text(text = "워치 동기화") },
-                text = { Text(text = "경기를 관람하겠습니까?") },
+                text = { Text(text = dialogMessage) },
                 confirmButton = {
                     TextButton(
                         onClick = {

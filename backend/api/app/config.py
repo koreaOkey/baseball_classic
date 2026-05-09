@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     apns_bundle_id: str = "com.basehaptic.app"
     apns_use_sandbox: bool = False
 
+    # FCM (Firebase Cloud Messaging)
+    fcm_service_account_json: str | None = None  # Service Account JSON 전체를 문자열로
+
     @property
     def cors_origins(self) -> list[str]:
         raw = self.cors_allow_origins.strip()

@@ -216,3 +216,105 @@ async def send_push_to_tokens(
         if isinstance(result, BaseException) or result is False:
             failed_tokens.append(token)
     return failed_tokens
+
+
+async def send_visible_push(
+    device_token: str,
+    *,
+    title: str,
+    body: str,
+    data: dict[str, Any] | None = None,
+    use_sandbox: bool | None = None,
+    category: str | None = None,
+) -> bool:
+    """단일 iOS 디바이스에 visible(alert) push 전송.
+
+    silent push (send_push) 와 달리 알림 센터에 표시되며 탭 시 앱이 열린다.
+    `category` 를 지정하면 클라이언트에 등록된 UNNotificationCategory 의 액션
+    버튼이 알림에 표시된다.
+    """
+    settings = get_settings()
+    jwt_token = _create_jwt_token()
+    if jwt_token is None:
+        return False
+
+    sandbox = use_sandbox if use_sandbox is not None else settings.apns_use_sandbox
+    headers = {
+        "authorization": f"bearer {jwt_token}",
+        "apns-topic": settings.apns_bundle_id,
+        "apns-push-type": "alert",
+        "apns-priority": "10",
+    }
+    aps: dict[str, Any] = {
+        "alert": {"title": title, "body": body},
+        "sound": "default",
+    }
+    if category:
+        aps["category"] = category
+    apns_payload: dict[str, Any] = {"aps": aps}
+    if data:
+        apns_payload.update({k: v for k, v in data.items() if k != "aps"})
+
+    client = _get_http_client()
+    environments = [sandbox, not sandbox]
+    for try_sandbox in environments:
+        base_url = APNS_SANDBOX_URL if try_sandbox else APNS_PRODUCTION_URL
+        url = f"{base_url}/3/device/{device_token}"
+        try:
+            response = await client.post(
+                url,
+                content=json.dumps(apns_payload),
+                headers={**headers, "content-type": "application/json"},
+            )
+            if response.status_code == 200:
+                return True
+
+            reason = ""
+            try:
+                reason = json.loads(response.text).get("reason", "")
+            except Exception:
+                pass
+            if reason == "BadEnvironmentKeyInToken" and try_sandbox == sandbox:
+                continue
+            logger.warning(
+                "[APNs-visible] send failed status=%s body=%s token=%s... sandbox=%s",
+                response.status_code, response.text, device_token[:16], try_sandbox,
+            )
+            return False
+        except Exception:
+            logger.exception("[APNs-visible] request error token=%s...", device_token[:16])
+            return False
+
+    return False
+
+
+async def send_visible_push_to_tokens(
+    tokens_with_sandbox: list[tuple[str, bool]],
+    *,
+    title: str,
+    body: str,
+    data: dict[str, Any] | None = None,
+    category: str | None = None,
+) -> list[str]:
+    """여러 iOS 디바이스에 visible push 병렬 전송. 실패 토큰 반환."""
+    if not tokens_with_sandbox:
+        return []
+    results = await asyncio.gather(
+        *(
+            send_visible_push(
+                token,
+                title=title,
+                body=body,
+                data=data,
+                use_sandbox=is_sandbox,
+                category=category,
+            )
+            for token, is_sandbox in tokens_with_sandbox
+        ),
+        return_exceptions=True,
+    )
+    failed: list[str] = []
+    for (token, _), result in zip(tokens_with_sandbox, results):
+        if isinstance(result, BaseException) or result is False:
+            failed.append(token)
+    return failed

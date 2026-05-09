@@ -9,9 +9,27 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        registerNotificationCategories()
         registerForPushNotifications()
         MobileAds.shared.start()
         return true
+    }
+
+    /// 경기 시작 알림에 "관람하기" 액션 버튼을 노출하기 위한 카테고리 등록.
+    /// APNs payload 의 aps.category="OPEN_LIVE_GAME" 일 때 적용된다.
+    private func registerNotificationCategories() {
+        let watchAction = UNNotificationAction(
+            identifier: "OPEN_LIVE_GAME_ACTION",
+            title: "관람하기",
+            options: [.foreground]
+        )
+        let category = UNNotificationCategory(
+            identifier: "OPEN_LIVE_GAME",
+            actions: [watchAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([category])
     }
 
     // MARK: - Push Registration
@@ -33,6 +51,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         print("[APNs] Device token: \(token)")
         // 토큰을 UserDefaults에 저장 (백엔드 등록은 경기 구독 시 수행)
         UserDefaults.standard.set(token, forKey: "apns_device_token")
+        Task { await TeamSubscriptionManager.syncIfNeeded() }
     }
 
     func application(
@@ -110,4 +129,30 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     ) async -> UNNotificationPresentationOptions {
         return [.banner, .sound, .badge]
     }
+
+    // MARK: - 알림 탭 시 라이브 화면 진입
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        if let gameId = userInfo["game_id"] as? String, !gameId.isEmpty {
+            var forwardInfo: [String: Any] = ["game_id": gameId]
+            if let home = userInfo["home_team"] as? String { forwardInfo["home_team"] = home }
+            if let away = userInfo["away_team"] as? String { forwardInfo["away_team"] = away }
+            NotificationCenter.default.post(
+                name: .openLiveGameRequested,
+                object: nil,
+                userInfo: forwardInfo
+            )
+        }
+        completionHandler()
+    }
+}
+
+extension Notification.Name {
+    /// 푸시 알림 탭 시 라이브 화면으로 이동 요청
+    static let openLiveGameRequested = Notification.Name("openLiveGameRequested")
 }
