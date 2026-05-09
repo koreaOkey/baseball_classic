@@ -7,20 +7,26 @@ struct WhatsNewSheet: View {
     @Environment(\.teamTheme) private var teamTheme
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
+        ZStack {
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onConfirm)
+
+            VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: AppSpacing.xl) {
                     header
                     bulletList
                 }
                 .padding(.horizontal, AppSpacing.xxl)
                 .padding(.top, AppSpacing.xxl)
-                .padding(.bottom, AppSpacing.lg)
-            }
+                .padding(.bottom, AppSpacing.xl)
 
-            confirmButton
+                confirmButton
+            }
+            .background(AppColors.gray950)
+            .cornerRadius(AppRadius.lg)
+            .padding(.horizontal, AppSpacing.xxl)
         }
-        .background(AppColors.gray950.ignoresSafeArea())
         .preferredColorScheme(.dark)
     }
 

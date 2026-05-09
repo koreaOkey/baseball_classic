@@ -131,7 +131,7 @@ enum Screen: Hashable {
     case myTeam
 }
 
-private let SHOW_MY_TEAM_TAB = true
+private let SHOW_MY_TEAM_TAB = false
 
 // MARK: - ContentView
 struct ContentView: View {
@@ -223,12 +223,17 @@ struct ContentView: View {
         .onAppear {
             evaluateWhatsNewTrigger()
         }
-        .sheet(item: $pendingReleaseNote) { note in
-            WhatsNewSheet(
-                note: note,
-                onConfirm: { pendingReleaseNote = nil }
-            )
+        .overlay {
+            if let note = pendingReleaseNote {
+                WhatsNewSheet(
+                    note: note,
+                    onConfirm: { pendingReleaseNote = nil }
+                )
+                .transition(.opacity)
+                .zIndex(1)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: pendingReleaseNote?.id)
         .task(id: selectedTeam) {
             await loadTodayGames()
         }

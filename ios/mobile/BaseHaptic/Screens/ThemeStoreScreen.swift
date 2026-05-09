@@ -1,5 +1,7 @@
 import SwiftUI
 
+private let SHOW_STADIUM_CHEER_THEMES = false
+
 enum ThemeStoreTab: String, CaseIterable {
     case watch = "Watch Themes"
     case phone = "Phone App Themes"
@@ -30,6 +32,10 @@ struct ThemeStoreScreen: View {
     @State private var selectedTab: ThemeStoreTab = .watch
     @State private var watchThemeSection: WatchThemeSection = .basic
 
+    private var effectiveSection: WatchThemeSection {
+        SHOW_STADIUM_CHEER_THEMES ? watchThemeSection : .basic
+    }
+
     private var freeAndAdThemes: [ThemeData] {
         ThemeData.allThemes.filter { $0.category == .free || $0.category == .adReward }
     }
@@ -59,9 +65,11 @@ struct ThemeStoreScreen: View {
                 .font(AppFont.caption)
                 .foregroundColor(teamTheme.primary)
                 .padding(.top, AppSpacing.sm)
-            Text("응원 테마: \(activeCheerTheme?.name ?? "기본 응원")")
-                .font(AppFont.caption)
-                .foregroundColor(AppColors.gray400)
+            if SHOW_STADIUM_CHEER_THEMES {
+                Text("응원 테마: \(activeCheerTheme?.name ?? "기본 응원")")
+                    .font(AppFont.caption)
+                    .foregroundColor(AppColors.gray400)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, AppSpacing.xxl)
@@ -105,13 +113,17 @@ struct ThemeStoreScreen: View {
     private var watchThemesTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                sectionToggle
-                if watchThemeSection == .stadiumCheer {
-                    Text("응원 시각에 워치 풀스크린에 적용됩니다 (목업)")
-                        .font(AppFont.caption)
-                        .foregroundColor(AppColors.gray500)
-                        .padding(.horizontal, AppSpacing.xxl)
-                        .padding(.bottom, AppSpacing.sm)
+                if SHOW_STADIUM_CHEER_THEMES {
+                    sectionToggle
+                    if effectiveSection == .stadiumCheer {
+                        Text("응원 시각에 워치 풀스크린에 적용됩니다 (목업)")
+                            .font(AppFont.caption)
+                            .foregroundColor(AppColors.gray500)
+                            .padding(.horizontal, AppSpacing.xxl)
+                            .padding(.bottom, AppSpacing.sm)
+                    }
+                } else {
+                    Spacer().frame(height: AppSpacing.md)
                 }
                 themeGrid(currentSectionThemes)
 
@@ -121,7 +133,7 @@ struct ThemeStoreScreen: View {
     }
 
     private var currentSectionThemes: [ThemeData] {
-        switch watchThemeSection {
+        switch effectiveSection {
         case .basic: return freeAndAdThemes
         case .stadiumCheer: return StadiumCheerThemes.allThemes
         }
@@ -183,7 +195,7 @@ struct ThemeStoreScreen: View {
 
     private func themeGrid(_ themes: [ThemeData]) -> some View {
         let columns = [GridItem(.flexible(), spacing: AppSpacing.md), GridItem(.flexible(), spacing: AppSpacing.md)]
-        let isCheerSection = watchThemeSection == .stadiumCheer
+        let isCheerSection = effectiveSection == .stadiumCheer
         let activeForSection = isCheerSection ? activeCheerTheme : activeTheme
         return LazyVGrid(columns: columns, spacing: AppSpacing.md) {
             ForEach(themes) { theme in
