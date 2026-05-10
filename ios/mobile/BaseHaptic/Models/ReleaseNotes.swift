@@ -13,11 +13,12 @@ enum ReleaseNotes {
     // 일치하는 entry 가 없으면 모달이 노출되지 않는다.
     static let all: [ReleaseNote] = [
         ReleaseNote(
-            version: "1.0.3",
+            version: "1.1.3",
             subtitle: "더 좋아진 야구봄",
             bullets: [
                 "워치 앱 연동 가이드 추가",
                 "워치로 투구수 확인 기능 추가",
+                "경기 시작 시 푸쉬 알림 추가",
             ]
         ),
     ]
