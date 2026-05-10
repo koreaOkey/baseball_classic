@@ -88,6 +88,18 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
         UserDefaults.standard.set(payload, forKey: Self.lastGameDataKey)
     }
 
+    /// 동일 game_id 의 마지막으로 워치에 전송한 누적 투구수.
+    /// 백엔드 silent push 가 `pitcher_pitch_count` 를 누락한 채 도착하는 경우의 폴백.
+    /// 캐시가 없거나 game_id 가 다르면 nil.
+    func cachedPitcherPitchCount(forGameId gameId: String) -> Int? {
+        guard !gameId.isEmpty,
+              let cached = UserDefaults.standard.dictionary(forKey: Self.lastGameDataKey),
+              cached["game_id"] as? String == gameId,
+              let raw = cached["pitcher_pitch_count"] as? Int,
+              raw >= 0 else { return nil }
+        return raw
+    }
+
     private func deliverGameData(_ basePayload: [String: Any]) {
         var message = basePayload
         message["updated_at"] = Date().timeIntervalSince1970

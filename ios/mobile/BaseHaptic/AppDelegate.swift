@@ -100,6 +100,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         let homeDisplay = Team.fromBackendName(homeTeam).teamName
         let awayDisplay = Team.fromBackendName(awayTeam).teamName
 
+        // 누적 투구수: 푸시 페이로드 sentinel = -1 → nil. 키 자체가 빠진 (구버전 백엔드)
+        // 페이로드는 마지막 전송값으로 폴백해 워치 UI 깜빡임을 방지.
+        let pitcherPitchCount: Int? = {
+            if let raw = userInfo["pitcher_pitch_count"] as? Int {
+                return raw >= 0 ? raw : nil
+            }
+            return WatchGameSyncManager.shared.cachedPitcherPitchCount(forGameId: gameId)
+        }()
+
         WatchGameSyncManager.shared.sendGameData(
             gameId: gameId,
             homeTeam: homeDisplay,
@@ -116,7 +125,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             baseThird: userInfo["base_third"] as? Bool ?? false,
             pitcher: userInfo["pitcher"] as? String ?? "",
             batter: userInfo["batter"] as? String ?? "",
-            pitcherPitchCount: userInfo["pitcher_pitch_count"] as? Int,
+            pitcherPitchCount: pitcherPitchCount,
             myTeam: userInfo["my_team"] as? String ?? ""
         )
     }

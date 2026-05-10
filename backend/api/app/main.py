@@ -738,6 +738,9 @@ async def _send_push_for_game_events(
     tokens = list(token_info.keys())
 
     # 이벤트가 있으면 각 이벤트에 대해 push, 없으면 상태 업데이트만
+    # 누적 투구수: nullable. iOS 측은 -1 sentinel 로 nil 표현. 키 자체가 빠지면
+    # AppDelegate 가 nil 로 forwarding 해 워치에서 투구수가 사라진다 — 항상 포함.
+    pitcher_pitch_count = state_payload.get("pitcherPitchCount")
     base_payload = {
         "game_id": state_payload.get("gameId", game_id),
         "home_team": state_payload.get("homeTeam", ""),
@@ -754,6 +757,7 @@ async def _send_push_for_game_events(
         "base_third": state_payload.get("bases", {}).get("third", False),
         "pitcher": state_payload.get("pitcher", ""),
         "batter": state_payload.get("batter", ""),
+        "pitcher_pitch_count": pitcher_pitch_count if pitcher_pitch_count is not None else -1,
     }
 
     async def _fanout(push_payload: dict[str, Any]) -> None:
