@@ -80,6 +80,19 @@ class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificationCente
     private func parseGameData(from userInfo: [AnyHashable: Any]) -> [String: Any]? {
         guard let gameId = userInfo["game_id"] as? String, !gameId.isEmpty else { return nil }
 
+        // 누적 투구수: push 에 키 자체가 빠진 (구버전 백엔드) 페이로드에서는 워치 메모리상의
+        // 마지막 값을 유지해 폰 백그라운드 동안 투구수가 사라지는 회귀를 방지.
+        // 키가 있으면 sentinel(-1)→nil 규칙은 디코더가 처리.
+        let pitchCountValue: Int = {
+            if let raw = userInfo["pitcher_pitch_count"] as? Int { return raw }
+            if let cached = WatchConnectivityManager.shared.gameData,
+               cached.gameId == gameId,
+               let cachedCount = cached.pitcherPitchCount {
+                return cachedCount
+            }
+            return -1
+        }()
+
         return [
             "type": "game_data",
             "game_id": gameId,
@@ -97,6 +110,7 @@ class WatchAppDelegate: NSObject, WKApplicationDelegate, UNUserNotificationCente
             "base_third": userInfo["base_third"] as? Bool ?? false,
             "pitcher": userInfo["pitcher"] as? String ?? "",
             "batter": userInfo["batter"] as? String ?? "",
+            "pitcher_pitch_count": pitchCountValue,
             "my_team": userInfo["my_team"] as? String ?? "",
             "updated_at": Date().timeIntervalSince1970,
         ]
