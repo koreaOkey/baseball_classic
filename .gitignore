@@ -25,6 +25,10 @@ Real-time Baseball Broadcast/
 # Xcode user-specific state
 **/xcuserdata/
 *.xcuserstate
+ios/build/
+
+# Local design references (screenshots, mockups)
+reference/
 
 # Local backend secrets
 backend/api/.env
