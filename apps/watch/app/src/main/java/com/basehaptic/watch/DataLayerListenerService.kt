@@ -101,12 +101,8 @@ class DataLayerListenerService : WearableListenerService() {
      * 경기 데이터 수신 → UI 업데이트
      */
     private fun handleGameData(item: DataItem) {
-        val liveHapticEnabled = getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)
-        if (!liveHapticEnabled) {
-            Log.d(TAG, "live_haptic_enabled=false, freezing game_data")
-            return
-        }
+        // live_haptic_enabled 토글은 햅틱·응원 트리거만 차단한다. 점수/이닝/BSO 등 UI
+        // 상태는 토글과 무관하게 항상 갱신해 iOS와 동작을 일치시킨다.
         val dataMap = DataMapItem.fromDataItem(item).dataMap
         val rawStatus = dataMap.getString(KEY_STATUS, "")
         val incomingInning = dataMap.getString(KEY_INNING, "") ?: ""

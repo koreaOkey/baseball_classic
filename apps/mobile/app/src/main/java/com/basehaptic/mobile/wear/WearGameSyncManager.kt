@@ -43,16 +43,9 @@ object WearGameSyncManager {
             inning, ball, strike, out, baseFirst, baseSecond, baseThird,
             pitcher, batter, pitcherPitchCount, myTeam, eventType
         )
-        // 마스터 OFF여도 phone-side 캐시는 항상 갱신 (ON 복원 시 즉시 push 용)
+        // live_haptic_enabled 토글은 진동/응원 트리거만 게이트한다. 점수·이닝 등 게임
+        // 상태는 토글과 무관하게 항상 워치로 흘려 iOS와 동일한 동작을 유지.
         cacheLastGameData(context, payload)
-
-        val liveHapticEnabled = context
-            .getSharedPreferences(CACHE_PREFS, Context.MODE_PRIVATE)
-            .getBoolean("live_haptic_enabled", true)
-        if (!liveHapticEnabled) {
-            Log.d(TAG, "live_haptic_enabled=false, skipping game_data send")
-            return
-        }
         deliverGameData(context, payload)
     }
 
