@@ -608,31 +608,80 @@ _TEAM_CODE_TO_MASCOT: dict[str, str] = {
     "NC": "다이노스",
 }
 
+# 네이버 KBO 라벨이 영문 코드 / 한글 모기업 / 마스코트 어느 형태로 들어와도
+# 사용자 노출용 마스코트로 정규화하기 위한 양방향 별칭 테이블.
+_TEAM_ALIAS_TO_MASCOT: dict[str, str] = {
+    # 한글 모기업/도시 라벨 → 마스코트
+    "두산": "베어스",
+    "엘지": "트윈스",
+    "키움": "히어로즈",
+    "삼성": "라이온즈",
+    "롯데": "자이언츠",
+    "에스에스지": "랜더스",
+    "케이티": "위즈",
+    "한화": "이글스",
+    "기아": "타이거즈",
+    "엔씨": "다이노스",
+    # 마스코트 셀프 매핑 (이미 마스코트로 들어온 경우 no-op)
+    "베어스": "베어스",
+    "트윈스": "트윈스",
+    "히어로즈": "히어로즈",
+    "라이온즈": "라이온즈",
+    "자이언츠": "자이언츠",
+    "랜더스": "랜더스",
+    "위즈": "위즈",
+    "이글스": "이글스",
+    "타이거즈": "타이거즈",
+    "다이노스": "다이노스",
+}
+
+
+def _resolve_mascot(raw: str | None) -> str | None:
+    """모든 라벨 형태(영문 코드 / 한글 모기업 / 마스코트)를 마스코트로 변환.
+    매칭 실패 시 None.
+    """
+    if not raw:
+        return None
+    key = raw.strip()
+    if not key:
+        return None
+    if mapped := _TEAM_CODE_TO_MASCOT.get(key.upper()):
+        return mapped
+    if mapped := _TEAM_ALIAS_TO_MASCOT.get(key):
+        return mapped
+    return None
+
 
 def _normalize_my_team_for_watch(raw: str | None) -> str:
     if not raw:
         return ""
-    return _TEAM_CODE_TO_MASCOT.get(raw.strip().upper(), raw)
+    return _resolve_mascot(raw) or raw
 
 
 def _team_display_name(raw: str | None) -> str:
-    """home_team / away_team 의 백엔드 코드("DOOSAN") 또는 원본 라벨을
-    사용자 노출용 표시명으로 변환. 알 수 없는 값은 원본 그대로.
+    """home_team / away_team 의 백엔드 코드("DOOSAN") 또는 한글 라벨("두산")을
+    사용자 노출용 마스코트("베어스")로 변환. 알 수 없는 값은 원본 그대로.
     """
     if not raw:
         return ""
-    return _TEAM_CODE_TO_MASCOT.get(raw.strip().upper(), raw)
+    return _resolve_mascot(raw) or raw
 
 
 def _team_codes_for_match(raw: str | None) -> set[str]:
-    """home/away 팀 라벨로부터 매칭에 쓸 응원팀 코드 후보 집합."""
+    """home/away 팀 라벨(영문 코드 / 한글 모기업 / 마스코트)로부터
+    매칭에 쓸 응원팀 코드 후보 집합. 마스코트로 먼저 정규화한 뒤
+    해당 마스코트와 연결된 영문 코드를 역으로 찾는다.
+    """
     if not raw:
         return set()
     upper = raw.strip().upper()
     candidates = {upper}
-    for code, mascot in _TEAM_CODE_TO_MASCOT.items():
-        if mascot == raw or code == upper:
-            candidates.add(code)
+    mascot = _resolve_mascot(raw)
+    if mascot:
+        candidates.add(mascot)
+        for code, m in _TEAM_CODE_TO_MASCOT.items():
+            if m == mascot:
+                candidates.add(code)
     return candidates
 
 

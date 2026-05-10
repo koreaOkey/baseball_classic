@@ -152,6 +152,7 @@ struct ContentView: View {
     @State private var pendingReleaseNote: ReleaseNote?
     @State private var pendingWatchSyncGameId: String?
     @State private var pendingWatchSyncNavigateToLive = false
+    @State private var pendingWatchSyncNavigateOnDecline = false
     @State private var pendingWatchSyncHomeTeam: String = ""
     @State private var pendingWatchSyncAwayTeam: String = ""
     @State private var todayGames: [Game] = []
@@ -208,16 +209,16 @@ struct ContentView: View {
             guard !showOnboarding else { return }
             let homeTeam = notification.userInfo?["home_team"] as? String ?? ""
             let awayTeam = notification.userInfo?["away_team"] as? String ?? ""
-            // 워치 앱 설치된 사용자에게만 다이얼로그 노출. 그 외는 직진.
+            // 푸시 탭은 항상 홈으로 착지 → 그 위에 워치 관람 팝업.
+            // "아니오" 시 홈 유지(navigateOnDecline=false), 워치 미설치는 팝업 없이 홈에 머문다.
+            selectedGameId = gameId
+            if currentView != .home {
+                navigateTo(.home)
+            }
             if connectivity.watchCompanionStatus == .installed {
                 pendingWatchSyncHomeTeam = homeTeam
                 pendingWatchSyncAwayTeam = awayTeam
                 requestWatchSyncPrompt(gameId: gameId, navigateToLive: true)
-            } else {
-                selectedGameId = gameId
-                if currentView != .liveGame {
-                    navigateTo(.liveGame)
-                }
             }
         }
         .onAppear {
@@ -304,7 +305,7 @@ struct ContentView: View {
                         onSelectGame: { game in
                             selectedGameId = game.id
                             if game.status == .live && syncedGameId != game.id {
-                                requestWatchSyncPrompt(gameId: game.id, navigateToLive: true)
+                                requestWatchSyncPrompt(gameId: game.id, navigateToLive: true, navigateOnDecline: true)
                             } else {
                                 navigateTo(.liveGame)
                             }
@@ -432,10 +433,18 @@ struct ContentView: View {
         .alert("워치 동기화", isPresented: $showWatchSyncDialog) {
             Button("예") {
                 syncedGameId = pendingWatchSyncGameId
+                let shouldNavigate = pendingWatchSyncNavigateToLive
                 closeWatchSyncDialog()
+                if shouldNavigate && currentView != .liveGame {
+                    navigateTo(.liveGame)
+                }
             }
             Button("아니오", role: .cancel) {
+                let shouldNavigate = pendingWatchSyncNavigateOnDecline
                 closeWatchSyncDialog()
+                if shouldNavigate && currentView != .liveGame {
+                    navigateTo(.liveGame)
+                }
             }
         } message: {
             if !pendingWatchSyncHomeTeam.isEmpty && !pendingWatchSyncAwayTeam.isEmpty {
@@ -508,10 +517,11 @@ struct ContentView: View {
     }
 
     // MARK: - Watch Sync
-    private func requestWatchSyncPrompt(gameId: String, navigateToLive: Bool) {
+    private func requestWatchSyncPrompt(gameId: String, navigateToLive: Bool, navigateOnDecline: Bool = false) {
         guard syncedGameId != gameId else { return }
         pendingWatchSyncGameId = gameId
         pendingWatchSyncNavigateToLive = navigateToLive
+        pendingWatchSyncNavigateOnDecline = navigateOnDecline
         showWatchSyncDialog = true
     }
 
@@ -520,10 +530,8 @@ struct ContentView: View {
         pendingWatchSyncGameId = nil
         pendingWatchSyncHomeTeam = ""
         pendingWatchSyncAwayTeam = ""
-        if pendingWatchSyncNavigateToLive {
-            navigateTo(.liveGame)
-        }
         pendingWatchSyncNavigateToLive = false
+        pendingWatchSyncNavigateOnDecline = false
     }
 
     private func consumePendingWatchSyncResponse() {

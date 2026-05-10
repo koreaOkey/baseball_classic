@@ -304,6 +304,7 @@ fun BaseHapticApp(
     var showWatchSyncDialog by remember { mutableStateOf(false) }
     var pendingWatchSyncGameId by remember { mutableStateOf<String?>(null) }
     var pendingWatchSyncNavigateToLive by remember { mutableStateOf(false) }
+    var pendingWatchSyncNavigateOnDecline by remember { mutableStateOf(false) }
     var pendingWatchSyncHomeTeam by remember { mutableStateOf("") }
     var pendingWatchSyncAwayTeam by remember { mutableStateOf("") }
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
@@ -321,10 +322,12 @@ fun BaseHapticApp(
         navigateToLive: Boolean,
         homeTeam: String = "",
         awayTeam: String = "",
+        navigateOnDecline: Boolean = false,
     ) {
         if (syncedGameId == gameId) return
         pendingWatchSyncGameId = gameId
         pendingWatchSyncNavigateToLive = navigateToLive
+        pendingWatchSyncNavigateOnDecline = navigateOnDecline
         pendingWatchSyncHomeTeam = homeTeam
         pendingWatchSyncAwayTeam = awayTeam
         showWatchSyncDialog = true
@@ -341,10 +344,8 @@ fun BaseHapticApp(
         pendingWatchSyncGameId = null
         pendingWatchSyncHomeTeam = ""
         pendingWatchSyncAwayTeam = ""
-        if (pendingWatchSyncNavigateToLive) {
-            navigateTo(Screen.LiveGame)
-        }
         pendingWatchSyncNavigateToLive = false
+        pendingWatchSyncNavigateOnDecline = false
     }
 
     fun applyWatchSyncResponse(gameId: String, accepted: Boolean) {
@@ -359,6 +360,7 @@ fun BaseHapticApp(
             showWatchSyncDialog = false
             pendingWatchSyncGameId = null
             pendingWatchSyncNavigateToLive = false
+            pendingWatchSyncNavigateOnDecline = false
         }
     }
 
@@ -451,13 +453,11 @@ fun BaseHapticApp(
         com.basehaptic.mobile.wear.WearSettingsSyncManager.syncLiveHapticEnabledToWatch(context, liveHapticEnabled)
     }
 
-    DisposableEffect(lifecycleOwner, selectedTeam, todayGamesLoadedDate) {
+    DisposableEffect(lifecycleOwner, selectedTeam) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                val today = LocalDate.now()
-                if (todayGamesLoadedDate != today) {
-                    todayGamesReloadToken += 1
-                }
+                // 매 ON_RESUME 마다 새로 fetch — 같은 날 안에서도 SCHEDULED→LIVE 전이를 반영.
+                todayGamesReloadToken += 1
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -473,18 +473,19 @@ fun BaseHapticApp(
             return@LaunchedEffect
         }
 
-        val today = LocalDate.now()
-        if (todayGamesLoadedDate == today) return@LaunchedEffect
-
-        val cachedGames = runCatching {
-            withContext(Dispatchers.IO) {
-                BackendGamesRepository.peekTodayGamesCache(context.applicationContext, selectedTeam)
+        // 첫 진입: 캐시로 즉시 페인트 (이미 채워져 있으면 스킵해 깜빡임 방지)
+        if (todayGamesSnapshot.isEmpty()) {
+            val cachedGames = runCatching {
+                withContext(Dispatchers.IO) {
+                    BackendGamesRepository.peekTodayGamesCache(context.applicationContext, selectedTeam)
+                }
+            }.getOrNull().orEmpty()
+            if (cachedGames.isNotEmpty()) {
+                todayGamesSnapshot = cachedGames
             }
-        }.getOrNull().orEmpty()
-        if (cachedGames.isNotEmpty()) {
-            todayGamesSnapshot = cachedGames
         }
 
+        // 항상 네트워크에서 갱신 — 점수/상태(LIVE) 변경 반영.
         val freshGames = runCatching {
             withContext(Dispatchers.IO) {
                 BackendGamesRepository.fetchTodayGamesCached(context.applicationContext, selectedTeam)
@@ -492,9 +493,7 @@ fun BaseHapticApp(
         }.getOrNull()
         if (freshGames != null) {
             todayGamesSnapshot = freshGames
-            todayGamesLoadedDate = today
-        } else if (cachedGames.isNotEmpty()) {
-            todayGamesLoadedDate = today
+            todayGamesLoadedDate = LocalDate.now()
         }
     }
 
@@ -520,13 +519,17 @@ fun BaseHapticApp(
     }
 
     // 푸시 알림 탭 → MainActivity 진입 시 NotificationIntentBus 로 게임 정보 전달.
-    // 워치 컴패니언 앱이 설치된 경우 다이얼로그, 그 외 라이브 화면 직진.
+    // 항상 홈으로 착지 → 그 위에 워치 관람 팝업("아니오" 시 홈 유지). 워치 미설치는 팝업 없이 홈에 머문다.
     val pendingNotificationIntent by NotificationIntentBus.pending.collectAsState()
     LaunchedEffect(pendingNotificationIntent) {
         val pending = pendingNotificationIntent ?: return@LaunchedEffect
         if (showOnboarding) {
             NotificationIntentBus.consume()
             return@LaunchedEffect
+        }
+        selectedGameId = pending.gameId
+        if (currentView != Screen.Home) {
+            navigateTo(Screen.Home)
         }
         val status = withContext(Dispatchers.IO) {
             WatchCompanionStatusRepository.getStatus(context.applicationContext)
@@ -538,11 +541,6 @@ fun BaseHapticApp(
                 homeTeam = pending.homeTeam.orEmpty(),
                 awayTeam = pending.awayTeam.orEmpty(),
             )
-        } else {
-            selectedGameId = pending.gameId
-            if (currentView != Screen.LiveGame) {
-                navigateTo(Screen.LiveGame)
-            }
         }
         NotificationIntentBus.consume()
     }
@@ -581,7 +579,11 @@ fun BaseHapticApp(
                         onSelectGame = { game ->
                             selectedGameId = game.id
                             if (game.status == GameStatus.LIVE && syncedGameId != game.id) {
-                                requestWatchSyncPrompt(gameId = game.id, navigateToLive = true)
+                                requestWatchSyncPrompt(
+                                    gameId = game.id,
+                                    navigateToLive = true,
+                                    navigateOnDecline = true,
+                                )
                             } else {
                                 navigateTo(Screen.LiveGame)
                             }
@@ -700,7 +702,11 @@ fun BaseHapticApp(
                     TextButton(
                         onClick = {
                             syncedGameId = pendingWatchSyncGameId
+                            val shouldNavigate = pendingWatchSyncNavigateToLive
                             closeWatchSyncDialog()
+                            if (shouldNavigate && currentView != Screen.LiveGame) {
+                                navigateTo(Screen.LiveGame)
+                            }
                         }
                     ) {
                         Text("예")
@@ -708,7 +714,13 @@ fun BaseHapticApp(
                 },
                 dismissButton = {
                     TextButton(
-                        onClick = { closeWatchSyncDialog() }
+                        onClick = {
+                            val shouldNavigate = pendingWatchSyncNavigateOnDecline
+                            closeWatchSyncDialog()
+                            if (shouldNavigate && currentView != Screen.LiveGame) {
+                                navigateTo(Screen.LiveGame)
+                            }
+                        }
                     ) {
                         Text("아니오")
                     }
