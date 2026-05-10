@@ -51,6 +51,7 @@ class GameSyncForegroundService : Service() {
 
     private var selectedTeam: Team = Team.NONE
     private var syncedGameId: String? = null
+    private var lastNotificationText: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -73,7 +74,9 @@ class GameSyncForegroundService : Service() {
                 }
                 syncedGameId = gameId
 
-                val notification = buildNotification("워치로 관람 중...")
+                val initialText = "워치로 관람 중..."
+                lastNotificationText = initialText
+                val notification = buildNotification(initialText)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                     startForeground(
                         NOTIFICATION_ID,
@@ -127,6 +130,23 @@ class GameSyncForegroundService : Service() {
             var reconnectAttempt = 0
 
             fun pushStateToWatch(state: BackendGamesRepository.LiveGameState) {
+                val awayMascot = state.awayTeamId
+                    .takeIf { it != Team.NONE }
+                    ?.teamName
+                    ?.takeIf { it.isNotBlank() }
+                    ?: state.awayTeam
+                val homeMascot = state.homeTeamId
+                    .takeIf { it != Team.NONE }
+                    ?.teamName
+                    ?.takeIf { it.isNotBlank() }
+                    ?: state.homeTeam
+                if (awayMascot.isNotBlank() && homeMascot.isNotBlank()) {
+                    val notifText = "$awayMascot vs $homeMascot 경기 워치로 관람 중..."
+                    if (notifText != lastNotificationText) {
+                        lastNotificationText = notifText
+                        updateNotification(notifText)
+                    }
+                }
                 val latestEventType =
                     localEvents.firstNotNullOfOrNull { mapToWatchEventType(it.type) }
                         ?: mapToWatchEventType(state.lastEventType)
@@ -320,7 +340,7 @@ class GameSyncForegroundService : Service() {
         )
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("BaseHaptic")
+            .setContentTitle("야구봄")
             .setContentText(contentText)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
