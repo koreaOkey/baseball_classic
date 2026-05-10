@@ -134,17 +134,11 @@ object BackendGamesRepository {
         selectedTeam: Team,
         forceRefresh: Boolean = false
     ): List<Game>? {
+        // 네트워크 우선. 캐시는 폴백 전용.
+        // 캐시가 새벽에 SCHEDULED 상태로 굳으면, 경기 시작 후에도 갱신 안 되어
+        // 점수·상태(LIVE 트리거)가 화면에 반영되지 않는 회귀가 발생함.
         val today = LocalDate.now().toString()
         val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
-        val cachedDate = prefs.getString(KEY_TODAY_GAMES_DATE, null)
-        val cachedPayload = prefs.getString(KEY_TODAY_GAMES_PAYLOAD, null)
-
-        if (!forceRefresh && cachedDate == today && !cachedPayload.isNullOrBlank()) {
-            val cachedGames = parseGamesPayload(cachedPayload, selectedTeam)
-            if (!cachedGames.isNullOrEmpty()) {
-                return cachedGames
-            }
-        }
 
         val freshPayload = fetchGamesByDateRaw(LocalDate.now())
         if (!freshPayload.isNullOrBlank()) {
@@ -160,6 +154,8 @@ object BackendGamesRepository {
             }
         }
 
+        val cachedDate = prefs.getString(KEY_TODAY_GAMES_DATE, null)
+        val cachedPayload = prefs.getString(KEY_TODAY_GAMES_PAYLOAD, null)
         if (cachedDate == today && !cachedPayload.isNullOrBlank()) {
             return parseGamesPayload(cachedPayload, selectedTeam)
         }
