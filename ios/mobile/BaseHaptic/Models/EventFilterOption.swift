@@ -1,5 +1,24 @@
 import Foundation
 
+enum EventFilterGate {
+    static func isAllowed(eventType: String?) -> Bool {
+        guard let type = eventType?.uppercased(), !type.isEmpty else { return true }
+        let key: String
+        switch type {
+        case "HOMERUN": key = "event_filter_homerun_enabled"
+        case "SCORE", "SAC_FLY_SCORE": key = "event_filter_score_enabled"
+        case "HIT": key = "event_filter_hit_enabled"
+        case "STEAL", "TAG_UP_ADVANCE": key = "event_filter_steal_enabled"
+        case "WALK": key = "event_filter_walk_enabled"
+        case "OUT": key = "event_filter_out_enabled"
+        case "DOUBLE_PLAY", "TRIPLE_PLAY": key = "event_filter_double_play_enabled"
+        case "PITCHER_CHANGE": key = "event_filter_pitcher_change_enabled"
+        default: return true
+        }
+        return UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+}
+
 struct EventFilterOption: Identifiable {
     let id: String
     let storageKey: String

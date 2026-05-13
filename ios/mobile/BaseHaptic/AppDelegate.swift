@@ -80,9 +80,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // 햅틱 이벤트 워치로 전달 (마스터 스위치 OFF 시 차단)
+        // 햅틱 이벤트 워치로 전달 (마스터 스위치 OFF 시 차단 + 사용자 이벤트 필터 가드)
         let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
-        if liveHapticEnabled {
+        if liveHapticEnabled && EventFilterGate.isAllowed(eventType: eventType) {
             let cursor = userInfo["event_cursor"] as? Int64
             WatchGameSyncManager.shared.sendHapticEvent(eventType: eventType, cursor: cursor)
         }
@@ -137,6 +137,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
+        let userInfo = notification.request.content.userInfo
+        let eventType = userInfo["event_type"] as? String
+
+        // 사용자 이벤트 필터: 미선택 이벤트는 노티 자체를 노출 안 함
+        if !EventFilterGate.isAllowed(eventType: eventType) {
+            return []
+        }
+
         // 워치 우선 햅틱 정책: 워치 페어링·설치 상태면 폰 소리/진동 suppress (배너만 노출)
         let session = WCSession.default
         let watchActive = session.activationState == .activated

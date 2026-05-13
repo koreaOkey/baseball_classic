@@ -397,6 +397,11 @@ struct WatchTestScreen: View {
     }
 
     private func scheduleLocalPush(eventType: String, label: String) {
+        // 사용자 이벤트 필터: 미선택 이벤트는 실제 푸시와 동일하게 차단
+        if !EventFilterGate.isAllowed(eventType: eventType) {
+            addLog("[푸시 시뮬] \(eventType) 필터 차단 — 설정에서 OFF")
+            return
+        }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             guard granted else {

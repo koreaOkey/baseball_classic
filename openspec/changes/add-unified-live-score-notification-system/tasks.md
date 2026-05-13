@@ -1,10 +1,14 @@
 ## 1. 백엔드 준비
 
-- [ ] 1.1 Supabase migration: `user_preferences.preferred_event_types` 컬럼 추가 (text[] / jsonb), 기본값 = 전체 이벤트 선택
+- [ ] 1.1 Supabase migration: `user_preferences.preferred_event_types` 컬럼 추가 (jsonb 권장 — 8개 키 boolean), 기본값 = 전체 이벤트 선택
 - [ ] 1.2 사용자 preferences GET/PUT 엔드포인트에 `preferred_event_types` 필드 노출 (FastAPI 핸들러 + Pydantic 스키마)
 - [ ] 1.3 push payload 표준 이벤트 타입 식별자 확인. 누락된 경우 payload에 `event_type` 필드 추가
 - [ ] 1.4 미수신 이벤트 큐잉 로직(있다면) 제거. 도달 가능 시 클라이언트가 별도 동기화 경로로 최신 상태만 복원하도록 정리
 - [ ] 1.5 백엔드 단위 테스트: preferences CRUD, payload 직렬화에 event_type 포함
+- [ ] 1.6 **푸시 발송 시 백엔드 측 필터 가드 (Bulk SQL 방식)** — 이벤트당 1번 쿼리로 수신 대상 사용자 추리기. 예: `SELECT device_token FROM ... WHERE preferred_event_types ->> 'homerun' = 'true' AND subscribed_team = 'LG'`. 인덱스: `(subscribed_team, preferred_event_types)` 또는 jsonb GIN index. **순진한 N+1 쿼리 금지** — 풀 폭발 위험. 10k 사용자까지는 Bulk SQL 충분, 그 이상이면 Redis 캐시 또는 FCM Topic으로 마이그레이션 검토.
+- [ ] 1.7 클라이언트 동기화 디바운스: 폰 토글 변경 → 로컬 즉시 저장 + 1.5초 후 백엔드 PUT 1번 (8개 키 batch). 빠른 연타 시 API 호출 1번만 발생하도록.
+- [ ] 1.8 앱 시작 시 백엔드 → 로컬 sync (디바이스 변경/재설치 사용자 보호). 로컬 우선, 백엔드 응답으로 갱신.
+- [ ] 1.9 클라이언트 필터 가드는 이중 안전망으로 유지 (백엔드 sync 지연/실패 보호). 백엔드가 1차, 클라이언트가 2차 필터.
 
 ## 2. iOS 폰 (mobile-ios)
 

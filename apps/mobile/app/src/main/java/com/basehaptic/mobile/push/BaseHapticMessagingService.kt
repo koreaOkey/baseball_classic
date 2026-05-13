@@ -35,6 +35,13 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
         val gameId = data["game_id"]
         val homeTeam = data["home_team"]
         val awayTeam = data["away_team"]
+        val eventType = data["event_type"]
+
+        // 사용자 이벤트 필터 가드: 미선택 이벤트는 폰 노티 자체를 게시 안 함
+        if (!com.basehaptic.mobile.data.model.EventFilterGate.isAllowed(this, eventType)) {
+            Log.d(TAG, "event filter blocked phone push: $eventType")
+            return
+        }
 
         showNotification(
             title = title,

@@ -553,8 +553,13 @@ fun WatchTestScreen(
                                 row.forEach { (type, label, color) ->
                                     Button(
                                         onClick = {
-                                            postLocalPush(context, type, label, gameState)
-                                            addLog("[푸시 시뮬] $type 5초 후 발사 — 지금 폰 잠그세요")
+                                            if (!com.basehaptic.mobile.data.model.EventFilterGate
+                                                    .isAllowed(context, type)) {
+                                                addLog("[푸시 시뮬] $type 필터 차단 — 설정에서 OFF")
+                                            } else {
+                                                postLocalPush(context, type, label, gameState)
+                                                addLog("[푸시 시뮬] $type 5초 후 발사 — 지금 폰 잠그세요")
+                                            }
                                         },
                                         modifier = Modifier
                                             .weight(1f)

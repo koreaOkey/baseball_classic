@@ -11,6 +11,26 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.ui.graphics.vector.ImageVector
 
+object EventFilterGate {
+    fun isAllowed(context: android.content.Context, eventType: String?): Boolean {
+        val type = eventType?.uppercase() ?: return true
+        if (type.isBlank()) return true
+        val key = when (type) {
+            "HOMERUN" -> "event_filter_homerun_enabled"
+            "SCORE", "SAC_FLY_SCORE" -> "event_filter_score_enabled"
+            "HIT" -> "event_filter_hit_enabled"
+            "STEAL", "TAG_UP_ADVANCE" -> "event_filter_steal_enabled"
+            "WALK" -> "event_filter_walk_enabled"
+            "OUT" -> "event_filter_out_enabled"
+            "DOUBLE_PLAY", "TRIPLE_PLAY" -> "event_filter_double_play_enabled"
+            "PITCHER_CHANGE" -> "event_filter_pitcher_change_enabled"
+            else -> return true
+        }
+        return context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+            .getBoolean(key, true)
+    }
+}
+
 data class EventFilterOption(
     val id: String,
     val storageKey: String,
