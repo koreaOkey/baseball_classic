@@ -1,6 +1,7 @@
 import UIKit
 import UserNotifications
 import GoogleMobileAds
+import WatchConnectivity
 
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
@@ -136,6 +137,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
+        // 워치 우선 햅틱 정책: 워치 페어링·설치 상태면 폰 소리/진동 suppress (배너만 노출)
+        let session = WCSession.default
+        let watchActive = session.activationState == .activated
+            && session.isPaired
+            && session.isWatchAppInstalled
+        if watchActive {
+            return [.banner, .badge]
+        }
         return [.banner, .sound, .badge]
     }
 

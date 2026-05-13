@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 import WatchConnectivity
 import WatchKit
 
@@ -77,6 +78,91 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         }
         if let enabled = ctx["live_haptic_enabled"] as? Bool {
             UserDefaults.standard.set(enabled, forKey: "live_haptic_enabled")
+        }
+        for filterKey in WatchConnectivityManager.eventFilterPrefKeys {
+            if let enabled = ctx[filterKey] as? Bool {
+                UserDefaults.standard.set(enabled, forKey: filterKey)
+            }
+        }
+    }
+
+    static let eventFilterPrefKeys: [String] = [
+        "event_filter_homerun_enabled",
+        "event_filter_score_enabled",
+        "event_filter_hit_enabled",
+        "event_filter_steal_enabled",
+        "event_filter_walk_enabled",
+        "event_filter_out_enabled",
+        "event_filter_double_play_enabled",
+        "event_filter_pitcher_change_enabled"
+    ]
+
+    static func isEventTypeAllowedByFilter(_ eventType: String) -> Bool {
+        let key: String
+        switch eventType.uppercased() {
+        case "HOMERUN": key = "event_filter_homerun_enabled"
+        case "SCORE", "SAC_FLY_SCORE": key = "event_filter_score_enabled"
+        case "HIT": key = "event_filter_hit_enabled"
+        case "STEAL", "TAG_UP_ADVANCE": key = "event_filter_steal_enabled"
+        case "WALK": key = "event_filter_walk_enabled"
+        case "OUT": key = "event_filter_out_enabled"
+        case "DOUBLE_PLAY", "TRIPLE_PLAY": key = "event_filter_double_play_enabled"
+        case "PITCHER_CHANGE": key = "event_filter_pitcher_change_enabled"
+        default: return true
+        }
+        return UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+
+    static let ongoingLiveScoreNotificationId = "live_score_ongoing"
+
+    static func postOngoingLiveScoreNotification(gameData: GameData, latestEventType: String?) {
+        let content = UNMutableNotificationContent()
+        content.title = "\(gameData.awayTeam) \(gameData.awayScore) : \(gameData.homeScore) \(gameData.homeTeam)"
+        var parts: [String] = []
+        if !gameData.inning.isEmpty { parts.append(gameData.inning) }
+        parts.append("\(gameData.outCount)아웃")
+        var bases: [String] = []
+        if gameData.bases.first { bases.append("1루") }
+        if gameData.bases.second { bases.append("2루") }
+        if gameData.bases.third { bases.append("3루") }
+        if !bases.isEmpty { parts.append(bases.joined(separator: "·")) }
+        if let event = latestEventType, !event.isEmpty {
+            let label = eventTypeKorean(event)
+            if !label.isEmpty { parts.append(label) }
+        }
+        content.body = parts.joined(separator: " · ")
+        content.sound = nil
+        let request = UNNotificationRequest(
+            identifier: ongoingLiveScoreNotificationId,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("[WatchConnectivity] ongoing live score notification post failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    static func removeOngoingLiveScoreNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.removeDeliveredNotifications(withIdentifiers: [ongoingLiveScoreNotificationId])
+        center.removePendingNotificationRequests(withIdentifiers: [ongoingLiveScoreNotificationId])
+    }
+
+    private static func eventTypeKorean(_ type: String) -> String {
+        switch type.uppercased() {
+        case "HOMERUN": return "홈런"
+        case "SCORE", "SAC_FLY_SCORE": return "득점"
+        case "HIT": return "안타"
+        case "STEAL", "TAG_UP_ADVANCE": return "도루"
+        case "WALK": return "볼넷"
+        case "OUT": return "아웃"
+        case "DOUBLE_PLAY": return "병살"
+        case "TRIPLE_PLAY": return "삼중살"
+        case "PITCHER_CHANGE": return "투수교체"
+        case "VICTORY": return "경기 종료"
+        default: return ""
         }
     }
 
@@ -225,9 +311,16 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 return Date().timeIntervalSince1970 - ts > Self.staleEventThreshold
             }()
             let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
-            if !isStale && liveHapticEnabled {
+            if !isStale && liveHapticEnabled && Self.isEventTypeAllowedByFilter(eventType) {
                 triggerHaptic(eventType: eventType)
             }
+        }
+
+        // 라이브 스코어 ongoing 노티 갱신 (같은 identifier replace) / 종료 시 제거
+        if !isFinished, let updated = gameData {
+            Self.postOngoingLiveScoreNotification(gameData: updated, latestEventType: latestEventType)
+        } else if isFinished {
+            Self.removeOngoingLiveScoreNotification()
         }
 
         // 경기가 LIVE이면 Extended Session 시작, 종료되면 정지
@@ -261,6 +354,12 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             UserDefaults.standard.set(enabled, forKey: "live_haptic_enabled")
             print("[WatchConnectivity] live_haptic_enabled = \(enabled)")
         }
+        for filterKey in Self.eventFilterPrefKeys {
+            if let enabled = message[filterKey] as? Bool {
+                UserDefaults.standard.set(enabled, forKey: filterKey)
+                print("[WatchConnectivity] \(filterKey) = \(enabled)")
+            }
+        }
     }
 
     /// 10초 이상 된 이벤트는 stale로 판정 (워치 재시작 시 이벤트 폭주 방지)
@@ -285,6 +384,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
         guard liveHapticEnabled else {
             print("[WatchConnectivity] live_haptic_enabled=false, skipping: \(eventType)")
+            return
+        }
+
+        guard Self.isEventTypeAllowedByFilter(eventType) else {
+            print("[WatchConnectivity] event filter blocked: \(eventType)")
             return
         }
 
@@ -324,6 +428,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
         guard liveHapticEnabled else {
             print("⌚ [WatchConn] live_haptic_enabled=false, skipping push haptic: \(upper)")
+            return
+        }
+        guard Self.isEventTypeAllowedByFilter(eventType) else {
+            print("⌚ [WatchConn] event filter blocked push haptic: \(upper)")
             return
         }
         triggerHaptic(eventType: eventType)

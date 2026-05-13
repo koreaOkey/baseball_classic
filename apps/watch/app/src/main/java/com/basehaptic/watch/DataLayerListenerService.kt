@@ -6,8 +6,6 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
-import androidx.wear.tiles.TileService
-import com.basehaptic.watch.tile.GameTileService
 import com.basehaptic.watch.ui.StadiumCheerOverlayCoordinator
 import com.basehaptic.watch.ui.StadiumCheerPayload
 import com.google.android.gms.wearable.*
@@ -38,6 +36,17 @@ class DataLayerListenerService : WearableListenerService() {
         const val SETTINGS_PREFS_NAME = "watch_user_prefs"
         const val PREF_KEY_EVENT_VIDEO_ENABLED = "event_video_enabled"
         const val PREF_KEY_LIVE_HAPTIC_ENABLED = "live_haptic_enabled"
+
+        val EVENT_FILTER_PREF_KEYS = listOf(
+            "event_filter_homerun_enabled",
+            "event_filter_score_enabled",
+            "event_filter_hit_enabled",
+            "event_filter_steal_enabled",
+            "event_filter_walk_enabled",
+            "event_filter_out_enabled",
+            "event_filter_double_play_enabled",
+            "event_filter_pitcher_change_enabled"
+        )
 
         const val PATH_GAME = "/game"
         const val PATH_THEME = "/theme"
@@ -187,7 +196,6 @@ class DataLayerListenerService : WearableListenerService() {
         }
 
         sendBroadcast(Intent(ACTION_GAME_UPDATED))
-        TileService.getUpdater(this).requestUpdate(GameTileService::class.java)
     }
     
     /**
@@ -314,9 +322,33 @@ class DataLayerListenerService : WearableListenerService() {
             Log.d(TAG, "live_haptic_enabled = $enabled")
             changed = true
         }
+        for (filterKey in EVENT_FILTER_PREF_KEYS) {
+            if (dataMap.containsKey(filterKey)) {
+                val enabled = dataMap.getBoolean(filterKey, true)
+                prefs.edit().putBoolean(filterKey, enabled).apply()
+                Log.d(TAG, "$filterKey = $enabled")
+                changed = true
+            }
+        }
         if (changed) {
             sendBroadcast(Intent(ACTION_SETTINGS_UPDATED))
         }
+    }
+
+    private fun isEventTypeAllowedByFilter(eventType: String): Boolean {
+        val key = when (eventType.uppercase()) {
+            "HOMERUN" -> "event_filter_homerun_enabled"
+            "SCORE", "SAC_FLY_SCORE" -> "event_filter_score_enabled"
+            "HIT" -> "event_filter_hit_enabled"
+            "STEAL", "TAG_UP_ADVANCE" -> "event_filter_steal_enabled"
+            "WALK" -> "event_filter_walk_enabled"
+            "OUT" -> "event_filter_out_enabled"
+            "DOUBLE_PLAY", "TRIPLE_PLAY" -> "event_filter_double_play_enabled"
+            "PITCHER_CHANGE" -> "event_filter_pitcher_change_enabled"
+            else -> return true
+        }
+        return getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(key, true)
     }
 
     private fun saveLatestEvent(eventType: String, eventCursor: Long?) {
@@ -338,6 +370,12 @@ class DataLayerListenerService : WearableListenerService() {
             .getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)
         if (!liveHapticEnabled) {
             Log.d(TAG, "live_haptic_enabled=false, skipping: $eventType")
+            return
+        }
+
+        // 사용자 선택 이벤트 필터: 미선택 이벤트는 햅틱·화면 깨우기 모두 차단
+        if (!isEventTypeAllowedByFilter(eventType)) {
+            Log.d(TAG, "event filter blocked: $eventType")
             return
         }
 

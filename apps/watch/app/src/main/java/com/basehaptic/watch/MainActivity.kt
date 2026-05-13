@@ -98,6 +98,14 @@ class MainActivity : ComponentActivity() {
     // Exposed to Compose via mutableStateOf
     private var isAmbient by mutableStateOf(false)
 
+    private val ongoingUpdateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(ctx: Context?, intent: Intent?) {
+            if (intent?.action == DataLayerListenerService.ACTION_GAME_UPDATED) {
+                postOngoingActivity()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -109,7 +117,13 @@ class MainActivity : ComponentActivity() {
 
         // Ongoing Activity: prevents system kill + shows on watch face
         createOngoingNotificationChannel()
-        startOngoingActivity()
+        postOngoingActivity()
+        ContextCompat.registerReceiver(
+            this,
+            ongoingUpdateReceiver,
+            IntentFilter(DataLayerListenerService.ACTION_GAME_UPDATED),
+            ContextCompat.RECEIVER_EXPORTED
+        )
 
         setContent {
             WatchApp(isAmbient = isAmbient)
@@ -117,6 +131,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            unregisterReceiver(ongoingUpdateReceiver)
+        } catch (_: IllegalArgumentException) {
+        }
         stopOngoingActivity()
         super.onDestroy()
     }
@@ -133,7 +151,11 @@ class MainActivity : ComponentActivity() {
         manager.createNotificationChannel(channel)
     }
 
-    private fun startOngoingActivity() {
+    private fun postOngoingActivity() {
+        val gameData = readGameDataFromPrefs(this)
+        val latestEvent = readLatestEventFromPrefs(this)
+        val (title, contentText, statusTemplate) = buildOngoingContent(gameData, latestEvent)
+
         val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -144,18 +166,20 @@ class MainActivity : ComponentActivity() {
 
         val notification = NotificationCompat.Builder(this, ONGOING_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("BaseHaptic")
-            .setContentText("경기 관람 중")
+            .setContentTitle(title)
+            .setContentText(contentText)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setContentIntent(pendingIntent)
             .build()
 
         val ongoingNotificationBuilder = NotificationCompat.Builder(this, ONGOING_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("BaseHaptic")
-            .setContentText("Game tracking in progress")
+            .setContentTitle(title)
+            .setContentText(contentText)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setContentIntent(pendingIntent)
 
@@ -168,7 +192,7 @@ class MainActivity : ComponentActivity() {
             .setTouchIntent(pendingIntent)
             .setStatus(
                 Status.Builder()
-                    .addTemplate("경기 관람 중")
+                    .addTemplate(statusTemplate)
                     .build()
             )
             .build()
@@ -177,6 +201,44 @@ class MainActivity : ComponentActivity() {
 
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(ONGOING_NOTIFICATION_ID, notification)
+    }
+
+    private fun buildOngoingContent(
+        gameData: GameData?,
+        latestEvent: WatchEventInfo?
+    ): Triple<String, String, String> {
+        if (gameData == null) {
+            return Triple("야구봄", "경기 관람 중", "경기 관람 중")
+        }
+        val title = "${gameData.awayTeam} ${gameData.awayScore} : ${gameData.homeScore} ${gameData.homeTeam}"
+        val parts = mutableListOf<String>().apply {
+            if (gameData.inning.isNotBlank()) add(gameData.inning)
+            add("${gameData.outCount}아웃")
+            val bases = mutableListOf<String>().apply {
+                if (gameData.bases.first) add("1루")
+                if (gameData.bases.second) add("2루")
+                if (gameData.bases.third) add("3루")
+            }
+            if (bases.isNotEmpty()) add(bases.joinToString("·"))
+            val eventLabel = latestEvent?.type?.let { eventTypeToKorean(it) }.orEmpty()
+            if (eventLabel.isNotBlank()) add(eventLabel)
+        }
+        val text = parts.joinToString(" · ")
+        return Triple(title, text, text)
+    }
+
+    private fun eventTypeToKorean(type: String): String = when (type.uppercase()) {
+        "HOMERUN" -> "홈런"
+        "SCORE", "SAC_FLY_SCORE" -> "득점"
+        "HIT" -> "안타"
+        "STEAL", "TAG_UP_ADVANCE" -> "도루"
+        "WALK" -> "볼넷"
+        "OUT" -> "아웃"
+        "DOUBLE_PLAY" -> "병살"
+        "TRIPLE_PLAY" -> "삼중살"
+        "PITCHER_CHANGE" -> "투수교체"
+        "VICTORY" -> "경기 종료"
+        else -> ""
     }
 
     private fun stopOngoingActivity() {

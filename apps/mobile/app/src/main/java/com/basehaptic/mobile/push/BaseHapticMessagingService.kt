@@ -7,8 +7,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.basehaptic.mobile.MainActivity
 import com.basehaptic.mobile.R
+import com.basehaptic.mobile.wear.WatchCompanionStatus
+import com.basehaptic.mobile.wear.WatchCompanionStatusRepository
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.runBlocking
 
 class BaseHapticMessagingService : FirebaseMessagingService() {
 
@@ -72,15 +75,29 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // 워치 우선 햅틱 정책: 워치 앱 설치/연결 상태면 폰 진동·소리 suppress (배너는 유지)
+        val watchActive = try {
+            runBlocking { WatchCompanionStatusRepository.getStatus(this@BaseHapticMessagingService) } ==
+                WatchCompanionStatus.Installed
+        } catch (e: Exception) {
+            false
+        }
+
+        val priority = if (watchActive) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH
         val builder = NotificationCompat.Builder(this, NotificationChannels.GAME_ALERTS_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(priority)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .addAction(0, "관람하기", actionPendingIntent)
+
+        if (watchActive) {
+            builder.setSilent(true)
+            builder.setDefaults(0)
+        }
 
         val notificationId = gameId?.hashCode() ?: System.currentTimeMillis().toInt()
         try {

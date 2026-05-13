@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
@@ -408,6 +409,41 @@ fun SettingsScreen(
                     eventVideoEnabled = it
                     prefs.edit().putBoolean("event_video_enabled", it).apply()
                     com.basehaptic.mobile.wear.WearSettingsSyncManager.syncEventVideoEnabledToWatch(context, it)
+                }
+            )
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(AppSpacing.lg))
+            SettingsSection(title = "선택한 이벤트만 알림")
+            Text(
+                text = "선택한 이벤트가 발생할 때만 강한 알림으로 받아요",
+                color = Gray400,
+                style = AppFont.body,
+                modifier = Modifier.padding(horizontal = AppSpacing.xs, vertical = AppSpacing.xs)
+            )
+        }
+
+        items(com.basehaptic.mobile.data.model.EventFilterOption.all, key = { it.id }) { option ->
+            val context = LocalContext.current
+            val prefs = remember {
+                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+            }
+            var enabled by remember {
+                mutableStateOf(prefs.getBoolean(option.storageKey, true))
+            }
+            SettingsItemWithSwitch(
+                icon = option.icon,
+                title = option.title,
+                subtitle = option.subtitle,
+                checked = enabled,
+                onCheckedChange = {
+                    enabled = it
+                    prefs.edit().putBoolean(option.storageKey, it).apply()
+                    val filters = com.basehaptic.mobile.data.model.EventFilterOption.all
+                        .associate { opt -> opt.storageKey to prefs.getBoolean(opt.storageKey, true) }
+                    com.basehaptic.mobile.wear.WearSettingsSyncManager
+                        .syncEventFiltersToWatch(context, filters)
                 }
             )
         }

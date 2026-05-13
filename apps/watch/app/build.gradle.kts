@@ -31,7 +31,7 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
         targetSdk = 35
-        versionCode = 20
+        versionCode = 22
         versionName = "1.0.3"
 
         val backendBaseUrl = (
@@ -107,16 +107,6 @@ dependencies {
 
     // Ongoing Activity (prevents system kill, shows on watch face)
     implementation("androidx.wear:wear-ongoing:1.1.0")
-
-    // Tiles (swipe-left panel)
-    implementation("androidx.wear.tiles:tiles:1.4.1")
-    implementation("androidx.wear.tiles:tiles-material:1.4.1")
-    implementation("androidx.wear.protolayout:protolayout:1.2.1")
-    implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
-    implementation("androidx.wear.protolayout:protolayout-expression:1.2.1")
-
-    // Guava (required by Tiles ListenableFuture)
-    implementation("com.google.guava:guava:33.0.0-android")
 
     // Video playback for home-run transition clip
     implementation("androidx.media3:media3-exoplayer:1.4.1")

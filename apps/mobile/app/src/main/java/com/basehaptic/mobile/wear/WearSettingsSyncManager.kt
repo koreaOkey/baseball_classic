@@ -21,6 +21,22 @@ object WearSettingsSyncManager {
         putBool(context, KEY_LIVE_HAPTIC_ENABLED, enabled)
     }
 
+    fun syncEventFiltersToWatch(context: Context, filters: Map<String, Boolean>) {
+        Thread {
+            try {
+                val request = PutDataMapRequest.create(PATH_SETTINGS).apply {
+                    filters.forEach { (key, value) -> dataMap.putBoolean(key, value) }
+                    dataMap.putLong(KEY_UPDATED_AT, System.currentTimeMillis())
+                }.asPutDataRequest().setUrgent()
+
+                Tasks.await(Wearable.getDataClient(context).putDataItem(request))
+                Log.d(TAG, "Event filters sync queued: ${filters.size} keys")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to sync event filters to watch", e)
+            }
+        }.start()
+    }
+
     private fun putBool(context: Context, key: String, enabled: Boolean) {
         Thread {
             try {

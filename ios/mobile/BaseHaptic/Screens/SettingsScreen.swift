@@ -202,6 +202,18 @@ struct SettingsScreen: View {
                     WatchThemeSyncManager.syncEventVideoEnabledToWatch(enabled: newValue)
                 }
 
+                Spacer().frame(height: AppSpacing.lg)
+                SettingsSection(title: "선택한 이벤트만 알림")
+                Text("선택한 이벤트가 발생할 때만 강한 알림으로 받아요")
+                    .font(AppFont.body)
+                    .foregroundColor(AppColors.gray400)
+                    .padding(.horizontal, AppSpacing.xs)
+                    .padding(.bottom, AppSpacing.xs)
+
+                ForEach(EventFilterOption.all) { option in
+                    EventFilterToggleRow(option: option)
+                }
+
                 // 정보 섹션
                 Spacer().frame(height: AppSpacing.lg)
                 SettingsSection(title: "정보")
@@ -334,5 +346,38 @@ private struct SettingsItemWithToggle: View {
         .padding(AppSpacing.lg)
         .background(AppColors.gray900)
         .cornerRadius(AppRadius.md)
+    }
+}
+
+private struct EventFilterToggleRow: View {
+    let option: EventFilterOption
+    @AppStorage private var isOn: Bool
+
+    init(option: EventFilterOption) {
+        self.option = option
+        _isOn = AppStorage(wrappedValue: true, option.storageKey)
+    }
+
+    var body: some View {
+        SettingsItemWithToggle(
+            icon: option.icon,
+            title: option.title,
+            subtitle: option.subtitle,
+            isOn: $isOn
+        )
+        .onChange(of: isOn) { _, _ in
+            WatchThemeSyncManager.syncEventFiltersToWatch(filters: EventFilterOption.currentValues())
+        }
+    }
+}
+
+extension EventFilterOption {
+    static func currentValues() -> [String: Bool] {
+        var values: [String: Bool] = [:]
+        let defaults = UserDefaults.standard
+        for option in EventFilterOption.all {
+            values[option.storageKey] = defaults.object(forKey: option.storageKey) as? Bool ?? true
+        }
+        return values
     }
 }

@@ -8,19 +8,34 @@ import androidx.core.content.getSystemService
 
 object NotificationChannels {
     const val GAME_ALERTS_ID = "game_alerts"
+    const val LIVE_SCORE_ID = "live_score"
 
     fun ensureCreated(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService<NotificationManager>() ?: return
-        if (manager.getNotificationChannel(GAME_ALERTS_ID) != null) return
-        val channel = NotificationChannel(
-            GAME_ALERTS_ID,
-            "경기 알림",
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = "응원팀 경기 시작 등 주요 경기 알림"
-            enableVibration(true)
+        if (manager.getNotificationChannel(GAME_ALERTS_ID) == null) {
+            val channel = NotificationChannel(
+                GAME_ALERTS_ID,
+                "경기 알림",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "응원팀 경기 시작 등 주요 경기 알림"
+                enableVibration(true)
+            }
+            manager.createNotificationChannel(channel)
         }
-        manager.createNotificationChannel(channel)
+        if (manager.getNotificationChannel(LIVE_SCORE_ID) == null) {
+            val channel = NotificationChannel(
+                LIVE_SCORE_ID,
+                "라이브 스코어",
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = "라이브 경기 진행 중 스코어·이닝·BSO 진행 상태 표시"
+                enableVibration(false)
+                setSound(null, null)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+            manager.createNotificationChannel(channel)
+        }
     }
 }

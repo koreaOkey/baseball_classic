@@ -36,6 +36,17 @@ final class WatchThemeSyncManager {
         ])
     }
 
+    static func syncEventFiltersToWatch(filters: [String: Bool]) {
+        var context: [String: Any] = [
+            "type": "settings_update",
+            "updated_at": Date().timeIntervalSince1970
+        ]
+        for (key, value) in filters {
+            context[key] = value
+        }
+        syncToWatch(context: context)
+    }
+
     /// 응원 시각 도래 시 iPhone에서 Watch로 현장 응원 페이로드를 전달한다.
     /// - Parameters:
     ///   - teamCode: 사용자 응원팀 코드 (예: "DOOSAN")

@@ -113,6 +113,7 @@ class GameSyncForegroundService : Service() {
 
     override fun onDestroy() {
         GameSyncState.setServiceRunning(false)
+        com.basehaptic.mobile.push.LiveScoreNotificationManager.remove(applicationContext)
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -130,6 +131,18 @@ class GameSyncForegroundService : Service() {
             var reconnectAttempt = 0
 
             fun pushStateToWatch(state: BackendGamesRepository.LiveGameState) {
+                // 폰 라이브 스코어 ongoing notification (잠금화면·드로어 표시)
+                if (state.status == GameStatus.LIVE) {
+                    val latestForNoti = localEvents.firstOrNull()?.type ?: state.lastEventType
+                    com.basehaptic.mobile.push.LiveScoreNotificationManager.post(
+                        applicationContext,
+                        state,
+                        latestForNoti
+                    )
+                } else if (state.status == GameStatus.FINISHED) {
+                    com.basehaptic.mobile.push.LiveScoreNotificationManager.remove(applicationContext)
+                }
+
                 val awayMascot = state.awayTeamId
                     .takeIf { it != Team.NONE }
                     ?.teamName
