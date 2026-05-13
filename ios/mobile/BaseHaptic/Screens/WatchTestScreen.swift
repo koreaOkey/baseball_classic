@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 // MARK: - Simulation Models
 private struct SimGameState {
@@ -186,6 +187,7 @@ struct WatchTestScreen: View {
                     scoreCard
                     autoSimulationCard
                     manualEventCard
+                    pushSimulationCard
                     cheerTestCard
                     logCard
                     Spacer().frame(height: AppSpacing.bottomSafeSpacer)
@@ -349,6 +351,101 @@ struct WatchTestScreen: View {
         .padding(AppSpacing.lg)
         .background(AppColors.gray900)
         .cornerRadius(AppRadius.md)
+    }
+
+    // MARK: - Push Simulation (Long-look 노티 검증용)
+    private var pushSimulationCard: some View {
+        let pushEvents: [(String, String, Color)] = [
+            ("HOMERUN", "홈런 푸시", teamTheme.primary),
+            ("SCORE", "득점 푸시", AppEventColors.color(for: "SCORE")),
+            ("HIT", "안타 푸시", AppEventColors.color(for: "HIT")),
+            ("OUT", "아웃 푸시", AppEventColors.color(for: "OUT"))
+        ]
+
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("푸시 시뮬레이션 (Long-look)")
+                .font(AppFont.bodyBold)
+                .foregroundColor(AppColors.gray300)
+
+            Text("5초 후 로컬 노티 발사 — 그 사이 폰을 잠가두면 잠금화면·워치 long-look에서 확인 가능")
+                .font(AppFont.caption)
+                .foregroundColor(AppColors.gray500)
+
+            let rows = stride(from: 0, to: pushEvents.count, by: 2).map { Array(pushEvents[$0..<min($0 + 2, pushEvents.count)]) }
+            ForEach(0..<rows.count, id: \.self) { rowIndex in
+                HStack(spacing: AppSpacing.sm) {
+                    ForEach(0..<rows[rowIndex].count, id: \.self) { colIndex in
+                        let event = rows[rowIndex][colIndex]
+                        Button {
+                            scheduleLocalPush(eventType: event.0, label: event.1)
+                        } label: {
+                            Text(event.1)
+                                .font(AppFont.bodyBold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: AppSpacing.buttonHeight)
+                                .background(event.2)
+                                .cornerRadius(AppRadius.sm)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(AppSpacing.lg)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.md)
+    }
+
+    private func scheduleLocalPush(eventType: String, label: String) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            guard granted else {
+                DispatchQueue.main.async { addLog("[푸시 시뮬] 권한 거부됨") }
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = "야구봄 · \(label)"
+            content.body = pushBody(for: eventType)
+            content.sound = .default
+            if #available(iOS 15.0, *) {
+                content.interruptionLevel = .timeSensitive
+            }
+            content.userInfo = [
+                "event_type": eventType,
+                "game_id": "test-\(UUID().uuidString.prefix(8))",
+                "home_team": gameState.homeTeam,
+                "away_team": gameState.awayTeam,
+                "home_score": gameState.homeScore,
+                "away_score": gameState.awayScore,
+                "inning": gameState.inning
+            ]
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+            let request = UNNotificationRequest(
+                identifier: "push_sim_\(eventType)_\(Date().timeIntervalSince1970)",
+                content: content,
+                trigger: trigger
+            )
+            center.add(request) { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        addLog("[푸시 시뮬] 실패: \(error.localizedDescription)")
+                    } else {
+                        addLog("[푸시 시뮬] \(eventType) 5초 후 발사 — 지금 폰 잠그세요")
+                    }
+                }
+            }
+        }
+    }
+
+    private func pushBody(for eventType: String) -> String {
+        let score = "\(gameState.awayTeam) \(gameState.awayScore) : \(gameState.homeScore) \(gameState.homeTeam)"
+        switch eventType {
+        case "HOMERUN": return "\(gameState.batter) 홈런 · \(score) · \(gameState.inning)"
+        case "SCORE": return "득점 · \(score) · \(gameState.inning)"
+        case "HIT": return "\(gameState.batter) 안타 · \(score) · \(gameState.inning)"
+        case "OUT": return "아웃 · \(score) · \(gameState.inning)"
+        default: return score
+        }
     }
 
     // MARK: - Cheer Test

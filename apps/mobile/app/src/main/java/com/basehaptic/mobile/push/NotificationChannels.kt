@@ -9,6 +9,7 @@ import androidx.core.content.getSystemService
 object NotificationChannels {
     const val GAME_ALERTS_ID = "game_alerts"
     const val LIVE_SCORE_ID = "live_score"
+    const val TEST_PUSH_ID = "test_push"
 
     fun ensureCreated(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -33,6 +34,18 @@ object NotificationChannels {
                 description = "라이브 경기 진행 중 스코어·이닝·BSO 진행 상태 표시"
                 enableVibration(false)
                 setSound(null, null)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+            manager.createNotificationChannel(channel)
+        }
+        if (manager.getNotificationChannel(TEST_PUSH_ID) == null) {
+            val channel = NotificationChannel(
+                TEST_PUSH_ID,
+                "푸시 시뮬레이션 테스트",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "워치 테스트 메뉴에서 발사하는 로컬 푸시 (잠금화면 노출)"
+                enableVibration(true)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
             manager.createNotificationChannel(channel)

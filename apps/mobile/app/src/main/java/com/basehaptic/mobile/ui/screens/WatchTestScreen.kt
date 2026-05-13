@@ -59,6 +59,9 @@ import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Red400
 import com.basehaptic.mobile.ui.theme.Yellow400
 import com.basehaptic.mobile.wear.WearGameSyncManager
+import com.basehaptic.mobile.push.NotificationChannels
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -526,6 +529,59 @@ fun WatchTestScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                        Text("푸시 시뮬레이션 (Heads-up)", style = AppFont.bodyBold, color = Gray300)
+                        Spacer(Modifier.height(AppSpacing.xs))
+                        Text(
+                            "5초 후 로컬 노티 발사 — 그 사이 폰을 잠가두면 잠금화면에서 확인 가능",
+                            style = AppFont.caption,
+                            color = Gray500
+                        )
+                        Spacer(Modifier.height(AppSpacing.sm))
+
+                        val pushEvents = listOf(
+                            Triple("HOMERUN", "홈런 푸시", teamTheme.primary),
+                            Triple("SCORE", "득점 푸시", AppEventColors.eventColor("SCORE")),
+                            Triple("HIT", "안타 푸시", AppEventColors.eventColor("HIT")),
+                            Triple("OUT", "아웃 푸시", AppEventColors.eventColor("OUT"))
+                        )
+
+                        pushEvents.chunked(2).forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+                            ) {
+                                row.forEach { (type, label, color) ->
+                                    Button(
+                                        onClick = {
+                                            postLocalPush(context, type, label, gameState)
+                                            addLog("[푸시 시뮬] $type 5초 후 발사 — 지금 폰 잠그세요")
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(AppSpacing.buttonHeight),
+                                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                                        shape = AppShapes.sm
+                                    ) {
+                                        Text(label, style = AppFont.bodyBold)
+                                    }
+                                }
+                                if (row.size < 2) {
+                                    Spacer(Modifier.weight(1f))
+                                }
+                            }
+                            Spacer(Modifier.height(AppSpacing.sm))
+                        }
+                    }
+                }
+            }
+
+            item {
+                Surface(
+                    shape = AppShapes.md,
+                    color = Gray900,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -562,4 +618,50 @@ fun WatchTestScreen(
 
 private fun Color.toRgbHex(): String {
     return "#%06X".format(toArgb() and 0x00FFFFFF)
+}
+
+private fun postLocalPush(
+    context: android.content.Context,
+    eventType: String,
+    label: String,
+    state: SimGameState
+) {
+    NotificationChannels.ensureCreated(context)
+    val score = "${state.awayTeam} ${state.awayScore} : ${state.homeScore} ${state.homeTeam}"
+    val body = when (eventType) {
+        "HOMERUN" -> "${state.batter} 홈런 · $score · ${state.inning}"
+        "SCORE" -> "득점 · $score · ${state.inning}"
+        "HIT" -> "${state.batter} 안타 · $score · ${state.inning}"
+        "OUT" -> "아웃 · $score · ${state.inning}"
+        else -> score
+    }
+    Thread {
+        Thread.sleep(5000)
+        // 워치 우선 햅틱 정책 동일 적용 (FCM 핸들러와 일치)
+        val watchActive = try {
+            kotlinx.coroutines.runBlocking {
+                com.basehaptic.mobile.wear.WatchCompanionStatusRepository.getStatus(context)
+            } == com.basehaptic.mobile.wear.WatchCompanionStatus.Installed
+        } catch (_: Exception) { false }
+
+        val priority = if (watchActive) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH
+        val builder = NotificationCompat.Builder(context, NotificationChannels.TEST_PUSH_ID)
+            .setSmallIcon(com.basehaptic.mobile.R.mipmap.ic_launcher)
+            .setContentTitle("야구봄 · $label")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(priority)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+        if (watchActive) {
+            builder.setSilent(true)
+            builder.setDefaults(0)
+        }
+        val id = ("push_sim_$eventType".hashCode() and Int.MAX_VALUE)
+        try {
+            NotificationManagerCompat.from(context).notify(id, builder.build())
+        } catch (_: SecurityException) {
+        }
+    }.start()
 }
