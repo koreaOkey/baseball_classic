@@ -97,6 +97,18 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         "event_filter_pitcher_change_enabled"
     ]
 
+    /// 폰 EventFilterOption 의 defaultEnabled 와 1:1 동기 — 둘 중 하나만 바꾸지 말 것.
+    private static let eventFilterDefaults: [String: Bool] = [
+        "event_filter_homerun_enabled": true,
+        "event_filter_score_enabled": true,
+        "event_filter_hit_enabled": true,
+        "event_filter_steal_enabled": false,
+        "event_filter_walk_enabled": false,
+        "event_filter_out_enabled": false,
+        "event_filter_double_play_enabled": false,
+        "event_filter_pitcher_change_enabled": false
+    ]
+
     static func isEventTypeAllowedByFilter(_ eventType: String) -> Bool {
         let key: String
         switch eventType.uppercased() {
@@ -110,7 +122,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         case "PITCHER_CHANGE": key = "event_filter_pitcher_change_enabled"
         default: return true
         }
-        return UserDefaults.standard.object(forKey: key) as? Bool ?? true
+        let fallback = eventFilterDefaults[key] ?? true
+        return UserDefaults.standard.object(forKey: key) as? Bool ?? fallback
     }
 
     static let ongoingLiveScoreNotificationId = "live_score_ongoing"
@@ -301,23 +314,28 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             syncedTeamName = myTeam
         }
 
-        // 인라인 이벤트 처리
-        if let eventType = message["event_type"] as? String, !eventType.isEmpty {
-            latestEventType = eventType.uppercased()
+        // 인라인 이벤트 처리: 차단된 이벤트는 latestEventType·햅틱 모두 갱신하지 않아
+        // 노티 본문에 차단 이벤트 라벨이 끼어들지 않게 한다.
+        let incomingEventType = (message["event_type"] as? String) ?? ""
+        let incomingEventAllowed = incomingEventType.isEmpty
+            || Self.isEventTypeAllowedByFilter(incomingEventType)
+        if !incomingEventType.isEmpty && incomingEventAllowed {
+            latestEventType = incomingEventType.uppercased()
             latestEventTimestamp = Date()
             // 오래된 이벤트는 햅틱 무시
             let isStale: Bool = {
                 guard let ts = message["timestamp"] as? TimeInterval else { return false }
                 return Date().timeIntervalSince1970 - ts > Self.staleEventThreshold
             }()
-            let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
-            if !isStale && liveHapticEnabled && Self.isEventTypeAllowedByFilter(eventType) {
-                triggerHaptic(eventType: eventType)
+            if !isStale {
+                triggerHaptic(eventType: incomingEventType)
             }
         }
 
-        // 라이브 스코어 ongoing 노티 갱신 (같은 identifier replace) / 종료 시 제거
-        if !isFinished, let updated = gameData {
+        // 라이브 스코어 ongoing 노티: 차단된 이벤트가 동반된 푸시는 post 자체를 생략.
+        // 같은 identifier 재전송이 silent replace 되면서 다음 허용 이벤트 (HR/득점/안타) 의
+        // lock-screen wake 를 죽여버리는 것을 막기 위함이다.
+        if !isFinished, let updated = gameData, incomingEventAllowed {
             Self.postOngoingLiveScoreNotification(gameData: updated, latestEventType: latestEventType)
         } else if isFinished {
             Self.removeOngoingLiveScoreNotification()
