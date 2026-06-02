@@ -259,6 +259,17 @@ def test_ingest_and_query_flow() -> None:
         assert state_body["pitcher"] == "Kim Starter"
         assert state_body["pitcherPitchCount"] == 88
 
+        # 라인업이 응답에 포함되고 team_side 로 분리된다
+        assert isinstance(state_body["homeLineup"], list)
+        assert isinstance(state_body["awayLineup"], list)
+        assert len(state_body["homeLineup"]) == 1
+        assert state_body["homeLineup"][0]["playerName"] == "Home One"
+        assert state_body["homeLineup"][0]["positionName"] == "Left Field"
+        assert state_body["homeLineup"][0]["battingOrder"] == 1
+        assert state_body["homeLineup"][0]["isActive"] is True
+        assert len(state_body["awayLineup"]) == 1
+        assert state_body["awayLineup"][0]["playerName"] == "Away One"
+
         events = client.get("/games/20250501SSSK02025/events")
         assert events.status_code == 200
         events_body = events.json()["items"]
@@ -1161,3 +1172,62 @@ def test_rollback_session_safely_handles_rollback_error() -> None:
     ok = main_module._rollback_session_safely(session, game_id="G2", attempt=2)
     assert ok is False
     assert session.closed is True
+
+
+def test_game_state_excludes_inactive_lineup_slots() -> None:
+    with TestClient(app) as client:
+        snapshot = sample_snapshot()
+        snapshot["lineupSlots"] = [
+            {
+                "teamSide": "home",
+                "battingOrder": 1,
+                "playerId": "H001",
+                "playerName": "Home Active",
+                "positionCode": "LF",
+                "positionName": "Left Field",
+                "isStarter": True,
+                "isActive": True,
+            },
+            {
+                "teamSide": "home",
+                "battingOrder": 2,
+                "playerId": "H002",
+                "playerName": "Home Inactive",
+                "positionCode": "CF",
+                "positionName": "Center Field",
+                "isStarter": True,
+                "isActive": False,
+            },
+        ]
+        ingest = client.post(
+            "/internal/crawler/games/20260601LINEUP01/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=snapshot,
+        )
+        assert ingest.status_code == 200
+
+        state = client.get("/games/20260601LINEUP01/state")
+        assert state.status_code == 200
+        body = state.json()
+        names = [s["playerName"] for s in body["homeLineup"]]
+        assert "Home Active" in names
+        assert "Home Inactive" not in names
+
+
+def test_game_state_lineup_empty_when_no_slots() -> None:
+    with TestClient(app) as client:
+        snapshot = sample_snapshot()
+        snapshot["lineupSlots"] = []
+        snapshot["batterStats"] = []
+        ingest = client.post(
+            "/internal/crawler/games/20260601LINEUP02/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=snapshot,
+        )
+        assert ingest.status_code == 200
+
+        state = client.get("/games/20260601LINEUP02/state")
+        assert state.status_code == 200
+        body = state.json()
+        assert body["homeLineup"] == []
+        assert body["awayLineup"] == []

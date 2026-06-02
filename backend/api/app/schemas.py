@@ -238,6 +238,15 @@ class GameSummaryOut(BaseModel):
     updatedAt: IsoDatetime
 
 
+class LineupSlotOut(BaseModel):
+    battingOrder: int
+    playerName: str
+    positionCode: str | None = None
+    positionName: str | None = None
+    isStarter: bool = False
+    isActive: bool = True
+
+
 class GameStateOut(BaseModel):
     gameId: str
     homeTeam: str
@@ -256,6 +265,8 @@ class GameStateOut(BaseModel):
     lastEventType: EventType | None = None
     lastEventAt: IsoDatetime | None = None
     updatedAt: IsoDatetime
+    homeLineup: list[LineupSlotOut] = Field(default_factory=list)
+    awayLineup: list[LineupSlotOut] = Field(default_factory=list)
 
 
 class GameEventOut(BaseModel):

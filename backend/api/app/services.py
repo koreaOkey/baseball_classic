@@ -26,6 +26,7 @@ from .schemas import (
     GameStateOut,
     GameStatus,
     GameSummaryOut,
+    LineupSlotOut,
     TeamRecordOut,
 )
 
@@ -1331,6 +1332,25 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         if active is not None:
             pitcher_pitch_count = active
 
+    lineup_rows = db.execute(
+        select(GameLineupSlot)
+        .where(GameLineupSlot.game_id == game.id, GameLineupSlot.is_active.is_(True))
+        .order_by(GameLineupSlot.batting_order.asc())
+    ).scalars().all()
+
+    def _slot_to_out(slot: GameLineupSlot) -> LineupSlotOut:
+        return LineupSlotOut(
+            battingOrder=slot.batting_order,
+            playerName=slot.player_name,
+            positionCode=slot.position_code,
+            positionName=slot.position_name,
+            isStarter=bool(slot.is_starter),
+            isActive=bool(slot.is_active),
+        )
+
+    home_lineup = [_slot_to_out(s) for s in lineup_rows if s.team_side == "home"]
+    away_lineup = [_slot_to_out(s) for s in lineup_rows if s.team_side == "away"]
+
     return GameStateOut(
         gameId=game.id,
         homeTeam=game.home_team,
@@ -1349,4 +1369,6 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         lastEventType=normalize_event_type(latest_event.event_type) if latest_event else None,
         lastEventAt=latest_event.event_time if latest_event else None,
         updatedAt=game.updated_at,
+        homeLineup=home_lineup,
+        awayLineup=away_lineup,
     )
