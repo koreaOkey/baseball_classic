@@ -1,0 +1,88 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#37773B"/>
+      <stop offset="1" stop-color="#255F31"/>
+    </linearGradient>
+    <pattern id="grassStripe" width="92" height="900" patternUnits="userSpaceOnUse">
+      <rect width="46" height="900" fill="#2F6F37"/>
+      <rect x="46" width="46" height="900" fill="#367B3E"/>
+      <rect x="10" width="10" height="900" fill="#FFFFFF" opacity="0.035"/>
+      <rect x="58" width="12" height="900" fill="#000000" opacity="0.035"/>
+    </pattern>
+    <filter id="labelShadow" x="-30%" y="-50%" width="160%" height="200%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+    <linearGradient id="dirt" x1="270" y1="205" x2="960" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#CDB783"/>
+      <stop offset="1" stop-color="#A88957"/>
+    </linearGradient>
+    <linearGradient id="basePath" x1="284" y1="480" x2="920" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B79A67"/>
+      <stop offset="1" stop-color="#8B6D43"/>
+    </linearGradient>
+  </defs>
+
+  <g opacity="0.22">
+    <line x1="600" y1="747" x2="0" y2="330" stroke="#FFFFFF" stroke-width="5"/>
+    <line x1="600" y1="747" x2="1200" y2="330" stroke="#FFFFFF" stroke-width="5"/>
+  </g>
+
+  <path d="M248 492C332 318 468 216 600 216C732 216 868 318 952 492L814 565C755 447 662 383 600 383C538 383 445 447 386 565L248 492Z" fill="url(#dirt)"/>
+  <path d="M385 559L600 347L815 559L600 743L385 559Z" fill="#1F5E2F" stroke="#C3AC75" stroke-width="34" stroke-linejoin="round"/>
+  <path d="M385 559L600 743L815 559" stroke="url(#basePath)" stroke-width="70" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <path d="M385 559L600 347L815 559L600 743L385 559Z" stroke="#E7D2A4" stroke-width="6" stroke-linejoin="round" opacity="0.72"/>
+
+  <g filter="url(#labelShadow)">
+    <rect x="586" y="334" width="28" height="28" transform="rotate(45 586 334)" fill="#EFEFEF"/>
+    <rect x="374" y="548" width="28" height="28" transform="rotate(45 374 548)" fill="#EFEFEF"/>
+    <rect x="798" y="548" width="28" height="28" transform="rotate(45 798 548)" fill="#EFEFEF"/>
+    <path d="M576 737H624V775H600L576 763V737Z" fill="#D8D8D8"/>
+  </g>
+
+  <g font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif" font-weight="800" font-size="30" text-anchor="middle" filter="url(#labelShadow)">
+    <g>
+      <rect x="526" y="34" width="148" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="600" y="73" fill="#EAF4EA">김용의</text>
+    </g>
+    <g>
+      <rect x="118" y="142" width="148" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="192" y="181" fill="#EAF4EA">이천웅</text>
+    </g>
+    <g>
+      <rect x="934" y="142" width="116" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="992" y="181" fill="#EAF4EA">임훈</text>
+    </g>
+    <g>
+      <rect x="354" y="312" width="148" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="428" y="351" fill="#EAF4EA">오지환</text>
+    </g>
+    <g>
+      <rect x="696" y="312" width="148" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="770" y="351" fill="#EAF4EA">정주현</text>
+    </g>
+    <g>
+      <rect x="192" y="466" width="164" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="274" y="505" fill="#EAF4EA">히메네스</text>
+    </g>
+    <g>
+      <rect x="844" y="466" width="148" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="918" y="505" fill="#EAF4EA">정성훈</text>
+    </g>
+    <g>
+      <rect x="526" y="492" width="148" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="600" y="531" fill="#EAF4EA">류제국</text>
+    </g>
+    <g>
+      <rect x="518" y="790" width="164" height="58" rx="10" fill="#26492A" opacity="0.9"/>
+      <text x="600" y="829" fill="#EAF4EA">유강남</text>
+    </g>
+    <g>
+      <rect x="590" y="662" width="156" height="62" rx="10" fill="#F0434E"/>
+      <rect x="598" y="671" width="42" height="44" rx="4" fill="#F3F4F6"/>
+      <circle cx="619" cy="690" r="12" fill="#D6A38C"/>
+      <path d="M606 711C609 701 613 697 619 697C625 697 630 701 633 711H606Z" fill="#1F2937"/>
+      <text x="684" y="704" fill="#FFFFFF" text-anchor="middle">강민호</text>
+    </g>
+  </g>
+</svg>

@@ -21,6 +21,8 @@ import { IosWatchSyncScreen } from "./iphone/IosWatchSyncScreen";
 import { IpadOnboardingScreen } from "./iphone/IpadOnboardingScreen";
 import { IpadHomeScreen } from "./iphone/IpadHomeScreen";
 import { IpadWatchSyncScreen } from "./iphone/IpadWatchSyncScreen";
+import { YagubomFeatureCard } from "./promo/YagubomFeatureCard";
+import { YagubomPromoCard } from "./promo/YagubomPromoCard";
 
 // Apple Watch Series 9 (App Store)
 const W = 396;
@@ -51,6 +53,10 @@ const T10H = 2560;
 // Feature graphic
 const FW = 1024;
 const FH = 500;
+
+// Social promo card
+const PROMOW = 1080;
+const PROMOH = 1350;
 
 export const RemotionRoot: React.FC = () => (
   <>
@@ -100,5 +106,47 @@ export const RemotionRoot: React.FC = () => (
     <Composition id="android-tablet10-2" component={PhoneScreenshot2_Onboarding} durationInFrames={1} fps={1} width={T10W} height={T10H} />
     <Composition id="android-tablet10-3" component={PhoneScreenshot3_WatchSync} durationInFrames={1} fps={1} width={T10W} height={T10H} />
     <Composition id="android-tablet10-4" component={PhoneScreenshot4_WatchPreview} durationInFrames={1} fps={1} width={T10W} height={T10H} />
+
+    {/* Promo cards */}
+    <Composition
+      id="promo-yagubom-ios"
+      component={() => <YagubomPromoCard platform="ios" />}
+      durationInFrames={1}
+      fps={1}
+      width={PROMOW}
+      height={PROMOH}
+    />
+    <Composition
+      id="promo-yagubom-android"
+      component={() => <YagubomPromoCard platform="android" />}
+      durationInFrames={1}
+      fps={1}
+      width={PROMOW}
+      height={PROMOH}
+    />
+    <Composition
+      id="promo-yagubom-feature-1-live"
+      component={() => <YagubomFeatureCard feature="live" />}
+      durationInFrames={1}
+      fps={1}
+      width={PROMOW}
+      height={PROMOH}
+    />
+    <Composition
+      id="promo-yagubom-feature-2-events"
+      component={() => <YagubomFeatureCard feature="events" />}
+      durationInFrames={1}
+      fps={1}
+      width={PROMOW}
+      height={PROMOH}
+    />
+    <Composition
+      id="promo-yagubom-feature-3-themes"
+      component={() => <YagubomFeatureCard feature="themes" />}
+      durationInFrames={1}
+      fps={1}
+      width={PROMOW}
+      height={PROMOH}
+    />
   </>
 );

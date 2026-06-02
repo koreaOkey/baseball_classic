@@ -1,0 +1,122 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="fieldClip">
+      <path d="M78 828C78 470 366 180 720 180C1074 180 1362 470 1362 828H78Z"/>
+    </clipPath>
+
+    <linearGradient id="grassBase" x1="720" y1="180" x2="720" y2="900" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2E7A43"/>
+      <stop offset="0.58" stop-color="#1F6234"/>
+      <stop offset="1" stop-color="#174D2A"/>
+    </linearGradient>
+
+    <pattern id="grassStripes" width="96" height="900" patternUnits="userSpaceOnUse">
+      <rect width="48" height="900" fill="#FFFFFF" opacity="0.045"/>
+      <rect x="48" width="48" height="900" fill="#000000" opacity="0.035"/>
+    </pattern>
+
+    <radialGradient id="fieldVignette" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(720 524) rotate(90) scale(520 760)">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="0.62" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.22"/>
+    </radialGradient>
+
+    <linearGradient id="dirtFill" x1="350" y1="280" x2="1090" y2="720" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#D0B277"/>
+      <stop offset="0.54" stop-color="#B9975E"/>
+      <stop offset="1" stop-color="#8C653D"/>
+    </linearGradient>
+
+    <linearGradient id="basepathFill" x1="460" y1="500" x2="980" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C7AC75"/>
+      <stop offset="0.56" stop-color="#A78350"/>
+      <stop offset="1" stop-color="#735233"/>
+    </linearGradient>
+
+    <linearGradient id="slotFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B2027"/>
+      <stop offset="1" stop-color="#10151B"/>
+    </linearGradient>
+
+    <filter id="softShadow" x="-35%" y="-45%" width="170%" height="190%">
+      <feDropShadow dx="0" dy="9" stdDeviation="9" flood-color="#000000" flood-opacity="0.32"/>
+    </filter>
+
+    <filter id="slotShadow" x="-35%" y="-70%" width="170%" height="240%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+
+  <!-- Transparent outside. Render this over the app's own card surface. -->
+  <g clip-path="url(#fieldClip)">
+    <path d="M78 828C78 470 366 180 720 180C1074 180 1362 470 1362 828H78Z" fill="url(#grassBase)"/>
+    <rect x="0" y="160" width="1440" height="740" fill="url(#grassStripes)" opacity="0.72"/>
+    <path d="M78 828C78 470 366 180 720 180C1074 180 1362 470 1362 828H78Z" fill="url(#fieldVignette)"/>
+
+    <line x1="720" y1="794" x2="0" y2="286" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="4"/>
+    <line x1="720" y1="794" x2="1440" y2="286" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="4"/>
+    <path d="M174 616C276 364 505 212 720 212C935 212 1164 364 1266 616" stroke="#E9D8AA" stroke-opacity="0.18" stroke-width="4"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <path d="M275 595C354 392 536 276 720 276C904 276 1086 392 1165 595L990 681C932 529 810 452 720 452C630 452 508 529 450 681L275 595Z" fill="url(#dirtFill)"/>
+    <path d="M449 672L720 428L991 672L720 828L449 672Z" fill="#15552D" stroke="#C8AB72" stroke-width="40" stroke-linejoin="round"/>
+    <path d="M449 672L720 828L991 672" stroke="url(#basepathFill)" stroke-width="84" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+    <path d="M449 672L720 428L991 672L720 828L449 672Z" stroke="#F0DDB0" stroke-width="7" stroke-linejoin="round" opacity="0.72"/>
+
+    <rect x="700" y="405" width="40" height="40" transform="rotate(45 700 405)" fill="#F5F5F5"/>
+    <rect x="423" y="645" width="40" height="40" transform="rotate(45 423 645)" fill="#F5F5F5"/>
+    <rect x="977" y="645" width="40" height="40" transform="rotate(45 977 645)" fill="#F5F5F5"/>
+    <path d="M690 807H750V852H720L690 836V807Z" fill="#E4E4E4"/>
+  </g>
+
+  <!-- Position slots. These are intentionally generic so app text can be replaced or hidden. -->
+  <g id="position-slots" font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif" font-weight="800" text-anchor="middle" filter="url(#slotShadow)">
+    <g id="slot-cf">
+      <rect x="633" y="86" width="174" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="720" y="127" fill="#F4F7F5" font-size="28">CF</text>
+    </g>
+    <g id="slot-lf">
+      <rect x="244" y="196" width="174" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="331" y="237" fill="#F4F7F5" font-size="28">LF</text>
+    </g>
+    <g id="slot-rf">
+      <rect x="1022" y="196" width="174" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="1109" y="237" fill="#F4F7F5" font-size="28">RF</text>
+    </g>
+    <g id="slot-ss">
+      <rect x="461" y="394" width="168" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="545" y="435" fill="#F43F5E" font-size="28">SS</text>
+    </g>
+    <g id="slot-2b">
+      <rect x="811" y="394" width="168" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="895" y="435" fill="#F43F5E" font-size="28">2B</text>
+    </g>
+    <g id="slot-3b">
+      <rect x="314" y="552" width="168" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="398" y="593" fill="#F43F5E" font-size="28">3B</text>
+    </g>
+    <g id="slot-1b">
+      <rect x="958" y="552" width="168" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="1042" y="593" fill="#F43F5E" font-size="28">1B</text>
+    </g>
+    <g id="slot-p">
+      <rect x="633" y="584" width="174" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="720" y="625" fill="#F4F7F5" font-size="28">P</text>
+    </g>
+    <g id="slot-c">
+      <rect x="633" y="832" width="174" height="64" rx="32" fill="url(#slotFill)" stroke="#67707C" stroke-width="3"/>
+      <text x="720" y="873" fill="#F4F7F5" font-size="28">C</text>
+    </g>
+  </g>
+
+  <!-- Runner chips can be toggled/covered by app state. -->
+  <g id="runner-markers" font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif" font-weight="900" text-anchor="middle" filter="url(#slotShadow)">
+    <circle id="runner-first" cx="1018" cy="706" r="32" fill="#FFFFFF"/>
+    <text x="1018" y="718" fill="#EF4444" font-size="34">1</text>
+    <circle id="runner-second" cx="720" cy="388" r="28" fill="#FFFFFF" opacity="0.98"/>
+    <text x="720" y="399" fill="#EF4444" font-size="30">2</text>
+    <circle id="runner-third" cx="422" cy="706" r="32" fill="#FFFFFF"/>
+    <text x="422" y="718" fill="#EF4444" font-size="34">3</text>
+  </g>
+</svg>

@@ -1,0 +1,99 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <linearGradient id="dirt" x1="310" y1="270" x2="1290" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C6A36E"/>
+      <stop offset="1" stop-color="#9D7647"/>
+    </linearGradient>
+    <linearGradient id="lineDirt" x1="480" y1="410" x2="1120" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A97E4C"/>
+      <stop offset="1" stop-color="#7D5B38"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Transparent outside by design. Place this over the app's own green field/card background. -->
+  <path d="M256 476C383 246 626 146 800 146C974 146 1217 246 1344 476L1162 565C1078 410 922 326 800 326C678 326 522 410 438 565L256 476Z" fill="url(#dirt)" opacity="0.96"/>
+  <path d="M436 570L800 316L1164 570L800 792L436 570Z" fill="#0D321B" stroke="#C5A06B" stroke-width="36" stroke-linejoin="round"/>
+  <path d="M436 570L800 792L1164 570" stroke="url(#lineDirt)" stroke-width="82" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+  <path d="M436 570L800 316L1164 570L800 792L436 570Z" stroke="#D2B27B" stroke-width="8" stroke-linejoin="round" opacity="0.72"/>
+
+  <line x1="800" y1="792" x2="0" y2="230" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="4"/>
+  <line x1="800" y1="792" x2="1600" y2="230" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="4"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="769" y="285" width="44" height="44" transform="rotate(45 769 285)" fill="#F4F4F4"/>
+    <rect x="522" y="563" width="44" height="44" transform="rotate(45 522 563)" fill="#F4F4F4"/>
+    <rect x="1034" y="563" width="44" height="44" transform="rotate(45 1034 563)" fill="#F4F4F4"/>
+    <rect x="768" y="769" width="48" height="36" fill="#D9D9D9" opacity="0.75"/>
+  </g>
+
+  <g font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif" font-weight="700">
+    <g filter="url(#softShadow)">
+      <rect x="700" y="68" width="200" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="735" y="115" fill="#F43F5E" font-size="28">CF</text>
+      <text x="790" y="115" fill="#FFFFFF" font-size="30">최지훈</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="275" y="158" width="220" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="315" y="205" fill="#F43F5E" font-size="28">LF</text>
+      <text x="370" y="205" fill="#FFFFFF" font-size="30">에레디아</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="1110" y="158" width="215" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="1148" y="205" fill="#F43F5E" font-size="28">RF</text>
+      <text x="1202" y="205" fill="#FFFFFF" font-size="30">한유섬</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="510" y="300" width="215" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="552" y="347" fill="#F43F5E" font-size="28">SS</text>
+      <text x="606" y="347" fill="#FFFFFF" font-size="30">김성현</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="885" y="300" width="215" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="925" y="347" fill="#F43F5E" font-size="28">2B</text>
+      <text x="982" y="347" fill="#FFFFFF" font-size="30">정준재</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="350" y="412" width="205" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="390" y="459" fill="#F43F5E" font-size="28">3B</text>
+      <text x="447" y="459" fill="#FFFFFF" font-size="30">박성한</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="1045" y="412" width="180" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="1086" y="459" fill="#F43F5E" font-size="28">1B</text>
+      <text x="1140" y="459" fill="#FFFFFF" font-size="30">최정</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="708" y="500" width="184" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="747" y="547" fill="#FFFFFF" font-size="28">P</text>
+      <text x="790" y="547" fill="#FFFFFF" font-size="30">양현종</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="1010" y="635" width="180" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="1055" y="682" fill="#FFFFFF" font-size="30">주신수</text>
+    </g>
+
+    <g filter="url(#softShadow)">
+      <rect x="710" y="805" width="180" height="74" rx="37" fill="#171A1F" stroke="#6B7280" stroke-width="3"/>
+      <text x="752" y="852" fill="#FFFFFF" font-size="28">C</text>
+      <text x="795" y="852" fill="#FFFFFF" font-size="30">박지환</text>
+    </g>
+  </g>
+
+  <g filter="url(#softShadow)" font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif" font-weight="800">
+    <circle cx="516" cy="620" r="33" fill="#FFFFFF"/>
+    <text x="504" y="633" fill="#EF4444" font-size="34">1</text>
+    <circle cx="1086" cy="620" r="33" fill="#FFFFFF"/>
+    <text x="1074" y="633" fill="#EF4444" font-size="34">2</text>
+  </g>
+</svg>
