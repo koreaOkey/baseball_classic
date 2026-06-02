@@ -42,6 +42,17 @@ struct LiveGameState {
     let batter: String
     let pitcherPitchCount: Int?
     let lastEventType: String?
+    let homeLineup: [LineupSlot]
+    let awayLineup: [LineupSlot]
+}
+
+struct LineupSlot {
+    let battingOrder: Int
+    let playerName: String
+    let positionCode: String?
+    let positionName: String?
+    let isStarter: Bool
+    let isActive: Bool
 }
 
 struct LiveEvent: Identifiable {
@@ -50,6 +61,8 @@ struct LiveEvent: Identifiable {
     let type: String
     let description: String
     let time: String
+    let pitcher: String?
+    let batter: String?
 }
 
 struct LiveEventsPage {
@@ -308,6 +321,8 @@ final class BackendGamesRepository {
         let rawStatus = json["status"] as? String ?? ""
         let status = statusFromBackend(rawStatus)
         let inning = (json["inning"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? defaultInning(for: status)
+        let homeLineup = (json["homeLineup"] as? [[String: Any]] ?? []).compactMap(parseLineupSlot)
+        let awayLineup = (json["awayLineup"] as? [[String: Any]] ?? []).compactMap(parseLineupSlot)
 
         return LiveGameState(
             gameId: json["gameId"] as? String ?? "",
@@ -328,7 +343,21 @@ final class BackendGamesRepository {
             pitcher: json["pitcher"] as? String ?? "",
             batter: json["batter"] as? String ?? "",
             pitcherPitchCount: json["pitcherPitchCount"] as? Int,
-            lastEventType: (json["lastEventType"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            lastEventType: (json["lastEventType"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            homeLineup: homeLineup,
+            awayLineup: awayLineup
+        )
+    }
+
+    private func parseLineupSlot(_ json: [String: Any]) -> LineupSlot? {
+        guard let name = json["playerName"] as? String, !name.isEmpty else { return nil }
+        return LineupSlot(
+            battingOrder: json["battingOrder"] as? Int ?? 0,
+            playerName: name,
+            positionCode: (json["positionCode"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            positionName: (json["positionName"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            isStarter: json["isStarter"] as? Bool ?? false,
+            isActive: json["isActive"] as? Bool ?? true
         )
     }
 
@@ -339,7 +368,9 @@ final class BackendGamesRepository {
             id: (json["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "\(cursor)",
             type: (json["type"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "OTHER",
             description: json["description"] as? String ?? "",
-            time: formatBackendTime(json["time"] as? String ?? "")
+            time: formatBackendTime(json["time"] as? String ?? ""),
+            pitcher: (json["pitcher"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            batter: (json["batter"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 

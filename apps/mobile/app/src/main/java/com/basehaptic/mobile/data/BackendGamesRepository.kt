@@ -69,7 +69,18 @@ object BackendGamesRepository {
         val pitcher: String,
         val batter: String,
         val pitcherPitchCount: Int?,
-        val lastEventType: String?
+        val lastEventType: String?,
+        val homeLineup: List<LineupSlot> = emptyList(),
+        val awayLineup: List<LineupSlot> = emptyList(),
+    )
+
+    data class LineupSlot(
+        val battingOrder: Int,
+        val playerName: String,
+        val positionCode: String?,
+        val positionName: String?,
+        val isStarter: Boolean,
+        val isActive: Boolean,
     )
 
     data class LiveEvent(
@@ -77,7 +88,9 @@ object BackendGamesRepository {
         val id: String,
         val type: String,
         val description: String,
-        val time: String
+        val time: String,
+        val pitcher: String?,
+        val batter: String?
     )
 
     data class LiveEventsPage(
@@ -634,7 +647,31 @@ object BackendGamesRepository {
             pitcher = optString("pitcher"),
             batter = optString("batter"),
             pitcherPitchCount = if (isNull("pitcherPitchCount")) null else optInt("pitcherPitchCount").takeIf { has("pitcherPitchCount") },
-            lastEventType = optString("lastEventType").ifBlank { null }
+            lastEventType = optString("lastEventType").ifBlank { null },
+            homeLineup = optLineupArray("homeLineup"),
+            awayLineup = optLineupArray("awayLineup"),
+        )
+    }
+
+    private fun JSONObject.optLineupArray(key: String): List<LineupSlot> {
+        val array = optJSONArray(key) ?: return emptyList()
+        return buildList(array.length()) {
+            for (i in 0 until array.length()) {
+                val slot = array.optJSONObject(i)?.toLineupSlot() ?: continue
+                add(slot)
+            }
+        }
+    }
+
+    private fun JSONObject.toLineupSlot(): LineupSlot? {
+        val name = optString("playerName").ifBlank { return null }
+        return LineupSlot(
+            battingOrder = optInt("battingOrder", 0),
+            playerName = name,
+            positionCode = optString("positionCode").ifBlank { null },
+            positionName = optString("positionName").ifBlank { null },
+            isStarter = optBoolean("isStarter", false),
+            isActive = optBoolean("isActive", true),
         )
     }
 
@@ -645,7 +682,9 @@ object BackendGamesRepository {
             id = optString("id").ifBlank { cursor.toString() },
             type = optString("type").ifBlank { "OTHER" },
             description = optString("description"),
-            time = formatBackendTime(optString("time"))
+            time = formatBackendTime(optString("time")),
+            pitcher = optString("pitcher").ifBlank { null },
+            batter = optString("batter").ifBlank { null }
         )
     }
 

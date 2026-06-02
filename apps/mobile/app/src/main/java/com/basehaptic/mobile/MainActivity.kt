@@ -69,8 +69,7 @@ import kotlinx.coroutines.withContext
 private const val REQUEST_CODE_IN_APP_UPDATE = 9001
 private const val SHOW_COMMUNITY_TAB = false
 private const val SHOW_STORE_TAB = true
-// TODO(my-team-tab): 활성화 시 true로 변경. 다크 머지 단계에서는 탭 미노출.
-private const val SHOW_MY_TEAM_TAB = false
+private const val SHOW_MY_TEAM_TAB = true
 private const val USER_PREFS_NAME = "basehaptic_user_prefs"
 private const val KEY_SELECTED_TEAM = "selected_team"
 private const val KEY_UNLOCKED_THEME_IDS = "unlocked_theme_ids"
@@ -78,6 +77,20 @@ private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
 // 워치 페이스 테마와 무관하게 응원 시 풀스크린에 적용될 테마. ThemeStore와 별도로 StadiumCheerThemeStore에서 매칭.
 private const val KEY_ACTIVE_CHEER_THEME_ID = "active_cheer_theme_id"
 private const val KEY_LAST_SEEN_UPDATE_VERSION = "last_seen_update_version"
+
+private const val DEBUG_DUMMY_LIVE_GAME_ID = "debug-watch-sync-test"
+private val DEBUG_DUMMY_LIVE_GAME = Game(
+    id = DEBUG_DUMMY_LIVE_GAME_ID,
+    homeTeam = "두산",
+    awayTeam = "LG",
+    homeTeamId = Team.DOOSAN,
+    awayTeamId = Team.LG,
+    homeScore = 3,
+    awayScore = 5,
+    inning = "7회초",
+    status = GameStatus.LIVE,
+    time = "19:30"
+)
 
 class MainActivity : ComponentActivity() {
     private val appUpdateManager by lazy { AppUpdateManagerFactory.create(this) }
@@ -574,11 +587,16 @@ fun BaseHapticApp(
                 when (currentView) {
                     Screen.Home -> HomeScreen(
                         selectedTeam = selectedTeam,
-                        todayGames = todayGamesSnapshot,
+                        todayGames = if (BuildConfig.DEBUG) {
+                            listOf(DEBUG_DUMMY_LIVE_GAME) + todayGamesSnapshot
+                        } else {
+                            todayGamesSnapshot
+                        },
                         syncedGameId = syncedGameId,
                         onSelectGame = { game ->
                             selectedGameId = game.id
-                            if (game.status == GameStatus.LIVE && syncedGameId != game.id) {
+                            val isDebugDummy = BuildConfig.DEBUG && game.id == DEBUG_DUMMY_LIVE_GAME_ID
+                            if (!isDebugDummy && game.status == GameStatus.LIVE && syncedGameId != game.id) {
                                 requestWatchSyncPrompt(
                                     gameId = game.id,
                                     navigateToLive = true,
@@ -592,6 +610,7 @@ fun BaseHapticApp(
                     Screen.LiveGame -> LiveGameScreen(
                         gameId = selectedGameId,
                         syncedGameId = syncedGameId,
+                        onSetSyncedGame = { next -> syncedGameId = next },
                         onBack = { navigateBack() }
                     )
                     Screen.Community -> CommunityScreen(
@@ -622,7 +641,11 @@ fun BaseHapticApp(
                             onPersistActiveCheerThemeId(theme?.id)
                         },
                         onUnlockTheme = { theme ->
-                            RewardedAdManager.loadAndShowAd(context) {
+                            RewardedAdManager.loadAndShowAd(
+                                context = context,
+                                adUnitId = RewardedAdManager.THEME_STORE_AD_UNIT,
+                            ) { rewardEarned ->
+                                if (!rewardEarned) return@loadAndShowAd
                                 unlockedThemeIds = unlockedThemeIds + theme.id
                                 onPersistUnlockedThemeIds(unlockedThemeIds)
                                 if (theme.id.startsWith("cheer_")) {
@@ -678,9 +701,10 @@ fun BaseHapticApp(
                         selectedTeam = selectedTeam,
                         onBack = { navigateBack() }
                     )
-                    // TODO(my-team-tab): 활성화 시 SHOW_MY_TEAM_TAB=true. 컨테이너에 응원 랭킹·향후 팀별 뉴스 임베드.
+                    // TODO(my-team-tab): 컨테이너에 응원 랭킹·향후 팀별 뉴스 임베드.
                     Screen.MyTeam -> MyTeamScreen(
                         selectedTeam = selectedTeam,
+                        todayGames = todayGamesSnapshot,
                     )
                 }
             }
@@ -794,7 +818,7 @@ fun BottomNavigationBar(
             )
         }
 
-        // TODO(my-team-tab): 활성화 시 SHOW_MY_TEAM_TAB=true. 1차 콘텐츠는 응원팀 랭킹, 향후 팀별 뉴스 추가.
+        // TODO(my-team-tab): 1차 콘텐츠는 응원팀 랭킹, 향후 팀별 뉴스 추가.
         if (SHOW_MY_TEAM_TAB) {
             BottomNavItem(
                 icon = Icons.Default.Star,
@@ -856,7 +880,5 @@ sealed class Screen {
     object Store : Screen()
     object Settings : Screen()
     object WatchTest : Screen()
-    // TODO(my-team-tab): 활성화 시 BottomNavigationBar에 진입점 노출. 다크 머지 상태에서는 SHOW_MY_TEAM_TAB=false로 미노출.
     object MyTeam : Screen()
 }
-

@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UserNotifications
+import CoreLocation
 
 @main
 struct BaseHapticApp: App {
@@ -131,7 +132,7 @@ enum Screen: Hashable {
     case myTeam
 }
 
-private let SHOW_MY_TEAM_TAB = false
+private let SHOW_MY_TEAM_TAB = true
 
 // MARK: - ContentView
 struct ContentView: View {
@@ -161,10 +162,36 @@ struct ContentView: View {
     @State private var observedMyTeamGameStatus: [String: GameStatus] = [:]
     @State private var autoPromptedLiveGames: [String: Bool] = [:]
     @State private var pendingCheckinStadium: Stadium?
+    @State private var currentStadiumLocation: CLLocation?
     @State private var dismissedCheckinStadiumCodes: Set<String> = []
     @State private var scheduledCheerSignalIds: Set<String> = []
     @State private var gameStreamTask: Task<Void, Never>?
     @StateObject private var rewardedAdManager = RewardedAdManager.shared
+
+    private let debugDummyLiveGameId = "debug-watch-sync-test"
+    #if DEBUG
+    private var debugDummyLiveGame: Game {
+        Game(
+            id: debugDummyLiveGameId,
+            homeTeam: "두산",
+            awayTeam: "LG",
+            homeTeamId: .doosan,
+            awayTeamId: .lg,
+            homeScore: 3,
+            awayScore: 5,
+            inning: "7회초",
+            status: .live,
+            time: "19:30"
+        )
+    }
+    #endif
+    private var gamesForHome: [Game] {
+        #if DEBUG
+        return [debugDummyLiveGame] + todayGames
+        #else
+        return todayGames
+        #endif
+    }
 
     @ObservedObject private var connectivity = PhoneConnectivityManager.shared
     @Environment(\.teamTheme) private var teamTheme
@@ -292,10 +319,10 @@ struct ContentView: View {
                 case .home:
                     HomeScreen(
                         selectedTeam: selectedTeam,
-                        todayGames: todayGames,
+                        todayGames: gamesForHome,
                         activeTheme: nil,
                         syncedGameId: syncedGameId,
-                        checkinStadium: pendingCheckinStadium,
+                        checkinStadium: nil,
                         onConfirmCheckin: {
                             confirmPendingCheckin()
                         },
@@ -304,7 +331,8 @@ struct ContentView: View {
                         },
                         onSelectGame: { game in
                             selectedGameId = game.id
-                            if game.status == .live && syncedGameId != game.id {
+                            let isDebugDummy = game.id == debugDummyLiveGameId
+                            if !isDebugDummy && game.status == .live && syncedGameId != game.id {
                                 requestWatchSyncPrompt(gameId: game.id, navigateToLive: true, navigateOnDecline: true)
                             } else {
                                 navigateTo(.liveGame)
@@ -316,6 +344,7 @@ struct ContentView: View {
                         activeTheme: nil,
                         gameId: selectedGameId,
                         syncedGameId: syncedGameId,
+                        onSetSyncedGame: { next in syncedGameId = next },
                         onBack: { navigateBack() }
                     )
                 case .watchTest:
@@ -341,7 +370,10 @@ struct ContentView: View {
                             UserDefaults.standard.set(theme?.id, forKey: "active_cheer_theme_id")
                         },
                         onUnlockTheme: { theme in
-                            rewardedAdManager.loadAndShowAd {
+                            rewardedAdManager.loadAndShowAd(
+                                adUnitID: RewardedAdManager.themeStoreAdUnitID
+                            ) { rewardEarned in
+                                guard rewardEarned else { return }
                                 unlockedThemeIds.insert(theme.id)
                                 UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
                                 if theme.id.hasPrefix("cheer_") {
@@ -416,7 +448,18 @@ struct ContentView: View {
                         }
                     )
                 case .myTeam:
-                    MyTeamScreen(selectedTeam: selectedTeam)
+                    MyTeamScreen(
+                        selectedTeam: selectedTeam,
+                        todayGames: todayGames,
+                        checkinStadium: pendingCheckinStadium,
+                        currentLocation: currentStadiumLocation,
+                        onConfirmCheckin: {
+                            confirmPendingCheckin()
+                        },
+                        onDismissCheckin: {
+                            dismissPendingCheckin()
+                        }
+                    )
                 default:
                     Text("준비 중")
                         .foregroundColor(.white)
@@ -548,6 +591,11 @@ struct ContentView: View {
         StadiumRegionMonitor.shared.onEnterStadium = { stadium in
             Task { @MainActor in
                 handleEnteredStadium(stadium)
+            }
+        }
+        StadiumRegionMonitor.shared.onLocationUpdate = { location in
+            Task { @MainActor in
+                currentStadiumLocation = location
             }
         }
         StadiumRegionMonitor.shared.start()

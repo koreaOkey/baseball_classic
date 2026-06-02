@@ -80,7 +80,7 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
+        versionCode = 21
         versionName = "1.0.3"
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
@@ -166,6 +166,7 @@ dependencies {
 
     // Wear OS Data Layer
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     // Firebase (Cloud Messaging)

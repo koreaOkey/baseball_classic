@@ -1,32 +1,61 @@
 import GoogleMobileAds
 import UIKit
 
-#if DEBUG
-private let kRewardedAdUnitID = "ca-app-pub-3940256099942544/1712485313" // Google 테스트용
-#else
-private let kRewardedAdUnitID = "ca-app-pub-7935544989894266/6775093261" // 프로덕션
-#endif
-
 @MainActor
-final class RewardedAdManager: ObservableObject {
+final class RewardedAdManager: NSObject, ObservableObject {
     static let shared = RewardedAdManager()
 
     @Published var isLoading = false
 
-    private init() {}
+    private var pendingCompletion: ((Bool) -> Void)?
+    private var rewardEarnedForCurrentAd = false
+    private var presentingAdDelegate: AdDelegate?
 
-    /// 버튼 클릭 시 호출: 광고 로드 → 표시 → 시청 완료 시 onRewardEarned 콜백
-    func loadAndShowAd(onRewardEarned: @escaping () -> Void) {
-        guard !isLoading else { return }
+    private override init() { super.init() }
+
+    #if DEBUG
+    private static let testAdUnitID = "ca-app-pub-3940256099942544/1712485313"
+    #endif
+
+    private static let themeStoreAdUnitProd = "ca-app-pub-7935544989894266/6775093261"
+    private static let watchSyncAdUnitProd = "ca-app-pub-7935544989894266/6602098213"
+
+    static var themeStoreAdUnitID: String {
+        #if DEBUG
+        return testAdUnitID
+        #else
+        return themeStoreAdUnitProd
+        #endif
+    }
+
+    static var watchSyncAdUnitID: String {
+        #if DEBUG
+        return testAdUnitID
+        #else
+        return watchSyncAdUnitProd
+        #endif
+    }
+
+    /// 광고 로드 → 표시 → dismiss 후 콜백.
+    /// `rewardEarned`: 사용자가 광고를 끝까지 시청했으면 true. 로드/표시 실패도 콜백을 호출하며 false.
+    func loadAndShowAd(adUnitID: String, onComplete: @escaping (_ rewardEarned: Bool) -> Void) {
+        guard !isLoading else {
+            onComplete(false)
+            return
+        }
         isLoading = true
 
-        RewardedAd.load(with: kRewardedAdUnitID, request: Request()) { [weak self] ad, error in
+        RewardedAd.load(with: adUnitID, request: Request()) { [weak self] ad, error in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self else {
+                    onComplete(false)
+                    return
+                }
                 self.isLoading = false
 
                 if let error {
                     print("[RewardedAd] Load failed: \(error.localizedDescription)")
+                    onComplete(false)
                     return
                 }
 
@@ -34,14 +63,55 @@ final class RewardedAdManager: ObservableObject {
                       let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                       let rootVC = windowScene.windows.first?.rootViewController else {
                     print("[RewardedAd] No ad or no root VC")
+                    onComplete(false)
                     return
                 }
 
+                let delegate = AdDelegate { rewardEarned in
+                    self.presentingAdDelegate = nil
+                    onComplete(rewardEarned)
+                }
+                self.presentingAdDelegate = delegate
+                ad.fullScreenContentDelegate = delegate
+
                 ad.present(from: rootVC) {
                     print("[RewardedAd] User earned reward")
-                    onRewardEarned()
+                    delegate.rewardEarned = true
                 }
             }
         }
+    }
+}
+
+private final class AdDelegate: NSObject, FullScreenContentDelegate {
+    var rewardEarned = false
+    private let onDismissOrFail: (Bool) -> Void
+
+    init(onDismissOrFail: @escaping (Bool) -> Void) {
+        self.onDismissOrFail = onDismissOrFail
+        super.init()
+    }
+
+    func adDidDismissFullScreenContent(_ ad: any FullScreenPresentingAd) {
+        onDismissOrFail(rewardEarned)
+    }
+
+    func ad(_ ad: any FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: any Error) {
+        print("[RewardedAd] Present failed: \(error.localizedDescription)")
+        onDismissOrFail(false)
+    }
+}
+
+enum WatchSyncAdLedger {
+    private static let keyPrefix = "watchSyncAdViewed."
+
+    static func hasViewed(gameId: String) -> Bool {
+        guard !gameId.isEmpty else { return false }
+        return UserDefaults.standard.bool(forKey: keyPrefix + gameId)
+    }
+
+    static func markViewed(gameId: String) {
+        guard !gameId.isEmpty else { return }
+        UserDefaults.standard.set(true, forKey: keyPrefix + gameId)
     }
 }
