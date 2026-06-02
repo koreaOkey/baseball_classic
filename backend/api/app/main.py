@@ -934,6 +934,7 @@ def _ingest_crawler_snapshot_locked(
                 events=payload.events,
                 fallback_pitcher=payload.pitcher,
                 fallback_batter=payload.batter,
+                fallback_inning=game.inning,
             )
             sync_snapshot_details(db, game_id=game_id, payload=payload)
             current_state = build_game_state(db, game)

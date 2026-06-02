@@ -54,6 +54,7 @@ class CrawlerEventIn(BaseModel):
     description: str = ""
     occurredAt: datetime
     hapticPattern: str | None = None
+    inning: str | None = Field(default=None, max_length=32)
     metadata: dict[str, Any] | None = None
 
 
@@ -278,6 +279,7 @@ class GameEventOut(BaseModel):
     pitcher: str | None = None
     batter: str | None = None
     hapticPattern: str | None = None
+    inning: str | None = None
 
 
 class EventsResponse(BaseModel):

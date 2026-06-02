@@ -501,6 +501,7 @@ def insert_events(
     events: list[CrawlerEventIn],
     fallback_pitcher: str | None = None,
     fallback_batter: str | None = None,
+    fallback_inning: str | None = None,
 ) -> tuple[list[GameEvent], int]:
     if not events:
         return [], 0
@@ -555,6 +556,7 @@ def insert_events(
             continue
 
         seen_in_batch.add(source_id)
+        event_inning = (event_in.inning or "").strip() or fallback_inning
         event = GameEvent(
             game_id=game_id,
             source_event_id=source_id,
@@ -564,6 +566,7 @@ def insert_events(
             pitcher=event_pitcher,
             batter=event_batter,
             haptic_pattern=event_in.hapticPattern,
+            inning=event_inning,
             payload_json=event_in.metadata,
         )
         db.add(event)
@@ -1210,6 +1213,7 @@ def to_event_out(event: GameEvent) -> GameEventOut:
         pitcher=event.pitcher,
         batter=event.batter,
         hapticPattern=event.haptic_pattern,
+        inning=event.inning,
     )
 
 

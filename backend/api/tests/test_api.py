@@ -1231,3 +1231,43 @@ def test_game_state_lineup_empty_when_no_slots() -> None:
         body = state.json()
         assert body["homeLineup"] == []
         assert body["awayLineup"] == []
+
+
+def test_event_inning_populated_from_payload_and_fallback() -> None:
+    with TestClient(app) as client:
+        snapshot = sample_snapshot()
+        snapshot["inning"] = "7B"
+        snapshot["events"] = [
+            {
+                "sourceEventId": "inning-explicit-001",
+                "type": "HIT",
+                "description": "explicit inning",
+                "occurredAt": "2026-02-17T08:59:20Z",
+                "hapticPattern": "HIT-HIT",
+                "inning": "6회말",
+                "metadata": {},
+            },
+            {
+                "sourceEventId": "inning-fallback-001",
+                "type": "SCORE",
+                "description": "fallback to game.inning",
+                "occurredAt": "2026-02-17T08:59:44Z",
+                "hapticPattern": "SCORE-SCORE",
+                "metadata": {},
+            },
+        ]
+        ingest = client.post(
+            "/internal/crawler/games/20260601INNING01/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=snapshot,
+        )
+        assert ingest.status_code == 200
+
+        events = client.get("/games/20260601INNING01/events")
+        assert events.status_code == 200
+        items = events.json()["items"]
+        by_source = {item["id"]: item for item in items}
+        assert by_source["inning-explicit-001"]["inning"] == "6회말"
+        # game.inning "7B" 는 정규화돼 저장되므로 응답은 정규화된 값(예: "7회말")
+        assert by_source["inning-fallback-001"]["inning"] is not None
+        assert by_source["inning-fallback-001"]["inning"] != ""

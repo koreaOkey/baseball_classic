@@ -136,6 +136,8 @@ def _ensure_game_event_columns() -> None:
         ddl_statements.append("ALTER TABLE game_events ADD COLUMN pitcher VARCHAR(128)")
     if "batter" not in columns:
         ddl_statements.append("ALTER TABLE game_events ADD COLUMN batter VARCHAR(128)")
+    if "inning" not in columns:
+        ddl_statements.append("ALTER TABLE game_events ADD COLUMN inning VARCHAR(32)")
 
     if not ddl_statements:
         return

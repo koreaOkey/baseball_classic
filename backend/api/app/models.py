@@ -105,6 +105,7 @@ class GameEvent(Base):
     pitcher: Mapped[str | None] = mapped_column(String(128), nullable=True)
     batter: Mapped[str | None] = mapped_column(String(128), nullable=True)
     haptic_pattern: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    inning: Mapped[str | None] = mapped_column(String(32), nullable=True)
     payload_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
