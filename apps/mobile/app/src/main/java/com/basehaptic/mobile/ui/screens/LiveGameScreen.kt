@@ -2,6 +2,7 @@ package com.basehaptic.mobile.ui.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -111,6 +112,24 @@ fun LiveGameScreen(
     val currentLineup: FieldLineup? = run {
         if (BuildConfig.DEBUG && gameId == "debug-watch-sync-test") return@run DebugDummyLiveGame.lineup
         gameState?.let { FieldLineup.from(it) }
+    }
+
+    var selectedInningNumber by remember(gameId) { mutableStateOf<Int?>(null) }
+    var hasManualInningSelection by remember(gameId) { mutableStateOf(false) }
+
+    LaunchedEffect(gameState?.inning) {
+        val inning = gameState?.inning ?: return@LaunchedEffect
+        if (hasManualInningSelection) return@LaunchedEffect
+        val n = inningNumber(inning)
+        if (n > 0) selectedInningNumber = n
+    }
+
+    val filteredEvents = run {
+        val n = selectedInningNumber ?: return@run events
+        events.filter { event ->
+            val inn = event.inning ?: return@filter false
+            inningNumber(inn) == n
+        }
     }
 
     LaunchedEffect(gameId) {
@@ -266,7 +285,14 @@ fun LiveGameScreen(
                 }
 
                 item {
-                    InningTabs(state = state)
+                    InningTabs(
+                        state = state,
+                        selectedInningNumber = selectedInningNumber,
+                        onSelect = { n ->
+                            selectedInningNumber = n
+                            hasManualInningSelection = true
+                        }
+                    )
                 }
 
                 item {
@@ -282,12 +308,12 @@ fun LiveGameScreen(
                     )
                 }
 
-                if (events.isEmpty()) {
+                if (filteredEvents.isEmpty()) {
                     item {
-                        EmptyEventCard()
+                        EmptyInningEventCard()
                     }
                 } else {
-                    items(events, key = { it.cursor }) { event ->
+                    items(filteredEvents, key = { it.cursor }) { event ->
                         EventCard(event = event)
                     }
                 }
@@ -720,19 +746,27 @@ private fun PositionPill(text: String, modifier: Modifier, highlighted: Boolean)
 }
 
 @Composable
-private fun InningTabs(state: BackendGamesRepository.LiveGameState) {
-    val current = inningNumber(state.inning)
+private fun InningTabs(
+    state: BackendGamesRepository.LiveGameState,
+    selectedInningNumber: Int?,
+    onSelect: (Int) -> Unit,
+) {
     val tabs = listOf("득점") + (1..9).map { "${it}회" }
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm),
         modifier = Modifier.fillMaxWidth()
     ) {
         items(tabs) { tab ->
-            val selected = tab == "득점" || tab == "${current}회"
+            val isScore = tab == "득점"
+            val tabNumber = if (isScore) null else tab.removeSuffix("회").toIntOrNull()
+            val selected = !isScore && tabNumber == selectedInningNumber
             Surface(
                 shape = AppShapes.pill,
                 color = if (selected) Yellow500 else Gray900,
-                border = BorderStroke(1.dp, if (selected) Yellow500 else Gray800)
+                border = BorderStroke(1.dp, if (selected) Yellow500 else Gray800),
+                modifier = Modifier.then(
+                    if (!isScore && tabNumber != null) Modifier.clickable { onSelect(tabNumber) } else Modifier
+                )
             ) {
                 Text(
                     text = tab,
@@ -742,6 +776,25 @@ private fun InningTabs(state: BackendGamesRepository.LiveGameState) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyInningEventCard() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.lg,
+        color = Gray900,
+    ) {
+        Text(
+            text = "해당 회 이벤트가 없습니다",
+            style = AppFont.bodyMedium,
+            color = Gray400,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = AppSpacing.xxxl)
+        )
     }
 }
 
@@ -1183,11 +1236,11 @@ private object DebugDummyLiveGame {
     )
 
     val events: List<BackendGamesRepository.LiveEvent> = listOf(
-        BackendGamesRepository.LiveEvent(5, "dbg-5", "HIT", "오스틴 우전 안타로 1루 진루", "19:42", "곽빈", "오스틴"),
-        BackendGamesRepository.LiveEvent(4, "dbg-4", "BALL", "곽빈 → 오스틴 볼", "19:41", "곽빈", "오스틴"),
-        BackendGamesRepository.LiveEvent(3, "dbg-3", "STRIKE", "곽빈 → 오스틴 스트라이크", "19:40", "곽빈", "오스틴"),
-        BackendGamesRepository.LiveEvent(2, "dbg-2", "OUT", "박해민 삼진 아웃", "19:37", "곽빈", "박해민"),
-        BackendGamesRepository.LiveEvent(1, "dbg-1", "SCORE", "신민재 득점", "19:34", "곽빈", "오지환")
+        BackendGamesRepository.LiveEvent(5, "dbg-5", "HIT", "오스틴 우전 안타로 1루 진루", "19:42", "곽빈", "오스틴", "7회초"),
+        BackendGamesRepository.LiveEvent(4, "dbg-4", "BALL", "곽빈 → 오스틴 볼", "19:41", "곽빈", "오스틴", "7회초"),
+        BackendGamesRepository.LiveEvent(3, "dbg-3", "STRIKE", "곽빈 → 오스틴 스트라이크", "19:40", "곽빈", "오스틴", "7회초"),
+        BackendGamesRepository.LiveEvent(2, "dbg-2", "OUT", "박해민 삼진 아웃", "19:37", "곽빈", "박해민", "7회초"),
+        BackendGamesRepository.LiveEvent(1, "dbg-1", "SCORE", "신민재 득점", "19:34", "곽빈", "오지환", "6회말"),
     )
 
     val lineup = FieldLineup(

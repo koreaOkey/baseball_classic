@@ -90,7 +90,8 @@ object BackendGamesRepository {
         val description: String,
         val time: String,
         val pitcher: String?,
-        val batter: String?
+        val batter: String?,
+        val inning: String? = null,
     )
 
     data class LiveEventsPage(
@@ -684,7 +685,8 @@ object BackendGamesRepository {
             description = optString("description"),
             time = formatBackendTime(optString("time")),
             pitcher = optString("pitcher").ifBlank { null },
-            batter = optString("batter").ifBlank { null }
+            batter = optString("batter").ifBlank { null },
+            inning = optString("inning").ifBlank { null },
         )
     }
 

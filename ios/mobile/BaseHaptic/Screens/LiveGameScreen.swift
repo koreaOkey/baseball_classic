@@ -10,6 +10,16 @@ struct LiveGameScreen: View {
     @State private var gameState: LiveGameState?
     @State private var events: [LiveEvent] = []
     @State private var loadError: String?
+    @State private var selectedInningNumber: Int? = nil
+    @State private var hasManualInningSelection: Bool = false
+
+    private var filteredEvents: [LiveEvent] {
+        guard let n = selectedInningNumber else { return events }
+        return events.filter { event in
+            guard let inn = event.inning else { return false }
+            return inningNumber(inn) == n
+        }
+    }
 
     private var currentLineup: FieldLineup? {
         #if DEBUG
@@ -45,7 +55,14 @@ struct LiveGameScreen: View {
                     LazyVStack(spacing: AppSpacing.md) {
                         ScoreboardCard(state: state, latestEvent: events.first)
                         BaseballFieldCard(state: state, latestEvent: events.first, lineup: currentLineup)
-                        InningTabs(state: state)
+                        InningTabs(
+                            state: state,
+                            selectedInningNumber: selectedInningNumber,
+                            onSelect: { n in
+                                selectedInningNumber = n
+                                hasManualInningSelection = true
+                            }
+                        )
                         CurrentMatchupCard(state: state, latestEvent: events.first)
 
                         Text("실시간 이벤트")
@@ -54,10 +71,10 @@ struct LiveGameScreen: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, AppSpacing.sm)
 
-                        if events.isEmpty {
-                            EmptyEventCard()
+                        if filteredEvents.isEmpty {
+                            EmptyInningEventCard(hasAnyEvents: !events.isEmpty)
                         } else {
-                            ForEach(events) { event in
+                            ForEach(filteredEvents) { event in
                                 EventCard(event: event)
                             }
                         }
@@ -71,6 +88,11 @@ struct LiveGameScreen: View {
         .background(AppColors.gray950)
         .task(id: gameId) {
             await startLiveStream()
+        }
+        .onChange(of: gameState?.inning) { _, newValue in
+            guard !hasManualInningSelection, let inning = newValue else { return }
+            let n = inningNumber(inning)
+            if n > 0 { selectedInningNumber = n }
         }
     }
 
@@ -266,51 +288,11 @@ private enum DebugDummyLiveGame {
     )
 
     static let events: [LiveEvent] = [
-        LiveEvent(
-            cursor: 5,
-            id: "dbg-5",
-            type: "HIT",
-            description: "오스틴 우전 안타로 1루 진루",
-            time: "19:42",
-            pitcher: "곽빈",
-            batter: "오스틴"
-        ),
-        LiveEvent(
-            cursor: 4,
-            id: "dbg-4",
-            type: "BALL",
-            description: "곽빈 → 오스틴 볼",
-            time: "19:41",
-            pitcher: "곽빈",
-            batter: "오스틴"
-        ),
-        LiveEvent(
-            cursor: 3,
-            id: "dbg-3",
-            type: "STRIKE",
-            description: "곽빈 → 오스틴 스트라이크",
-            time: "19:40",
-            pitcher: "곽빈",
-            batter: "오스틴"
-        ),
-        LiveEvent(
-            cursor: 2,
-            id: "dbg-2",
-            type: "OUT",
-            description: "박해민 삼진 아웃",
-            time: "19:37",
-            pitcher: "곽빈",
-            batter: "박해민"
-        ),
-        LiveEvent(
-            cursor: 1,
-            id: "dbg-1",
-            type: "SCORE",
-            description: "신민재 득점",
-            time: "19:34",
-            pitcher: "곽빈",
-            batter: "오지환"
-        )
+        LiveEvent(cursor: 5, id: "dbg-5", type: "HIT", description: "오스틴 우전 안타로 1루 진루", time: "19:42", pitcher: "곽빈", batter: "오스틴", inning: "7회초"),
+        LiveEvent(cursor: 4, id: "dbg-4", type: "BALL", description: "곽빈 → 오스틴 볼", time: "19:41", pitcher: "곽빈", batter: "오스틴", inning: "7회초"),
+        LiveEvent(cursor: 3, id: "dbg-3", type: "STRIKE", description: "곽빈 → 오스틴 스트라이크", time: "19:40", pitcher: "곽빈", batter: "오스틴", inning: "7회초"),
+        LiveEvent(cursor: 2, id: "dbg-2", type: "OUT", description: "박해민 삼진 아웃", time: "19:37", pitcher: "곽빈", batter: "박해민", inning: "7회초"),
+        LiveEvent(cursor: 1, id: "dbg-1", type: "SCORE", description: "신민재 득점", time: "19:34", pitcher: "곽빈", batter: "오지환", inning: "6회말"),
     ]
 }
 #endif
@@ -634,19 +616,28 @@ private struct PositionPill: View {
 
 private struct InningTabs: View {
     let state: LiveGameState
+    let selectedInningNumber: Int?
+    let onSelect: (Int?) -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: AppSpacing.sm) {
                 ForEach(tabs, id: \.self) { tab in
-                    let selected = tab == "득점" || tab == "\(inningNumber(state.inning))회"
-                    Text(tab)
-                        .font(AppFont.captionBold)
-                        .foregroundColor(selected ? AppColors.gray950 : AppColors.gray400)
-                        .padding(.horizontal, AppSpacing.md)
-                        .padding(.vertical, AppSpacing.sm)
-                        .background(Capsule().fill(selected ? AppColors.yellow500 : AppColors.gray900))
-                        .overlay(Capsule().stroke(selected ? AppColors.yellow500 : AppColors.gray800, lineWidth: 1))
+                    let isScore = tab == "득점"
+                    let tabNumber: Int? = isScore ? nil : Int(tab.replacingOccurrences(of: "회", with: ""))
+                    let selected: Bool = isScore ? false : (tabNumber == selectedInningNumber)
+                    Button {
+                        if !isScore, let n = tabNumber { onSelect(n) }
+                    } label: {
+                        Text(tab)
+                            .font(AppFont.captionBold)
+                            .foregroundColor(selected ? AppColors.gray950 : AppColors.gray400)
+                            .padding(.horizontal, AppSpacing.md)
+                            .padding(.vertical, AppSpacing.sm)
+                            .background(Capsule().fill(selected ? AppColors.yellow500 : AppColors.gray900))
+                            .overlay(Capsule().stroke(selected ? AppColors.yellow500 : AppColors.gray800, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -654,6 +645,20 @@ private struct InningTabs: View {
 
     private var tabs: [String] {
         ["득점"] + (1...9).map { "\($0)회" }
+    }
+}
+
+private struct EmptyInningEventCard: View {
+    let hasAnyEvents: Bool
+
+    var body: some View {
+        Text("해당 회 이벤트가 없습니다")
+            .font(AppFont.bodyMedium)
+            .foregroundColor(AppColors.gray400)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.xxxl)
+            .background(AppColors.gray900)
+            .cornerRadius(AppRadius.lg)
     }
 }
 

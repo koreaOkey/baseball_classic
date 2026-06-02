@@ -63,6 +63,7 @@ struct LiveEvent: Identifiable {
     let time: String
     let pitcher: String?
     let batter: String?
+    let inning: String?
 }
 
 struct LiveEventsPage {
@@ -370,7 +371,8 @@ final class BackendGamesRepository {
             description: json["description"] as? String ?? "",
             time: formatBackendTime(json["time"] as? String ?? ""),
             pitcher: (json["pitcher"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-            batter: (json["batter"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            batter: (json["batter"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            inning: (json["inning"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 
