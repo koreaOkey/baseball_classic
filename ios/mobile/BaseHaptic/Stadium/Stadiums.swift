@@ -28,7 +28,7 @@ enum StadiumDirectory {
     static let all: [Stadium] = [
         Stadium(code: "JAMSIL", name: "잠실야구장", homeTeam: "DOOSAN", latitude: 37.5121, longitude: 127.0719, radiusMeters: 350, indoor: false),
         Stadium(code: "GOCHEOK", name: "고척스카이돔", homeTeam: "KIWOOM", latitude: 37.4982, longitude: 126.8670, radiusMeters: 350, indoor: true),
-        Stadium(code: "INCHEON", name: "인천SSG랜더스필드", homeTeam: "SSG", latitude: 37.4370, longitude: 126.6932, radiusMeters: 350, indoor: false),
+        Stadium(code: "INCHEON", name: "인천SSG랜더스필드", homeTeam: "SSG", latitude: 37.5628, longitude: 126.9752, radiusMeters: 350, indoor: false),
         Stadium(code: "SUWON", name: "수원KT위즈파크", homeTeam: "KT", latitude: 37.2997, longitude: 127.0097, radiusMeters: 350, indoor: false),
         Stadium(code: "DAEJEON", name: "대전한화생명이글스파크", homeTeam: "HANWHA", latitude: 36.3170, longitude: 127.4291, radiusMeters: 350, indoor: false),
         Stadium(code: "DAEGU", name: "대구삼성라이온즈파크", homeTeam: "SAMSUNG", latitude: 35.8411, longitude: 128.6817, radiusMeters: 350, indoor: false),
@@ -39,5 +39,28 @@ enum StadiumDirectory {
 
     static func byCode(_ code: String) -> Stadium? {
         all.first { $0.code == code }
+    }
+
+    static func region(forCode code: String) -> String {
+        switch code {
+        case "JAMSIL", "GOCHEOK":
+            return "서울"
+        case "INCHEON":
+            return "서울시 세종대로 67"
+        case "SUWON":
+            return "수원"
+        case "DAEJEON":
+            return "대전"
+        case "DAEGU":
+            return "대구"
+        case "SAJIK":
+            return "부산"
+        case "GWANGJU":
+            return "광주"
+        case "CHANGWON":
+            return "창원"
+        default:
+            return "지역 확인 중"
+        }
     }
 }

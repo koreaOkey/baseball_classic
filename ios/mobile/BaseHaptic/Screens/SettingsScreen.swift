@@ -355,7 +355,7 @@ private struct EventFilterToggleRow: View {
 
     init(option: EventFilterOption) {
         self.option = option
-        _isOn = AppStorage(wrappedValue: true, option.storageKey)
+        _isOn = AppStorage(wrappedValue: option.defaultEnabled, option.storageKey)
     }
 
     var body: some View {
@@ -376,7 +376,7 @@ extension EventFilterOption {
         var values: [String: Bool] = [:]
         let defaults = UserDefaults.standard
         for option in EventFilterOption.all {
-            values[option.storageKey] = defaults.object(forKey: option.storageKey) as? Bool ?? true
+            values[option.storageKey] = defaults.object(forKey: option.storageKey) as? Bool ?? option.defaultEnabled
         }
         return values
     }

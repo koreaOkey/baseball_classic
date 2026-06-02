@@ -11,6 +11,7 @@ object WearSettingsSyncManager {
     private const val PATH_SETTINGS = "/settings/current"
     private const val KEY_EVENT_VIDEO_ENABLED = "event_video_enabled"
     private const val KEY_LIVE_HAPTIC_ENABLED = "live_haptic_enabled"
+    private const val KEY_STADIUM_CHEER_ENABLED = "stadium_cheer_enabled"
     private const val KEY_UPDATED_AT = "updated_at"
 
     fun syncEventVideoEnabledToWatch(context: Context, enabled: Boolean) {
@@ -19,6 +20,10 @@ object WearSettingsSyncManager {
 
     fun syncLiveHapticEnabledToWatch(context: Context, enabled: Boolean) {
         putBool(context, KEY_LIVE_HAPTIC_ENABLED, enabled)
+    }
+
+    fun syncStadiumCheerEnabledToWatch(context: Context, enabled: Boolean) {
+        putBool(context, KEY_STADIUM_CHEER_ENABLED, enabled)
     }
 
     fun syncEventFiltersToWatch(context: Context, filters: Map<String, Boolean>) {

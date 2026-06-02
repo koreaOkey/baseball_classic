@@ -37,6 +37,7 @@ struct HomeScreen: View {
                 if let checkinStadium {
                     CheerCheckinCard(
                         stadiumName: checkinStadium.name,
+                        stadiumRegion: StadiumDirectory.region(forCode: checkinStadium.code),
                         teamLabel: selectedTeam.teamName,
                         onConfirm: onConfirmCheckin,
                         onDismiss: onDismissCheckin

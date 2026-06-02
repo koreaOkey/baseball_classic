@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.Vibration
@@ -65,6 +66,8 @@ import com.basehaptic.mobile.ui.theme.Gray800
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.ui.theme.Gray950
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
+
+private const val SHOW_STADIUM_CHEER_TOGGLE = false
 
 @Composable
 fun SettingsScreen(
@@ -370,6 +373,31 @@ fun SettingsScreen(
                     }
                 }
             )
+        }
+
+        // TODO(stadium-cheer): Android 활성화 시 SHOW_STADIUM_CHEER_TOGGLE=true로 전환해 UI 노출.
+        if (SHOW_STADIUM_CHEER_TOGGLE) {
+            item {
+                val context = LocalContext.current
+                val prefs = remember {
+                    context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+                }
+                var stadiumCheerEnabled by remember {
+                    mutableStateOf(prefs.getBoolean("stadium_cheer_enabled", true))
+                }
+                SettingsItemWithSwitch(
+                    icon = Icons.Default.LocationOn,
+                    title = "경기장 응원",
+                    subtitle = "구장 체크인과 경기 시작 워치 응원을 받기",
+                    checked = stadiumCheerEnabled,
+                    onCheckedChange = {
+                        stadiumCheerEnabled = it
+                        prefs.edit().putBoolean("stadium_cheer_enabled", it).apply()
+                        com.basehaptic.mobile.wear.WearSettingsSyncManager
+                            .syncStadiumCheerEnabledToWatch(context, it)
+                    }
+                )
+            }
         }
 
         item {

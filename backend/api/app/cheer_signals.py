@@ -27,7 +27,7 @@ class StadiumInfo:
 STADIUMS: tuple[StadiumInfo, ...] = (
     StadiumInfo("JAMSIL", "잠실야구장", ("DOOSAN", "LG"), 37.5121, 127.0719, 350),
     StadiumInfo("GOCHEOK", "고척스카이돔", ("KIWOOM",), 37.4982, 126.8670, 350, True),
-    StadiumInfo("INCHEON", "인천SSG랜더스필드", ("SSG",), 37.4370, 126.6932, 350),
+    StadiumInfo("INCHEON", "인천SSG랜더스필드", ("SSG",), 37.5628, 126.9752, 350),
     StadiumInfo("SUWON", "수원KT위즈파크", ("KT",), 37.2997, 127.0097, 350),
     StadiumInfo("DAEJEON", "대전한화생명이글스파크", ("HANWHA",), 36.3170, 127.4291, 350),
     StadiumInfo("DAEGU", "대구삼성라이온즈파크", ("SAMSUNG",), 35.8411, 128.6817, 350),

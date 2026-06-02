@@ -2,7 +2,7 @@
 
 야구봄 사용자가 KBO 9구장에서 직관 시 본인 응원팀의 경기 시작 정각에 워치로 풀스크린 응원 문구·팀 컬러·햅틱을 동시에 받는 "현장 동시 응원" 경험을 추가한다. 동시에 팀별 누적 체크인 랭킹 화면을 신규 탭(`내 팀`)에 노출한다.
 
-초기 설계는 전체 기능을 다크 머지한 뒤 한 번에 켜는 방식이었다. 실테스트 요청에 따라 현재 구현은 플랫폼별로 갈라진다. iOS phone/watchOS, 백엔드, DB, iOS 권한 매니페스트는 활성화했고, Android phone/Wear OS는 기존 `SHOW_COMMUNITY_TAB`/`SHOW_STORE_TAB` 패턴에 맞춰 일부 화면·통신 코드를 다크 상태로 유지한다.
+초기 설계는 전체 기능을 다크 머지한 뒤 한 번에 켜는 방식이었다. 실테스트 요청에 따라 현재 구현은 플랫폼별로 갈라진다. iOS phone/watchOS, 백엔드, DB, iOS 권한 매니페스트는 활성화했고, **2026-06-02 기준 iOS와 Android 모두 `내 팀` 탭 진입점은 활성화**했다. Android phone/Wear OS는 실제 geofence 등록, 권한 매니페스트, Wear 수신 dispatch를 후속 활성화 전까지 다크 상태로 유지한다.
 
 핵심 인프라 재사용:
 - 폰↔워치 통신: iOS `WatchThemeSyncManager` / Android `WearGameSyncManager`·`WearSettingsSyncManager`
@@ -12,14 +12,14 @@
 ## Goals / Non-Goals
 
 **Goals**
-- 9구장 진입 자동 감지 + OS 로컬 알림 (iOS 실테스트 활성화, Android는 후속 적용)
+- 9구장 진입 자동 감지 + OS 로컬 알림 (iOS 실테스트 활성화, Android 실제 geofence 등록은 후속 적용)
 - cheer_signals.json 기반 클라이언트 자율 응원 발화 (백엔드 푸시 fan-out 없음)
 - 워치 풀스크린 응원 (팀 컬러 배경 + 응원 문구 + 햅틱)
 - 폰 화면은 응원 발화 시 변화 없음 (사용자 명시 결정)
 - 원정/홈 동일 응원 문구
 - cheer_events 단일 테이블 + 사후 검증 워커
 - 신규 탭 `내 팀` (응원 랭킹 1차, 팀별 뉴스 자리 확보)
-- iOS 신규 진입점은 실테스트 활성화, Android 신규 진입점은 다크 상태 유지
+- iOS와 Android 신규 진입점은 `내 팀` 탭으로 활성화. Android의 위치 권한/지오펜싱 실제 등록/설정 토글 노출은 다크 상태 유지
 
 **Non-Goals**
 - 이벤트별 응원(홈런/세이브 등) — Phase 2
@@ -57,7 +57,7 @@
 클라이언트는 사용자 응원팀 = `signals[].team_code` 매칭으로 1개 선택. **원정팬은 홈팬과 동일 cheer_text** (사용자 결정). `role` 필드는 향후 차별화 여지로 보존.
 
 ### D4. 플랫폼별 활성화 메커니즘
-**Android**: 기존 `SHOW_COMMUNITY_TAB=false` 컨벤션 재사용. `SHOW_MY_TEAM_TAB=false` private const + BottomNav 분기. Android 신규 진입점과 권한/지오펜싱은 후속 활성화 전까지 가드 유지.
+**Android**: 기존 `SHOW_COMMUNITY_TAB=false` 컨벤션 재사용. `SHOW_MY_TEAM_TAB=true`로 `내 팀` 탭 진입점은 노출한다. 권한/지오펜싱 실제 등록과 설정 토글은 후속 활성화 전까지 가드 유지.
 **iOS**: 실테스트를 위해 `SHOW_MY_TEAM_TAB=true`, `case .myTeam`, region monitoring, checkin card, cheer signal fetch, watch trigger 송신을 활성화했다. `Info.plist`에도 위치 권한과 background location mode를 추가했다.
 **백엔드**: 신규 라우트는 실제 등록되어 있다. `POST /cheer-events`는 bearer token 기반 사용자 식별을 사용하고, background validation task를 연결한다.
 **DB 마이그레이션**: SQL 파일을 Supabase에 적용했다. `cheer_events.user_id`는 uuid 타입으로 보정했고, RLS 정책을 확인했다.
@@ -76,7 +76,18 @@
 **Android**: `GeofencingClient.addGeofences(...)` 동일. `ACCESS_BACKGROUND_LOCATION` 권한 요청은 Android 활성화 시점에만.
 
 ### D8. 신규 탭 콘텐츠 컨테이너
-탭 화면은 `MyTeamScreen`(또는 동등)이 컨테이너 역할. 1차는 `TeamCheckinRankingView`만 임베드. 향후 `TeamNewsView` 등 자식 화면 추가 시 탭 화면을 segmented control 또는 내부 navigation으로 확장. **현재 단계에서 segmented control은 구현하지 않음** (랭킹 단일 콘텐츠).
+탭 화면은 `MyTeamScreen`(또는 동등)이 경기장 체크인 허브 역할을 한다. 경기장 체크인, 워치 응원 안내, 팀별 체크인 랭킹을 한 화면 안에서 보여주며, 홈 화면은 주 진입점이 아니다. 알림 탭 또는 앱 내 fallback 진입은 `내 팀` 탭으로 연결한다.
+
+현재 iOS와 Android UI는 목업 방향을 반영해 다음 구성을 가진다.
+- 상단 헤더: `내 팀`, 선택 응원팀 pill, `구장 체크인`/`워치 응원`/`랭킹` 설명 버튼
+- 경기장 체크인 카드: 경기장+위치핀 히어로 비주얼, 이미지 오른쪽 상단의 오늘 응원팀 경기 구장명/지역 오버레이, 전체 폭 `체크인하기` CTA, `위치 확인 완료` 상태 컴포넌트, 상태별 완료/권한 필요/경기 없음 표시. 구장명/지역은 선택 응원팀의 홈구장 fallback이 아니라 오늘 경기 목록에서 선택 응원팀이 참여하는 경기의 홈팀 구장을 기준으로 산출한다. `위치 확인 완료` 상태는 선택 팀 컬러와 무관하게 성공 의미의 초록색으로 표시한다. 실제 위치/경기 상태 연동 전까지는 UI 확인을 위해 체크인 가능 상태를 기본 표시한다.
+- 기능 설명 팝업: `구장 체크인`, `워치 응원`, `랭킹` 버튼을 탭했을 때만 모달로 열리며 각 기능의 목적과 동작 방식을 표시
+- 팀 체크인 랭킹 카드: 주간/시즌 토글, `iOS · Android 합산 집계` 라벨, 내 팀 강조
+- 개인 기록 요약 카드: 후속 달력/개인 통계 화면을 위한 자리 확보
+
+iOS는 `pendingCheckinStadium`을 홈 화면 카드가 아니라 `MyTeamScreen` 입력으로 넘긴다. 홈 화면은 경기장 체크인의 주 진입점으로 쓰지 않는다. 2026-06-02 재오픈 요청에 따라 iOS와 Android 모두 `SHOW_MY_TEAM_TAB=true`로 전환했으며, `내 팀` 탭에서 체크인 허브 UI를 확인할 수 있다.
+
+향후 `TeamNewsView`, 개인 체크인 달력 등 자식 화면 추가 시 `내 팀` 탭 내부 segmented control 또는 내부 navigation으로 확장한다. Android는 현재 단계에서 `SHOW_STADIUM_CHEER_TOGGLE=false`를 유지해 설정 토글 노출과 실제 geofence 활성화를 막는다.
 
 ## Risks / Trade-offs
 
@@ -86,6 +97,7 @@
 - **Android 백그라운드 위치 권한 거부율** → 동일. fallback 동일.
 - **플랫폼별 활성화 차이** → iOS와 Android 기능 상태가 달라질 수 있음. 후속 Android 적용 시 spec/tasks 기준으로 누락 항목 재검증 필요.
 - **stadiums.json 시즌 외 변경** (홈구장 임시 변경, 우천 취소 등) → Phase 1.5 silent push로 갱신.
+- **실테스트 임시 좌표** → 위치 테스트를 위해 `INCHEON`/SSG 구장 좌표를 일시적으로 서울 중구 세종대로 67 근처로 오버라이드했다. 테스트 종료 후 인천SSG랜더스필드 실제 좌표로 되돌려야 한다.
 - **권한 매니페스트 사전 추가 vs 활성화 시 추가** → 사전 추가 시 앱스토어 노출 영향. **활성화 시점 추가** 채택.
 
 ## Migration Plan
@@ -106,11 +118,14 @@
 6. iOS build 및 백엔드 import 검증
 
 **Phase 2 — Android 활성화 (잔여)**
-1. AndroidManifest `ACCESS_BACKGROUND_LOCATION`, `POST_NOTIFICATIONS` 추가
-2. Android phone geofence/checkin card/cheer signal loader/API 연동
-3. Android Wear `PATH_CHEER_TRIGGER` when dispatch 및 overlay mount 활성화
-4. Android build/실기기 테스트
-5. 파일럿 팀(LG/두산) 한정 서버 토글 후 9구장 확대
+1. `SHOW_MY_TEAM_TAB=true` 반영 완료. 남은 항목은 실제 geofence/권한/알림 운영 연결
+2. AndroidManifest `ACCESS_BACKGROUND_LOCATION`, `POST_NOTIFICATIONS` 추가
+3. Android `StadiumGeofenceManager.startMonitoringDark(...)`를 실제 `addGeofences(...)` 호출로 전환
+4. Android 체크인 카드에 실제 위치/경기/체크인 완료 상태 연결
+5. Android `SHOW_STADIUM_CHEER_TOGGLE=true` 전환 및 설정 토글 노출
+6. Android Wear 실기기에서 `PATH_CHEER_TRIGGER` 수신, overlay, 진동, dismiss 테스트
+6. Android build/실기기 테스트
+7. 파일럿 팀(LG/두산) 한정 서버 토글 후 9구장 확대
 
 **롤백**: 실테스트 중 문제 시 `cheer_signals` 응답을 비우거나 `stadium_cheer_enabled` 기본값/서버 게이트를 내려 응원 발화를 차단한다. 클라이언트 노출이 문제라면 iOS `SHOW_MY_TEAM_TAB=false` 핫픽스 빌드를 준비한다.
 

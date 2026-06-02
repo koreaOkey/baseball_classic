@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TeamCheckinRankingView: View {
     let selectedTeam: Team
+    var localWeeklyBoost: Int = 0
 
     @State private var period: RankingPeriod = .weekly
     @State private var fetchedRows: [TeamCheckinRank] = []
@@ -20,14 +21,11 @@ struct TeamCheckinRankingView: View {
 
     private var rows: [TeamCheckinRank] {
         let order: [Team] = [.doosan, .lg, .kia, .samsung, .lotte, .ssg, .hanwha, .nc, .kt, .kiwoom]
-        if fetchedRows.isEmpty {
-            return order.enumerated().map { idx, team in
-                TeamCheckinRank(rank: idx + 1, team: team, count: 0)
-            }
-        }
         let fetchedByTeam = Dictionary(uniqueKeysWithValues: fetchedRows.map { ($0.team, $0) })
         return order.enumerated().map { idx, team in
-            fetchedByTeam[team] ?? TeamCheckinRank(rank: idx + 1, team: team, count: 0)
+            let count = fetchedByTeam[team]?.count ?? 0
+            let boostedCount = count + (period == .weekly && team == selectedTeam ? localWeeklyBoost : 0)
+            return TeamCheckinRank(rank: idx + 1, team: team, count: boostedCount)
         }.sorted { lhs, rhs in
             if lhs.count == rhs.count { return lhs.rank < rhs.rank }
             return lhs.count > rhs.count

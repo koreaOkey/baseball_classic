@@ -7,6 +7,7 @@
     <string name="start_button">시작하기</string>
     <string name="home">홈</string>
     <string name="community">커뮤니티</string>
+    <string name="tab_my_team">내 팀</string>
     <string name="store">상점</string>
     <string name="settings">설정</string>
     <string name="live">LIVE</string>
@@ -17,7 +18,10 @@
     <string name="upcoming_games">다가오는 경기</string>
     <string name="live_events">실시간 이벤트</string>
     <string name="quick_cheer">퀵 응원</string>
+    <string name="cheer_checkin_card_title">오늘 직관 인증</string>
+    <string name="cheer_checkin_card_cta">체크인하기</string>
+    <string name="cheer_checkin_watch_preview_title">워치 응원 예정</string>
+    <string name="team_checkin_ranking_title">팀 체크인 랭킹</string>
     <string name="watch_connected">스마트워치 연결됨</string>
     <string name="watch_disconnected">스마트워치 연결 안 됨</string>
 </resources>
-
