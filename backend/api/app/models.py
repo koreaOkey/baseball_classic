@@ -328,6 +328,7 @@ class CheerEvent(Base):
     __table_args__ = (
         Index("idx_cheer_events_team_status", "team_code", "validity_status"),
         Index("idx_cheer_events_stadium_ts", "stadium_code", "client_ts"),
+        Index("idx_cheer_events_user_id", "user_id"),
     )
 
     id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
@@ -373,6 +374,30 @@ class TeamCheckinSeason(Base):
     )
 
     team_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    season: Mapped[str] = mapped_column(String(8), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class UserCheckinDaily(Base):
+    __tablename__ = "user_checkin_daily"
+    __table_args__ = (
+        Index("idx_user_checkin_daily_date", "date"),
+    )
+
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    date: Mapped[str] = mapped_column(String(10), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class UserCheckinSeason(Base):
+    __tablename__ = "user_checkin_season"
+    __table_args__ = (
+        Index("idx_user_checkin_season_count", "season", "count"),
+    )
+
+    user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     season: Mapped[str] = mapped_column(String(8), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

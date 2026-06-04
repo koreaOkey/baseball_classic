@@ -90,6 +90,8 @@ def init_db() -> None:
                 _ensure_boxscore_context_columns()
                 _ensure_game_event_type_check_constraint()
                 _ensure_device_token_columns()
+                _ensure_cheer_events_user_id_index()
+                _ensure_user_checkin_backfill()
             finally:
                 lock_conn.execute(text("SELECT pg_advisory_unlock(hashtext('basehaptic_init_db'))"))
                 lock_conn.commit()
@@ -100,6 +102,8 @@ def init_db() -> None:
         _ensure_boxscore_context_columns()
         _ensure_game_event_type_check_constraint()
         _ensure_device_token_columns()
+        _ensure_cheer_events_user_id_index()
+        _ensure_user_checkin_backfill()
 
 
 def _ensure_game_columns() -> None:
@@ -231,6 +235,100 @@ def _ensure_device_token_columns() -> None:
             conn,
             "ALTER TABLE device_tokens ADD COLUMN is_sandbox BOOLEAN NOT NULL DEFAULT FALSE",
         )
+
+
+def _ensure_cheer_events_user_id_index() -> None:
+    # 기존 cheer_events 테이블에 user_id 인덱스가 없을 수 있다(모델에 추가되기 전 배포된 인스턴스).
+    # CREATE INDEX IF NOT EXISTS 로 멱등 보강.
+    inspector = inspect(engine)
+    if "cheer_events" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        _execute_ddl_best_effort(
+            conn,
+            "CREATE INDEX IF NOT EXISTS idx_cheer_events_user_id ON cheer_events (user_id)",
+        )
+
+
+def _ensure_user_checkin_backfill() -> None:
+    # user_checkin_season 행이 0건일 때만 기존 valid cheer_events 를 user 단위 집계 테이블에 채운다.
+    # 한 번 채워지면 이후 startup 에서는 스킵. 검증 워커가 신규 valid 이벤트로 이후를 증가시킨다.
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if not {"cheer_events", "user_checkin_daily", "user_checkin_season"}.issubset(tables):
+        return
+
+    try:
+        with engine.connect() as conn:
+            existing = conn.execute(text("SELECT 1 FROM user_checkin_season LIMIT 1")).first()
+            if existing is not None:
+                return
+            has_valid = conn.execute(
+                text("SELECT 1 FROM cheer_events WHERE validity_status = 'valid' LIMIT 1")
+            ).first()
+            if has_valid is None:
+                return
+    except SQLAlchemyError as exc:
+        logger.warning("user_checkin backfill probe failed err=%s", exc)
+        return
+
+    if engine.dialect.name == "postgresql":
+        daily_sql = """
+            INSERT INTO user_checkin_daily (user_id, date, count, updated_at)
+            SELECT
+                user_id,
+                to_char(client_ts AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD'),
+                COUNT(*),
+                now()
+            FROM cheer_events
+            WHERE validity_status = 'valid'
+            GROUP BY 1, 2
+            ON CONFLICT (user_id, date) DO NOTHING
+        """
+        season_sql = """
+            INSERT INTO user_checkin_season (user_id, season, count, updated_at)
+            SELECT
+                user_id,
+                to_char(client_ts AT TIME ZONE 'Asia/Seoul', 'YYYY'),
+                COUNT(*),
+                now()
+            FROM cheer_events
+            WHERE validity_status = 'valid'
+            GROUP BY 1, 2
+            ON CONFLICT (user_id, season) DO NOTHING
+        """
+    else:
+        # SQLite: client_ts 는 UTC 저장이므로 +9h 시프트 후 strftime.
+        daily_sql = """
+            INSERT OR IGNORE INTO user_checkin_daily (user_id, date, count, updated_at)
+            SELECT
+                user_id,
+                strftime('%Y-%m-%d', client_ts, '+9 hours'),
+                COUNT(*),
+                CURRENT_TIMESTAMP
+            FROM cheer_events
+            WHERE validity_status = 'valid'
+            GROUP BY 1, 2
+        """
+        season_sql = """
+            INSERT OR IGNORE INTO user_checkin_season (user_id, season, count, updated_at)
+            SELECT
+                user_id,
+                strftime('%Y', client_ts, '+9 hours'),
+                COUNT(*),
+                CURRENT_TIMESTAMP
+            FROM cheer_events
+            WHERE validity_status = 'valid'
+            GROUP BY 1, 2
+        """
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(daily_sql))
+            conn.execute(text(season_sql))
+    except SQLAlchemyError as exc:
+        # 백필 실패해도 startup 은 계속 — 검증 워커가 신규 이벤트로 자기 치유한다.
+        logger.warning("user_checkin backfill failed err=%s", exc)
 
 
 def _execute_ddl_best_effort(conn: Connection, ddl: str) -> None:

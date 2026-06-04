@@ -7,7 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..cheer_signals import stadium_by_code
-from ..models import CheerEvent, TeamCheckinDaily, TeamCheckinSeason
+from ..models import (
+    CheerEvent,
+    TeamCheckinDaily,
+    TeamCheckinSeason,
+    UserCheckinDaily,
+    UserCheckinSeason,
+)
 
 
 KST = timezone(timedelta(hours=9))
@@ -67,6 +73,18 @@ def _increment_aggregates(db: Session, event: CheerEvent) -> None:
         db.add(TeamCheckinSeason(team_code=event.team_code, season=season, count=1))
     else:
         season_row.count += 1
+
+    user_daily = db.get(UserCheckinDaily, {"user_id": event.user_id, "date": date_key})
+    if user_daily is None:
+        db.add(UserCheckinDaily(user_id=event.user_id, date=date_key, count=1))
+    else:
+        user_daily.count += 1
+
+    user_season = db.get(UserCheckinSeason, {"user_id": event.user_id, "season": season})
+    if user_season is None:
+        db.add(UserCheckinSeason(user_id=event.user_id, season=season, count=1))
+    else:
+        user_season.count += 1
 
 
 def _distance_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:

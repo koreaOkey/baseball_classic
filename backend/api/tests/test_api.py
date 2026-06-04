@@ -1390,3 +1390,139 @@ def test_event_score_after_populated_from_payload_metadata() -> None:
         assert by_source["02-002-0001"]["awayScoreAfter"] is None
         # 0 도 명시적으로 유지(falsy 가 아닌 valid 값)
         assert by_source["01-005-0002"]["homeScoreAfter"] == 0
+
+
+def _insert_cheer_event(
+    db,
+    *,
+    user_id: str,
+    client_ts,
+    status: str = "pending",
+) -> int:
+    from app.models import CheerEvent
+
+    event = CheerEvent(
+        user_id=user_id,
+        team_code="DOOSAN",
+        stadium_code="JAMSIL",
+        client_ts=client_ts,
+        lat=37.5121,
+        lng=127.0719,
+        accuracy_m=20.0,
+        mock_location=False,
+        platform="ios",
+        validity_status=status,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return event.id
+
+
+def test_user_checkin_aggregates_increment_on_valid():
+    from datetime import datetime, timezone
+
+    from app.db import init_db
+    from app.models import UserCheckinDaily, UserCheckinSeason
+    from app.workers.cheer_validator import validate_pending_cheer_events
+
+    init_db()
+    user_id = "user-checkin-incr-1"
+    ts = datetime(2026, 6, 4, 10, 0, 0, tzinfo=timezone.utc)  # KST 2026-06-04 19:00
+
+    with SessionLocal() as db:
+        _insert_cheer_event(db, user_id=user_id, client_ts=ts)
+        validate_pending_cheer_events(db)
+
+        daily = db.get(UserCheckinDaily, {"user_id": user_id, "date": "2026-06-04"})
+        season = db.get(UserCheckinSeason, {"user_id": user_id, "season": "2026"})
+        assert daily is not None and daily.count == 1
+        assert season is not None and season.count == 1
+
+        _insert_cheer_event(db, user_id=user_id, client_ts=ts)
+        validate_pending_cheer_events(db)
+
+        db.refresh(daily)
+        db.refresh(season)
+        assert daily.count == 2
+        assert season.count == 2
+
+
+def test_user_checkin_aggregates_not_incremented_on_invalid():
+    from datetime import datetime, timezone
+
+    from app.db import init_db
+    from app.models import CheerEvent, UserCheckinDaily, UserCheckinSeason
+    from app.workers.cheer_validator import validate_pending_cheer_events
+
+    init_db()
+    user_id = "user-checkin-invalid-1"
+    ts = datetime(2026, 6, 4, 10, 0, 0, tzinfo=timezone.utc)
+
+    with SessionLocal() as db:
+        bad = CheerEvent(
+            user_id=user_id,
+            team_code="DOOSAN",
+            stadium_code="JAMSIL",
+            client_ts=ts,
+            lat=37.5121,
+            lng=127.0719,
+            accuracy_m=20.0,
+            mock_location=True,  # invalid 트리거
+            platform="ios",
+            validity_status="pending",
+        )
+        db.add(bad)
+        db.commit()
+        validate_pending_cheer_events(db)
+
+        assert db.get(UserCheckinDaily, {"user_id": user_id, "date": "2026-06-04"}) is None
+        assert db.get(UserCheckinSeason, {"user_id": user_id, "season": "2026"}) is None
+
+
+def test_user_checkin_backfill_idempotent():
+    from datetime import datetime, timezone
+
+    from sqlalchemy import delete
+
+    from app.db import _ensure_user_checkin_backfill, init_db
+    from app.models import UserCheckinDaily, UserCheckinSeason
+
+    init_db()
+    user_id = "user-checkin-backfill-1"
+    ts = datetime(2026, 5, 1, 10, 0, 0, tzinfo=timezone.utc)  # KST 2026-05-01 19:00
+
+    with SessionLocal() as db:
+        # 백필 대상으로 valid raw 이벤트 2건을 직접 심는다(이 user 한정).
+        _insert_cheer_event(db, user_id=user_id, client_ts=ts, status="valid")
+        _insert_cheer_event(db, user_id=user_id, client_ts=ts, status="valid")
+
+        # guard 가 발동하지 않도록 user_checkin_* 테이블을 비운 뒤 백필 호출.
+        db.execute(delete(UserCheckinDaily))
+        db.execute(delete(UserCheckinSeason))
+        db.commit()
+
+        _ensure_user_checkin_backfill()
+
+        daily = db.get(UserCheckinDaily, {"user_id": user_id, "date": "2026-05-01"})
+        season = db.get(UserCheckinSeason, {"user_id": user_id, "season": "2026"})
+        assert daily is not None and daily.count == 2
+        assert season is not None and season.count == 2
+
+        # 멱등성: 두 번째 호출은 guard("user_checkin_season 행 존재")로 skip 되어야 한다.
+        _ensure_user_checkin_backfill()
+        db.refresh(daily)
+        db.refresh(season)
+        assert daily.count == 2
+        assert season.count == 2
+
+
+def test_cheer_events_user_id_index_exists():
+    from sqlalchemy import inspect
+
+    from app.db import engine, init_db
+
+    init_db()
+    inspector = inspect(engine)
+    index_names = {idx["name"] for idx in inspector.get_indexes("cheer_events")}
+    assert "idx_cheer_events_user_id" in index_names
