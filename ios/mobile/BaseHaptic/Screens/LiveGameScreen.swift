@@ -97,7 +97,11 @@ struct LiveGameScreen: View {
                                 if index == 0 || sectionKey(for: groups[index - 1]) != sectionKey(for: group) {
                                     AtBatSectionHeader(title: sectionTitle(for: group, state: state))
                                 }
-                                AtBatCard(group: group)
+                                AtBatCard(
+                                    group: group,
+                                    awayTeamName: state.awayTeamId.teamName,
+                                    homeTeamName: state.homeTeamId.teamName
+                                )
                             }
                         }
 
@@ -318,7 +322,7 @@ private enum DebugDummyLiveGame {
         LiveEvent(cursor: 4, id: "dbg-4", type: "BALL", description: "곽빈 → 오스틴 볼", time: "19:41", pitcher: "곽빈", batter: "오스틴", inning: "7회초", atBatId: "07-003", seqno: 2),
         LiveEvent(cursor: 3, id: "dbg-3", type: "STRIKE", description: "곽빈 → 오스틴 스트라이크", time: "19:40", pitcher: "곽빈", batter: "오스틴", inning: "7회초", atBatId: "07-003", seqno: 1),
         LiveEvent(cursor: 2, id: "dbg-2", type: "OUT", description: "박해민 삼진 아웃", time: "19:37", pitcher: "곽빈", batter: "박해민", inning: "7회초", atBatId: "07-002", seqno: 1),
-        LiveEvent(cursor: 1, id: "dbg-1", type: "SCORE", description: "신민재 득점", time: "19:34", pitcher: "곽빈", batter: "오지환", inning: "6회말", atBatId: "06-001", seqno: 1),
+        LiveEvent(cursor: 1, id: "dbg-1", type: "SCORE", description: "신민재 적시타로 1점 추가", time: "19:34", pitcher: "곽빈", batter: "오지환", inning: "6회말", atBatId: "06-001", seqno: 1, homeScoreAfter: 3, awayScoreAfter: 5),
     ]
 }
 #endif
@@ -981,6 +985,17 @@ private struct EventTypePill: View {
 // MARK: - At-Bat Card (네이버 릴레이 스타일 타석 단위 카드)
 private struct AtBatCard: View {
     let group: AtBatGroup
+    let awayTeamName: String
+    let homeTeamName: String
+
+    /// SCORE outcome 그룹의 정확한 시점 누적 스코어 라인 ("LG 1 : 3 두산" 형태).
+    /// 백엔드 GameEventOut.homeScoreAfter/awayScoreAfter 가 노출된 경우에만 만들어짐.
+    private var scoreLineText: String? {
+        guard isScoreOutcome,
+              let away = group.outcome?.awayScoreAfter,
+              let home = group.outcome?.homeScoreAfter else { return nil }
+        return "\(awayTeamName) \(away) : \(home) \(homeTeamName)"
+    }
 
     private var highlighted: Bool {
         guard let outcomeType = group.outcome?.type else { return false }
@@ -1047,12 +1062,21 @@ private struct AtBatCard: View {
                             .font(AppFont.caption)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                    } else if let batter = group.batter, !batter.isEmpty {
-                        // SCORE 그룹: description 은 헤더로 옮겼고, 푸터엔 타석 타자만 보조 노출
-                        Text("타석: \(batter)")
-                            .font(AppFont.micro)
-                            .foregroundColor(AppColors.gray400)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        // SCORE 그룹: description 은 헤더로 옮겼고, 푸터엔 타석 타자 + 정확 스코어 노출
+                        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                            if let batter = group.batter, !batter.isEmpty {
+                                Text("타석: \(batter)")
+                                    .font(AppFont.micro)
+                                    .foregroundColor(AppColors.gray400)
+                            }
+                            if let scoreLine = scoreLineText {
+                                Text(scoreLine)
+                                    .font(AppFont.microBold)
+                                    .foregroundColor(AppColors.yellow500)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             } else if group.pitches.count == 1,

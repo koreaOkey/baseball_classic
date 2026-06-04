@@ -68,8 +68,12 @@ struct LiveEvent: Identifiable {
     // 형식일 때만 채워지며, 구버전 백엔드/비정형 이벤트에서는 nil — 평면 폴백.
     let atBatId: String?
     let seqno: Int?
+    // 이벤트 직후 시점의 누적 스코어. 백엔드 GameEventOut.homeScoreAfter/awayScoreAfter
+    // 에서 옴. 크롤러가 채운 경우에만 값이 있고, 미수집 이벤트는 nil — description 폴백.
+    let homeScoreAfter: Int?
+    let awayScoreAfter: Int?
 
-    // 두 신규 필드에 default nil 을 부여하기 위한 명시적 init.
+    // 신규 필드들에 default nil 을 부여하기 위한 명시적 init.
     // (Swift 의 let + default value 는 memberwise init 에서 인자를 받지 못하므로,
     //  외부 호출자 무영향 + parser 에서 값 전달 가능이라는 두 조건을 같이 만족시키려면
     //  명시적 init 이 필요.)
@@ -83,7 +87,9 @@ struct LiveEvent: Identifiable {
         batter: String? = nil,
         inning: String? = nil,
         atBatId: String? = nil,
-        seqno: Int? = nil
+        seqno: Int? = nil,
+        homeScoreAfter: Int? = nil,
+        awayScoreAfter: Int? = nil
     ) {
         self.cursor = cursor
         self.id = id
@@ -95,6 +101,8 @@ struct LiveEvent: Identifiable {
         self.inning = inning
         self.atBatId = atBatId
         self.seqno = seqno
+        self.homeScoreAfter = homeScoreAfter
+        self.awayScoreAfter = awayScoreAfter
     }
 }
 
@@ -406,7 +414,9 @@ final class BackendGamesRepository {
             batter: (json["batter"] as? String).flatMap { $0.isEmpty ? nil : $0 },
             inning: (json["inning"] as? String).flatMap { $0.isEmpty ? nil : $0 },
             atBatId: (json["atBatId"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-            seqno: json["seqno"] as? Int
+            seqno: json["seqno"] as? Int,
+            homeScoreAfter: json["homeScoreAfter"] as? Int,
+            awayScoreAfter: json["awayScoreAfter"] as? Int
         )
     }
 
