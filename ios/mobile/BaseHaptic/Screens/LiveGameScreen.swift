@@ -291,12 +291,16 @@ private enum DebugDummyLiveGame {
         awayLineup: []
     )
 
+    // 타석 그룹화 시연용 atBatId/seqno 부여:
+    //   - 오스틴 7회초 타석(relayNo 003) STRIKE→BALL→HIT 3구 → 1개 카드
+    //   - 박해민 7회초 타석(relayNo 002) 삼진 아웃 → 1개 카드
+    //   - 신민재 6회말 득점(relayNo 001) → 1개 카드
     static let events: [LiveEvent] = [
-        LiveEvent(cursor: 5, id: "dbg-5", type: "HIT", description: "오스틴 우전 안타로 1루 진루", time: "19:42", pitcher: "곽빈", batter: "오스틴", inning: "7회초"),
-        LiveEvent(cursor: 4, id: "dbg-4", type: "BALL", description: "곽빈 → 오스틴 볼", time: "19:41", pitcher: "곽빈", batter: "오스틴", inning: "7회초"),
-        LiveEvent(cursor: 3, id: "dbg-3", type: "STRIKE", description: "곽빈 → 오스틴 스트라이크", time: "19:40", pitcher: "곽빈", batter: "오스틴", inning: "7회초"),
-        LiveEvent(cursor: 2, id: "dbg-2", type: "OUT", description: "박해민 삼진 아웃", time: "19:37", pitcher: "곽빈", batter: "박해민", inning: "7회초"),
-        LiveEvent(cursor: 1, id: "dbg-1", type: "SCORE", description: "신민재 득점", time: "19:34", pitcher: "곽빈", batter: "오지환", inning: "6회말"),
+        LiveEvent(cursor: 5, id: "dbg-5", type: "HIT", description: "오스틴 우전 안타로 1루 진루", time: "19:42", pitcher: "곽빈", batter: "오스틴", inning: "7회초", atBatId: "07-003", seqno: 3),
+        LiveEvent(cursor: 4, id: "dbg-4", type: "BALL", description: "곽빈 → 오스틴 볼", time: "19:41", pitcher: "곽빈", batter: "오스틴", inning: "7회초", atBatId: "07-003", seqno: 2),
+        LiveEvent(cursor: 3, id: "dbg-3", type: "STRIKE", description: "곽빈 → 오스틴 스트라이크", time: "19:40", pitcher: "곽빈", batter: "오스틴", inning: "7회초", atBatId: "07-003", seqno: 1),
+        LiveEvent(cursor: 2, id: "dbg-2", type: "OUT", description: "박해민 삼진 아웃", time: "19:37", pitcher: "곽빈", batter: "박해민", inning: "7회초", atBatId: "07-002", seqno: 1),
+        LiveEvent(cursor: 1, id: "dbg-1", type: "SCORE", description: "신민재 득점", time: "19:34", pitcher: "곽빈", batter: "오지환", inning: "6회말", atBatId: "06-001", seqno: 1),
     ]
 }
 #endif
