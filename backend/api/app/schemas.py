@@ -280,6 +280,10 @@ class GameEventOut(BaseModel):
     batter: str | None = None
     hapticPattern: str | None = None
     inning: str | None = None
+    # 타석(at-bat) 단위 그룹화 키. source_event_id가 "{inning:02d}-{relayNo:03d}-{seqno:04d}"
+    # 형식일 때만 채워지며, 그 외(시뮬레이션·테스트 prefix)에서는 None — 클라가 평면 폴백.
+    atBatId: str | None = None
+    seqno: int | None = None
 
 
 class EventsResponse(BaseModel):

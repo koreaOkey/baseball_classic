@@ -1203,7 +1203,21 @@ def to_game_summary(game: Game) -> GameSummaryOut:
     )
 
 
+def _split_at_bat(source_event_id: str) -> tuple[str | None, int | None]:
+    parts = (source_event_id or "").split("-")
+    if len(parts) != 3:
+        return None, None
+    try:
+        int(parts[0])
+        int(parts[1])
+        seqno = int(parts[2])
+    except ValueError:
+        return None, None
+    return f"{parts[0]}-{parts[1]}", seqno
+
+
 def to_event_out(event: GameEvent) -> GameEventOut:
+    at_bat_id, seqno = _split_at_bat(event.source_event_id)
     return GameEventOut(
         cursor=event.cursor,
         id=event.source_event_id,
@@ -1214,6 +1228,8 @@ def to_event_out(event: GameEvent) -> GameEventOut:
         batter=event.batter,
         hapticPattern=event.haptic_pattern,
         inning=event.inning,
+        atBatId=at_bat_id,
+        seqno=seqno,
     )
 
 

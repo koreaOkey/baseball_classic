@@ -1271,3 +1271,62 @@ def test_event_inning_populated_from_payload_and_fallback() -> None:
         # game.inning "7B" 는 정규화돼 저장되므로 응답은 정규화된 값(예: "7회말")
         assert by_source["inning-fallback-001"]["inning"] is not None
         assert by_source["inning-fallback-001"]["inning"] != ""
+
+
+def test_event_at_bat_id_and_seqno_populated_from_source_event_id() -> None:
+    """크롤러가 보내는 'NN-NNN-NNNN' 형식의 sourceEventId 에서 atBatId/seqno 가
+    분리되어 응답에 노출되어야 한다 (라이브 상세 화면 타석 단위 그룹화 키)."""
+    with TestClient(app) as client:
+        snapshot = sample_snapshot()
+        snapshot["events"] = [
+            {
+                "sourceEventId": "07-045-0001",
+                "type": "BALL",
+                "description": "ball outside",
+                "occurredAt": "2026-02-17T08:59:10Z",
+                "metadata": {},
+            },
+            {
+                "sourceEventId": "07-045-0002",
+                "type": "STRIKE",
+                "description": "swinging strike",
+                "occurredAt": "2026-02-17T08:59:20Z",
+                "metadata": {},
+            },
+            {
+                "sourceEventId": "07-046-0001",
+                "type": "HIT",
+                "description": "single to left",
+                "occurredAt": "2026-02-17T08:59:40Z",
+                "metadata": {},
+            },
+            {
+                # 폴백: 시뮬레이션/테스트에서 들어올 수 있는 비정형 형식 → None 으로 둔다
+                "sourceEventId": "relay-fallback-001",
+                "type": "OUT",
+                "description": "fly out",
+                "occurredAt": "2026-02-17T08:59:50Z",
+                "metadata": {},
+            },
+        ]
+        ingest = client.post(
+            "/internal/crawler/games/20260601ATBAT01/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=snapshot,
+        )
+        assert ingest.status_code == 200
+
+        events = client.get("/games/20260601ATBAT01/events")
+        assert events.status_code == 200
+        by_source = {item["id"]: item for item in events.json()["items"]}
+
+        assert by_source["07-045-0001"]["atBatId"] == "07-045"
+        assert by_source["07-045-0001"]["seqno"] == 1
+        assert by_source["07-045-0002"]["atBatId"] == "07-045"
+        assert by_source["07-045-0002"]["seqno"] == 2
+        # 같은 이닝의 다른 타석은 다른 atBatId 를 가져야 한다
+        assert by_source["07-046-0001"]["atBatId"] == "07-046"
+        assert by_source["07-046-0001"]["seqno"] == 1
+        # 비정형 sourceEventId 는 폴백
+        assert by_source["relay-fallback-001"]["atBatId"] is None
+        assert by_source["relay-fallback-001"]["seqno"] is None
