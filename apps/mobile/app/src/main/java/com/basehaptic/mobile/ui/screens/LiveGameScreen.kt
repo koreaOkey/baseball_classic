@@ -1261,9 +1261,10 @@ private fun AtBatCard(
                 Spacer(modifier = Modifier.height(AppSpacing.xs))
                 Text(text = subHeader, style = AppFont.micro, color = Gray500)
             }
-            if (group.pitches.size > 1) {
+            val chipTypes = normalizePitchTypes(group.pitches)
+            if (chipTypes.size > 1) {
                 Spacer(modifier = Modifier.height(AppSpacing.sm))
-                FlowingPitchChips(types = group.pitches.map { it.type })
+                FlowingPitchChips(types = chipTypes)
             }
             if (outcome != null && outcome.description.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(AppSpacing.sm))
@@ -1316,16 +1317,41 @@ private fun AtBatCard(
     }
 }
 
+/// HOMERUN 칩·라벨 무지개 그라데이션. iOS 와 동일 색 위계 (red→orange→yellow→green→blue→violet).
+private val homerunRainbowColors: List<Color> = listOf(
+    Color(0xFFFF4D4D),
+    Color(0xFFFF9E33),
+    Color(0xFFFFD93D),
+    Color(0xFF5AD966),
+    Color(0xFF4D99FF),
+    Color(0xFFB266F2),
+)
+private val homerunRainbowBrush: Brush
+    get() = Brush.horizontalGradient(homerunRainbowColors)
+private val homerunRainbowBrushSoft: Brush
+    get() = Brush.horizontalGradient(homerunRainbowColors.map { it.copy(alpha = 0.18f) })
+
 @Composable
 private fun EventTypePill(type: String) {
-    Text(
-        text = eventLabel(type),
-        style = AppFont.captionBold,
-        color = AppEventColors.eventColor(type),
-        modifier = Modifier
-            .background(AppEventColors.eventColor(type).copy(alpha = 0.14f), AppShapes.pill)
-            .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs)
-    )
+    val isHomerun = type.uppercase() == "HOMERUN"
+    if (isHomerun) {
+        Text(
+            text = eventLabel(type),
+            style = AppFont.captionBold.copy(brush = homerunRainbowBrush),
+            modifier = Modifier
+                .background(homerunRainbowBrushSoft, AppShapes.pill)
+                .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs)
+        )
+    } else {
+        Text(
+            text = eventLabel(type),
+            style = AppFont.captionBold,
+            color = AppEventColors.eventColor(type),
+            modifier = Modifier
+                .background(AppEventColors.eventColor(type).copy(alpha = 0.14f), AppShapes.pill)
+                .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs)
+        )
+    }
 }
 
 @Composable
@@ -1344,21 +1370,34 @@ private fun FlowingPitchChips(types: List<String>) {
 
 @Composable
 private fun PitchChip(type: String) {
-    val color = AppEventColors.eventColor(type)
-    Text(
-        text = pitchShortLabel(type),
-        style = AppFont.microBold,
-        color = color,
-        modifier = Modifier
-            .background(color.copy(alpha = 0.14f), AppShapes.pill)
-            .border(0.5.dp, color.copy(alpha = 0.32f), AppShapes.pill)
-            .padding(horizontal = AppSpacing.xs, vertical = 2.dp)
-    )
+    val isHomerun = type.uppercase() == "HOMERUN"
+    if (isHomerun) {
+        Text(
+            text = pitchShortLabel(type),
+            style = AppFont.microBold.copy(brush = homerunRainbowBrush),
+            modifier = Modifier
+                .background(homerunRainbowBrushSoft, AppShapes.pill)
+                .border(0.8.dp, homerunRainbowBrush, AppShapes.pill)
+                .padding(horizontal = AppSpacing.xs, vertical = 2.dp)
+        )
+    } else {
+        val color = AppEventColors.eventColor(type)
+        Text(
+            text = pitchShortLabel(type),
+            style = AppFont.microBold,
+            color = color,
+            modifier = Modifier
+                .background(color.copy(alpha = 0.14f), AppShapes.pill)
+                .border(0.5.dp, color.copy(alpha = 0.32f), AppShapes.pill)
+                .padding(horizontal = AppSpacing.xs, vertical = 2.dp)
+        )
+    }
 }
 
 private fun pitchShortLabel(type: String): String = when (type.uppercase()) {
     "BALL" -> "B"
     "STRIKE" -> "S"
+    "FOUL" -> "F"
     "HIT" -> "안"
     "HOMERUN" -> "홈"
     "OUT" -> "O"
@@ -1372,6 +1411,19 @@ private fun pitchShortLabel(type: String): String = when (type.uppercase()) {
     "HALF_INNING_CHANGE" -> "교대"
     else -> "·"
 }
+
+/// 타석 카드 PitchChip 시퀀스에 들어갈 타입을 정제한다. iOS normalizePitchTypes 와 동등.
+/// - 타석 시작 안내성 OTHER → 칩 제외
+/// - 파울/타격 OTHER → 가상 타입 "FOUL"
+/// - 그 외 OTHER → 칩 제외
+/// - 그 외 타입은 그대로 보존
+private fun normalizePitchTypes(events: List<BackendGamesRepository.LiveEvent>): List<String> =
+    events.mapNotNull { event ->
+        val upper = event.type.uppercase()
+        if (upper != "OTHER") return@mapNotNull upper
+        val desc = event.description
+        if (desc.contains("파울") || desc.contains("타격")) "FOUL" else null
+    }
 
 private fun displayPitcher(
     state: BackendGamesRepository.LiveGameState,

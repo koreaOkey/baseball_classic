@@ -975,12 +975,24 @@ private struct EventTypePill: View {
     let type: String
 
     var body: some View {
-        Text(eventLabel(type))
-            .font(AppFont.microBold)
-            .foregroundColor(AppEventColors.color(for: type))
-            .padding(.horizontal, AppSpacing.sm)
-            .padding(.vertical, AppSpacing.xs)
-            .background(Capsule().fill(AppEventColors.color(for: type).opacity(0.14)))
+        let isHomerun = type.uppercased() == "HOMERUN"
+        return Group {
+            if isHomerun {
+                Text(eventLabel(type))
+                    .font(AppFont.microBold)
+                    .foregroundStyle(homerunRainbowGradient)
+                    .padding(.horizontal, AppSpacing.sm)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(Capsule().fill(homerunRainbowGradientSoft))
+            } else {
+                Text(eventLabel(type))
+                    .font(AppFont.microBold)
+                    .foregroundColor(AppEventColors.color(for: type))
+                    .padding(.horizontal, AppSpacing.sm)
+                    .padding(.vertical, AppSpacing.xs)
+                    .background(Capsule().fill(AppEventColors.color(for: type).opacity(0.14)))
+            }
+        }
     }
 }
 
@@ -1050,9 +1062,10 @@ private struct AtBatCard: View {
                     .foregroundColor(AppColors.gray500)
             }
 
-            // 투구·진행 칩 시퀀스 (BALL/STRIKE 등). outcome 자체도 마지막 칩으로 포함.
-            if group.pitches.count > 1 {
-                FlowingPitchChips(types: group.pitches.map { $0.type })
+            // 투구·진행 칩 시퀀스 (BALL/STRIKE/FOUL 등). 타석 안내성 OTHER 는 정제 단계에서 제외.
+            let chipTypes = normalizePitchTypes(events: group.pitches)
+            if chipTypes.count > 1 {
+                FlowingPitchChips(types: chipTypes)
             }
 
             // Footer: 최종 결과 텍스트
@@ -1132,18 +1145,53 @@ private struct FlowingPitchChips: View {
     }
 }
 
+private let homerunRainbowColors: [Color] = [
+    Color(red: 1.0, green: 0.30, blue: 0.30),   // red
+    Color(red: 1.0, green: 0.62, blue: 0.20),   // orange
+    Color(red: 1.0, green: 0.85, blue: 0.20),   // yellow
+    Color(red: 0.35, green: 0.85, blue: 0.40),  // green
+    Color(red: 0.30, green: 0.60, blue: 1.0),   // blue
+    Color(red: 0.70, green: 0.40, blue: 0.95),  // violet
+]
+
+private var homerunRainbowGradient: LinearGradient {
+    LinearGradient(colors: homerunRainbowColors, startPoint: .leading, endPoint: .trailing)
+}
+
+private var homerunRainbowGradientSoft: LinearGradient {
+    LinearGradient(
+        colors: homerunRainbowColors.map { $0.opacity(0.18) },
+        startPoint: .leading, endPoint: .trailing
+    )
+}
+
 private struct PitchChip: View {
     let type: String
 
     var body: some View {
-        Text(pitchShortLabel(type))
-            .font(AppFont.microBold)
-            .foregroundColor(AppEventColors.color(for: type))
-            .frame(minWidth: 24)
-            .padding(.horizontal, AppSpacing.xs)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(AppEventColors.color(for: type).opacity(0.14)))
-            .overlay(Capsule().stroke(AppEventColors.color(for: type).opacity(0.32), lineWidth: 0.5))
+        let isHomerun = type.uppercased() == "HOMERUN"
+        let color = AppEventColors.color(for: type)
+        return Group {
+            if isHomerun {
+                Text(pitchShortLabel(type))
+                    .font(AppFont.microBold)
+                    .foregroundStyle(homerunRainbowGradient)
+                    .frame(minWidth: 24)
+                    .padding(.horizontal, AppSpacing.xs)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(homerunRainbowGradientSoft))
+                    .overlay(Capsule().stroke(homerunRainbowGradient, lineWidth: 0.8))
+            } else {
+                Text(pitchShortLabel(type))
+                    .font(AppFont.microBold)
+                    .foregroundColor(color)
+                    .frame(minWidth: 24)
+                    .padding(.horizontal, AppSpacing.xs)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(color.opacity(0.14)))
+                    .overlay(Capsule().stroke(color.opacity(0.32), lineWidth: 0.5))
+            }
+        }
     }
 }
 
@@ -1184,6 +1232,7 @@ private func pitchShortLabel(_ type: String) -> String {
     switch type.uppercased() {
     case "BALL": return "B"
     case "STRIKE": return "S"
+    case "FOUL": return "F"
     case "HIT": return "안"
     case "HOMERUN": return "홈"
     case "OUT": return "O"
@@ -1196,6 +1245,22 @@ private func pitchShortLabel(_ type: String) -> String {
     case "PITCHER_CHANGE": return "교"
     case "HALF_INNING_CHANGE": return "교대"
     default: return "·"
+    }
+}
+
+/// 타석 카드 PitchChip 시퀀스에 들어갈 타입을 정제한다.
+/// - 타석 시작 안내성 OTHER ("1번타자 ...", "X회 ... 공격") → 칩 제외
+/// - 파울/타격 OTHER → 클라이언트 가상 타입 "FOUL" 로 통합 (Orange500, F 라벨)
+/// - 그 외 OTHER (분류 불가) → 칩 제외
+/// - 그 외 타입은 그대로 보존
+private func normalizePitchTypes(events: [LiveEvent]) -> [String] {
+    events.compactMap { event in
+        let upper = event.type.uppercased()
+        if upper != "OTHER" { return upper }
+        let desc = event.description
+        if desc.contains("파울") || desc.contains("타격") { return "FOUL" }
+        // 타석/이닝 안내성 OTHER 는 칩에서 제외
+        return nil
     }
 }
 

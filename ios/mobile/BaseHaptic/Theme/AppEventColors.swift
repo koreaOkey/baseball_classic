@@ -15,6 +15,8 @@ enum AppEventColors {
             return AppColors.green500
         case "HIT":
             return AppColors.blue500
+        case "FOUL":
+            return AppColors.orange500
         case "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY", "MOUND_VISIT":
             return AppColors.yellow500
         case "WALK", "STEAL", "TAG_UP_ADVANCE", "PITCHER_CHANGE":

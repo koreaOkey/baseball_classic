@@ -14,6 +14,7 @@ object AppEventColors {
         "STRIKE" -> Yellow500
         "BALL" -> Green500
         "HIT" -> Blue500
+        "FOUL" -> Orange500
         "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY", "MOUND_VISIT" -> Yellow500
         "WALK", "STEAL", "TAG_UP_ADVANCE", "PITCHER_CHANGE" -> Green500
         "DOUBLE_PLAY", "TRIPLE_PLAY" -> Orange500
