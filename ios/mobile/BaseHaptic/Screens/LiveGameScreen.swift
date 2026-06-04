@@ -69,7 +69,7 @@ struct LiveGameScreen: View {
                         )
                         CurrentMatchupCard(state: state, latestEvent: events.first)
 
-                        Text("실시간 이벤트")
+                        Text("실시간 중계")
                             .font(AppFont.h5Bold)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -78,7 +78,11 @@ struct LiveGameScreen: View {
                         if filteredEvents.isEmpty {
                             EmptyInningEventCard(hasAnyEvents: !events.isEmpty)
                         } else {
-                            ForEach(filteredAtBats) { group in
+                            let groups = filteredAtBats
+                            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                                if index == 0 || sectionKey(for: groups[index - 1]) != sectionKey(for: group) {
+                                    AtBatSectionHeader(title: sectionTitle(for: group, state: state))
+                                }
                                 AtBatCard(group: group)
                             }
                         }
@@ -1074,6 +1078,39 @@ private struct PitchChip: View {
             .background(Capsule().fill(AppEventColors.color(for: type).opacity(0.14)))
             .overlay(Capsule().stroke(AppEventColors.color(for: type).opacity(0.32), lineWidth: 0.5))
     }
+}
+
+// MARK: - At-Bat Section Header (이닝·공격팀 단위 구분)
+private struct AtBatSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(AppFont.captionBold)
+            .foregroundColor(AppColors.gray400)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, AppSpacing.sm)
+    }
+}
+
+/// 두 그룹이 같은 섹션에 속하는지 판정하는 키 — 같은 이닝 문자열이면 같은 섹션.
+private func sectionKey(for group: AtBatGroup) -> String {
+    group.inning ?? "?"
+}
+
+/// "9회초 트윈스 공격" 형태의 섹션 헤더 문자열.
+/// 이닝 표기가 비어있으면 폴백으로 "타석"을 쓰고, 공격팀 판별이 안 되면 이닝만 보여준다.
+private func sectionTitle(for group: AtBatGroup, state: LiveGameState) -> String {
+    guard let inning = group.inning, !inning.isEmpty else { return "타석" }
+    let teamName: String
+    if inning.contains("초") {
+        teamName = state.awayTeamId.teamName
+    } else if inning.contains("말") {
+        teamName = state.homeTeamId.teamName
+    } else {
+        teamName = ""
+    }
+    return teamName.isEmpty ? inning : "\(inning) \(teamName) 공격"
 }
 
 private func pitchShortLabel(_ type: String) -> String {
