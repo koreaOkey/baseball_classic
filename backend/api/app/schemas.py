@@ -268,6 +268,10 @@ class GameStateOut(BaseModel):
     updatedAt: IsoDatetime
     homeLineup: list[LineupSlotOut] = Field(default_factory=list)
     awayLineup: list[LineupSlotOut] = Field(default_factory=list)
+    # 선발투수 이름. 라인업 슬롯에는 DH 룰로 타자 9명만 들어가므로 투수는 별도 노출.
+    # GamePitcherStat(is_starter=True, appearance_order=1) 우선, 없으면 그냥 is_starter=True 첫 행.
+    homeStartingPitcher: str | None = None
+    awayStartingPitcher: str | None = None
 
 
 class GameEventOut(BaseModel):

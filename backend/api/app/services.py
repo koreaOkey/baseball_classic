@@ -1391,6 +1391,16 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
     home_lineup = [_slot_to_out(s) for s in lineup_rows if s.team_side == "home"]
     away_lineup = [_slot_to_out(s) for s in lineup_rows if s.team_side == "away"]
 
+    # 선발투수: GamePitcherStat 에서 is_starter=True 한 명씩(우선 appearance_order=1).
+    # KBO DH 룰로 lineupSlots(타자 9명)에는 빠지므로 클라이언트 마운드 표시용으로 별도 노출.
+    starter_rows = db.execute(
+        select(GamePitcherStat)
+        .where(GamePitcherStat.game_id == game.id, GamePitcherStat.is_starter.is_(True))
+        .order_by(GamePitcherStat.appearance_order.asc().nullslast())
+    ).scalars().all()
+    home_starting_pitcher = next((p.player_name for p in starter_rows if p.team_side == "home"), None)
+    away_starting_pitcher = next((p.player_name for p in starter_rows if p.team_side == "away"), None)
+
     return GameStateOut(
         gameId=game.id,
         homeTeam=game.home_team,
@@ -1411,4 +1421,6 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         updatedAt=game.updated_at,
         homeLineup=home_lineup,
         awayLineup=away_lineup,
+        homeStartingPitcher=home_starting_pitcher,
+        awayStartingPitcher=away_starting_pitcher,
     )
