@@ -12,8 +12,15 @@ struct LiveGameScreen: View {
     @State private var loadError: String?
     @State private var selectedInningNumber: Int? = nil
     @State private var hasManualInningSelection: Bool = false
+    @State private var isScoreFilterActive: Bool = false
 
     private var filteredEvents: [LiveEvent] {
+        if isScoreFilterActive {
+            return events.filter { event in
+                let t = event.type.uppercased()
+                return t == "SCORE" || t == "SAC_FLY_SCORE"
+            }
+        }
         guard let n = selectedInningNumber else { return events }
         return events.filter { event in
             guard let inn = event.inning else { return false }
@@ -62,8 +69,15 @@ struct LiveGameScreen: View {
                         InningTabs(
                             state: state,
                             selectedInningNumber: selectedInningNumber,
-                            onSelect: { n in
+                            isScoreFilterActive: isScoreFilterActive,
+                            onSelectInning: { n in
+                                isScoreFilterActive = false
                                 selectedInningNumber = n
+                                hasManualInningSelection = true
+                            },
+                            onSelectScore: {
+                                isScoreFilterActive = true
+                                selectedInningNumber = nil
                                 hasManualInningSelection = true
                             }
                         )
@@ -629,7 +643,9 @@ private struct PositionPill: View {
 private struct InningTabs: View {
     let state: LiveGameState
     let selectedInningNumber: Int?
-    let onSelect: (Int?) -> Void
+    let isScoreFilterActive: Bool
+    let onSelectInning: (Int) -> Void
+    let onSelectScore: () -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -637,9 +653,15 @@ private struct InningTabs: View {
                 ForEach(tabs, id: \.self) { tab in
                     let isScore = tab == "득점"
                     let tabNumber: Int? = isScore ? nil : Int(tab.replacingOccurrences(of: "회", with: ""))
-                    let selected: Bool = isScore ? false : (tabNumber == selectedInningNumber)
+                    let selected: Bool = isScore
+                        ? isScoreFilterActive
+                        : (!isScoreFilterActive && tabNumber == selectedInningNumber)
                     Button {
-                        if !isScore, let n = tabNumber { onSelect(n) }
+                        if isScore {
+                            onSelectScore()
+                        } else if let n = tabNumber {
+                            onSelectInning(n)
+                        }
                     } label: {
                         Text(tab)
                             .font(AppFont.captionBold)
@@ -965,7 +987,18 @@ private struct AtBatCard: View {
         return EventFilterGate.isAllowed(eventType: outcomeType)
     }
 
+    /// SCORE/SAC_FLY_SCORE outcome 그룹은 "득점 탭" 에서 description 자체가 정보의 핵심
+    /// ("{타자} 적시타로 X점", "{주자} 홈인" 등)이라, 헤더에 description 을 강조하고
+    /// 푸터 중복을 생략한다.
+    private var isScoreOutcome: Bool {
+        let t = group.outcome?.type.uppercased() ?? ""
+        return t == "SCORE" || t == "SAC_FLY_SCORE"
+    }
+
     private var headerText: String {
+        if isScoreOutcome, let desc = group.outcome?.description, !desc.isEmpty {
+            return desc
+        }
         if let batter = group.batter, !batter.isEmpty {
             return batter
         }
@@ -1009,10 +1042,18 @@ private struct AtBatCard: View {
             if let outcome = group.outcome, !outcome.description.isEmpty {
                 HStack(alignment: .top, spacing: AppSpacing.sm) {
                     EventTypePill(type: outcome.type)
-                    Text(outcome.description)
-                        .font(AppFont.caption)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if !isScoreOutcome {
+                        Text(outcome.description)
+                            .font(AppFont.caption)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else if let batter = group.batter, !batter.isEmpty {
+                        // SCORE 그룹: description 은 헤더로 옮겼고, 푸터엔 타석 타자만 보조 노출
+                        Text("타석: \(batter)")
+                            .font(AppFont.micro)
+                            .foregroundColor(AppColors.gray400)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             } else if group.pitches.count == 1,
                       let only = group.pitches.first,
