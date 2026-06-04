@@ -21,6 +21,10 @@ struct LiveGameScreen: View {
         }
     }
 
+    private var filteredAtBats: [AtBatGroup] {
+        AtBatGroup.group(filteredEvents)
+    }
+
     private var currentLineup: FieldLineup? {
         #if DEBUG
         if gameId == "debug-watch-sync-test" { return DebugDummyLiveGame.lineup }
@@ -74,8 +78,8 @@ struct LiveGameScreen: View {
                         if filteredEvents.isEmpty {
                             EmptyInningEventCard(hasAnyEvents: !events.isEmpty)
                         } else {
-                            ForEach(filteredEvents) { event in
-                                EventCard(event: event)
+                            ForEach(filteredAtBats) { group in
+                                AtBatCard(group: group)
                             }
                         }
 
@@ -941,6 +945,149 @@ private struct EventTypePill: View {
             .padding(.horizontal, AppSpacing.sm)
             .padding(.vertical, AppSpacing.xs)
             .background(Capsule().fill(AppEventColors.color(for: type).opacity(0.14)))
+    }
+}
+
+// MARK: - At-Bat Card (네이버 릴레이 스타일 타석 단위 카드)
+private struct AtBatCard: View {
+    let group: AtBatGroup
+
+    private var highlighted: Bool {
+        guard let outcomeType = group.outcome?.type else { return false }
+        return EventFilterGate.isAllowed(eventType: outcomeType)
+    }
+
+    private var headerText: String {
+        if let batter = group.batter, !batter.isEmpty {
+            return batter
+        }
+        // 타자 정보 폴백 — 단일 그룹(atBatId nil) 의 경우 대표 이벤트 description 일부.
+        return group.outcome?.description ?? group.pitches.last?.description ?? "타석"
+    }
+
+    private var subHeaderText: String {
+        var parts: [String] = []
+        if let inning = group.inning, !inning.isEmpty { parts.append(inning) }
+        if let pitcher = group.pitcher, !pitcher.isEmpty { parts.append("vs \(pitcher)") }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            // Header: 타자(또는 폴백) + 시간
+            HStack(alignment: .firstTextBaseline) {
+                Text(headerText)
+                    .font(AppFont.bodyBold)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Spacer()
+                Text(group.time)
+                    .font(AppFont.micro)
+                    .foregroundColor(AppColors.gray400)
+            }
+
+            if !subHeaderText.isEmpty {
+                Text(subHeaderText)
+                    .font(AppFont.micro)
+                    .foregroundColor(AppColors.gray500)
+            }
+
+            // 투구·진행 칩 시퀀스 (BALL/STRIKE 등). outcome 자체도 마지막 칩으로 포함.
+            if group.pitches.count > 1 {
+                FlowingPitchChips(types: group.pitches.map { $0.type })
+            }
+
+            // Footer: 최종 결과 텍스트
+            if let outcome = group.outcome, !outcome.description.isEmpty {
+                HStack(alignment: .top, spacing: AppSpacing.sm) {
+                    EventTypePill(type: outcome.type)
+                    Text(outcome.description)
+                        .font(AppFont.caption)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else if group.pitches.count == 1,
+                      let only = group.pitches.first,
+                      !only.description.isEmpty {
+                // 폴백 단일 그룹 — 기존 EventCard 와 유사한 정보 밀도 유지.
+                HStack(alignment: .top, spacing: AppSpacing.sm) {
+                    EventTypePill(type: only.type)
+                    Text(only.description)
+                        .font(AppFont.caption)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .padding(AppSpacing.lg)
+        .background(AppColors.gray900)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(highlighted ? AppColors.yellow500 : Color.clear, lineWidth: highlighted ? 1.5 : 0)
+        )
+        .cornerRadius(AppRadius.md)
+    }
+}
+
+/// 가로로 흘러가는 투구 칩 모음. 4개 초과 시 자동 줄바꿈.
+private struct FlowingPitchChips: View {
+    let types: [String]
+
+    var body: some View {
+        // LazyVGrid 대신 단순 HStack 으로도 보통 4~6 칩이면 한 줄에 들어감.
+        // 더 많아질 때만 줄바꿈이 필요하므로 가벼운 wrapping HStack 흉내.
+        let rows = Self.chunk(types, perRow: 6)
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: AppSpacing.xs) {
+                    ForEach(Array(row.enumerated()), id: \.offset) { _, type in
+                        PitchChip(type: type)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private static func chunk(_ array: [String], perRow: Int) -> [[String]] {
+        guard !array.isEmpty else { return [] }
+        return stride(from: 0, to: array.count, by: perRow).map {
+            Array(array[$0..<min($0 + perRow, array.count)])
+        }
+    }
+}
+
+private struct PitchChip: View {
+    let type: String
+
+    var body: some View {
+        Text(pitchShortLabel(type))
+            .font(AppFont.microBold)
+            .foregroundColor(AppEventColors.color(for: type))
+            .frame(minWidth: 24)
+            .padding(.horizontal, AppSpacing.xs)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(AppEventColors.color(for: type).opacity(0.14)))
+            .overlay(Capsule().stroke(AppEventColors.color(for: type).opacity(0.32), lineWidth: 0.5))
+    }
+}
+
+private func pitchShortLabel(_ type: String) -> String {
+    switch type.uppercased() {
+    case "BALL": return "B"
+    case "STRIKE": return "S"
+    case "HIT": return "안"
+    case "HOMERUN": return "홈"
+    case "OUT": return "O"
+    case "WALK": return "BB"
+    case "DOUBLE_PLAY": return "DP"
+    case "TRIPLE_PLAY": return "TP"
+    case "SCORE", "SAC_FLY_SCORE": return "득"
+    case "STEAL": return "도"
+    case "TAG_UP_ADVANCE": return "태"
+    case "PITCHER_CHANGE": return "교"
+    case "HALF_INNING_CHANGE": return "교대"
+    default: return "·"
     }
 }
 

@@ -7,11 +7,13 @@
 - [x] `pytest tests/` 전체 통과 (40 tests passed, 2026-06-04)
 
 ## iOS Phone
-- [ ] `ios/mobile/BaseHaptic/Models/LiveEvent.swift` — `atBatId: String?`, `seqno: Int?` 디코딩
-- [ ] `ios/mobile/BaseHaptic/Models/AtBatGroup.swift` (신규) — `struct AtBatGroup` + `static func group([LiveEvent]) -> [AtBatGroup]` (atBatId 그룹 / seqno asc / cursor desc 정렬 / nil 폴백)
-- [ ] `ios/mobile/BaseHaptic/Screens/LiveGameScreen.swift` — 이벤트 리스트 블록을 `ForEach(groups)` + `AtBatCard` 로 교체
-- [ ] `AtBatCard` 신규 컴포넌트 — 헤더(타자/타순) · 본문(`PitchChip` 시퀀스) · 푸터(결과 텍스트) · 강조(EventFilterGate 통과 시 Yellow500)
-- [ ] `EventCard` 는 LiveActivity / 푸시 long-look 재사용 가능성 위해 보존
+- [x] `ios/mobile/BaseHaptic/Data/BackendGamesRepository.swift` — `LiveEvent` 에 `atBatId`, `seqno` 필드 + 명시적 init(기존 호출자 무영향) + `parseLiveEvent` 가 응답에서 디코딩
+- [x] `ios/mobile/BaseHaptic/Models/AtBatGroup.swift` (신규) — `struct AtBatGroup` + `static func group([LiveEvent]) -> [AtBatGroup]`. outcome 후보 타입 set, seqno asc / leadCursor desc, atBatId nil → solo 그룹 폴백
+- [x] `ios/mobile/BaseHaptic/Screens/LiveGameScreen.swift` — `filteredAtBats` computed 추가, 이벤트 리스트 블록을 `ForEach(filteredAtBats)` + `AtBatCard` 로 교체
+- [x] `AtBatCard` / `FlowingPitchChips` / `PitchChip` 신규 컴포넌트 — 헤더(타자 + inning·vs pitcher) · 본문(투구 칩 6개/줄 wrap) · 푸터(outcome EventTypePill + description) · 강조(outcome 이 EventFilterGate 통과 시 yellow500 1.5pt border)
+- [x] `pitchShortLabel()` 헬퍼 — B/S/안/홈/O/BB/DP/TP/득/도/태/교/교대
+- [x] `ios/BaseHaptic.xcodeproj/project.pbxproj` — AtBatGroup.swift 를 PBXBuildFile / PBXFileReference / Models 그룹 / Sources phase 4곳에 등록 (plutil-lint OK)
+- [x] `EventCard` 는 LiveActivity / 푸시 long-look 재사용 위해 보존
 
 ## Android Phone
 - [ ] `apps/mobile/.../model/LiveEvent.kt` — `atBatId: String? = null`, `seqno: Int? = null` (kotlinx 기본값으로 미지 키 안전)

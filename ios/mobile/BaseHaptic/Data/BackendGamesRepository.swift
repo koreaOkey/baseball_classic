@@ -64,6 +64,38 @@ struct LiveEvent: Identifiable {
     let pitcher: String?
     let batter: String?
     let inning: String?
+    // 타석(at-bat) 그룹화 키. 백엔드 source_event_id 가 "{inning:02d}-{relayNo:03d}-{seqno:04d}"
+    // 형식일 때만 채워지며, 구버전 백엔드/비정형 이벤트에서는 nil — 평면 폴백.
+    let atBatId: String?
+    let seqno: Int?
+
+    // 두 신규 필드에 default nil 을 부여하기 위한 명시적 init.
+    // (Swift 의 let + default value 는 memberwise init 에서 인자를 받지 못하므로,
+    //  외부 호출자 무영향 + parser 에서 값 전달 가능이라는 두 조건을 같이 만족시키려면
+    //  명시적 init 이 필요.)
+    init(
+        cursor: Int64,
+        id: String,
+        type: String,
+        description: String,
+        time: String,
+        pitcher: String? = nil,
+        batter: String? = nil,
+        inning: String? = nil,
+        atBatId: String? = nil,
+        seqno: Int? = nil
+    ) {
+        self.cursor = cursor
+        self.id = id
+        self.type = type
+        self.description = description
+        self.time = time
+        self.pitcher = pitcher
+        self.batter = batter
+        self.inning = inning
+        self.atBatId = atBatId
+        self.seqno = seqno
+    }
 }
 
 struct LiveEventsPage {
@@ -372,7 +404,9 @@ final class BackendGamesRepository {
             time: formatBackendTime(json["time"] as? String ?? ""),
             pitcher: (json["pitcher"] as? String).flatMap { $0.isEmpty ? nil : $0 },
             batter: (json["batter"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-            inning: (json["inning"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            inning: (json["inning"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            atBatId: (json["atBatId"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            seqno: json["seqno"] as? Int
         )
     }
 

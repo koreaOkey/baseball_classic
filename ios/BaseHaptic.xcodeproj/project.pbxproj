@@ -47,6 +47,7 @@
 		735D83BB6EF1DA3BA9EEF37D /* StadiumRegionMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92557ABFA815EF3A9E554EBA /* StadiumRegionMonitor.swift */; };
 		7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */; };
 		AD4ADAD491E64538ABBB9CA9 /* EventFilterOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92AFF4F47DB74B1D94AB7B74 /* EventFilterOption.swift */; };
+		D322797AA4E645E6A699A6DC /* AtBatGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DDCF4705C04AC1AC261AB6 /* AtBatGroup.swift */; };
 		8073FF78A82DE637FB79DFFE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4700C8F4E6DAF0F281FB70B /* AppDelegate.swift */; };
 		80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */; };
 		835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44A3A560B1DD2E714A06DE2 /* LiveActivityManager.swift */; };
@@ -127,6 +128,7 @@
 		45C0734BB3B091847ABD41DA /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
 		47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEvent.swift; sourceTree = "<group>"; };
 		92AFF4F47DB74B1D94AB7B74 /* EventFilterOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventFilterOption.swift; sourceTree = "<group>"; };
+		11DDCF4705C04AC1AC261AB6 /* AtBatGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtBatGroup.swift; sourceTree = "<group>"; };
 		48CAEC1ACB1D95BABD8620BB /* MyTeamScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyTeamScreen.swift; sourceTree = "<group>"; };
 		53716117F7CB8A7631F7CBB6 /* CheerCheckinCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheerCheckinCard.swift; sourceTree = "<group>"; };
 		53BA5C62F0AE8C59D23DBEDD /* WatchAppRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppRadius.swift; sourceTree = "<group>"; };
@@ -408,6 +410,7 @@
 				0DE96A677E34F2CC49DE538E /* Game.swift */,
 				47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */,
 				92AFF4F47DB74B1D94AB7B74 /* EventFilterOption.swift */,
+				11DDCF4705C04AC1AC261AB6 /* AtBatGroup.swift */,
 				FACADE00020000000000B002 /* ReleaseNotes.swift */,
 				81854AC725B2650C74AD594D /* StadiumCheerThemes.swift */,
 				D59061C8B8CAB2114F761D19 /* Team.swift */,
@@ -547,6 +550,7 @@
 				0A2EE9240C436B71C1B1997C /* Game.swift in Sources */,
 				7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */,
 				AD4ADAD491E64538ABBB9CA9 /* EventFilterOption.swift in Sources */,
+				D322797AA4E645E6A699A6DC /* AtBatGroup.swift in Sources */,
 				FF04F10F375D614182ACC91E /* HomeScreen.swift in Sources */,
 				835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */,
 				5149C6E8A8F4998C32890151 /* LiveGameScreen.swift in Sources */,
