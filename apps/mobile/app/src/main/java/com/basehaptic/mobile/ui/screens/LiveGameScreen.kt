@@ -1381,7 +1381,12 @@ private fun displayPitcher(
     val direct = state.pitcher.trim()
     if (direct.isNotEmpty()) return direct
     val fromEvent = event?.pitcher?.trim().orEmpty()
-    return if (fromEvent.isNotEmpty()) fromEvent else placeholder
+    if (fromEvent.isNotEmpty()) return fromEvent
+    // 라인업 공개 후 라이브 진입 전: 수비팀 선발투수로 폴백. FieldLineup.from 과 동일 규칙.
+    val preferHome = !state.inning.contains("말")
+    val starter = if (preferHome) state.homeStartingPitcher?.trim() else state.awayStartingPitcher?.trim()
+    if (!starter.isNullOrEmpty()) return starter
+    return placeholder
 }
 
 private fun displayBatter(

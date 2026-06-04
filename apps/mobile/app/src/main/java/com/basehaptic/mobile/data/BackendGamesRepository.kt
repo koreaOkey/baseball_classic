@@ -72,6 +72,9 @@ object BackendGamesRepository {
         val lastEventType: String?,
         val homeLineup: List<LineupSlot> = emptyList(),
         val awayLineup: List<LineupSlot> = emptyList(),
+        // 선발투수 이름. DH 룰로 lineup 에서 빠지므로 BaseballFieldCard 마운드 자리 보조.
+        val homeStartingPitcher: String? = null,
+        val awayStartingPitcher: String? = null,
     )
 
     data class LineupSlot(
@@ -659,6 +662,8 @@ object BackendGamesRepository {
             lastEventType = optString("lastEventType").ifBlank { null },
             homeLineup = optLineupArray("homeLineup"),
             awayLineup = optLineupArray("awayLineup"),
+            homeStartingPitcher = optString("homeStartingPitcher").ifBlank { null },
+            awayStartingPitcher = optString("awayStartingPitcher").ifBlank { null },
         )
     }
 

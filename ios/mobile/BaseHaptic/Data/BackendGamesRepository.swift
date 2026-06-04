@@ -44,6 +44,10 @@ struct LiveGameState {
     let lastEventType: String?
     let homeLineup: [LineupSlot]
     let awayLineup: [LineupSlot]
+    // 선발투수 이름. 백엔드가 GamePitcherStat(is_starter=True) 에서 채움.
+    // DH 룰로 lineup 에는 빠지므로 BaseballFieldCard 마운드 자리에 따로 그린다.
+    let homeStartingPitcher: String?
+    let awayStartingPitcher: String?
 }
 
 struct LineupSlot {
@@ -386,7 +390,9 @@ final class BackendGamesRepository {
             pitcherPitchCount: json["pitcherPitchCount"] as? Int,
             lastEventType: (json["lastEventType"] as? String).flatMap { $0.isEmpty ? nil : $0 },
             homeLineup: homeLineup,
-            awayLineup: awayLineup
+            awayLineup: awayLineup,
+            homeStartingPitcher: (json["homeStartingPitcher"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            awayStartingPitcher: (json["awayStartingPitcher"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 

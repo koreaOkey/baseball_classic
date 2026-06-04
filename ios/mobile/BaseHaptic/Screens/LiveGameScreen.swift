@@ -310,7 +310,9 @@ private enum DebugDummyLiveGame {
         pitcherPitchCount: 87,
         lastEventType: "HIT",
         homeLineup: [],
-        awayLineup: []
+        awayLineup: [],
+        homeStartingPitcher: "곽빈",
+        awayStartingPitcher: "임찬규"
     )
 
     // 타석 그룹화 시연용 atBatId/seqno 부여:
@@ -1202,6 +1204,15 @@ private func displayPitcher(state: LiveGameState, event: LiveEvent?, placeholder
     if !direct.isEmpty { return direct }
     if let eventName = event?.pitcher?.trimmingCharacters(in: .whitespacesAndNewlines), !eventName.isEmpty {
         return eventName
+    }
+    // 라인업 공개 후 라이브 진입 전: 수비팀 선발투수로 폴백.
+    // FieldLineup.from(state:) 과 동일 규칙(`말` 이 아니면 home 수비).
+    let preferHome = !state.inning.contains("말")
+    if preferHome, let starter = state.homeStartingPitcher?.trimmingCharacters(in: .whitespacesAndNewlines), !starter.isEmpty {
+        return starter
+    }
+    if !preferHome, let starter = state.awayStartingPitcher?.trimmingCharacters(in: .whitespacesAndNewlines), !starter.isEmpty {
+        return starter
     }
     return placeholder
 }
