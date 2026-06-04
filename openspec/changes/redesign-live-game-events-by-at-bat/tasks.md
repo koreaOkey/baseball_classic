@@ -3,8 +3,12 @@
 ## Backend
 - [x] `backend/api/app/schemas.py` — `GameEventOut.atBatId: str | None`, `seqno: int | None` 추가
 - [x] `backend/api/app/services.py` — `_split_at_bat()` 헬퍼 + `to_event_out()` 에서 두 키 채우기 (3-part 정수일 때만, 그 외 None 폴백)
-- [x] `backend/api/tests/test_api.py` — `test_event_at_bat_id_and_seqno_populated_from_source_event_id` 신규: 같은 `relayNo` 이벤트가 동일 `atBatId` + 다른 `seqno`, 비정형 sourceEventId 는 `null` 폴백
-- [x] `pytest tests/` 전체 통과 (40 tests passed, 2026-06-04)
+- [x] `backend/api/tests/test_api.py` — `test_event_at_bat_id_and_seqno_populated_from_source_event_id` 신규
+- [x] `backend/api/app/schemas.py` — `GameEventOut.homeScoreAfter`, `awayScoreAfter: int | None` 추가 (라이브 상세 "득점" 탭 정확 점수 표기용)
+- [x] `backend/api/app/services.py` — `_coerce_score()` 헬퍼 + `to_event_out()` 에서 `payload_json["homeScoreAfter"]`/`awayScoreAfter` pluck (없으면 None 폴백)
+- [x] `crawler/backend_sender.py` — 각 option 의 `currentGameState` 에서 `homeScore`/`awayScore` 추출해 metadata 에 `homeScoreAfter`/`awayScoreAfter` 채움 (값이 없으면 키 생략)
+- [x] `backend/api/tests/test_api.py` — `test_event_score_after_populated_from_payload_metadata` 신규: SCORE 이벤트가 응답에 정확 노출, 메타 누락 시 null 폴백, 0 도 명시적 유지
+- [x] `pytest tests/` 전체 통과 (41 tests passed, 2026-06-04)
 
 ## iOS Phone
 - [x] `ios/mobile/BaseHaptic/Data/BackendGamesRepository.swift` — `LiveEvent` 에 `atBatId`, `seqno` 필드 + 명시적 init(기존 호출자 무영향) + `parseLiveEvent` 가 응답에서 디코딩

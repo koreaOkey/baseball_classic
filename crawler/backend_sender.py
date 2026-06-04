@@ -726,6 +726,11 @@ def build_snapshot_payload(
         if option_batter_name:
             last_batter_name = option_batter_name
 
+        # 이벤트 직후 시점의 누적 스코어. SCORE/SAC_FLY_SCORE 이벤트가 어느 회 누구 공격에
+        # 어떤 결과로 몇 점이 났는지를 클라이언트가 정확히 재구성할 수 있게 한다.
+        option_home_score = _safe_int(current_state.get("homeScore"), default=-1)
+        option_away_score = _safe_int(current_state.get("awayScore"), default=-1)
+
         metadata: Dict[str, Any] = {
             "inning": inning,
             "half": half,
@@ -733,6 +738,10 @@ def build_snapshot_payload(
             "seqno": seqno,
             "optionType": option_type,
         }
+        if option_home_score >= 0:
+            metadata["homeScoreAfter"] = option_home_score
+        if option_away_score >= 0:
+            metadata["awayScoreAfter"] = option_away_score
         if half == "top":
             metadata["offenseTeam"] = away_team
             metadata["defenseTeam"] = home_team

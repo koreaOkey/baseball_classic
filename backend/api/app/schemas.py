@@ -284,6 +284,11 @@ class GameEventOut(BaseModel):
     # 형식일 때만 채워지며, 그 외(시뮬레이션·테스트 prefix)에서는 None — 클라가 평면 폴백.
     atBatId: str | None = None
     seqno: int | None = None
+    # 이벤트 직후 누적 스코어. 크롤러가 payload_json metadata 에 채운 경우에만 노출.
+    # 라이브 상세 "득점" 탭에서 "X회 {공격팀} {타자} 적시타 → 3-2" 같은 표기에 사용.
+    # 미수집 이벤트(과거 데이터, 시뮬레이션)에서는 None — 클라가 description 폴백.
+    homeScoreAfter: int | None = None
+    awayScoreAfter: int | None = None
 
 
 class EventsResponse(BaseModel):

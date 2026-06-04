@@ -1330,3 +1330,63 @@ def test_event_at_bat_id_and_seqno_populated_from_source_event_id() -> None:
         # 비정형 sourceEventId 는 폴백
         assert by_source["relay-fallback-001"]["atBatId"] is None
         assert by_source["relay-fallback-001"]["seqno"] is None
+
+
+def test_event_score_after_populated_from_payload_metadata() -> None:
+    """SCORE 이벤트는 payload_json metadata 에 homeScoreAfter/awayScoreAfter 가
+    있으면 응답에 그대로 노출. 라이브 상세 "득점" 탭에서 정확 점수 표기에 사용.
+
+    크롤러가 metadata 에 안 채운 이벤트는 응답 응답 필드가 null 로 폴백돼야 한다."""
+    with TestClient(app) as client:
+        snapshot = sample_snapshot()
+        snapshot["events"] = [
+            {
+                "sourceEventId": "01-005-0001",
+                "type": "SCORE",
+                "description": "박해민 적시타로 1점",
+                "occurredAt": "2026-02-17T09:00:00Z",
+                "metadata": {"homeScoreAfter": 0, "awayScoreAfter": 1},
+            },
+            {
+                "sourceEventId": "01-005-0002",
+                "type": "HIT",
+                "description": "다음 타자 안타",
+                "occurredAt": "2026-02-17T09:00:10Z",
+                "metadata": {"homeScoreAfter": 0, "awayScoreAfter": 1},
+            },
+            {
+                "sourceEventId": "02-001-0001",
+                "type": "SCORE",
+                "description": "박찬호 솔로 홈런",
+                "occurredAt": "2026-02-17T09:05:00Z",
+                "metadata": {"homeScoreAfter": 1, "awayScoreAfter": 1},
+            },
+            {
+                # 메타데이터에 스코어 없는 케이스 — 응답에서 null 폴백
+                "sourceEventId": "02-002-0001",
+                "type": "OUT",
+                "description": "땅볼 아웃",
+                "occurredAt": "2026-02-17T09:06:00Z",
+                "metadata": {},
+            },
+        ]
+        ingest = client.post(
+            "/internal/crawler/games/20260601SCORE01/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=snapshot,
+        )
+        assert ingest.status_code == 200
+
+        events = client.get("/games/20260601SCORE01/events")
+        assert events.status_code == 200
+        by_source = {item["id"]: item for item in events.json()["items"]}
+
+        assert by_source["01-005-0001"]["homeScoreAfter"] == 0
+        assert by_source["01-005-0001"]["awayScoreAfter"] == 1
+        assert by_source["02-001-0001"]["homeScoreAfter"] == 1
+        assert by_source["02-001-0001"]["awayScoreAfter"] == 1
+        # 메타데이터 누락 — null 폴백
+        assert by_source["02-002-0001"]["homeScoreAfter"] is None
+        assert by_source["02-002-0001"]["awayScoreAfter"] is None
+        # 0 도 명시적으로 유지(falsy 가 아닌 valid 값)
+        assert by_source["01-005-0002"]["homeScoreAfter"] == 0

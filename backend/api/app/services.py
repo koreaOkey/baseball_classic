@@ -1216,8 +1216,26 @@ def _split_at_bat(source_event_id: str) -> tuple[str | None, int | None]:
     return f"{parts[0]}-{parts[1]}", seqno
 
 
+def _coerce_score(value: Any) -> int | None:
+    """payload_json 안의 스코어를 안전하게 정수로 변환.
+    문자열 ("3"), float (3.0), int (3) 어떤 형태로 와도 0~99 정수만 통과.
+    """
+    if value is None:
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= n <= 99:
+        return n
+    return None
+
+
 def to_event_out(event: GameEvent) -> GameEventOut:
     at_bat_id, seqno = _split_at_bat(event.source_event_id)
+    payload = event.payload_json if isinstance(event.payload_json, dict) else {}
+    home_score_after = _coerce_score(payload.get("homeScoreAfter"))
+    away_score_after = _coerce_score(payload.get("awayScoreAfter"))
     return GameEventOut(
         cursor=event.cursor,
         id=event.source_event_id,
@@ -1230,6 +1248,8 @@ def to_event_out(event: GameEvent) -> GameEventOut:
         inning=event.inning,
         atBatId=at_bat_id,
         seqno=seqno,
+        homeScoreAfter=home_score_after,
+        awayScoreAfter=away_score_after,
     )
 
 
