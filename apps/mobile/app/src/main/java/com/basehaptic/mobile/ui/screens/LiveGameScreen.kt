@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -67,6 +69,8 @@ import com.basehaptic.mobile.BuildConfig
 import com.basehaptic.mobile.R
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.WatchSyncAdLedger
+import com.basehaptic.mobile.data.model.AtBatGroup
+import com.basehaptic.mobile.data.model.EventFilterGate
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 
@@ -116,6 +120,7 @@ fun LiveGameScreen(
 
     var selectedInningNumber by remember(gameId) { mutableStateOf<Int?>(null) }
     var hasManualInningSelection by remember(gameId) { mutableStateOf(false) }
+    var isScoreFilterActive by remember(gameId) { mutableStateOf(false) }
 
     LaunchedEffect(gameState?.inning) {
         val inning = gameState?.inning ?: return@LaunchedEffect
@@ -125,12 +130,20 @@ fun LiveGameScreen(
     }
 
     val filteredEvents = run {
+        if (isScoreFilterActive) {
+            return@run events.filter { event ->
+                val t = event.type.uppercase()
+                t == "SCORE" || t == "SAC_FLY_SCORE"
+            }
+        }
         val n = selectedInningNumber ?: return@run events
         events.filter { event ->
             val inn = event.inning ?: return@filter false
             inningNumber(inn) == n
         }
     }
+
+    val filteredAtBats = AtBatGroup.group(filteredEvents)
 
     LaunchedEffect(gameId) {
         if (gameId.isNullOrBlank()) return@LaunchedEffect
@@ -288,8 +301,15 @@ fun LiveGameScreen(
                     InningTabs(
                         state = state,
                         selectedInningNumber = selectedInningNumber,
-                        onSelect = { n ->
+                        isScoreFilterActive = isScoreFilterActive,
+                        onSelectInning = { n ->
+                            isScoreFilterActive = false
                             selectedInningNumber = n
+                            hasManualInningSelection = true
+                        },
+                        onSelectScore = {
+                            isScoreFilterActive = true
+                            selectedInningNumber = null
                             hasManualInningSelection = true
                         }
                     )
@@ -301,7 +321,7 @@ fun LiveGameScreen(
 
                 item {
                     Text(
-                        text = "실시간 이벤트",
+                        text = "실시간 중계",
                         style = AppFont.h5Bold,
                         color = Color.White,
                         modifier = Modifier.padding(top = AppSpacing.sm)
@@ -313,8 +333,17 @@ fun LiveGameScreen(
                         EmptyInningEventCard()
                     }
                 } else {
-                    items(filteredEvents, key = { it.cursor }) { event ->
-                        EventCard(event = event)
+                    itemsIndexed(filteredAtBats, key = { _, g -> g.id }) { index, group ->
+                        val prevKey = filteredAtBats.getOrNull(index - 1)?.let(::sectionKey)
+                        val currKey = sectionKey(group)
+                        if (index == 0 || prevKey != currKey) {
+                            AtBatSectionHeader(title = sectionTitle(group, state))
+                        }
+                        AtBatCard(
+                            group = group,
+                            awayTeamName = state.awayTeamId.teamName,
+                            homeTeamName = state.homeTeamId.teamName,
+                        )
                     }
                 }
 
@@ -749,7 +778,9 @@ private fun PositionPill(text: String, modifier: Modifier, highlighted: Boolean)
 private fun InningTabs(
     state: BackendGamesRepository.LiveGameState,
     selectedInningNumber: Int?,
-    onSelect: (Int) -> Unit,
+    isScoreFilterActive: Boolean,
+    onSelectInning: (Int) -> Unit,
+    onSelectScore: () -> Unit,
 ) {
     val tabs = listOf("득점") + (1..9).map { "${it}회" }
     LazyRow(
@@ -759,14 +790,15 @@ private fun InningTabs(
         items(tabs) { tab ->
             val isScore = tab == "득점"
             val tabNumber = if (isScore) null else tab.removeSuffix("회").toIntOrNull()
-            val selected = !isScore && tabNumber == selectedInningNumber
+            val selected = if (isScore) isScoreFilterActive
+            else (!isScoreFilterActive && tabNumber == selectedInningNumber)
             Surface(
                 shape = AppShapes.pill,
                 color = if (selected) Yellow500 else Gray900,
                 border = BorderStroke(1.dp, if (selected) Yellow500 else Gray800),
-                modifier = Modifier.then(
-                    if (!isScore && tabNumber != null) Modifier.clickable { onSelect(tabNumber) } else Modifier
-                )
+                modifier = Modifier.clickable {
+                    if (isScore) onSelectScore() else tabNumber?.let { onSelectInning(it) }
+                }
             ) {
                 Text(
                     text = tab,
@@ -1149,6 +1181,197 @@ private fun EventCard(event: BackendGamesRepository.LiveEvent) {
     }
 }
 
+// MARK: - At-Bat Card (네이버 릴레이 스타일 타석 단위 카드)
+
+@Composable
+private fun AtBatSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = AppFont.captionBold,
+        color = Gray400,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = AppSpacing.sm)
+    )
+}
+
+private fun sectionKey(group: AtBatGroup): String = group.inning ?: "?"
+
+private fun sectionTitle(group: AtBatGroup, state: BackendGamesRepository.LiveGameState): String {
+    val inning = group.inning?.takeIf { it.isNotEmpty() } ?: return "타석"
+    val teamName = when {
+        inning.contains("초") -> state.awayTeamId.teamName
+        inning.contains("말") -> state.homeTeamId.teamName
+        else -> ""
+    }
+    return if (teamName.isEmpty()) inning else "$inning $teamName 공격"
+}
+
+@Composable
+private fun AtBatCard(
+    group: AtBatGroup,
+    awayTeamName: String,
+    homeTeamName: String,
+) {
+    val context = LocalContext.current
+    val outcomeType = group.outcome?.type?.uppercase() ?: ""
+    val isScoreOutcome = outcomeType == "SCORE" || outcomeType == "SAC_FLY_SCORE"
+    val highlighted = group.outcome?.let { EventFilterGate.isAllowed(context, it.type) } ?: false
+    val headerText = when {
+        isScoreOutcome && !group.outcome?.description.isNullOrEmpty() -> group.outcome!!.description
+        !group.batter.isNullOrEmpty() -> group.batter
+        else -> group.outcome?.description ?: group.pitches.lastOrNull()?.description ?: "타석"
+    }
+    val subHeader = buildString {
+        if (!group.inning.isNullOrEmpty()) append(group.inning)
+        if (!group.pitcher.isNullOrEmpty()) {
+            if (isNotEmpty()) append(" · ")
+            append("vs ").append(group.pitcher)
+        }
+    }
+    val outcome = group.outcome
+    val scoreLine = if (isScoreOutcome &&
+        outcome?.awayScoreAfter != null &&
+        outcome.homeScoreAfter != null
+    ) {
+        "$awayTeamName ${outcome.awayScoreAfter} : ${outcome.homeScoreAfter} $homeTeamName"
+    } else null
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = AppSpacing.xs),
+        shape = AppShapes.md,
+        colors = CardDefaults.cardColors(containerColor = Gray900),
+        border = if (highlighted) BorderStroke(1.5.dp, Yellow500) else null,
+    ) {
+        Column(modifier = Modifier.padding(AppSpacing.lg)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    text = headerText,
+                    style = AppFont.bodyBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(text = group.time, style = AppFont.micro, color = Gray400)
+            }
+            if (subHeader.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(AppSpacing.xs))
+                Text(text = subHeader, style = AppFont.micro, color = Gray500)
+            }
+            if (group.pitches.size > 1) {
+                Spacer(modifier = Modifier.height(AppSpacing.sm))
+                FlowingPitchChips(types = group.pitches.map { it.type })
+            }
+            if (outcome != null && outcome.description.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(AppSpacing.sm))
+                Row(verticalAlignment = Alignment.Top) {
+                    EventTypePill(type = outcome.type)
+                    Spacer(modifier = Modifier.width(AppSpacing.sm))
+                    if (!isScoreOutcome) {
+                        Text(
+                            text = outcome.description,
+                            style = AppFont.caption,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Column(modifier = Modifier.weight(1f)) {
+                            if (!group.batter.isNullOrEmpty()) {
+                                Text(
+                                    text = "타석: ${group.batter}",
+                                    style = AppFont.micro,
+                                    color = Gray400
+                                )
+                            }
+                            if (scoreLine != null) {
+                                Text(
+                                    text = scoreLine,
+                                    style = AppFont.microBold,
+                                    color = Yellow500
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (group.pitches.size == 1) {
+                val only = group.pitches.first()
+                if (only.description.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(AppSpacing.sm))
+                    Row(verticalAlignment = Alignment.Top) {
+                        EventTypePill(type = only.type)
+                        Spacer(modifier = Modifier.width(AppSpacing.sm))
+                        Text(
+                            text = only.description,
+                            style = AppFont.caption,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EventTypePill(type: String) {
+    Text(
+        text = eventLabel(type),
+        style = AppFont.captionBold,
+        color = AppEventColors.eventColor(type),
+        modifier = Modifier
+            .background(AppEventColors.eventColor(type).copy(alpha = 0.14f), AppShapes.pill)
+            .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs)
+    )
+}
+
+@Composable
+private fun FlowingPitchChips(types: List<String>) {
+    val rows = types.chunked(6)
+    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.xs)) {
+        for (row in rows) {
+            Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)) {
+                for (type in row) {
+                    PitchChip(type = type)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PitchChip(type: String) {
+    val color = AppEventColors.eventColor(type)
+    Text(
+        text = pitchShortLabel(type),
+        style = AppFont.microBold,
+        color = color,
+        modifier = Modifier
+            .background(color.copy(alpha = 0.14f), AppShapes.pill)
+            .border(0.5.dp, color.copy(alpha = 0.32f), AppShapes.pill)
+            .padding(horizontal = AppSpacing.xs, vertical = 2.dp)
+    )
+}
+
+private fun pitchShortLabel(type: String): String = when (type.uppercase()) {
+    "BALL" -> "B"
+    "STRIKE" -> "S"
+    "HIT" -> "안"
+    "HOMERUN" -> "홈"
+    "OUT" -> "O"
+    "WALK" -> "BB"
+    "DOUBLE_PLAY" -> "DP"
+    "TRIPLE_PLAY" -> "TP"
+    "SCORE", "SAC_FLY_SCORE" -> "득"
+    "STEAL" -> "도"
+    "TAG_UP_ADVANCE" -> "태"
+    "PITCHER_CHANGE" -> "교"
+    "HALF_INNING_CHANGE" -> "교대"
+    else -> "·"
+}
+
 private fun displayPitcher(
     state: BackendGamesRepository.LiveGameState,
     event: BackendGamesRepository.LiveEvent?,
@@ -1235,12 +1458,16 @@ private object DebugDummyLiveGame {
         lastEventType = "HIT"
     )
 
+    // 타석 그룹화 + 정확 점수 시연용 atBatId/seqno/스코어 부여:
+    //   - 오스틴 7회초 타석(relayNo 003) STRIKE→BALL→HIT 3구 → 1개 카드
+    //   - 박해민 7회초 타석(relayNo 002) 삼진 아웃 → 1개 카드
+    //   - 신민재 6회말 득점(relayNo 001) → 1개 카드 + 누적 스코어 3-5
     val events: List<BackendGamesRepository.LiveEvent> = listOf(
-        BackendGamesRepository.LiveEvent(5, "dbg-5", "HIT", "오스틴 우전 안타로 1루 진루", "19:42", "곽빈", "오스틴", "7회초"),
-        BackendGamesRepository.LiveEvent(4, "dbg-4", "BALL", "곽빈 → 오스틴 볼", "19:41", "곽빈", "오스틴", "7회초"),
-        BackendGamesRepository.LiveEvent(3, "dbg-3", "STRIKE", "곽빈 → 오스틴 스트라이크", "19:40", "곽빈", "오스틴", "7회초"),
-        BackendGamesRepository.LiveEvent(2, "dbg-2", "OUT", "박해민 삼진 아웃", "19:37", "곽빈", "박해민", "7회초"),
-        BackendGamesRepository.LiveEvent(1, "dbg-1", "SCORE", "신민재 득점", "19:34", "곽빈", "오지환", "6회말"),
+        BackendGamesRepository.LiveEvent(5, "dbg-5", "HIT", "오스틴 우전 안타로 1루 진루", "19:42", "곽빈", "오스틴", "7회초", atBatId = "07-003", seqno = 3),
+        BackendGamesRepository.LiveEvent(4, "dbg-4", "BALL", "곽빈 → 오스틴 볼", "19:41", "곽빈", "오스틴", "7회초", atBatId = "07-003", seqno = 2),
+        BackendGamesRepository.LiveEvent(3, "dbg-3", "STRIKE", "곽빈 → 오스틴 스트라이크", "19:40", "곽빈", "오스틴", "7회초", atBatId = "07-003", seqno = 1),
+        BackendGamesRepository.LiveEvent(2, "dbg-2", "OUT", "박해민 삼진 아웃", "19:37", "곽빈", "박해민", "7회초", atBatId = "07-002", seqno = 1),
+        BackendGamesRepository.LiveEvent(1, "dbg-1", "SCORE", "신민재 적시타로 1점 추가", "19:34", "곽빈", "오지환", "6회말", atBatId = "06-001", seqno = 1, homeScoreAfter = 3, awayScoreAfter = 5),
     )
 
     val lineup = FieldLineup(

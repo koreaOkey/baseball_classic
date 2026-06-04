@@ -20,11 +20,16 @@
 - [x] `EventCard` 는 LiveActivity / 푸시 long-look 재사용 위해 보존
 
 ## Android Phone
-- [ ] `apps/mobile/.../model/LiveEvent.kt` — `atBatId: String? = null`, `seqno: Int? = null` (kotlinx 기본값으로 미지 키 안전)
-- [ ] `apps/mobile/.../model/AtBatGroup.kt` (신규) — `data class AtBatGroup` + `fun List<LiveEvent>.groupByAtBat(): List<AtBatGroup>`
-- [ ] `apps/mobile/.../ui/screens/LiveGameScreen.kt` — `LazyColumn` `items(groups, key=AtBatGroup::id)` + `AtBatCard` 컴포저블
-- [ ] `AtBatCard` 컴포저블 — iOS와 동일 디자인 토큰(`AppEventColors`, `AppFont`, `AppSpacing`, `AppShapes`)
-- [ ] `PitchChip` 컴포저블 — Capsule shape, EventColors 매핑
+- [x] `apps/mobile/.../data/BackendGamesRepository.kt` — `LiveEvent` 에 `atBatId/seqno/homeScoreAfter/awayScoreAfter` 4필드 + `toLiveEvent()` 디코딩 갱신
+- [x] `apps/mobile/.../data/model/AtBatGroup.kt` (신규) — `data class AtBatGroup` + `companion fun group(events) = ...`. iOS 와 동등 그룹화 규칙
+- [x] `apps/mobile/.../ui/theme/EventColors.kt` — STRIKE=Yellow500, BALL=Green500, HIT=Blue500 분리
+- [x] `apps/mobile/.../ui/screens/LiveGameScreen.kt` — `isScoreFilterActive` 상태, SCORE 분기 `filteredEvents`, `filteredAtBats`, `itemsIndexed` + 섹션 헤더 + `AtBatCard` 교체, "실시간 이벤트" → "실시간 중계"
+- [x] `InningTabs` 컴포저블 — `onSelectInning/onSelectScore` 분리, "득점" 탭 활성화
+- [x] `AtBatCard/AtBatSectionHeader/FlowingPitchChips/PitchChip/EventTypePill/pitchShortLabel/sectionKey/sectionTitle` 추가
+- [x] SCORE outcome 그룹 푸터에 "{away} N : M {home}" Yellow500 정확 스코어 라인
+- [x] `DebugDummyLiveGame.events` 시연 데이터에 `atBatId/seqno + homeScoreAfter/awayScoreAfter` 부여 (BuildConfig.DEBUG 한정)
+- [x] `EventCard` 는 LiveActivity / 푸시 long-look 재사용 위해 보존
+- [x] `./gradlew :mobile:compileDebugKotlin` BUILD SUCCESSFUL
 
 ## Verification (앱 빌드 후)
 - [ ] 로컬 시뮬레이션: `backend/api/scripts/simulate_crawler.py` 로 한 게임 풀 시드 → `curl /games/{id}/events` 응답에서 같은 `atBatId` 가 묶이고 비정형은 `null`

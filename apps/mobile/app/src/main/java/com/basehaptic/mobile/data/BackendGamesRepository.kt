@@ -92,6 +92,14 @@ object BackendGamesRepository {
         val pitcher: String?,
         val batter: String?,
         val inning: String? = null,
+        // 타석(at-bat) 그룹화 키. 백엔드 source_event_id 가
+        // "{inning:02d}-{relayNo:03d}-{seqno:04d}" 형식일 때만 채워지며, 구버전 백엔드/비정형
+        // 이벤트에서는 null — 평면 폴백.
+        val atBatId: String? = null,
+        val seqno: Int? = null,
+        // 이벤트 직후 시점의 누적 스코어. 백엔드가 채운 경우에만 값이 있고, 미수집 이벤트는 null.
+        val homeScoreAfter: Int? = null,
+        val awayScoreAfter: Int? = null,
     )
 
     data class LiveEventsPage(
@@ -687,6 +695,10 @@ object BackendGamesRepository {
             pitcher = optString("pitcher").ifBlank { null },
             batter = optString("batter").ifBlank { null },
             inning = optString("inning").ifBlank { null },
+            atBatId = optString("atBatId").ifBlank { null },
+            seqno = optNullableInt("seqno"),
+            homeScoreAfter = optNullableInt("homeScoreAfter"),
+            awayScoreAfter = optNullableInt("awayScoreAfter"),
         )
     }
 

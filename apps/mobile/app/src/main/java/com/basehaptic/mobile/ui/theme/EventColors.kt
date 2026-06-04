@@ -9,13 +9,15 @@ import androidx.compose.ui.graphics.Color
  * iOS `AppEventColors`와 동일 그룹 매핑.
  */
 object AppEventColors {
+    // 라이브 상세 PitchChip 가독성을 위해 S=노랑, B=초록, 안타=파랑으로 분리.
     fun eventColor(eventType: String): Color = when (eventType.uppercase()) {
-        "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY" -> Yellow500
-        "HIT", "WALK", "STEAL", "TAG_UP_ADVANCE", "PITCHER_CHANGE" -> Green500
-        "DOUBLE_PLAY", "TRIPLE_PLAY", "STRIKE" -> Orange500
+        "STRIKE" -> Yellow500
+        "BALL" -> Green500
+        "HIT" -> Blue500
+        "HOMERUN", "SCORE", "SAC_FLY_SCORE", "VICTORY", "MOUND_VISIT" -> Yellow500
+        "WALK", "STEAL", "TAG_UP_ADVANCE", "PITCHER_CHANGE" -> Green500
+        "DOUBLE_PLAY", "TRIPLE_PLAY" -> Orange500
         "OUT" -> Red500
-        "BALL" -> Gray400
-        "MOUND_VISIT" -> Yellow500
         else -> Gray500
     }
 }
