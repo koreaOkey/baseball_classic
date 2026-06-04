@@ -678,13 +678,14 @@ data class FieldLineup(
 ) {
     companion object {
         /// 백엔드 응답의 라인업을 수비팀 기준으로 매핑.
-        /// 이닝 "초"=홈수비, "말"=어웨이수비. 라인업 비어있거나 이닝 파싱 실패 시 null.
+        /// 이닝 "초"=홈수비, "말"=어웨이수비. 라이브 외(SCHEDULED "경기전" 등)는 1회초가
+        /// 시작될 예정이므로 home 수비를 가정 — 라인업이 30분 전 노출되는 시점부터 카드가
+        /// 비지 않는다. 선택된 수비팀 라인업이 비어있으면 반대편으로 폴백.
         fun from(state: BackendGamesRepository.LiveGameState): FieldLineup? {
-            val defending = when {
-                state.inning.contains("초") -> state.homeLineup
-                state.inning.contains("말") -> state.awayLineup
-                else -> return null
-            }
+            val preferHome = !state.inning.contains("말")
+            val primary = if (preferHome) state.homeLineup else state.awayLineup
+            val fallback = if (preferHome) state.awayLineup else state.homeLineup
+            val defending = if (primary.isEmpty()) fallback else primary
             if (defending.isEmpty()) return null
             val slots = mutableMapOf<String, String>()
             for (slot in defending) {

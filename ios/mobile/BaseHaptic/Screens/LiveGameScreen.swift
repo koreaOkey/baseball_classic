@@ -235,14 +235,14 @@ struct FieldLineup {
 
 extension FieldLineup {
     /// 백엔드 응답의 라인업을 수비팀 기준으로 매핑.
-    /// 이닝 "초"=홈수비, "말"=어웨이수비. 라인업 비어있거나 이닝 파싱 실패 시 nil.
+    /// 이닝 "초"=홈수비, "말"=어웨이수비. 라이브 외(SCHEDULED "경기전", FINISHED "경기 종료" 등)
+    /// 에서는 1회초가 시작될 예정이므로 home 수비를 가정 — 라인업이 30분 전 노출되는 시점부터
+    /// BaseballFieldCard 가 비지 않는다. 선택된 수비팀 라인업이 비어있으면 반대편으로 폴백.
     static func from(state: LiveGameState) -> FieldLineup? {
-        let defending: [LineupSlot]
-        switch defendingTeamSide(forInning: state.inning) {
-        case .home: defending = state.homeLineup
-        case .away: defending = state.awayLineup
-        case .none: return nil
-        }
+        let preferHome: Bool = !state.inning.contains("말")
+        let primary = preferHome ? state.homeLineup : state.awayLineup
+        let fallback = preferHome ? state.awayLineup : state.homeLineup
+        let defending: [LineupSlot] = primary.isEmpty ? fallback : primary
         if defending.isEmpty { return nil }
         var slots: [String: String] = [:]
         for slot in defending where slot.isActive {
