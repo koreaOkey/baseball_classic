@@ -27,6 +27,22 @@
 - WHEN GET /games/{gameId}/events?after={cursor}&limit=50 을 호출하면
 - THEN 커서 이후의 이벤트를 시간순으로 최대 50건 반환한다
 
+#### Scenario: 회차별 이벤트 조회
+- GIVEN 경기에 여러 회차의 이벤트가 누적되어 있을 때
+- WHEN GET /games/{gameId}/events?inningNumber=3 을 호출하면
+- THEN 3회초와 3회말 이벤트만 시간순으로 반환한다
+
+#### Scenario: 득점 이벤트 조회
+- GIVEN 경기에 득점 이벤트가 누적되어 있을 때
+- WHEN GET /games/{gameId}/events?scoringOnly=true 을 호출하면
+- THEN 득점과 희생플라이 득점 이벤트만 시간순으로 반환한다
+
+#### Scenario: 투구 상세 이벤트 조회
+- GIVEN 크롤러가 투구 상세 메타데이터를 포함한 이벤트를 저장했을 때
+- WHEN GET /games/{gameId}/events 를 호출하면
+- THEN 응답 이벤트는 구속, 구종, 투구 번호, 투구 후 볼/스트라이크/아웃 카운트, 타자 기록, 승리확률 정보를 가능한 경우 포함한다
+- AND 해당 메타데이터가 없는 이벤트는 기존 이벤트 응답과 동일하게 조회된다
+
 ### Requirement: BSO 카운트 관리
 시스템은 3아웃 시 ball/strike 카운트를 자동 리셋해야 한다(MUST).
 
@@ -78,4 +94,3 @@
 - **GIVEN** 마이그레이션 이전에 저장돼 inning 이 NULL 인 이벤트
 - **WHEN** 응답이 생성되면
 - **THEN** `inning` 필드는 `null` 로 전달된다
-

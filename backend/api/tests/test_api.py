@@ -1392,6 +1392,151 @@ def test_event_score_after_populated_from_payload_metadata() -> None:
         assert by_source["01-005-0002"]["homeScoreAfter"] == 0
 
 
+def test_event_pitch_detail_metadata_exposed_from_payload() -> None:
+    """네이버 relay 원본의 투구 상세/BSO/확률 metadata 는 이벤트 응답에 optional 로 노출한다."""
+    with TestClient(app) as client:
+        snapshot = sample_snapshot()
+        snapshot["events"] = [
+            {
+                "sourceEventId": "05-040-0210",
+                "type": "STRIKE",
+                "description": "5구 헛스윙",
+                "occurredAt": "2026-06-07T09:05:06Z",
+                "inning": "5회초",
+                "metadata": {
+                    "pitchNum": 5,
+                    "pitchSpeed": 148,
+                    "pitchStuff": "투심",
+                    "ballAfter": 2,
+                    "strikeAfter": 3,
+                    "outAfter": 0,
+                    "batterRecord": {
+                        "name": "오윤석",
+                        "batOrder": 8,
+                        "seasonHra": 0.278,
+                        "pa": 2,
+                        "ab": 2,
+                        "hit": 0,
+                        "rbi": 0,
+                        "hr": 0,
+                        "bb": 0,
+                        "so": 1,
+                    },
+                    "homeWinProbability": 76.0,
+                    "awayWinProbability": 24.0,
+                    "wpaByPlate": -3.2,
+                },
+            },
+            {
+                "sourceEventId": "05-040-0211",
+                "type": "OUT",
+                "description": "오윤석 : 삼진 아웃",
+                "occurredAt": "2026-06-07T09:05:07Z",
+                "inning": "5회초",
+                "metadata": {},
+            },
+        ]
+        ingest = client.post(
+            "/internal/crawler/games/20260607PITCHMETA01/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=snapshot,
+        )
+        assert ingest.status_code == 200
+
+        events = client.get("/games/20260607PITCHMETA01/events")
+        assert events.status_code == 200
+        by_source = {item["id"]: item for item in events.json()["items"]}
+
+        pitch = by_source["05-040-0210"]
+        assert pitch["atBatId"] == "05-040"
+        assert pitch["seqno"] == 210
+        assert pitch["pitchNum"] == 5
+        assert pitch["pitchSpeed"] == 148
+        assert pitch["pitchStuff"] == "투심"
+        assert pitch["ballAfter"] == 2
+        assert pitch["strikeAfter"] == 3
+        assert pitch["outAfter"] == 0
+        assert pitch["batterRecord"]["name"] == "오윤석"
+        assert pitch["batterRecord"]["batOrder"] == 8
+        assert pitch["awayWinProbability"] == 24.0
+        assert pitch["wpaByPlate"] == -3.2
+
+        outcome = by_source["05-040-0211"]
+        assert outcome["atBatId"] == "05-040"
+        assert outcome["pitchSpeed"] is None
+        assert outcome["batterRecord"] is None
+
+
+def test_events_endpoint_filters_by_inning_number_and_scoring_only() -> None:
+    """라이브 상세 이닝 탭 lazy-load 를 위해 이벤트 API 는 회차/득점 필터를 지원한다.
+
+    기존 cursor/limit 조회는 그대로 유지하면서, inningNumber 는 N회초+N회말을 모두
+    포함하고 scoringOnly 는 득점성 이벤트만 반환해야 한다.
+    """
+    with TestClient(app) as client:
+        snapshot = sample_snapshot()
+        snapshot["events"] = [
+            {
+                "sourceEventId": "01-001-0001",
+                "type": "BALL",
+                "description": "1회초 볼",
+                "occurredAt": "2026-02-17T09:00:00Z",
+                "inning": "1회초",
+                "metadata": {},
+            },
+            {
+                "sourceEventId": "01-002-0001",
+                "type": "SCORE",
+                "description": "1회말 득점",
+                "occurredAt": "2026-02-17T09:01:00Z",
+                "inning": "1회말",
+                "metadata": {},
+            },
+            {
+                "sourceEventId": "02-001-0001",
+                "type": "HIT",
+                "description": "2회초 안타",
+                "occurredAt": "2026-02-17T09:02:00Z",
+                "inning": "2회초",
+                "metadata": {},
+            },
+            {
+                "sourceEventId": "02-002-0001",
+                "type": "SAC_FLY_SCORE",
+                "description": "2회말 희생플라이 득점",
+                "occurredAt": "2026-02-17T09:03:00Z",
+                "inning": "2회말",
+                "metadata": {},
+            },
+        ]
+        ingest = client.post(
+            "/internal/crawler/games/20260601EVENTFILTER01/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=snapshot,
+        )
+        assert ingest.status_code == 200
+
+        inning_one = client.get("/games/20260601EVENTFILTER01/events?inningNumber=1&limit=200")
+        assert inning_one.status_code == 200
+        assert [item["id"] for item in inning_one.json()["items"]] == [
+            "01-001-0001",
+            "01-002-0001",
+        ]
+
+        scoring = client.get("/games/20260601EVENTFILTER01/events?scoringOnly=true&limit=200")
+        assert scoring.status_code == 200
+        assert [item["id"] for item in scoring.json()["items"]] == [
+            "01-002-0001",
+            "02-002-0001",
+        ]
+
+        scoring_inning_two = client.get(
+            "/games/20260601EVENTFILTER01/events?inningNumber=2&scoringOnly=true&limit=200"
+        )
+        assert scoring_inning_two.status_code == 200
+        assert [item["id"] for item in scoring_inning_two.json()["items"]] == ["02-002-0001"]
+
+
 def _insert_cheer_event(
     db,
     *,

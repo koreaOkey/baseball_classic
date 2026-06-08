@@ -5,8 +5,14 @@ import Foundation
 enum WatchTokenRegistrar {
 
     private static var baseURL: String {
-        Bundle.main.object(forInfoDictionaryKey: "BACKEND_BASE_URL") as? String
-            ?? "http://localhost:8080"
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "BACKEND_BASE_URL") as? String else {
+            return "http://localhost:8080"
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed.hasPrefix("$(") {
+            return "http://localhost:8080"
+        }
+        return trimmed
     }
 
     /// embedded.mobileprovision에서 aps-environment를 읽어 sandbox 여부 판단

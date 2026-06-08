@@ -32,6 +32,8 @@ reference/
 
 # Local backend secrets
 backend/api/.env
+infra/staging/*.local.env
+infra/staging/*.secret.env
 
 # OS
 .DS_Store

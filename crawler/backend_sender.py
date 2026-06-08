@@ -222,15 +222,16 @@ def _collect_player_map(relays_by_inning: Dict[int, Dict[str, Any]]) -> Dict[str
     return player_map
 
 
-def _collect_options(relays_by_inning: Dict[int, Dict[str, Any]]) -> List[Tuple[int, str, int, Dict[str, Any]]]:
-    options: List[Tuple[int, str, int, Dict[str, Any]]] = []
+def _collect_options(relays_by_inning: Dict[int, Dict[str, Any]]) -> List[Tuple[int, str, int, Dict[str, Any], Dict[str, Any]]]:
+    options: List[Tuple[int, str, int, Dict[str, Any], Dict[str, Any]]] = []
     for inning in sorted(relays_by_inning):
         relay_data = relays_by_inning.get(inning) or {}
         for relay in sorted(relay_data.get("textRelays") or [], key=lambda item: item.get("no", 0)):
             relay_no = _safe_int(relay.get("no"), default=0)
             half = "top" if str(relay.get("homeOrAway")) == "0" else "bottom"
+            metric_option = relay.get("metricOption") if isinstance(relay.get("metricOption"), dict) else {}
             for option in sorted(relay.get("textOptions") or [], key=lambda item: item.get("seqno", 0)):
-                options.append((inning, half, relay_no, option))
+                options.append((inning, half, relay_no, option, metric_option))
     return options
 
 
@@ -676,7 +677,7 @@ def build_snapshot_payload(
     latest_state: Dict[str, Any] = {}
     latest_inning: Optional[int] = None
     latest_half: Optional[str] = None
-    for inning, half, _, option in options:
+    for inning, half, _, option, _ in options:
         state = option.get("currentGameState") or {}
         if state:
             latest_state = state
@@ -709,10 +710,14 @@ def build_snapshot_payload(
     events: List[Dict[str, Any]] = []
     last_pitcher_name = pitcher_name
     last_batter_name = batter_name
-    for index, (inning, half, relay_no, option) in enumerate(options):
+    for index, (inning, half, relay_no, option, metric_option) in enumerate(options):
         seqno = _safe_int(option.get("seqno"), default=index)
         option_type = _safe_int(option.get("type"), default=-1)
         pitch_result = str(option.get("pitchResult") or "").strip().upper() or None
+        pitch_num = _safe_int(option.get("pitchNum"), default=-1)
+        pitch_speed = _safe_int(option.get("speed"), default=-1)
+        pitch_stuff = str(option.get("stuff") or "").strip()
+        pts_pitch_id = str(option.get("ptsPitchId") or "").strip()
         event_time = base_time + timedelta(milliseconds=index)
         event_time_iso = event_time.isoformat().replace("+00:00", "Z")
         current_state = option.get("currentGameState") or {}
@@ -730,6 +735,9 @@ def build_snapshot_payload(
         # 어떤 결과로 몇 점이 났는지를 클라이언트가 정확히 재구성할 수 있게 한다.
         option_home_score = _safe_int(current_state.get("homeScore"), default=-1)
         option_away_score = _safe_int(current_state.get("awayScore"), default=-1)
+        ball_after = _safe_int(current_state.get("ball"), default=-1)
+        strike_after = _safe_int(current_state.get("strike"), default=-1)
+        out_after = _safe_int(current_state.get("out"), default=-1)
 
         metadata: Dict[str, Any] = {
             "inning": inning,
@@ -754,6 +762,30 @@ def build_snapshot_payload(
             metadata["pitcher"] = last_pitcher_name
         if last_batter_name:
             metadata["batter"] = last_batter_name
+        if pitch_num >= 0:
+            metadata["pitchNum"] = pitch_num
+        if pitch_speed >= 0:
+            metadata["pitchSpeed"] = pitch_speed
+        if pitch_stuff:
+            metadata["pitchStuff"] = pitch_stuff
+        if pts_pitch_id:
+            metadata["ptsPitchId"] = pts_pitch_id
+        if ball_after >= 0:
+            metadata["ballAfter"] = ball_after
+        if strike_after >= 0:
+            metadata["strikeAfter"] = strike_after
+        if out_after >= 0:
+            metadata["outAfter"] = out_after
+        batter_record = option.get("batterRecord")
+        if isinstance(batter_record, dict) and batter_record:
+            metadata["batterRecord"] = batter_record
+        if metric_option:
+            if "homeTeamWinRate" in metric_option:
+                metadata["homeWinProbability"] = metric_option["homeTeamWinRate"]
+            if "awayTeamWinRate" in metric_option:
+                metadata["awayWinProbability"] = metric_option["awayTeamWinRate"]
+            if "wpaByPlate" in metric_option:
+                metadata["wpaByPlate"] = metric_option["wpaByPlate"]
 
         event_type = _classify_event_type(option)
         if event_type == "PITCHER_CHANGE":

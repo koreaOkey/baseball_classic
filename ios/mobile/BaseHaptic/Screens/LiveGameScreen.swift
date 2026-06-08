@@ -13,6 +13,10 @@ struct LiveGameScreen: View {
     @State private var selectedInningNumber: Int? = nil
     @State private var hasManualInningSelection: Bool = false
     @State private var isScoreFilterActive: Bool = false
+    @State private var loadedInningNumbers: Set<Int> = []
+    @State private var loadingInningNumbers: Set<Int> = []
+    @State private var isScoreEventsLoaded: Bool = false
+    @State private var isScoreEventsLoading: Bool = false
 
     private var filteredEvents: [LiveEvent] {
         if isScoreFilterActive {
@@ -30,6 +34,14 @@ struct LiveGameScreen: View {
 
     private var filteredAtBats: [AtBatGroup] {
         AtBatGroup.group(filteredEvents)
+    }
+
+    private var isCurrentEventFilterLoading: Bool {
+        if isScoreFilterActive {
+            return isScoreEventsLoading
+        }
+        guard let selectedInningNumber else { return false }
+        return loadingInningNumbers.contains(selectedInningNumber)
     }
 
     private var currentLineup: FieldLineup? {
@@ -74,11 +86,13 @@ struct LiveGameScreen: View {
                                 isScoreFilterActive = false
                                 selectedInningNumber = n
                                 hasManualInningSelection = true
+                                Task { await loadInningEvents(n) }
                             },
                             onSelectScore: {
                                 isScoreFilterActive = true
                                 selectedInningNumber = nil
                                 hasManualInningSelection = true
+                                Task { await loadScoreEvents() }
                             }
                         )
                         CurrentMatchupCard(state: state, latestEvent: events.first)
@@ -90,7 +104,7 @@ struct LiveGameScreen: View {
                             .padding(.top, AppSpacing.sm)
 
                         if filteredEvents.isEmpty {
-                            EmptyInningEventCard(hasAnyEvents: !events.isEmpty)
+                            EmptyInningEventCard(isLoading: isCurrentEventFilterLoading)
                         } else {
                             let groups = filteredAtBats
                             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
@@ -118,7 +132,10 @@ struct LiveGameScreen: View {
         .onChange(of: gameState?.inning) { _, newValue in
             guard !hasManualInningSelection, let inning = newValue else { return }
             let n = inningNumber(inning)
-            if n > 0 { selectedInningNumber = n }
+            if n > 0 {
+                selectedInningNumber = n
+                Task { await loadInningEvents(n) }
+            }
         }
     }
 
@@ -151,15 +168,23 @@ struct LiveGameScreen: View {
             // Recovery pull
             if let fetchedState = await repo.fetchGameState(gameId: gameId) {
                 gameState = fetchedState
+                let n = inningNumber(fetchedState.inning)
+                if !hasManualInningSelection, n > 0 {
+                    selectedInningNumber = n
+                    await loadInningEvents(n)
+                    cursor = max(cursor, events.map(\.cursor).max() ?? 0)
+                }
                 loadError = nil
             } else if gameState == nil {
                 loadError = "백엔드 경기 상태를 가져오지 못했습니다."
             }
 
-            if let fetchedEvents = await repo.fetchGameEvents(gameId: gameId, after: cursor, limit: 200) {
+            if cursor > 0, let fetchedEvents = await repo.fetchGameEvents(gameId: gameId, after: cursor, limit: 200) {
                 mergeEvents(fetchedEvents.items)
                 if let nextCursor = fetchedEvents.nextCursor {
                     cursor = max(cursor, nextCursor)
+                } else {
+                    cursor = max(cursor, fetchedEvents.items.map(\.cursor).max() ?? 0)
                 }
             }
 
@@ -179,11 +204,13 @@ struct LiveGameScreen: View {
                         break
                     case .events(let items):
                         mergeEvents(items)
+                        cursor = max(cursor, items.map(\.cursor).max() ?? 0)
                     case .state(let state):
                         gameState = state
                         loadError = nil
                     case .update(let state, let events):
                         mergeEvents(events)
+                        cursor = max(cursor, events.map(\.cursor).max() ?? 0)
                         if let state {
                             let isInningChange = state.out == 0 && (gameState?.out ?? 0) >= 1 && state.status == .live
                             if isInningChange {
@@ -205,6 +232,77 @@ struct LiveGameScreen: View {
         }
     }
 
+    private func loadInningEvents(_ inningNumber: Int) async {
+        guard let gameId = gameId, !gameId.isEmpty else { return }
+        guard !loadedInningNumbers.contains(inningNumber),
+              !loadingInningNumbers.contains(inningNumber) else { return }
+
+        loadingInningNumbers.insert(inningNumber)
+        defer { loadingInningNumbers.remove(inningNumber) }
+
+        let fetched = await fetchEventPages(
+            gameId: gameId,
+            inningNumber: inningNumber,
+            scoringOnly: false
+        )
+        if let fetched {
+            mergeEvents(fetched)
+            loadedInningNumbers.insert(inningNumber)
+            loadError = nil
+        } else if filteredEvents.isEmpty {
+            loadError = "중계 데이터를 가져오지 못했습니다."
+        }
+    }
+
+    private func loadScoreEvents() async {
+        guard let gameId = gameId, !gameId.isEmpty else { return }
+        guard !isScoreEventsLoaded, !isScoreEventsLoading else { return }
+
+        isScoreEventsLoading = true
+        defer { isScoreEventsLoading = false }
+
+        let fetched = await fetchEventPages(
+            gameId: gameId,
+            inningNumber: nil,
+            scoringOnly: true
+        )
+        if let fetched {
+            mergeEvents(fetched)
+            isScoreEventsLoaded = true
+            loadError = nil
+        } else if filteredEvents.isEmpty {
+            loadError = "중계 데이터를 가져오지 못했습니다."
+        }
+    }
+
+    private func fetchEventPages(
+        gameId: String,
+        inningNumber: Int?,
+        scoringOnly: Bool
+    ) async -> [LiveEvent]? {
+        let repo = BackendGamesRepository.shared
+        var after: Int64 = 0
+        var collected: [LiveEvent] = []
+
+        while !Task.isCancelled {
+            guard let page = await repo.fetchGameEvents(
+                gameId: gameId,
+                after: after,
+                limit: 200,
+                inningNumber: inningNumber,
+                scoringOnly: scoringOnly
+            ) else {
+                return nil
+            }
+
+            collected.append(contentsOf: page.items)
+            guard let nextCursor = page.nextCursor, nextCursor > after else { break }
+            after = nextCursor
+        }
+
+        return collected
+    }
+
     private func mergeEvents(_ incoming: [LiveEvent]) {
         guard !incoming.isEmpty else { return }
         let sorted = incoming.sorted { $0.cursor > $1.cursor }
@@ -214,7 +312,7 @@ struct LiveGameScreen: View {
             }
             .values
             .sorted { $0.cursor > $1.cursor }
-        events = Array(merged.prefix(80))
+        events = merged
     }
 }
 
@@ -689,10 +787,10 @@ private struct InningTabs: View {
 }
 
 private struct EmptyInningEventCard: View {
-    let hasAnyEvents: Bool
+    let isLoading: Bool
 
     var body: some View {
-        Text("해당 회 이벤트가 없습니다")
+        Text(isLoading ? "중계 데이터를 불러오는 중..." : "해당 회 이벤트가 없습니다")
             .font(AppFont.bodyMedium)
             .foregroundColor(AppColors.gray400)
             .frame(maxWidth: .infinity)
@@ -1337,4 +1435,3 @@ private func eventLabel(_ type: String) -> String {
     default: return type
     }
 }
-

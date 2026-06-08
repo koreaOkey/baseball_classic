@@ -1231,6 +1231,40 @@ def _coerce_score(value: Any) -> int | None:
     return None
 
 
+def _coerce_int_range(value: Any, *, minimum: int, maximum: int) -> int | None:
+    if value is None:
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    if minimum <= n <= maximum:
+        return n
+    return None
+
+
+def _coerce_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_payload_dict(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict) and value:
+        return value
+    return None
+
+
+def _coerce_payload_str(value: Any, *, max_length: int) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    return raw[:max_length]
+
+
 def to_event_out(event: GameEvent) -> GameEventOut:
     at_bat_id, seqno = _split_at_bat(event.source_event_id)
     payload = event.payload_json if isinstance(event.payload_json, dict) else {}
@@ -1250,6 +1284,16 @@ def to_event_out(event: GameEvent) -> GameEventOut:
         seqno=seqno,
         homeScoreAfter=home_score_after,
         awayScoreAfter=away_score_after,
+        pitchNum=_coerce_int_range(payload.get("pitchNum"), minimum=0, maximum=999),
+        pitchSpeed=_coerce_int_range(payload.get("pitchSpeed"), minimum=0, maximum=250),
+        pitchStuff=_coerce_payload_str(payload.get("pitchStuff"), max_length=64),
+        ballAfter=_coerce_int_range(payload.get("ballAfter"), minimum=0, maximum=4),
+        strikeAfter=_coerce_int_range(payload.get("strikeAfter"), minimum=0, maximum=3),
+        outAfter=_coerce_int_range(payload.get("outAfter"), minimum=0, maximum=3),
+        batterRecord=_coerce_payload_dict(payload.get("batterRecord")),
+        homeWinProbability=_coerce_float(payload.get("homeWinProbability")),
+        awayWinProbability=_coerce_float(payload.get("awayWinProbability")),
+        wpaByPlate=_coerce_float(payload.get("wpaByPlate")),
     )
 
 

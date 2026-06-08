@@ -21,6 +21,7 @@ Supabase(PostgreSQL) 스키마/마이그레이션을 관리하는 영역입니�
 - `migrations/20260302_003_fix_stats_uniqueness_and_outs.sql`
 - `migrations/20260308_005_add_pitcher_change_event_type_check.sql`
 - `migrations/20260308_006_add_half_inning_change_event_type_check.sql`
+- `migrations/20260312_007_add_game_date_and_start_time_to_games.sql`
 - `migrations/20260507_010_allow_canceled_postponed_game_status.sql`
 
 ## 테이블

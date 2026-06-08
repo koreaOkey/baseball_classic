@@ -1,9 +1,10 @@
 import logging
+from contextlib import contextmanager
 from collections.abc import Generator
 from typing import Any
 
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import NullPool
@@ -84,30 +85,55 @@ def init_db() -> None:
             lock_conn.execute(text("SELECT pg_advisory_lock(hashtext('basehaptic_init_db'))"))
             lock_conn.commit()
             try:
-                Base.metadata.create_all(bind=engine)
-                _ensure_game_columns()
-                _ensure_game_event_columns()
-                _ensure_boxscore_context_columns()
-                _ensure_game_event_type_check_constraint()
-                _ensure_device_token_columns()
-                _ensure_cheer_events_user_id_index()
-                _ensure_user_checkin_backfill()
+                schema_conn = lock_conn.execution_options(isolation_level="AUTOCOMMIT")
+                _run_schema_init(schema_conn)
             finally:
                 lock_conn.execute(text("SELECT pg_advisory_unlock(hashtext('basehaptic_init_db'))"))
                 lock_conn.commit()
     else:
-        Base.metadata.create_all(bind=engine)
-        _ensure_game_columns()
-        _ensure_game_event_columns()
-        _ensure_boxscore_context_columns()
-        _ensure_game_event_type_check_constraint()
-        _ensure_device_token_columns()
-        _ensure_cheer_events_user_id_index()
-        _ensure_user_checkin_backfill()
+        _run_schema_init(engine)
 
 
-def _ensure_game_columns() -> None:
-    inspector = inspect(engine)
+SchemaBind = Engine | Connection
+
+
+def _run_schema_init(bind: SchemaBind = engine) -> None:
+    Base.metadata.create_all(bind=bind)
+    _ensure_game_columns(bind)
+    _ensure_game_event_columns(bind)
+    _ensure_boxscore_context_columns(bind)
+    _ensure_game_event_type_check_constraint(bind)
+    _ensure_device_token_columns(bind)
+    _ensure_cheer_events_user_id_index(bind)
+    _ensure_user_checkin_backfill(bind)
+
+
+@contextmanager
+def _with_connection(bind: SchemaBind) -> Generator[Connection, None, None]:
+    if isinstance(bind, Connection):
+        yield bind
+        return
+
+    with bind.connect() as conn:
+        yield conn
+
+
+def _execute_ddl_statements(bind: SchemaBind, ddl_statements: list[str]) -> None:
+    if not ddl_statements:
+        return
+
+    if isinstance(bind, Connection):
+        for ddl in ddl_statements:
+            _execute_ddl_best_effort(bind, ddl)
+        return
+
+    with bind.begin() as conn:
+        for ddl in ddl_statements:
+            _execute_ddl_best_effort(conn, ddl)
+
+
+def _ensure_game_columns(bind: SchemaBind = engine) -> None:
+    inspector = inspect(bind)
     table_names = set(inspector.get_table_names())
     if "games" not in table_names:
         return
@@ -120,16 +146,12 @@ def _ensure_game_columns() -> None:
         ddl_statements.append("ALTER TABLE games ADD COLUMN game_date VARCHAR(10)")
     if "live_started_at" not in columns:
         ddl_statements.append("ALTER TABLE games ADD COLUMN live_started_at TIMESTAMPTZ")
-    if not ddl_statements:
-        return
 
-    with engine.begin() as conn:
-        for ddl in ddl_statements:
-            _execute_ddl_best_effort(conn, ddl)
+    _execute_ddl_statements(bind, ddl_statements)
 
 
-def _ensure_game_event_columns() -> None:
-    inspector = inspect(engine)
+def _ensure_game_event_columns(bind: SchemaBind = engine) -> None:
+    inspector = inspect(bind)
     table_names = set(inspector.get_table_names())
     if "game_events" not in table_names:
         return
@@ -143,16 +165,11 @@ def _ensure_game_event_columns() -> None:
     if "inning" not in columns:
         ddl_statements.append("ALTER TABLE game_events ADD COLUMN inning VARCHAR(32)")
 
-    if not ddl_statements:
-        return
-
-    with engine.begin() as conn:
-        for ddl in ddl_statements:
-            _execute_ddl_best_effort(conn, ddl)
+    _execute_ddl_statements(bind, ddl_statements)
 
 
-def _ensure_boxscore_context_columns() -> None:
-    inspector = inspect(engine)
+def _ensure_boxscore_context_columns(bind: SchemaBind = engine) -> None:
+    inspector = inspect(bind)
     table_names = set(inspector.get_table_names())
     target_tables = ("game_lineup_slots", "game_batter_stats", "game_pitcher_stats")
     for table_name in target_tables:
@@ -170,24 +187,19 @@ def _ensure_boxscore_context_columns() -> None:
         if "away_team" not in columns:
             ddl_statements.append(f"ALTER TABLE {table_name} ADD COLUMN away_team VARCHAR(64)")
 
-        if not ddl_statements:
-            continue
-
-        with engine.begin() as conn:
-            for ddl in ddl_statements:
-                _execute_ddl_best_effort(conn, ddl)
+        _execute_ddl_statements(bind, ddl_statements)
 
 
-def _ensure_game_event_type_check_constraint() -> None:
+def _ensure_game_event_type_check_constraint(bind: SchemaBind = engine) -> None:
     if engine.dialect.name != "postgresql":
         return
 
-    inspector = inspect(engine)
+    inspector = inspect(bind)
     table_names = set(inspector.get_table_names())
     if "game_events" not in table_names:
         return
 
-    with engine.connect() as conn:
+    with _with_connection(bind) as conn:
         row = conn.execute(
             text(
                 """
@@ -208,20 +220,21 @@ def _ensure_game_event_type_check_constraint() -> None:
         return
 
     values = ", ".join(f"'{event_type}'" for event_type in GAME_EVENT_TYPE_VALUES)
-    with engine.begin() as conn:
-        _execute_ddl_best_effort(conn, "alter table public.game_events drop constraint if exists game_events_event_type_check")
-        _execute_ddl_best_effort(
-            conn,
+    _execute_ddl_statements(
+        bind,
+        [
+            "alter table public.game_events drop constraint if exists game_events_event_type_check",
             f"""
             alter table public.game_events
             add constraint game_events_event_type_check
             check (event_type in ({values}))
             """,
-        )
+        ],
+    )
 
 
-def _ensure_device_token_columns() -> None:
-    inspector = inspect(engine)
+def _ensure_device_token_columns(bind: SchemaBind = engine) -> None:
+    inspector = inspect(bind)
     table_names = set(inspector.get_table_names())
     if "device_tokens" not in table_names:
         return
@@ -230,36 +243,34 @@ def _ensure_device_token_columns() -> None:
     if "is_sandbox" in columns:
         return
 
-    with engine.begin() as conn:
-        _execute_ddl_best_effort(
-            conn,
-            "ALTER TABLE device_tokens ADD COLUMN is_sandbox BOOLEAN NOT NULL DEFAULT FALSE",
-        )
+    _execute_ddl_statements(
+        bind,
+        ["ALTER TABLE device_tokens ADD COLUMN is_sandbox BOOLEAN NOT NULL DEFAULT FALSE"],
+    )
 
 
-def _ensure_cheer_events_user_id_index() -> None:
+def _ensure_cheer_events_user_id_index(bind: SchemaBind = engine) -> None:
     # 기존 cheer_events 테이블에 user_id 인덱스가 없을 수 있다(모델에 추가되기 전 배포된 인스턴스).
     # CREATE INDEX IF NOT EXISTS 로 멱등 보강.
-    inspector = inspect(engine)
+    inspector = inspect(bind)
     if "cheer_events" not in set(inspector.get_table_names()):
         return
-    with engine.begin() as conn:
-        _execute_ddl_best_effort(
-            conn,
-            "CREATE INDEX IF NOT EXISTS idx_cheer_events_user_id ON cheer_events (user_id)",
-        )
+    _execute_ddl_statements(
+        bind,
+        ["CREATE INDEX IF NOT EXISTS idx_cheer_events_user_id ON cheer_events (user_id)"],
+    )
 
 
-def _ensure_user_checkin_backfill() -> None:
+def _ensure_user_checkin_backfill(bind: SchemaBind = engine) -> None:
     # user_checkin_season 행이 0건일 때만 기존 valid cheer_events 를 user 단위 집계 테이블에 채운다.
     # 한 번 채워지면 이후 startup 에서는 스킵. 검증 워커가 신규 valid 이벤트로 이후를 증가시킨다.
-    inspector = inspect(engine)
+    inspector = inspect(bind)
     tables = set(inspector.get_table_names())
     if not {"cheer_events", "user_checkin_daily", "user_checkin_season"}.issubset(tables):
         return
 
     try:
-        with engine.connect() as conn:
+        with _with_connection(bind) as conn:
             existing = conn.execute(text("SELECT 1 FROM user_checkin_season LIMIT 1")).first()
             if existing is not None:
                 return
@@ -323,9 +334,14 @@ def _ensure_user_checkin_backfill() -> None:
         """
 
     try:
-        with engine.begin() as conn:
+        if isinstance(bind, Connection):
+            conn = bind
             conn.execute(text(daily_sql))
             conn.execute(text(season_sql))
+        else:
+            with bind.begin() as conn:
+                conn.execute(text(daily_sql))
+                conn.execute(text(season_sql))
     except SQLAlchemyError as exc:
         # 백필 실패해도 startup 은 계속 — 검증 워커가 신규 이벤트로 자기 치유한다.
         logger.warning("user_checkin backfill failed err=%s", exc)

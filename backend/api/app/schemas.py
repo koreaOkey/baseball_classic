@@ -293,6 +293,18 @@ class GameEventOut(BaseModel):
     # 미수집 이벤트(과거 데이터, 시뮬레이션)에서는 None — 클라가 description 폴백.
     homeScoreAfter: int | None = None
     awayScoreAfter: int | None = None
+    # 네이버 relay 원본의 투구 상세/카운트/확률 메타데이터. 크롤러가 채운 경우에만 노출.
+    # iOS 라이브 상세 타석 카드에서 구속·구종·투구 후 BSO·승리확률 표기에 사용한다.
+    pitchNum: int | None = None
+    pitchSpeed: int | None = None
+    pitchStuff: str | None = Field(default=None, max_length=64)
+    ballAfter: int | None = None
+    strikeAfter: int | None = None
+    outAfter: int | None = None
+    batterRecord: dict[str, Any] | None = None
+    homeWinProbability: float | None = None
+    awayWinProbability: float | None = None
+    wpaByPlate: float | None = None
 
 
 class EventsResponse(BaseModel):

@@ -35,6 +35,17 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_ENTITLEMENTS: BaseHaptic.entitlements
         DEVELOPMENT_TEAM: 8G4LG3694Q
+      configs:
+        Debug:
+          BACKEND_BASE_URL: $(BASEHAPTIC_STAGING_BACKEND_BASE_URL)
+          BACKEND_WS_URL: $(BASEHAPTIC_STAGING_BACKEND_WS_URL)
+          SUPABASE_URL: $(BASEHAPTIC_STAGING_SUPABASE_URL)
+          SUPABASE_ANON_KEY: $(BASEHAPTIC_STAGING_SUPABASE_ANON_KEY)
+        Release:
+          BACKEND_BASE_URL: https://baseballclassic-production.up.railway.app
+          BACKEND_WS_URL: wss://baseballclassic-production.up.railway.app
+          SUPABASE_URL: https://snrafqoqpmtoannnnwdq.supabase.co
+          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNucmFmcW9xcG10b2Fubm5ud2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMjQ5MjQsImV4cCI6MjA4NjkwMDkyNH0.ufw8jQw9K8vhn9lS_9JA7Yetdi_D_9_ZNpJeukx53bY
     dependencies:
       - target: BaseHapticWatch Watch App
       - package: supabase-swift
@@ -56,6 +67,11 @@ targets:
         SUPPORTS_WATCH_COMPANION: "YES"
         CODE_SIGN_ENTITLEMENTS: "BaseHapticWatch Watch App.entitlements"
         DEVELOPMENT_TEAM: 8G4LG3694Q
+      configs:
+        Debug:
+          BACKEND_BASE_URL: $(BASEHAPTIC_STAGING_BACKEND_BASE_URL)
+        Release:
+          BACKEND_BASE_URL: https://baseballclassic-production.up.railway.app
 
 # BaseHapticLiveActivity 타겟은 현재 비활성.
 # 원본 pbxproj에 네이티브 타겟으로 등록된 적이 없고 소스 파일은 dead code 상태.

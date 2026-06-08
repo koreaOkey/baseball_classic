@@ -104,6 +104,99 @@ def test_snapshot_payload_includes_offense_and_defense_team_metadata() -> None:
     assert metadata["defenseTeam"] == "Korea"
 
 
+def test_snapshot_payload_preserves_naver_pitch_detail_metadata() -> None:
+    game_data = {
+        "homeTeamName": "SSG",
+        "awayTeamName": "KT",
+        "statusCode": "STARTED",
+        "currentInning": "5회초",
+        "homeTeamScore": 2,
+        "awayTeamScore": 0,
+        "gameDateTime": "2026-06-07T17:00:00+09:00",
+    }
+    batter_record = {
+        "name": "오윤석",
+        "pcode": "64504",
+        "batOrder": 8,
+        "seasonHra": 0.278,
+        "pa": 2,
+        "ab": 2,
+        "hit": 0,
+        "rbi": 0,
+        "hr": 0,
+        "bb": 0,
+        "so": 1,
+    }
+    relays_by_inning = {
+        5: {
+            "homeLineup": {
+                "pitcher": [{"name": "베니지아노", "pcode": "56841", "seqno": 1, "ballCount": 75}],
+                "batter": [],
+            },
+            "awayLineup": {
+                "pitcher": [],
+                "batter": [batter_record],
+            },
+            "textRelays": [
+                {
+                    "no": 40,
+                    "homeOrAway": "0",
+                    "metricOption": {
+                        "homeTeamWinRate": 76.0,
+                        "awayTeamWinRate": 24.0,
+                        "wpaByPlate": -3.2,
+                    },
+                    "textOptions": [
+                        {
+                            "seqno": 210,
+                            "text": "5구 헛스윙",
+                            "type": 1,
+                            "pitchNum": 5,
+                            "pitchResult": "S",
+                            "ptsPitchId": "260607_180506",
+                            "speed": "148",
+                            "stuff": "투심",
+                            "batterRecord": batter_record,
+                            "currentGameState": {
+                                "homeScore": "2",
+                                "awayScore": "0",
+                                "pitcher": "56841",
+                                "batter": "64504",
+                                "strike": "3",
+                                "ball": "2",
+                                "out": "0",
+                                "base1": "0",
+                                "base2": "0",
+                                "base3": "0",
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+
+    payload = build_snapshot_payload(game_data=game_data, relays_by_inning=relays_by_inning)
+    event = payload["events"][0]
+    metadata = event["metadata"]
+
+    assert event["sourceEventId"] == "05-040-0210"
+    assert event["type"] == "STRIKE"
+    assert metadata["batter"] == "오윤석"
+    assert metadata["pitcher"] == "베니지아노"
+    assert metadata["pitchNum"] == 5
+    assert metadata["pitchResult"] == "S"
+    assert metadata["pitchSpeed"] == 148
+    assert metadata["pitchStuff"] == "투심"
+    assert metadata["ptsPitchId"] == "260607_180506"
+    assert metadata["ballAfter"] == 2
+    assert metadata["strikeAfter"] == 3
+    assert metadata["outAfter"] == 0
+    assert metadata["batterRecord"]["batOrder"] == 8
+    assert metadata["awayWinProbability"] == 24.0
+    assert metadata["wpaByPlate"] == -3.2
+
+
 def test_pitcher_stats_pick_up_ballcount_as_pitches_thrown() -> None:
     game_data = {
         "homeTeamName": "Hanwha",

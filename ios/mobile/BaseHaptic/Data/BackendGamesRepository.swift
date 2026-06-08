@@ -2,13 +2,22 @@ import Foundation
 
 // MARK: - Configuration
 enum BackendConfig {
+    private static func infoString(_ key: String) -> String? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed.hasPrefix("$(") { return nil }
+        return trimmed
+    }
+
     /// 백엔드 베이스 URL - Info.plist의 BACKEND_BASE_URL 또는 기본값 사용
     static var baseURL: String {
-        Bundle.main.object(forInfoDictionaryKey: "BACKEND_BASE_URL") as? String
-            ?? "http://localhost:8080"
+        infoString("BACKEND_BASE_URL") ?? "http://localhost:8080"
     }
 
     static var wsBaseURL: String {
+        if let configured = infoString("BACKEND_WS_URL") {
+            return configured.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        }
         let base = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if base.hasPrefix("https://") {
             return "wss://" + base.dropFirst("https://".count)
@@ -76,6 +85,16 @@ struct LiveEvent: Identifiable {
     // 에서 옴. 크롤러가 채운 경우에만 값이 있고, 미수집 이벤트는 nil — description 폴백.
     let homeScoreAfter: Int?
     let awayScoreAfter: Int?
+    let pitchNum: Int?
+    let pitchSpeed: Int?
+    let pitchStuff: String?
+    let ballAfter: Int?
+    let strikeAfter: Int?
+    let outAfter: Int?
+    let batterRecord: [String: Any]?
+    let homeWinProbability: Double?
+    let awayWinProbability: Double?
+    let wpaByPlate: Double?
 
     // 신규 필드들에 default nil 을 부여하기 위한 명시적 init.
     // (Swift 의 let + default value 는 memberwise init 에서 인자를 받지 못하므로,
@@ -93,7 +112,17 @@ struct LiveEvent: Identifiable {
         atBatId: String? = nil,
         seqno: Int? = nil,
         homeScoreAfter: Int? = nil,
-        awayScoreAfter: Int? = nil
+        awayScoreAfter: Int? = nil,
+        pitchNum: Int? = nil,
+        pitchSpeed: Int? = nil,
+        pitchStuff: String? = nil,
+        ballAfter: Int? = nil,
+        strikeAfter: Int? = nil,
+        outAfter: Int? = nil,
+        batterRecord: [String: Any]? = nil,
+        homeWinProbability: Double? = nil,
+        awayWinProbability: Double? = nil,
+        wpaByPlate: Double? = nil
     ) {
         self.cursor = cursor
         self.id = id
@@ -107,6 +136,16 @@ struct LiveEvent: Identifiable {
         self.seqno = seqno
         self.homeScoreAfter = homeScoreAfter
         self.awayScoreAfter = awayScoreAfter
+        self.pitchNum = pitchNum
+        self.pitchSpeed = pitchSpeed
+        self.pitchStuff = pitchStuff
+        self.ballAfter = ballAfter
+        self.strikeAfter = strikeAfter
+        self.outAfter = outAfter
+        self.batterRecord = batterRecord
+        self.homeWinProbability = homeWinProbability
+        self.awayWinProbability = awayWinProbability
+        self.wpaByPlate = wpaByPlate
     }
 }
 
@@ -224,8 +263,21 @@ final class BackendGamesRepository {
     }
 
     // MARK: - Game Events
-    func fetchGameEvents(gameId: String, after: Int64, limit: Int = 50) async -> LiveEventsPage? {
-        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/games/\(gameId)/events?after=\(after)&limit=\(limit)"
+    func fetchGameEvents(
+        gameId: String,
+        after: Int64,
+        limit: Int = 50,
+        inningNumber: Int? = nil,
+        scoringOnly: Bool = false
+    ) async -> LiveEventsPage? {
+        var query = "after=\(after)&limit=\(limit)"
+        if let inningNumber {
+            query += "&inningNumber=\(inningNumber)"
+        }
+        if scoringOnly {
+            query += "&scoringOnly=true"
+        }
+        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/games/\(gameId)/events?\(query)"
         return await getJSON(endpoint: endpoint) { data in
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
             let itemsArray = json["items"] as? [[String: Any]] ?? []
@@ -422,7 +474,17 @@ final class BackendGamesRepository {
             atBatId: (json["atBatId"] as? String).flatMap { $0.isEmpty ? nil : $0 },
             seqno: json["seqno"] as? Int,
             homeScoreAfter: json["homeScoreAfter"] as? Int,
-            awayScoreAfter: json["awayScoreAfter"] as? Int
+            awayScoreAfter: json["awayScoreAfter"] as? Int,
+            pitchNum: json["pitchNum"] as? Int,
+            pitchSpeed: json["pitchSpeed"] as? Int,
+            pitchStuff: (json["pitchStuff"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            ballAfter: json["ballAfter"] as? Int,
+            strikeAfter: json["strikeAfter"] as? Int,
+            outAfter: json["outAfter"] as? Int,
+            batterRecord: json["batterRecord"] as? [String: Any],
+            homeWinProbability: json["homeWinProbability"] as? Double,
+            awayWinProbability: json["awayWinProbability"] as? Double,
+            wpaByPlate: json["wpaByPlate"] as? Double
         )
     }
 

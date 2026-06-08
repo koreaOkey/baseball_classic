@@ -11,8 +11,14 @@ final class WatchGamePoller: ObservableObject {
     private var promptedGameIds: Set<String> = []
 
     private var baseURL: String {
-        Bundle.main.object(forInfoDictionaryKey: "BACKEND_BASE_URL") as? String
-            ?? "http://localhost:8080"
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "BACKEND_BASE_URL") as? String else {
+            return "http://localhost:8080"
+        }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed.hasPrefix("$(") {
+            return "http://localhost:8080"
+        }
+        return trimmed
     }
 
     private static let kst = TimeZone(identifier: "Asia/Seoul")!

@@ -53,8 +53,7 @@ class AuthManager: ObservableObject {
 
     func signInWithKakao() async throws {
         // Supabase 2.5.1: Provider enum에 kakao 없음 → URL 직접 구성 (implicit flow)
-        let baseURL = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String
-            ?? "https://snrafqoqpmtoannnnwdq.supabase.co"
+        let baseURL = SupabaseConfig.urlString
         let redirectTo = "com.basehaptic.app://login-callback"
         let encodedRedirect = redirectTo.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         guard let url = URL(string: "\(baseURL)/auth/v1/authorize?provider=kakao&redirect_to=\(encodedRedirect)") else {
@@ -103,8 +102,7 @@ class AuthManager: ObservableObject {
 
     func deleteAccount() async throws {
         let session = try await client.auth.session
-        let backendURL = Bundle.main.object(forInfoDictionaryKey: "BACKEND_BASE_URL") as? String
-            ?? "https://baseballclassic-production.up.railway.app"
+        let backendURL = BackendConfig.baseURL
         guard let deleteURL = URL(string: "\(backendURL)/account") else {
             throw URLError(.badURL)
         }
@@ -160,5 +158,3 @@ private class WebAuthContextProvider: NSObject, ASWebAuthenticationPresentationC
         return window
     }
 }
-
-

@@ -288,15 +288,23 @@ def get_game_events(
     game_id: str,
     after: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
+    inning_number: int | None = Query(default=None, alias="inningNumber", ge=1, le=12),
+    scoring_only: bool = Query(default=False, alias="scoringOnly"),
     db: Session = Depends(get_db),
 ) -> EventsResponse:
     game = db.get(Game, game_id)
     if game is None:
         raise HTTPException(status_code=404, detail="game not found")
 
+    filters = [GameEvent.game_id == game_id, GameEvent.cursor > after]
+    if inning_number is not None:
+        filters.append(GameEvent.inning.like(f"{inning_number}회%"))
+    if scoring_only:
+        filters.append(GameEvent.event_type.in_(("SCORE", "SAC_FLY_SCORE")))
+
     rows = db.execute(
         select(GameEvent)
-        .where(GameEvent.game_id == game_id, GameEvent.cursor > after)
+        .where(*filters)
         .order_by(GameEvent.cursor.asc())
         .limit(limit + 1)
     ).scalars().all()

@@ -22,6 +22,40 @@ uvicorn app.main:app --reload --port 8080
 - API 문서: `http://localhost:8080/docs`
 - 상세 구조/연동 가이드는 `../README.md` 참고
 
+## Staging iOS/watchOS Test Backend
+
+Debug 빌드의 iOS 앱과 watchOS 앱은 Xcode build setting으로 staging Railway 백엔드를 바라보게 할 수 있습니다.
+Release 빌드는 운영 Railway URL을 사용합니다.
+
+staging 인프라는 운영과 같은 형태로 구성하되, Railway/Supabase/Redis/API key는 모두 별도 리소스를 사용합니다.
+설정과 검증 절차는 `infra/staging/README.md`를 기준으로 합니다.
+
+```bash
+xcodebuild -project ios/BaseHaptic.xcodeproj -scheme BaseHaptic -configuration Debug \
+  BASEHAPTIC_STAGING_BACKEND_BASE_URL=https://<staging-backend>.up.railway.app \
+  BASEHAPTIC_STAGING_BACKEND_WS_URL=wss://<staging-backend>.up.railway.app \
+  BASEHAPTIC_STAGING_SUPABASE_URL=https://<staging-project>.supabase.co \
+  BASEHAPTIC_STAGING_SUPABASE_ANON_KEY=<staging-anon-key>
+```
+
+staging URL을 주입하지 않으면 앱은 로컬 백엔드(`http://localhost:8080`)로 폴백합니다. Supabase 설정은 Debug 빌드에서 staging 값을 주입하고, Release 빌드는 운영 Supabase 설정을 사용합니다.
+
+로컬 백엔드에 네이버 릴레이 형태의 테스트 경기를 한 번 주입하려면:
+
+```bash
+cd backend/api
+uvicorn app.main:app --host 0.0.0.0 --port 8080
+python scripts/simulate_crawler.py --naver-pitch-detail-once --game-id 20260607KTSK02026
+```
+
+물리 iPhone/Apple Watch에서 로컬 백엔드를 직접 테스트할 때는 `localhost` 대신 Mac LAN IP 또는 터널 URL을 빌드 설정으로 덮어씁니다.
+
+```bash
+xcodebuild -project ios/BaseHaptic.xcodeproj -scheme BaseHaptic -configuration Debug \
+  BACKEND_BASE_URL=http://<mac-lan-ip>:8080 \
+  BACKEND_WS_URL=ws://<mac-lan-ip>:8080
+```
+
 ## Railway Deploy Note (Python/mise)
 - Pin Python version with `.python-version` to avoid unstable latest builds.
 - Recommended Railway service variable: `RAILPACK_PYTHON_VERSION=3.12.8`.

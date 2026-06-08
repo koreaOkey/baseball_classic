@@ -18,6 +18,28 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - WHEN 클라이언트 앱에서 직접 접근을 시도하면
 - THEN 차단하고, 반드시 백엔드 API를 프록시로 경유한다
 
+### Requirement: 스테이징 배포 아키텍처
+스테이징 환경은 프로덕션과 같은 구성 요소를 사용하되 별도 리소스로 격리해야 한다(MUST).
+
+#### Scenario: 스테이징 배포 구성
+- GIVEN 서비스를 스테이징에 배포할 때
+- WHEN 인프라를 구성하면
+- THEN Backend와 Crawler는 Railway 스테이징 환경 또는 별도 스테이징 프로젝트에 배포한다
+- AND DB는 운영 Supabase와 다른 스테이징 Supabase 프로젝트 또는 스테이징 브랜치를 사용한다
+- AND Redis는 운영 Redis와 다른 스테이징 Redis를 사용한다
+- AND 운영 DB 연결 문자열, 운영 Redis URL, 운영 크롤러 API 키를 재사용하지 않는다
+
+#### Scenario: 스테이징 마이그레이션
+- GIVEN 새 스테이징 DB를 준비할 때
+- WHEN 마이그레이션을 적용하면
+- THEN `db/migrations/`의 스키마를 스테이징 DB에 먼저 적용한다
+- AND 운영 DB에는 마이그레이션을 적용하지 않는다
+
+#### Scenario: 스테이징 검증 후 운영 배포
+- GIVEN 스테이징에서 크롤러, 백엔드, 모바일/워치 연동 검증이 완료되었을 때
+- WHEN 동일 코드 변경을 운영에 반영하면
+- THEN 운영 Railway와 운영 Supabase에는 검증된 코드와 필요한 마이그레이션만 별도로 배포한다
+
 ### Requirement: Cloudflare 터널 (외부 디바이스 테스트)
 로컬 백엔드를 외부 디바이스(폰/워치)에서 접근할 수 있도록 HTTPS 터널을 제공해야 한다(MUST).
 
@@ -79,7 +101,7 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - GIVEN 백엔드를 실행할 때
 - WHEN 환경이 구성되면
 - THEN 아래 변수가 설정되어야 한다:
-  - `BASEHAPTIC_ENVIRONMENT` — development / production
+  - `BASEHAPTIC_ENVIRONMENT` — development / staging / production
   - `BASEHAPTIC_DATABASE_URL` — DB 연결 문자열 (postgresql+psycopg://)
   - `BASEHAPTIC_CRAWLER_API_KEY` — 크롤러 인증 키
   - `BASEHAPTIC_CORS_ALLOW_ORIGINS` — CORS 허용 도메인
@@ -96,6 +118,11 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - WHEN 백엔드를 실행하면
 - THEN `cd backend/api && uvicorn app.main:app --host 0.0.0.0 --port 8080`으로 시작한다
 
+#### Scenario: 로컬 테스트 경기 주입
+- GIVEN 로컬 백엔드가 실행 중일 때
+- WHEN 테스트용 크롤러 시뮬레이터로 네이버 릴레이 형태의 fixture를 주입하면
+- THEN 운영 DB를 사용하지 않고 로컬 DB에 테스트 경기가 생성된다
+
 #### Scenario: 크롤러 디스패처 실행
 - GIVEN 로컬 백엔드가 실행 중일 때
 - WHEN 크롤러를 시작하면
@@ -105,3 +132,16 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - GIVEN Android Studio 또는 Gradle이 설정되어 있을 때
 - WHEN 앱을 빌드하면
 - THEN `./gradlew :mobile:compileDebugKotlin` (모바일), `./gradlew :watch:compileDebugKotlin` (워치)로 빌드한다
+
+#### Scenario: iOS/watchOS Debug 스테이징 백엔드 분리
+- GIVEN iOS 또는 watchOS Debug 빌드를 실행할 때
+- WHEN 앱 번들이 백엔드 URL 설정을 읽으면
+- THEN 스테이징 백엔드 URL이 제공된 경우 해당 URL을 사용한다
+- AND 스테이징 URL이 제공되지 않으면 로컬 백엔드 URL로 폴백한다
+- AND Release 빌드는 운영 백엔드 URL을 사용한다
+
+#### Scenario: iOS Debug 스테이징 Supabase 분리
+- GIVEN iOS Debug 빌드를 실행할 때
+- WHEN 앱 번들이 Supabase 설정을 읽으면
+- THEN 스테이징 Supabase URL과 publishable key가 제공된 경우 해당 스테이징 프로젝트를 사용한다
+- AND Release 빌드는 운영 Supabase 프로젝트를 사용한다
