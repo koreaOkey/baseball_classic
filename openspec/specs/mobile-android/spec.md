@@ -30,7 +30,7 @@ Android(Jetpack Compose) 스마트폰에서 실시간 야구 경기를 확인하
 #### Scenario: 워치 동기화 응답 수신
 - GIVEN 워치에서 동기화 응답이 전송되었을 때
 - WHEN /watch/sync-response/{timestamp} 경로로 응답을 수신하면
-- THEN 수락 시 syncedGameId를 저장하고 실시간 동기화를 시작한다
+- THEN 수락 시 광고 확인 절차를 거친 뒤 syncedGameId를 저장하고 실시간 동기화를 시작한다
 
 ### Requirement: 실시간 경기 데이터 수신
 모바일은 선택된 경기의 실시간 데이터를 수신해야 한다(MUST).
@@ -39,6 +39,18 @@ Android(Jetpack Compose) 스마트폰에서 실시간 야구 경기를 확인하
 - GIVEN 사용자가 경기를 선택했을 때
 - WHEN 경기가 진행 중이면
 - THEN WebSocket 또는 폴링으로 state/events를 실시간 수신하여 화면에 반영한다
+
+#### Scenario: Debug 빌드 스테이징 백엔드 연동
+- GIVEN 개발자가 Android Debug 빌드를 실행했을 때
+- WHEN 앱이 경기 목록, 경기 상태, 이벤트, WebSocket URL을 구성하면
+- THEN 스테이징 백엔드 주소를 사용한다
+- AND Release 빌드는 운영 백엔드 주소를 사용한다
+
+#### Scenario: Debug 빌드 스테이징 Supabase 연동
+- GIVEN 개발자가 Android Debug 빌드를 실행했을 때
+- WHEN 앱이 인증용 Supabase 클라이언트를 구성하면
+- THEN 스테이징 Supabase 주소와 publishable key를 사용한다
+- AND Release 빌드는 운영 Supabase 프로젝트를 사용한다
 
 ### Requirement: Data Layer 서비스
 모바일은 워치와의 통신을 위한 Data Layer 리스너 서비스를 운영해야 한다(MUST).
@@ -74,6 +86,11 @@ Android 모바일 앱은 토글을 OFF→ON 으로 전환할 때 AdMob Rewarded 
 - **WHEN** 사용자가 토글을 탭하면
 - **THEN** 토글이 즉시 ON 위치로 슬라이드되고 "워치로 보시겠습니까? / 광고 관람 후 동기화됩니다" 메시지의 AlertDialog 가 표시된다
 - **AND** AlertDialog 의 좌측 버튼은 [확인], 우측 버튼은 [취소] 로 배치된다
+
+#### Scenario: 홈 카드 및 푸시 진입점 광고 게이트
+- **GIVEN** 사용자가 LIVE 경기 카드 또는 경기 시작 푸시에서 워치 관람을 시작할 때
+- **WHEN** 워치 앱이 설치되어 있고 해당 경기가 아직 동기화되지 않았으면
+- **THEN** LiveGame으로 바로 이동하지 않고 "워치로 보시겠습니까? / 광고 관람 후 동기화됩니다" 메시지의 AlertDialog 를 먼저 표시한다
 
 #### Scenario: 광고 시청 후 동기화
 - **GIVEN** OFF→ON 확인 팝업에서 사용자가 [확인] 을 탭했고 해당 경기 ID 에 대한 광고 시청 이력이 없을 때
@@ -229,4 +246,3 @@ Android 모바일 앱의 라이브 경기 상세 화면은 1~9회 탭을 통해 
 - **GIVEN** 사용자가 진입 후 어떤 탭도 직접 탭하지 않은 상태에서
 - **WHEN** `state.inning` 이 새 회로 전환되면
 - **THEN** 선택된 이닝이 새 값으로 자동 따라간다
-

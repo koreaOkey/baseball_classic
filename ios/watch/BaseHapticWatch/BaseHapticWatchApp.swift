@@ -378,6 +378,12 @@ struct WatchSyncPromptView: View {
                     .font(.system(size: 13))
                     .multilineTextAlignment(.center)
 
+                Text("휴대폰에서 광고 확인 후 자동 관람됩니다.")
+                    .foregroundColor(.white.opacity(0.72))
+                    .font(.system(size: 11))
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 4)
+
                 let matchup = [prompt.awayTeam, prompt.homeTeam]
                     .filter { !$0.isEmpty }
                     .joined(separator: " vs ")
@@ -389,9 +395,9 @@ struct WatchSyncPromptView: View {
                 }
 
                 HStack(spacing: WatchAppSpacing.sm) {
-                    Button("예") { onAccept() }
+                    Button("확인") { onAccept() }
                         .buttonStyle(.borderedProminent)
-                    Button("아니오") { onDecline() }
+                    Button("취소") { onDecline() }
                         .buttonStyle(.bordered)
                 }
                 // Reason: 버튼 상단 간격 미세 조정 (10pt)

@@ -11,16 +11,16 @@ Wear OS 스마트워치에서 실시간 야구 경기를 햅틱 피드백으로 
 #### Scenario: 동기화 프롬프트 수신
 - GIVEN Android 모바일에서 Data Layer로 동기화 프롬프트가 전송되었을 때
 - WHEN 워치가 /watch/prompt/current 경로의 프롬프트를 수신하면
-- THEN "관람하겠습니까?" 팝업을 표시한다
+- THEN "관람하겠습니까?" 팝업과 "휴대폰에서 광고 확인 후 자동 관람됩니다" 안내를 표시한다
 
 #### Scenario: 동기화 수락
 - GIVEN 동기화 팝업이 표시되었을 때
-- WHEN 사용자가 "예"를 선택하면
-- THEN /watch/sync-response/{timestamp}로 수락 응답을 전송하고 라이브 경기 화면으로 전환한다
+- WHEN 사용자가 "확인"을 선택하면
+- THEN /watch/sync-response/{timestamp}로 수락 응답을 전송하고 휴대폰의 광고 확인 완료 후 라이브 경기 화면으로 전환한다
 
 #### Scenario: 동기화 거부
 - GIVEN 동기화 팝업이 표시되었을 때
-- WHEN 사용자가 "아니오"를 선택하면
+- WHEN 사용자가 "취소"를 선택하면
 - THEN 모바일에 거부 응답을 전송하고 현재 화면을 유지한다
 
 ### Requirement: 라이브 경기 화면

@@ -153,7 +153,6 @@ struct ContentView: View {
     @State private var pendingReleaseNote: ReleaseNote?
     @State private var pendingWatchSyncGameId: String?
     @State private var pendingWatchSyncNavigateToLive = false
-    @State private var pendingWatchSyncNavigateOnDecline = false
     @State private var pendingWatchSyncHomeTeam: String = ""
     @State private var pendingWatchSyncAwayTeam: String = ""
     @State private var todayGames: [Game] = []
@@ -236,8 +235,8 @@ struct ContentView: View {
             guard !showOnboarding else { return }
             let homeTeam = notification.userInfo?["home_team"] as? String ?? ""
             let awayTeam = notification.userInfo?["away_team"] as? String ?? ""
-            // 푸시 탭은 항상 홈으로 착지 → 그 위에 워치 관람 팝업.
-            // "아니오" 시 홈 유지(navigateOnDecline=false), 워치 미설치는 팝업 없이 홈에 머문다.
+            // 푸시 탭은 항상 홈으로 착지 → 그 위에 광고 게이트가 있는 워치 관람 팝업.
+            // 취소 시 홈 유지, 워치 미설치는 팝업 없이 홈에 머문다.
             selectedGameId = gameId
             if currentView != .home {
                 navigateTo(.home)
@@ -333,7 +332,9 @@ struct ContentView: View {
                             selectedGameId = game.id
                             let isDebugDummy = game.id == debugDummyLiveGameId
                             if !isDebugDummy && game.status == .live && syncedGameId != game.id {
-                                requestWatchSyncPrompt(gameId: game.id, navigateToLive: true, navigateOnDecline: true)
+                                pendingWatchSyncHomeTeam = game.homeTeamId.teamName
+                                pendingWatchSyncAwayTeam = game.awayTeamId.teamName
+                                requestWatchSyncPrompt(gameId: game.id, navigateToLive: true)
                             } else {
                                 navigateTo(.liveGame)
                             }
@@ -473,27 +474,19 @@ struct ContentView: View {
                 bottomNavigationBar
             }
         }
-        .alert("워치 동기화", isPresented: $showWatchSyncDialog) {
-            Button("예") {
-                syncedGameId = pendingWatchSyncGameId
-                let shouldNavigate = pendingWatchSyncNavigateToLive
-                closeWatchSyncDialog()
-                if shouldNavigate && currentView != .liveGame {
-                    navigateTo(.liveGame)
-                }
+        .alert("워치로 보시겠습니까?", isPresented: $showWatchSyncDialog) {
+            Button("확인") {
+                confirmPendingWatchSync()
             }
-            Button("아니오", role: .cancel) {
-                let shouldNavigate = pendingWatchSyncNavigateOnDecline
+            Button("취소", role: .cancel) {
                 closeWatchSyncDialog()
-                if shouldNavigate && currentView != .liveGame {
-                    navigateTo(.liveGame)
-                }
             }
         } message: {
+            let suffix = "광고 관람 후 동기화됩니다."
             if !pendingWatchSyncHomeTeam.isEmpty && !pendingWatchSyncAwayTeam.isEmpty {
-                Text("\(pendingWatchSyncAwayTeam) vs \(pendingWatchSyncHomeTeam) 경기를 워치로 관람하시겠습니까?")
+                Text("\(pendingWatchSyncAwayTeam) vs \(pendingWatchSyncHomeTeam)\n\(suffix)")
             } else {
-                Text("경기를 관람하겠습니까?")
+                Text(suffix)
             }
         }
         .onAppear {
@@ -560,11 +553,10 @@ struct ContentView: View {
     }
 
     // MARK: - Watch Sync
-    private func requestWatchSyncPrompt(gameId: String, navigateToLive: Bool, navigateOnDecline: Bool = false) {
+    private func requestWatchSyncPrompt(gameId: String, navigateToLive: Bool) {
         guard syncedGameId != gameId else { return }
         pendingWatchSyncGameId = gameId
         pendingWatchSyncNavigateToLive = navigateToLive
-        pendingWatchSyncNavigateOnDecline = navigateOnDecline
         showWatchSyncDialog = true
     }
 
@@ -574,14 +566,50 @@ struct ContentView: View {
         pendingWatchSyncHomeTeam = ""
         pendingWatchSyncAwayTeam = ""
         pendingWatchSyncNavigateToLive = false
-        pendingWatchSyncNavigateOnDecline = false
+    }
+
+    private func confirmPendingWatchSync() {
+        guard let gameId = pendingWatchSyncGameId, !gameId.isEmpty else {
+            closeWatchSyncDialog()
+            return
+        }
+        let shouldNavigate = pendingWatchSyncNavigateToLive
+
+        let completeSync: () -> Void = {
+            syncedGameId = gameId
+            closeWatchSyncDialog()
+            if shouldNavigate && currentView != .liveGame {
+                navigateTo(.liveGame)
+            }
+        }
+
+        if WatchSyncAdLedger.hasViewed(gameId: gameId) {
+            completeSync()
+            return
+        }
+
+        showWatchSyncDialog = false
+        RewardedAdManager.shared.loadAndShowAd(
+            adUnitID: RewardedAdManager.watchSyncAdUnitID
+        ) { rewardEarned in
+            if rewardEarned {
+                WatchSyncAdLedger.markViewed(gameId: gameId)
+            }
+            completeSync()
+        }
     }
 
     private func consumePendingWatchSyncResponse() {
         guard let response = connectivity.consumePendingResponse() else { return }
         if response.accepted {
             selectedGameId = response.gameId
-            syncedGameId = response.gameId
+            pendingWatchSyncGameId = response.gameId
+            pendingWatchSyncNavigateToLive = true
+            pendingWatchSyncHomeTeam = ""
+            pendingWatchSyncAwayTeam = ""
+            confirmPendingWatchSync()
+        } else if pendingWatchSyncGameId == response.gameId {
+            closeWatchSyncDialog()
         }
     }
 

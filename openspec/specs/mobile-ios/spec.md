@@ -30,7 +30,7 @@ iOS(SwiftUI) 아이폰에서 실시간 야구 경기를 확인하고 Apple Watch
 #### Scenario: 워치 동기화 응답 수신
 - GIVEN Apple Watch에서 동기화 응답이 전송되었을 때
 - WHEN WCSession delegate로 응답을 수신하면
-- THEN 수락 시 syncedGameId를 저장하고 실시간 동기화를 시작한다
+- THEN 수락 시 광고 확인 절차를 거친 뒤 syncedGameId를 저장하고 실시간 동기화를 시작한다
 
 ### Requirement: 실시간 경기 데이터 수신
 모바일은 선택된 경기의 실시간 데이터를 수신해야 한다(MUST).
@@ -62,7 +62,7 @@ iOS 백그라운드 제약 내에서 경기 데이터를 유지해야 한다(MUS
 - THEN Background App Refresh를 활용하여 주기적으로 상태를 갱신한다
 
 ### Requirement: 푸시 알림
-LIVE 전환 등 주요 이벤트를 푸시 알림으로 전달해야 한다(SHOULD).
+LIVE 전환 등 주요 이벤트를 푸시 알림으로 전달해야 한다(MUST).
 
 #### Scenario: LIVE 전환 알림
 - GIVEN 관심 팀 경기가 LIVE로 전환되었을 때
@@ -95,6 +95,11 @@ iOS 모바일 앱은 토글을 OFF→ON 으로 전환할 때 AdMob Rewarded 광�
 - **WHEN** 사용자가 토글을 탭하면
 - **THEN** 토글이 즉시 ON 위치로 슬라이드되고 "워치로 보시겠습니까? / 광고 관람 후 동기화됩니다" 메시지의 alert 가 표시된다
 - **AND** alert 의 좌측 버튼은 [확인], 우측 버튼은 [취소] 로 배치된다
+
+#### Scenario: 홈 카드 및 푸시 진입점 광고 게이트
+- **GIVEN** 사용자가 LIVE 경기 카드 또는 경기 시작 푸시에서 워치 관람을 시작할 때
+- **WHEN** 워치 앱이 설치되어 있고 해당 경기가 아직 동기화되지 않았으면
+- **THEN** LiveGame으로 바로 이동하지 않고 "워치로 보시겠습니까? / 광고 관람 후 동기화됩니다" 메시지의 alert 를 먼저 표시한다
 
 #### Scenario: 광고 시청 후 동기화
 - **GIVEN** OFF→ON 확인 팝업에서 사용자가 [확인] 을 탭했고 해당 경기 ID 에 대한 광고 시청 이력이 없을 때

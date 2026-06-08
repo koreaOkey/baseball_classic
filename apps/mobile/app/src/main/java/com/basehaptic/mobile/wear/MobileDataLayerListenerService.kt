@@ -1,10 +1,13 @@
 package com.basehaptic.mobile.wear
 
-import android.content.Context
+import android.app.PendingIntent
 import android.content.Intent
 import android.util.Log
-import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.service.GameSyncForegroundService
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.basehaptic.mobile.MainActivity
+import com.basehaptic.mobile.R
+import com.basehaptic.mobile.push.NotificationChannels
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
@@ -34,30 +37,40 @@ class MobileDataLayerListenerService : WearableListenerService() {
                 gameId = gameId,
                 accepted = accepted
             )
-            sendBroadcast(Intent(WearWatchSyncBridge.ACTION_WATCH_SYNC_RESPONSE))
 
-            // 워치에서 수락 시 → 앱이 백그라운드/종료 상태여도 스트리밍 서비스 직접 시작
+            // 워치에서 수락 시에도 보상형 광고 게이트를 통과해야 한다.
+            // 앱이 떠 있으면 broadcast 로 처리되고, 백그라운드/종료 상태면 알림 탭으로 이어간다.
             if (accepted) {
-                startStreamingFromWatch(gameId)
+                notifyPhoneAdRequired(gameId)
             }
+            sendBroadcast(Intent(WearWatchSyncBridge.ACTION_WATCH_SYNC_RESPONSE))
         }
     }
 
-    private fun startStreamingFromWatch(gameId: String) {
-        val prefs = getSharedPreferences("basehaptic_user_prefs", Context.MODE_PRIVATE)
-        val teamName = prefs.getString("selected_team", null).orEmpty()
-        val team = Team.fromString(teamName)
-        if (team == Team.NONE) {
-            Log.w(TAG, "No saved team, cannot start streaming from watch")
-            return
+    private fun notifyPhoneAdRequired(gameId: String) {
+        NotificationChannels.ensureCreated(this)
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-
-        Log.d(TAG, "Starting streaming from watch accept: gameId=$gameId, team=$teamName")
-        val intent = Intent(this, GameSyncForegroundService::class.java).apply {
-            action = GameSyncForegroundService.ACTION_START_STREAMING
-            putExtra(GameSyncForegroundService.EXTRA_GAME_ID, gameId)
-            putExtra(GameSyncForegroundService.EXTRA_SELECTED_TEAM, teamName)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            gameId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, NotificationChannels.GAME_ALERTS_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("워치 관람 광고 확인")
+            .setContentText("휴대폰에서 광고 확인 후 자동 관람됩니다.")
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+        try {
+            NotificationManagerCompat.from(this).notify(gameId.hashCode(), notification)
+            Log.d(TAG, "Posted phone ad confirmation notification: gameId=$gameId")
+        } catch (error: SecurityException) {
+            Log.w(TAG, "Notification permission missing; pending watch response stored", error)
         }
-        startForegroundService(intent)
     }
 }

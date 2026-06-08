@@ -860,6 +860,12 @@ private fun WatchSyncPromptDialog(
                 color = Color.White,
                 fontSize = uiProfile.promptQuestionSp.sp
             )
+            Text(
+                text = "휴대폰에서 광고 확인 후 자동 관람됩니다.",
+                color = Color.White.copy(alpha = 0.72f),
+                fontSize = (uiProfile.promptQuestionSp - 2).sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
             val matchup = listOf(prompt.awayTeam, prompt.homeTeam)
                 .filter { it.isNotBlank() }
                 .joinToString(" vs ")
@@ -880,13 +886,13 @@ private fun WatchSyncPromptDialog(
                     onClick = onAccept,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("예")
+                    Text("확인")
                 }
                 Button(
                     onClick = onDecline,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("아니오")
+                    Text("취소")
                 }
             }
         }

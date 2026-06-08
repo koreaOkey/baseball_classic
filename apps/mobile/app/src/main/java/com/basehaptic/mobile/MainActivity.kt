@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -38,6 +39,7 @@ import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.auth.SupabaseClientProvider
 import io.github.jan.supabase.auth.handleDeeplinks
 import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.WatchSyncAdLedger
 import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.StadiumCheerThemeStore
@@ -317,7 +319,6 @@ fun BaseHapticApp(
     var showWatchSyncDialog by remember { mutableStateOf(false) }
     var pendingWatchSyncGameId by remember { mutableStateOf<String?>(null) }
     var pendingWatchSyncNavigateToLive by remember { mutableStateOf(false) }
-    var pendingWatchSyncNavigateOnDecline by remember { mutableStateOf(false) }
     var pendingWatchSyncHomeTeam by remember { mutableStateOf("") }
     var pendingWatchSyncAwayTeam by remember { mutableStateOf("") }
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
@@ -335,12 +336,10 @@ fun BaseHapticApp(
         navigateToLive: Boolean,
         homeTeam: String = "",
         awayTeam: String = "",
-        navigateOnDecline: Boolean = false,
     ) {
         if (syncedGameId == gameId) return
         pendingWatchSyncGameId = gameId
         pendingWatchSyncNavigateToLive = navigateToLive
-        pendingWatchSyncNavigateOnDecline = navigateOnDecline
         pendingWatchSyncHomeTeam = homeTeam
         pendingWatchSyncAwayTeam = awayTeam
         showWatchSyncDialog = true
@@ -358,22 +357,54 @@ fun BaseHapticApp(
         pendingWatchSyncHomeTeam = ""
         pendingWatchSyncAwayTeam = ""
         pendingWatchSyncNavigateToLive = false
-        pendingWatchSyncNavigateOnDecline = false
+    }
+
+    fun confirmPendingWatchSync() {
+        val gameId = pendingWatchSyncGameId
+        if (gameId.isNullOrBlank()) {
+            closeWatchSyncDialog()
+            return
+        }
+        val shouldNavigate = pendingWatchSyncNavigateToLive
+
+        fun completeSync() {
+            syncedGameId = gameId
+            closeWatchSyncDialog()
+            if (shouldNavigate && currentView != Screen.LiveGame) {
+                navigateTo(Screen.LiveGame)
+            }
+        }
+
+        if (WatchSyncAdLedger.hasViewed(context, gameId)) {
+            completeSync()
+            return
+        }
+
+        showWatchSyncDialog = false
+        RewardedAdManager.loadAndShowAd(
+            context = context,
+            adUnitId = RewardedAdManager.WATCH_SYNC_AD_UNIT,
+        ) { rewardEarned ->
+            if (rewardEarned) {
+                WatchSyncAdLedger.markViewed(context, gameId)
+            }
+            completeSync()
+        }
     }
 
     fun applyWatchSyncResponse(gameId: String, accepted: Boolean) {
         if (gameId.isBlank()) return
 
         if (accepted) {
+            NotificationManagerCompat.from(context).cancel(gameId.hashCode())
             selectedGameId = gameId
-            syncedGameId = gameId
-        }
-
-        if (pendingWatchSyncGameId == gameId) {
-            showWatchSyncDialog = false
-            pendingWatchSyncGameId = null
-            pendingWatchSyncNavigateToLive = false
-            pendingWatchSyncNavigateOnDecline = false
+            pendingWatchSyncGameId = gameId
+            pendingWatchSyncNavigateToLive = true
+            pendingWatchSyncHomeTeam = ""
+            pendingWatchSyncAwayTeam = ""
+            confirmPendingWatchSync()
+        } else if (pendingWatchSyncGameId == gameId) {
+            closeWatchSyncDialog()
         }
     }
 
@@ -532,7 +563,8 @@ fun BaseHapticApp(
     }
 
     // 푸시 알림 탭 → MainActivity 진입 시 NotificationIntentBus 로 게임 정보 전달.
-    // 항상 홈으로 착지 → 그 위에 워치 관람 팝업("아니오" 시 홈 유지). 워치 미설치는 팝업 없이 홈에 머문다.
+    // 항상 홈으로 착지 → 그 위에 광고 게이트가 있는 워치 관람 팝업. 취소 시 홈 유지.
+    // 워치 미설치는 팝업 없이 홈에 머문다.
     val pendingNotificationIntent by NotificationIntentBus.pending.collectAsState()
     LaunchedEffect(pendingNotificationIntent) {
         val pending = pendingNotificationIntent ?: return@LaunchedEffect
@@ -600,7 +632,8 @@ fun BaseHapticApp(
                                 requestWatchSyncPrompt(
                                     gameId = game.id,
                                     navigateToLive = true,
-                                    navigateOnDecline = true,
+                                    homeTeam = game.homeTeamId.teamName,
+                                    awayTeam = game.awayTeamId.teamName,
                                 )
                             } else {
                                 navigateTo(Screen.LiveGame)
@@ -711,42 +744,34 @@ fun BaseHapticApp(
         }
 
         if (showWatchSyncDialog && pendingWatchSyncGameId != null) {
+            val suffix = "광고 관람 후 동기화됩니다."
             val dialogMessage = if (
                 pendingWatchSyncHomeTeam.isNotEmpty() && pendingWatchSyncAwayTeam.isNotEmpty()
             ) {
-                "$pendingWatchSyncAwayTeam vs $pendingWatchSyncHomeTeam 경기를 워치로 관람하시겠습니까?"
+                "$pendingWatchSyncAwayTeam vs $pendingWatchSyncHomeTeam\n$suffix"
             } else {
-                "경기를 관람하겠습니까?"
+                suffix
             }
             AlertDialog(
                 onDismissRequest = { closeWatchSyncDialog() },
-                title = { Text(text = "워치 동기화") },
+                title = { Text(text = "워치로 보시겠습니까?") },
                 text = { Text(text = dialogMessage) },
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            syncedGameId = pendingWatchSyncGameId
-                            val shouldNavigate = pendingWatchSyncNavigateToLive
-                            closeWatchSyncDialog()
-                            if (shouldNavigate && currentView != Screen.LiveGame) {
-                                navigateTo(Screen.LiveGame)
-                            }
+                            confirmPendingWatchSync()
                         }
                     ) {
-                        Text("예")
+                        Text("확인")
                     }
                 },
                 dismissButton = {
                     TextButton(
                         onClick = {
-                            val shouldNavigate = pendingWatchSyncNavigateOnDecline
                             closeWatchSyncDialog()
-                            if (shouldNavigate && currentView != Screen.LiveGame) {
-                                navigateTo(Screen.LiveGame)
-                            }
                         }
                     ) {
-                        Text("아니오")
+                        Text("취소")
                     }
                 }
             )

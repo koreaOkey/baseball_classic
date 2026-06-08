@@ -11,16 +11,16 @@ Apple Watch(watchOS/SwiftUI)에서 실시간 야구 경기를 햅틱 피드백�
 #### Scenario: 동기화 프롬프트 수신
 - GIVEN iPhone에서 WCSession을 통해 동기화 프롬프트가 전송되었을 때
 - WHEN Apple Watch가 프롬프트를 수신하면
-- THEN "관람하겠습니까?" 팝업을 표시한다
+- THEN "관람하겠습니까?" 팝업과 "휴대폰에서 광고 확인 후 자동 관람됩니다" 안내를 표시한다
 
 #### Scenario: 동기화 수락
 - GIVEN 동기화 팝업이 표시되었을 때
-- WHEN 사용자가 "예"를 선택하면
-- THEN WCSession으로 수락 응답을 전송하고 라이브 경기 화면으로 전환한다
+- WHEN 사용자가 "확인"을 선택하면
+- THEN WCSession으로 수락 응답을 전송하고 휴대폰의 광고 확인 완료 후 라이브 경기 화면으로 전환한다
 
 #### Scenario: 동기화 거부
 - GIVEN 동기화 팝업이 표시되었을 때
-- WHEN 사용자가 "아니오"를 선택하면
+- WHEN 사용자가 "취소"를 선택하면
 - THEN iPhone에 거부 응답을 전송하고 현재 화면을 유지한다
 
 ### Requirement: 라이브 경기 화면
@@ -73,7 +73,7 @@ Apple Watch(watchOS/SwiftUI)에서 실시간 야구 경기를 햅틱 피드백�
 - THEN 41mm, 45mm, 49mm(Ultra) 모델에 맞게 폰트/패딩/위젯 크기를 조정한다
 
 ### Requirement: 컴플리케이션
-사용자는 워치 페이스에서 경기 상태를 바로 확인할 수 있어야 한다(SHOULD).
+사용자는 워치 페이스에서 경기 상태를 바로 확인할 수 있어야 한다(MUST).
 
 #### Scenario: 컴플리케이션 표시
 - GIVEN 사용자가 BaseHaptic 컴플리케이션을 워치 페이스에 추가했을 때
