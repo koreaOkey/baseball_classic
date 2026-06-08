@@ -246,7 +246,7 @@ fun HomeScreen(
                         ) {
                             Image(
                                 painter = painterResource(id = R.drawable.kbo_team_standings_icon),
-                                contentDescription = "KBO 팀 순위",
+                                contentDescription = "전체 순위",
                                 modifier = Modifier.size(30.dp)
                             )
                         }
@@ -446,15 +446,9 @@ private fun TeamStandingsSheetContent(
 ) {
     Column(modifier = modifier) {
         Text(
-            text = "KBO 팀 순위",
+            text = "전체 순위",
             style = AppFont.h4Bold,
             color = Color.White
-        )
-        Text(
-            text = "크롤러가 수집한 최신 팀 기록 기준",
-            style = AppFont.micro,
-            color = Gray400,
-            modifier = Modifier.padding(top = AppSpacing.xs)
         )
 
         Spacer(modifier = Modifier.height(AppSpacing.lg))
@@ -532,6 +526,7 @@ private fun TeamStandingsMessage(
 @Composable
 private fun TeamStandingRow(item: BackendGamesRepository.TeamRecordStanding) {
     val team = teamFromKboTeamId(item.teamId)
+    val displayName = team?.teamName ?: item.teamName
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = AppShapes.md,
@@ -560,7 +555,7 @@ private fun TeamStandingRow(item: BackendGamesRepository.TeamRecordStanding) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = item.teamName.take(1),
+                        text = displayName.take(1),
                         style = AppFont.microBold,
                         color = Color.White
                     )
@@ -569,7 +564,7 @@ private fun TeamStandingRow(item: BackendGamesRepository.TeamRecordStanding) {
             Spacer(modifier = Modifier.width(AppSpacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = item.teamName,
+                    text = displayName,
                     style = AppFont.bodyLgMedium,
                     color = Color.White,
                     maxLines = 1
@@ -583,7 +578,7 @@ private fun TeamStandingRow(item: BackendGamesRepository.TeamRecordStanding) {
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = item.wra?.let { String.format(Locale.US, "%.3f", it) } ?: "-.--",
+                    text = "승률 ${item.wra?.let { String.format(Locale.US, "%.3f", it) } ?: "-.--"}",
                     style = AppFont.bodyMedium,
                     color = Blue400
                 )
@@ -961,8 +956,7 @@ private fun teamRecordLine(item: BackendGamesRepository.TeamRecordStanding): Str
     val wins = item.winGameCount ?: 0
     val draws = item.drawnGameCount ?: 0
     val losses = item.loseGameCount ?: 0
-    val streak = item.continuousGameResult?.let { " · $it" }.orEmpty()
-    return "$games ${wins}승 ${draws}무 ${losses}패$streak"
+    return "$games ${wins}승 ${draws}무 ${losses}패"
 }
 
 private fun formatGameBehind(value: Double?): String {

@@ -105,7 +105,7 @@ struct HomeScreen: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("KBO 팀 순위")
+                .accessibilityLabel("전체 순위")
             }
 
             Spacer().frame(height: AppSpacing.lg)
@@ -269,12 +269,9 @@ private struct TeamStandingsSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.lg) {
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                Text("KBO 팀 순위")
+                Text("전체 순위")
                     .font(AppFont.h4Bold)
                     .foregroundColor(.white)
-                Text("크롤러가 수집한 최신 팀 기록 기준")
-                    .font(AppFont.micro)
-                    .foregroundColor(AppColors.gray400)
             }
 
             if loading {
@@ -337,6 +334,10 @@ private struct TeamStandingRow: View {
         teamFromKboTeamId(item.teamId)
     }
 
+    private var displayName: String {
+        team?.teamName ?? item.teamName
+    }
+
     var body: some View {
         HStack(spacing: AppSpacing.md) {
             Text(item.ranking.map(String.init) ?? "-")
@@ -351,14 +352,14 @@ private struct TeamStandingRow: View {
                     .fill(AppColors.gray800)
                     .frame(width: 36, height: 36)
                     .overlay(
-                        Text(String(item.teamName.prefix(1)))
+                        Text(String(displayName.prefix(1)))
                             .font(AppFont.microBold)
                             .foregroundColor(.white)
                     )
             }
 
             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text(item.teamName)
+                Text(displayName)
                     .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -370,7 +371,7 @@ private struct TeamStandingRow: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
-                Text(item.wra.map { String(format: "%.3f", $0) } ?? "-.--")
+                Text("승률 \(item.wra.map { String(format: "%.3f", $0) } ?? "-.--")")
                     .font(AppFont.bodyMedium)
                     .foregroundColor(AppColors.blue400)
                 Text("게임차 \(formatGameBehind(item.gameBehind))")
@@ -631,8 +632,7 @@ private func teamRecordLine(_ item: TeamRecordStanding) -> String {
     let wins = item.winGameCount ?? 0
     let draws = item.drawnGameCount ?? 0
     let losses = item.loseGameCount ?? 0
-    let streak = item.continuousGameResult.map { " · \($0)" } ?? ""
-    return "\(games) \(wins)승 \(draws)무 \(losses)패\(streak)"
+    return "\(games) \(wins)승 \(draws)무 \(losses)패"
 }
 
 private func formatGameBehind(_ value: Double?) -> String {
