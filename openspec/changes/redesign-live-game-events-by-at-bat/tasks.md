@@ -32,6 +32,8 @@
 - [x] `ios/mobile/BaseHaptic/Data/BackendGamesRepository.swift` — 이벤트 조회에 `inningNumber` / `scoringOnly` query 지원 추가
 - [x] `ios/mobile/BaseHaptic/Screens/LiveGameScreen.swift` — 현재 이닝 선로드 + 이닝/득점 탭 lazy load + 탭별 로딩 상태 및 캐시 추가
 - [x] `ios/mobile/BaseHaptic/Data/BackendGamesRepository.swift` — 투구 상세 optional 응답 필드 파싱 추가(필드 없으면 기존 표시 폴백)
+- [x] `ios/mobile/BaseHaptic/Screens/LiveGameScreen.swift` — `AtBatCard` 가 `batterRecord` 기반 타자 기록과 투구별 구속·구종·카운트 행을 표시하고, 승리확률은 숨기며 마지막 결과는 기존 이벤트 pill + description 으로 유지
+- [x] `ios/mobile/BaseHaptic/Screens/LiveGameScreen.swift` — 경기 상세 상단 바에서 LIVE 배지를 제목 왼쪽으로 옮기고 Watch ON/OFF 배지를 최우측 액션으로 유지
 - [x] iOS Debug 빌드가 스테이징 백엔드 URL을 build setting으로 주입할 수 있고 미주입 시 로컬 백엔드로 폴백하며, Release 빌드는 운영 백엔드를 사용하도록 Info.plist / Xcode build setting 분리
 - [x] iOS Debug 빌드가 스테이징 Supabase URL/publishable key를 build setting으로 주입할 수 있고, Release 빌드는 운영 Supabase 프로젝트를 사용하도록 Info.plist / Xcode build setting 분리
 
@@ -47,6 +49,8 @@
 - [x] `InningTabs` 컴포저블 — `onSelectInning/onSelectScore` 분리, "득점" 탭 활성화
 - [x] `AtBatCard/AtBatSectionHeader/FlowingPitchChips/PitchChip/EventTypePill/pitchShortLabel/sectionKey/sectionTitle` 추가
 - [x] SCORE outcome 그룹 푸터에 "{away} N : M {home}" Yellow500 정확 스코어 라인
+- [x] `apps/mobile/.../ui/screens/LiveGameScreen.kt` — 경기 상세 상단 바에서 LIVE 배지를 제목 왼쪽으로 옮기고 Watch ON/OFF 배지를 최우측 액션으로 유지
+- [x] `apps/mobile/app/build.gradle.kts` — Android Debug 빌드는 스테이징 Railway 백엔드와 스테이징 Supabase를, Release 빌드는 운영 백엔드와 운영 Supabase를 사용하도록 buildType 별 `BuildConfig` 분리
 - [x] `DebugDummyLiveGame.events` 시연 데이터에 `atBatId/seqno + homeScoreAfter/awayScoreAfter` 부여 (BuildConfig.DEBUG 한정)
 - [x] `EventCard` 는 LiveActivity / 푸시 long-look 재사용 위해 보존
 - [x] `./gradlew :mobile:compileDebugKotlin` BUILD SUCCESSFUL

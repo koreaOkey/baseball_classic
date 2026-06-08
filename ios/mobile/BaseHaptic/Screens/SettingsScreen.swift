@@ -357,7 +357,6 @@ private struct EventFilterToggleRow: View {
         self.option = option
         _isOn = AppStorage(wrappedValue: option.defaultEnabled, option.storageKey)
     }
-
     var body: some View {
         SettingsItemWithToggle(
             icon: option.icon,

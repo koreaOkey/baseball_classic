@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct LiveGameScreen: View {
@@ -451,15 +452,17 @@ private struct DetailTopBar: View {
                     syncedGameId: syncedGameId,
                     onSetSyncedGame: onSetSyncedGame
                 )
+            }
 
+            HStack(spacing: AppSpacing.sm) {
                 if state?.status == .live {
                     LiveBadge()
                 }
-            }
 
-            Text("경기 상세")
-                .font(AppFont.h5Bold)
-                .foregroundColor(.white)
+                Text("경기 상세")
+                    .font(AppFont.h5Bold)
+                    .foregroundColor(.white)
+            }
         }
         .padding(.horizontal, AppSpacing.sm)
         .padding(.vertical, AppSpacing.sm)
@@ -1140,30 +1143,60 @@ private struct AtBatCard: View {
         return parts.joined(separator: " · ")
     }
 
+    private var batterRecord: [String: Any]? {
+        group.pitches.reversed().compactMap { $0.batterRecord }.first
+    }
+
+    private var pitchDetailEvents: [LiveEvent] {
+        group.pitches
+            .filter { event in
+                event.pitchNum != nil ||
+                    event.pitchSpeed != nil ||
+                    event.pitchStuff != nil
+            }
+            .sorted {
+                ($0.pitchNum ?? $0.seqno ?? Int($0.cursor)) >
+                    ($1.pitchNum ?? $1.seqno ?? Int($1.cursor))
+            }
+    }
+
+    private var showsNaverStyleDetails: Bool {
+        !isScoreOutcome && (batterRecord != nil || !pitchDetailEvents.isEmpty)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            // Header: 타자(또는 폴백) + 시간
-            HStack(alignment: .firstTextBaseline) {
-                Text(headerText)
-                    .font(AppFont.bodyBold)
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Spacer()
-                Text(group.time)
-                    .font(AppFont.micro)
-                    .foregroundColor(AppColors.gray400)
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            if showsNaverStyleDetails {
+                AtBatBatterHeader(
+                    batterName: batterRecordString(batterRecord, keys: ["name"]) ?? group.batter ?? headerText,
+                    pitcherName: group.pitcher,
+                    inning: group.inning,
+                    record: batterRecord
+                )
+            } else {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(headerText)
+                        .font(AppFont.bodyBold)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(group.time)
+                        .font(AppFont.micro)
+                        .foregroundColor(AppColors.gray400)
+                }
+
+                if !subHeaderText.isEmpty {
+                    Text(subHeaderText)
+                        .font(AppFont.micro)
+                        .foregroundColor(AppColors.gray500)
+                }
             }
 
-            if !subHeaderText.isEmpty {
-                Text(subHeaderText)
-                    .font(AppFont.micro)
-                    .foregroundColor(AppColors.gray500)
-            }
-
-            // 투구·진행 칩 시퀀스 (BALL/STRIKE/FOUL 등). 타석 안내성 OTHER 는 정제 단계에서 제외.
-            let chipTypes = normalizePitchTypes(events: group.pitches)
-            if chipTypes.count > 1 {
-                FlowingPitchChips(types: chipTypes)
+            if pitchDetailEvents.isEmpty {
+                let chipTypes = normalizePitchTypes(events: group.pitches)
+                if chipTypes.count > 1 {
+                    FlowingPitchChips(types: chipTypes)
+                }
             }
 
             // Footer: 최종 결과 텍스트
@@ -1204,6 +1237,10 @@ private struct AtBatCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+
+            if !pitchDetailEvents.isEmpty {
+                PitchDetailRows(events: pitchDetailEvents)
+            }
         }
         .padding(AppSpacing.lg)
         .background(AppColors.gray900)
@@ -1212,6 +1249,190 @@ private struct AtBatCard: View {
                 .stroke(highlighted ? AppColors.yellow500 : Color.clear, lineWidth: highlighted ? 1.5 : 0)
         )
         .cornerRadius(AppRadius.md)
+    }
+}
+
+private struct AtBatBatterHeader: View {
+    let batterName: String
+    let pitcherName: String?
+    let inning: String?
+    let record: [String: Any]?
+
+    private var metaText: String {
+        var parts: [String] = []
+        if let order = batterRecordInt(record, keys: ["batOrder", "battingOrder"]) {
+            parts.append("\(order)번타자")
+        }
+        if let average = batterRecordAverageText(record) {
+            parts.append("타율 \(average)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            HStack(alignment: .top, spacing: AppSpacing.md) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+                        Text(batterName)
+                            .font(AppFont.h5Bold)
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+
+                        if !metaText.isEmpty {
+                            Text(metaText)
+                                .font(AppFont.micro)
+                                .foregroundColor(AppColors.gray400)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
+                        }
+                    }
+
+                    if let inning, !inning.isEmpty {
+                        Text(inning)
+                            .font(AppFont.micro)
+                            .foregroundColor(AppColors.gray500)
+                    }
+                }
+
+                Spacer(minLength: AppSpacing.sm)
+
+                if let pitcherName, !pitcherName.isEmpty {
+                    VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
+                        Text("상대투수")
+                            .font(AppFont.micro)
+                            .foregroundColor(AppColors.gray500)
+                        Text(pitcherName)
+                            .font(AppFont.captionBold)
+                            .foregroundColor(AppColors.gray200)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+                }
+            }
+
+            if let record {
+                BatterStatGrid(record: record)
+            }
+        }
+    }
+}
+
+private struct BatterStatGrid: View {
+    let record: [String: Any]
+
+    private var rows: [[BatterStatItem]] {
+        let stats = [
+            BatterStatItem(label: "타석", value: batterRecordDisplayInt(record, keys: ["pa", "plateAppearances"])),
+            BatterStatItem(label: "타수", value: batterRecordDisplayInt(record, keys: ["ab", "atBats"])),
+            BatterStatItem(label: "안타", value: batterRecordDisplayInt(record, keys: ["hit", "hits"])),
+            BatterStatItem(label: "득점", value: batterRecordDisplayInt(record, keys: ["run", "runs", "score"])),
+            BatterStatItem(label: "타점", value: batterRecordDisplayInt(record, keys: ["rbi"])),
+            BatterStatItem(label: "홈런", value: batterRecordDisplayInt(record, keys: ["hr", "homeRuns"])),
+            BatterStatItem(label: "볼넷", value: batterRecordDisplayInt(record, keys: ["bb", "walks"])),
+            BatterStatItem(label: "삼진", value: batterRecordDisplayInt(record, keys: ["so", "strikeOuts"]))
+        ]
+        return [Array(stats.prefix(4)), Array(stats.dropFirst(4))]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: AppSpacing.sm) {
+                    ForEach(row) { item in
+                        HStack(spacing: AppSpacing.xxs) {
+                            Text(item.label)
+                                .foregroundColor(AppColors.gray500)
+                            Text(item.value)
+                                .foregroundColor(AppColors.gray300)
+                        }
+                        .font(AppFont.micro)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+}
+
+private struct BatterStatItem: Identifiable {
+    let label: String
+    let value: String
+
+    var id: String { label }
+}
+
+private struct PitchDetailRows: View {
+    let events: [LiveEvent]
+
+    var body: some View {
+        VStack(spacing: AppSpacing.sm) {
+            ForEach(events) { event in
+                PitchDetailRow(event: event)
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.gray800.opacity(0.42))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
+    }
+}
+
+private struct PitchDetailRow: View {
+    let event: LiveEvent
+
+    private var displayType: String {
+        pitchDisplayType(event)
+    }
+
+    private var pitchMetricText: String {
+        switch (event.pitchSpeed, event.pitchStuff) {
+        case let (speed?, stuff?) where !stuff.isEmpty:
+            return "\(speed)km/h | \(stuff)"
+        case let (speed?, _):
+            return "\(speed)km/h"
+        case let (_, stuff?) where !stuff.isEmpty:
+            return stuff
+        default:
+            return "-"
+        }
+    }
+
+    private var countText: String {
+        guard let ball = event.ballAfter, let strike = event.strikeAfter else { return "-" }
+        return "\(ball)-\(strike)"
+    }
+
+    var body: some View {
+        HStack(spacing: AppSpacing.sm) {
+            Text("\(event.pitchNum ?? 0)")
+                .font(AppFont.microBold)
+                .foregroundColor(AppColors.gray950)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(AppEventColors.color(for: displayType)))
+
+            Text(pitchOutcomeText(event))
+                .font(AppFont.captionMedium)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
+
+            Spacer(minLength: AppSpacing.sm)
+
+            Text(pitchMetricText)
+                .font(AppFont.micro)
+                .foregroundColor(AppColors.gray400)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+
+            Text(countText)
+                .font(AppFont.microMedium)
+                .foregroundColor(AppColors.gray400)
+                .frame(width: 34, alignment: .trailing)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -1353,13 +1574,79 @@ private func pitchShortLabel(_ type: String) -> String {
 /// - 그 외 타입은 그대로 보존
 private func normalizePitchTypes(events: [LiveEvent]) -> [String] {
     events.compactMap { event in
-        let upper = event.type.uppercased()
+        let upper = pitchDisplayType(event)
         if upper != "OTHER" { return upper }
-        let desc = event.description
-        if desc.contains("파울") || desc.contains("타격") { return "FOUL" }
         // 타석/이닝 안내성 OTHER 는 칩에서 제외
         return nil
     }
+}
+
+private func pitchDisplayType(_ event: LiveEvent) -> String {
+    let upper = event.type.uppercased()
+    let desc = event.description
+    if desc.contains("파울") || desc.contains("타격") { return "FOUL" }
+    return upper
+}
+
+private func pitchOutcomeText(_ event: LiveEvent) -> String {
+    var text = event.description.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let range = text.range(of: #"^\d+구\s*"#, options: .regularExpression) {
+        text.removeSubrange(range)
+    }
+    if !text.isEmpty { return text }
+    return eventLabel(pitchDisplayType(event))
+}
+
+private func batterRecordString(_ record: [String: Any]?, keys: [String]) -> String? {
+    guard let record else { return nil }
+    for key in keys {
+        guard let raw = record[key] else { continue }
+        if let value = raw as? String {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        } else {
+            let value = "\(raw)".trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty { return value }
+        }
+    }
+    return nil
+}
+
+private func batterRecordInt(_ record: [String: Any]?, keys: [String]) -> Int? {
+    guard let record else { return nil }
+    for key in keys {
+        guard let raw = record[key] else { continue }
+        if let value = raw as? Int { return value }
+        if let value = raw as? Double { return Int(value) }
+        if let value = raw as? String, let parsed = Int(value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return parsed
+        }
+    }
+    return nil
+}
+
+private func batterRecordDouble(_ record: [String: Any]?, keys: [String]) -> Double? {
+    guard let record else { return nil }
+    for key in keys {
+        guard let raw = record[key] else { continue }
+        if let value = raw as? Double { return value }
+        if let value = raw as? Int { return Double(value) }
+        if let value = raw as? String, let parsed = Double(value.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return parsed
+        }
+    }
+    return nil
+}
+
+private func batterRecordAverageText(_ record: [String: Any]?) -> String? {
+    guard let average = batterRecordDouble(record, keys: ["seasonHra", "avg", "average", "battingAverage"]) else {
+        return nil
+    }
+    return String(format: "%.3f", average)
+}
+
+private func batterRecordDisplayInt(_ record: [String: Any]?, keys: [String]) -> String {
+    "\(batterRecordInt(record, keys: keys) ?? 0)"
 }
 
 private func displayPitcher(state: LiveGameState, event: LiveEvent?, placeholder: String = "-") -> String {

@@ -83,15 +83,15 @@ private const val KEY_LAST_SEEN_UPDATE_VERSION = "last_seen_update_version"
 private const val DEBUG_DUMMY_LIVE_GAME_ID = "debug-watch-sync-test"
 private val DEBUG_DUMMY_LIVE_GAME = Game(
     id = DEBUG_DUMMY_LIVE_GAME_ID,
-    homeTeam = "두산",
-    awayTeam = "LG",
-    homeTeamId = Team.DOOSAN,
-    awayTeamId = Team.LG,
-    homeScore = 3,
-    awayScore = 5,
-    inning = "7회초",
+    homeTeam = "LG",
+    awayTeam = "KIA",
+    homeTeamId = Team.LG,
+    awayTeamId = Team.KIA,
+    homeScore = 5,
+    awayScore = 3,
+    inning = "9회초",
     status = GameStatus.LIVE,
-    time = "19:30"
+    time = "18:30"
 )
 
 class MainActivity : ComponentActivity() {

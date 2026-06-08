@@ -145,3 +145,9 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - WHEN 앱 번들이 Supabase 설정을 읽으면
 - THEN 스테이징 Supabase URL과 publishable key가 제공된 경우 해당 스테이징 프로젝트를 사용한다
 - AND Release 빌드는 운영 Supabase 프로젝트를 사용한다
+
+#### Scenario: Android Debug 스테이징 인프라 분리
+- GIVEN Android Debug 빌드를 실행할 때
+- WHEN 앱이 백엔드와 Supabase 설정을 읽으면
+- THEN 스테이징 백엔드 URL과 스테이징 Supabase 프로젝트를 사용한다
+- AND Release 빌드는 운영 백엔드 URL과 운영 Supabase 프로젝트를 사용한다

@@ -15,13 +15,23 @@ val localProperties = Properties().apply {
     }
 }
 
-val backendBaseUrlValue = (
-    (project.findProperty("backendBaseUrl") as String?)
-        ?: localProperties.getProperty("backendBaseUrl")
-        ?: System.getenv("BACKEND_BASE_URL")
+fun configValue(propertyName: String, envName: String): String? {
+    return project.findProperty(propertyName)?.toString()
+        ?: localProperties.getProperty(propertyName)
+        ?: System.getenv(envName)
+}
+
+fun buildConfigString(value: String): String {
+    return "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+}
+
+val productionBackendBaseUrlValue =
+    configValue("backendBaseUrl", "BACKEND_BASE_URL")
         ?: "https://baseballclassic-production.up.railway.app"
-    )
-val backendBaseUrl = backendBaseUrlValue.replace("\"", "\\\"")
+
+val stagingBackendBaseUrlValue =
+    configValue("stagingBackendBaseUrl", "BASEHAPTIC_STAGING_BACKEND_BASE_URL")
+        ?: "https://baseballclassic-production-4796.up.railway.app"
 
 fun isLocalBackendUrl(url: String): Boolean {
     val normalizedUrl = url.trim().lowercase()
@@ -33,25 +43,30 @@ fun isLocalBackendUrl(url: String): Boolean {
 
 gradle.taskGraph.whenReady {
     val buildsRelease = allTasks.any { task -> task.name.contains("Release") }
-    if (buildsRelease && isLocalBackendUrl(backendBaseUrlValue)) {
+    if (buildsRelease && isLocalBackendUrl(productionBackendBaseUrlValue)) {
         throw GradleException(
-            "Release builds must use a public backend URL, but backendBaseUrl is '$backendBaseUrlValue'. " +
+            "Release builds must use a public backend URL, but backendBaseUrl is '$productionBackendBaseUrlValue'. " +
                 "Pass -PbackendBaseUrl=https://baseballclassic-production.up.railway.app or set BACKEND_BASE_URL."
         )
     }
 }
 
-val supabaseUrl = (
-    localProperties.getProperty("supabaseUrl")
-        ?: System.getenv("SUPABASE_URL")
+val productionSupabaseUrlValue =
+    configValue("supabaseUrl", "SUPABASE_URL")
         ?: "https://snrafqoqpmtoannnnwdq.supabase.co"
-    ).replace("\"", "\\\"")
 
-val supabaseAnonKey = (
-    localProperties.getProperty("supabaseAnonKey")
-        ?: System.getenv("SUPABASE_ANON_KEY")
+val productionSupabaseAnonKeyValue =
+    configValue("supabaseAnonKey", "SUPABASE_ANON_KEY")
         ?: ""
-    ).replace("\"", "\\\"")
+
+val stagingSupabaseUrlValue =
+    configValue("stagingSupabaseUrl", "BASEHAPTIC_STAGING_SUPABASE_URL")
+        ?: "https://egcsxoxqfcwjjcvjycry.supabase.co"
+
+val stagingSupabaseAnonKeyValue =
+    configValue("stagingSupabaseAnonKey", "BASEHAPTIC_STAGING_SUPABASE_ANON_KEY")
+        ?: configValue("stagingSupabasePublishableKey", "BASEHAPTIC_STAGING_SUPABASE_PUBLISHABLE_KEY")
+        ?: "sb_publishable_VTKZ4I3FS3COPXSe0dryjg_VDhg0D-a"
 
 val keystoreProperties = mutableMapOf<String, String>()
 rootProject.file("keystore.properties").let { file ->
@@ -82,9 +97,6 @@ android {
         targetSdk = 35
         versionCode = 21
         versionName = "1.0.3"
-        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
-        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -93,10 +105,19 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "BACKEND_BASE_URL", buildConfigString(stagingBackendBaseUrlValue))
+            buildConfigField("String", "SUPABASE_URL", buildConfigString(stagingSupabaseUrlValue))
+            buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(stagingSupabaseAnonKeyValue))
+        }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "BACKEND_BASE_URL", buildConfigString(productionBackendBaseUrlValue))
+            buildConfigField("String", "SUPABASE_URL", buildConfigString(productionSupabaseUrlValue))
+            buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(productionSupabaseAnonKeyValue))
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

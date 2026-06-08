@@ -93,9 +93,9 @@ Sensitive variables such as DB password, service role key, and crawler API key
 must be entered in the Railway dashboard or another approved secret manager. Do
 not commit them to this repository.
 
-## 3. iOS/watchOS Debug
+## 3. iOS/watchOS/Android Debug
 
-Debug builds read staging backend settings through Xcode build settings:
+iOS/watchOS Debug builds read staging backend settings through Xcode build settings:
 
 ```bash
 xcodebuild -project ios/BaseHaptic.xcodeproj \
@@ -107,8 +107,24 @@ xcodebuild -project ios/BaseHaptic.xcodeproj \
   BASEHAPTIC_STAGING_SUPABASE_ANON_KEY=<staging-anon-key>
 ```
 
-If these values are not provided, the app falls back to `http://localhost:8080`.
-Release builds keep the production Railway URL and production Supabase project.
+If these values are not provided, the iOS/watchOS app falls back to
+`http://localhost:8080`. Release builds keep the production Railway URL and
+production Supabase project.
+
+Android Debug builds use the staging Railway backend and staging Supabase project
+through Gradle `debug` build type defaults. Override them through environment
+variables or Gradle properties when needed:
+
+```bash
+BASEHAPTIC_STAGING_BACKEND_BASE_URL=https://baseballclassic-production-4796.up.railway.app \
+BASEHAPTIC_STAGING_SUPABASE_URL=https://egcsxoxqfcwjjcvjycry.supabase.co \
+BASEHAPTIC_STAGING_SUPABASE_ANON_KEY=<staging-publishable-key> \
+./gradlew :mobile:assembleDebug
+```
+
+Equivalent `local.properties` keys are `stagingBackendBaseUrl`,
+`stagingSupabaseUrl`, and `stagingSupabaseAnonKey`. Android Release builds keep
+the production Railway URL and production Supabase project.
 
 ## 4. Verification
 

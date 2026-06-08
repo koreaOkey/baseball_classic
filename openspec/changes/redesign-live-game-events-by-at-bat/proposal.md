@@ -31,6 +31,7 @@
 
 - **Android 폰** (`apps/mobile/.../model/LiveEvent.kt`, `model/AtBatGroup.kt` (신규), `ui/screens/LiveGameScreen.kt`)
   - 동일 패턴(`kotlinx.serialization` 미지 키 안전). `LazyColumn` `key = AtBatGroup.id` 로 스크롤 재배치 회피.
+  - Debug 빌드는 스테이징 Railway 백엔드와 스테이징 Supabase 프로젝트를 사용하고, Release 빌드는 운영 백엔드와 운영 Supabase 프로젝트를 사용하도록 Gradle buildType 별 `BuildConfig` 값을 분리한다.
 
 - **OpenSpec spec delta** (`openspec/specs/game-state`, `openspec/specs/crawling`, `openspec/specs/mobile-ios`)
   - 이벤트 응답의 타석 그룹화 키와 투구 상세 optional 메타데이터, 크롤러의 네이버 릴레이 상세 보존, iOS의 optional 필드 수신/폴백을 명세화한다.
@@ -50,5 +51,5 @@
 - **백엔드**: 응답에 nullable 문자열·정수 필드 2개 추가(이벤트당 평균 +25 bytes). 기존 클라이언트는 미지 키 무시로 비호환 없음. 추가 SQL/쿼리/인덱스/마이그레이션 없음. Redis 캐시(`game:events:{game_id}`)와 WS payload는 동일 `to_event_out` 직렬화를 거치므로 자동 포함. 1000명 동시 접속 추가 부담은 트래픽 +0.5KB/접속 수준.
 - **롤백**: 백엔드 PR 단독 revert 가능. 클라이언트는 `atBatId == nil` 시 평면 폴백.
 - **단계적 출시**: 백엔드 PR 머지 → iOS PR → Android PR 순. 어느 한쪽만 배포돼도 폴백 덕에 안전.
-- **테스트 인프라 분리**: 스테이징은 운영과 같은 Railway Backend/Crawler + Supabase + Redis 구성을 사용하되 별도 리소스와 별도 secret으로 격리한다. iOS/watchOS Debug 빌드는 스테이징 백엔드 URL을 주입할 수 있고, iOS Debug 빌드는 스테이징 Supabase URL/publishable key도 주입할 수 있다. Release 빌드는 운영 백엔드와 운영 Supabase를 사용한다.
+- **테스트 인프라 분리**: 스테이징은 운영과 같은 Railway Backend/Crawler + Supabase + Redis 구성을 사용하되 별도 리소스와 별도 secret으로 격리한다. iOS/watchOS Debug 빌드는 스테이징 백엔드 URL을 주입할 수 있고, iOS Debug 빌드는 스테이징 Supabase URL/publishable key도 주입할 수 있다. Android Debug 빌드는 스테이징 백엔드와 스테이징 Supabase를 사용한다. Release 빌드는 운영 백엔드와 운영 Supabase를 사용한다.
 - **Non-Goals**: 워치(Wear OS/watchOS) 라이브 화면의 네이버식 타석 상세 표시, LiveActivity / Long-look 노티 표시, 푸시 필터 정책, DB 스키마, 라인업/필드 카드 — 모두 변경 없음. Watch 이벤트 전달은 기존 이벤트 타입 기반 처리만 유지한다.
