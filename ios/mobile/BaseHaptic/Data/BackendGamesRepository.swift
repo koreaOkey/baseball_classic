@@ -162,6 +162,21 @@ struct TeamRecordStats {
     let updatedAt: String?
 }
 
+struct TeamRecordStanding: Identifiable {
+    var id: String { teamId }
+    let teamId: String
+    let teamName: String
+    let ranking: Int?
+    let wra: Double?
+    let gameCount: Int?
+    let winGameCount: Int?
+    let drawnGameCount: Int?
+    let loseGameCount: Int?
+    let gameBehind: Double?
+    let continuousGameResult: String?
+    let updatedAt: String?
+}
+
 struct UpcomingGameSchedule: Identifiable {
     var id: String { "\(gameDate):\(game.id)" }
     let gameDate: Date
@@ -295,6 +310,15 @@ final class BackendGamesRepository {
         return await getJSON(endpoint: endpoint) { data in
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
             return self.parseTeamRecordStats(json)
+        }
+    }
+
+    func fetchTeamRecordStandings() async -> [TeamRecordStanding]? {
+        let year = Calendar.current.component(.year, from: Date())
+        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/team-records?categoryId=kbo&seasonCode=\(year)"
+        return await getJSON(endpoint: endpoint) { data in
+            guard let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+            return items.map { self.parseTeamRecordStanding($0) }
         }
     }
 
@@ -492,10 +516,42 @@ final class BackendGamesRepository {
         TeamRecordStats(
             teamId: json["teamId"] as? String ?? "",
             ranking: json["ranking"] as? Int,
-            wra: json["wra"] as? Double,
+            wra: jsonDouble(json["wra"]),
             lastFiveGames: json["lastFiveGames"] as? String,
             updatedAt: json["updatedAt"] as? String
         )
+    }
+
+    private func parseTeamRecordStanding(_ json: [String: Any]) -> TeamRecordStanding {
+        let teamShortName = json["teamShortName"] as? String
+        let teamName = (teamShortName?.isEmpty == false ? teamShortName : json["teamName"] as? String) ?? ""
+        return TeamRecordStanding(
+            teamId: json["teamId"] as? String ?? "",
+            teamName: teamName,
+            ranking: jsonInt(json["ranking"]),
+            wra: jsonDouble(json["wra"]),
+            gameCount: jsonInt(json["gameCount"]),
+            winGameCount: jsonInt(json["winGameCount"]),
+            drawnGameCount: jsonInt(json["drawnGameCount"]),
+            loseGameCount: jsonInt(json["loseGameCount"]),
+            gameBehind: jsonDouble(json["gameBehind"]),
+            continuousGameResult: json["continuousGameResult"] as? String,
+            updatedAt: json["updatedAt"] as? String
+        )
+    }
+
+    private func jsonInt(_ value: Any?) -> Int? {
+        if let intValue = value as? Int { return intValue }
+        if let doubleValue = value as? Double { return Int(doubleValue) }
+        if let stringValue = value as? String { return Int(stringValue) }
+        return nil
+    }
+
+    private func jsonDouble(_ value: Any?) -> Double? {
+        if let doubleValue = value as? Double { return doubleValue }
+        if let intValue = value as? Int { return Double(intValue) }
+        if let stringValue = value as? String { return Double(stringValue) }
+        return nil
     }
 
     private func parseLiveStreamMessage(_ text: String) -> LiveStreamMessage? {

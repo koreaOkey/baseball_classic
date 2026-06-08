@@ -13,6 +13,10 @@ struct HomeScreen: View {
     @Environment(\.teamTheme) private var teamTheme
     @State private var teamRecordStats: TeamRecordStats?
     @State private var upcomingGames: [UpcomingGameSchedule] = []
+    @State private var showingStandings = false
+    @State private var standingsItems: [TeamRecordStanding] = []
+    @State private var standingsLoading = false
+    @State private var standingsError: String?
 
     private var primaryColor: Color {
         activeTheme?.colors.primary ?? teamTheme.primary
@@ -56,6 +60,18 @@ struct HomeScreen: View {
             async let upcoming: () = loadUpcomingGames()
             _ = await (record, upcoming)
         }
+        .sheet(isPresented: $showingStandings) {
+            TeamStandingsSheet(
+                items: standingsItems,
+                loading: standingsLoading,
+                error: standingsError,
+                onRetry: {
+                    Task { await loadTeamStandings() }
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Header
@@ -74,13 +90,22 @@ struct HomeScreen: View {
                     }
                 }
                 Spacer()
-                Circle()
-                    .fill(Color.white.opacity(0.2))
-                    .frame(width: 48, height: 48)
-                    .overlay(
-                        Image(systemName: "bolt.fill")
-                            .foregroundColor(.white)
-                    )
+                Button {
+                    showingStandings = true
+                    Task { await loadTeamStandings() }
+                } label: {
+                    Circle()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 48, height: 48)
+                        .overlay(
+                            Image("kbo_team_standings_icon")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 30, height: 30)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("KBO 팀 순위")
             }
 
             Spacer().frame(height: AppSpacing.lg)
@@ -217,6 +242,145 @@ struct HomeScreen: View {
             return
         }
         upcomingGames = await BackendGamesRepository.shared.fetchUpcomingMyTeamGames(selectedTeam: selectedTeam) ?? []
+    }
+
+    @MainActor
+    private func loadTeamStandings() async {
+        standingsLoading = true
+        standingsError = nil
+        let loaded = await BackendGamesRepository.shared.fetchTeamRecordStandings()
+        if let loaded {
+            standingsItems = loaded
+        } else {
+            standingsItems = []
+            standingsError = "팀 순위를 불러오지 못했습니다."
+        }
+        standingsLoading = false
+    }
+}
+
+// MARK: - TeamStandingsSheet
+private struct TeamStandingsSheet: View {
+    let items: [TeamRecordStanding]
+    let loading: Bool
+    let error: String?
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("KBO 팀 순위")
+                    .font(AppFont.h4Bold)
+                    .foregroundColor(.white)
+                Text("크롤러가 수집한 최신 팀 기록 기준")
+                    .font(AppFont.micro)
+                    .foregroundColor(AppColors.gray400)
+            }
+
+            if loading {
+                VStack(spacing: AppSpacing.md) {
+                    ProgressView()
+                        .tint(AppColors.yellow500)
+                    Text("순위를 불러오는 중입니다")
+                        .font(AppFont.body)
+                        .foregroundColor(AppColors.gray400)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.xxxl)
+            } else if let error {
+                StandingsMessage(title: error, actionLabel: "다시 시도", onAction: onRetry)
+            } else if items.isEmpty {
+                StandingsMessage(title: "저장된 팀 순위가 없습니다", actionLabel: "새로고침", onAction: onRetry)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: AppSpacing.sm) {
+                        ForEach(items) { item in
+                            TeamStandingRow(item: item)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.top, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.xxxl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppColors.gray950)
+    }
+}
+
+private struct StandingsMessage: View {
+    let title: String
+    let actionLabel: String
+    let onAction: () -> Void
+
+    var body: some View {
+        VStack(spacing: AppSpacing.md) {
+            Text(title)
+                .font(AppFont.bodyLgMedium)
+                .foregroundColor(AppColors.gray300)
+            Button(action: onAction) {
+                Text(actionLabel)
+                    .font(AppFont.bodyMedium)
+                    .foregroundColor(AppColors.yellow500)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.xxxl)
+    }
+}
+
+private struct TeamStandingRow: View {
+    let item: TeamRecordStanding
+
+    private var team: Team? {
+        teamFromKboTeamId(item.teamId)
+    }
+
+    var body: some View {
+        HStack(spacing: AppSpacing.md) {
+            Text(item.ranking.map(String.init) ?? "-")
+                .font(AppFont.bodyLgBold)
+                .foregroundColor((item.ranking ?? 99) <= 3 ? AppColors.yellow500 : AppColors.gray300)
+                .frame(width: 30, alignment: .leading)
+
+            if let team {
+                TeamLogo(team: team, size: 36)
+            } else {
+                Circle()
+                    .fill(AppColors.gray800)
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Text(String(item.teamName.prefix(1)))
+                            .font(AppFont.microBold)
+                            .foregroundColor(.white)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text(item.teamName)
+                    .font(AppFont.bodyLgMedium)
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text(teamRecordLine(item))
+                    .font(AppFont.micro)
+                    .foregroundColor(AppColors.gray400)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
+                Text(item.wra.map { String(format: "%.3f", $0) } ?? "-.--")
+                    .font(AppFont.bodyMedium)
+                    .foregroundColor(AppColors.blue400)
+                Text("게임차 \(formatGameBehind(item.gameBehind))")
+                    .font(AppFont.tiny)
+                    .foregroundColor(AppColors.gray500)
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.md)
     }
 }
 
@@ -459,5 +623,38 @@ private func isPlayableGameStatus(_ status: GameStatus) -> Bool {
     switch status {
     case .live, .scheduled: return true
     case .finished, .canceled, .postponed: return false
+    }
+}
+
+private func teamRecordLine(_ item: TeamRecordStanding) -> String {
+    let games = item.gameCount.map { "\($0)경기" } ?? "-경기"
+    let wins = item.winGameCount ?? 0
+    let draws = item.drawnGameCount ?? 0
+    let losses = item.loseGameCount ?? 0
+    let streak = item.continuousGameResult.map { " · \($0)" } ?? ""
+    return "\(games) \(wins)승 \(draws)무 \(losses)패\(streak)"
+}
+
+private func formatGameBehind(_ value: Double?) -> String {
+    guard let value else { return "-" }
+    if value == 0 { return "0" }
+    let whole = Int(value)
+    if value == Double(whole) { return "\(whole)" }
+    return String(format: "%.1f", value)
+}
+
+private func teamFromKboTeamId(_ teamId: String) -> Team? {
+    switch teamId.uppercased() {
+    case "OB": return .doosan
+    case "LG": return .lg
+    case "WO": return .kiwoom
+    case "SS": return .samsung
+    case "LT": return .lotte
+    case "SK": return .ssg
+    case "KT": return .kt
+    case "HH": return .hanwha
+    case "HT": return .kia
+    case "NC": return .nc
+    default: return nil
     }
 }

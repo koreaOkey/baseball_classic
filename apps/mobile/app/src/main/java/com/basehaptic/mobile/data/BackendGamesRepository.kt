@@ -103,6 +103,16 @@ object BackendGamesRepository {
         // 이벤트 직후 시점의 누적 스코어. 백엔드가 채운 경우에만 값이 있고, 미수집 이벤트는 null.
         val homeScoreAfter: Int? = null,
         val awayScoreAfter: Int? = null,
+        val pitchNum: Int? = null,
+        val pitchSpeed: Int? = null,
+        val pitchStuff: String? = null,
+        val ballAfter: Int? = null,
+        val strikeAfter: Int? = null,
+        val outAfter: Int? = null,
+        val batterRecord: Map<String, Any?>? = null,
+        val homeWinProbability: Double? = null,
+        val awayWinProbability: Double? = null,
+        val wpaByPlate: Double? = null,
     )
 
     data class LiveEventsPage(
@@ -115,6 +125,20 @@ object BackendGamesRepository {
         val ranking: Int?,
         val wra: Double?,
         val lastFiveGames: String?,
+        val updatedAt: String?
+    )
+
+    data class TeamRecordStanding(
+        val teamId: String,
+        val teamName: String,
+        val ranking: Int?,
+        val wra: Double?,
+        val gameCount: Int?,
+        val winGameCount: Int?,
+        val drawnGameCount: Int?,
+        val loseGameCount: Int?,
+        val gameBehind: Double?,
+        val continuousGameResult: String?,
         val updatedAt: String?
     )
 
@@ -493,6 +517,17 @@ object BackendGamesRepository {
         }
     }
 
+    fun fetchTeamRecordStandings(): List<TeamRecordStanding>? {
+        val seasonCode = LocalDate.now().year.toString()
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/team-records?categoryId=kbo&seasonCode=$seasonCode"
+        return getJson(endpoint) { body ->
+            val array = JSONArray(body)
+            List(array.length()) { index ->
+                array.getJSONObject(index).toTeamRecordStanding()
+            }
+        }
+    }
+
     private fun <T> getJson(endpoint: String, parser: (String) -> T): T? {
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -656,8 +691,8 @@ object BackendGamesRepository {
             baseFirst = bases.optBoolean("first", false),
             baseSecond = bases.optBoolean("second", false),
             baseThird = bases.optBoolean("third", false),
-            pitcher = optString("pitcher"),
-            batter = optString("batter"),
+            pitcher = optCleanString("pitcher", "currentPitcher", "current_pitcher").orEmpty(),
+            batter = optCleanString("batter", "currentBatter", "current_batter").orEmpty(),
             pitcherPitchCount = if (isNull("pitcherPitchCount")) null else optInt("pitcherPitchCount").takeIf { has("pitcherPitchCount") },
             lastEventType = optString("lastEventType").ifBlank { null },
             homeLineup = optLineupArray("homeLineup"),
@@ -697,13 +732,23 @@ object BackendGamesRepository {
             type = optString("type").ifBlank { "OTHER" },
             description = optString("description"),
             time = formatBackendTime(optString("time")),
-            pitcher = optString("pitcher").ifBlank { null },
-            batter = optString("batter").ifBlank { null },
+            pitcher = optCleanString("pitcher", "currentPitcher", "current_pitcher"),
+            batter = optCleanString("batter", "currentBatter", "current_batter"),
             inning = optString("inning").ifBlank { null },
             atBatId = optString("atBatId").ifBlank { null },
             seqno = optNullableInt("seqno"),
             homeScoreAfter = optNullableInt("homeScoreAfter"),
             awayScoreAfter = optNullableInt("awayScoreAfter"),
+            pitchNum = optNullableInt("pitchNum"),
+            pitchSpeed = optNullableInt("pitchSpeed"),
+            pitchStuff = optCleanString("pitchStuff"),
+            ballAfter = optNullableInt("ballAfter"),
+            strikeAfter = optNullableInt("strikeAfter"),
+            outAfter = optNullableInt("outAfter"),
+            batterRecord = optJSONObject("batterRecord")?.toMap(),
+            homeWinProbability = optNullableDouble("homeWinProbability"),
+            awayWinProbability = optNullableDouble("awayWinProbability"),
+            wpaByPlate = optNullableDouble("wpaByPlate"),
         )
     }
 
@@ -713,6 +758,22 @@ object BackendGamesRepository {
             ranking = optNullableInt("ranking"),
             wra = optNullableDouble("wra"),
             lastFiveGames = optString("lastFiveGames").ifBlank { null },
+            updatedAt = optString("updatedAt").ifBlank { null }
+        )
+    }
+
+    private fun JSONObject.toTeamRecordStanding(): TeamRecordStanding {
+        return TeamRecordStanding(
+            teamId = optString("teamId"),
+            teamName = optString("teamShortName").ifBlank { optString("teamName") },
+            ranking = optNullableInt("ranking"),
+            wra = optNullableDouble("wra"),
+            gameCount = optNullableInt("gameCount"),
+            winGameCount = optNullableInt("winGameCount"),
+            drawnGameCount = optNullableInt("drawnGameCount"),
+            loseGameCount = optNullableInt("loseGameCount"),
+            gameBehind = optNullableDouble("gameBehind"),
+            continuousGameResult = optString("continuousGameResult").ifBlank { null },
             updatedAt = optString("updatedAt").ifBlank { null }
         )
     }
@@ -908,5 +969,27 @@ object BackendGamesRepository {
     private fun JSONObject.optNullableDouble(key: String): Double? {
         if (!has(key) || isNull(key)) return null
         return runCatching { getDouble(key) }.getOrNull()
+    }
+
+    private fun JSONObject.optCleanString(vararg keys: String): String? {
+        for (key in keys) {
+            if (!has(key) || isNull(key)) continue
+            val value = optString(key).trim()
+            if (value.isNotEmpty() && !value.equals("null", ignoreCase = true)) {
+                return value
+            }
+        }
+        return null
+    }
+
+    private fun JSONObject.toMap(): Map<String, Any?> {
+        return buildMap {
+            val iterator = keys()
+            while (iterator.hasNext()) {
+                val key = iterator.next()
+                val value = opt(key)
+                put(key, if (value == JSONObject.NULL) null else value)
+            }
+        }
     }
 }

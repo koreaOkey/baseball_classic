@@ -1164,6 +1164,30 @@ def get_team_record(
     ).scalar_one_or_none()
 
 
+def get_team_records(
+    db: Session,
+    *,
+    category_id: str,
+    season_code: str,
+) -> list[TeamRecord]:
+    return (
+        db.execute(
+            select(TeamRecord)
+            .where(
+                TeamRecord.category_id == category_id,
+                TeamRecord.season_code == season_code,
+            )
+            .order_by(
+                func.coalesce(TeamRecord.ranking, 9999).asc(),
+                func.coalesce(TeamRecord.order_no, 9999).asc(),
+                TeamRecord.team_name.asc(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
 def to_team_record_out(record: TeamRecord) -> TeamRecordOut:
     return TeamRecordOut(
         upperCategoryId=record.upper_category_id,

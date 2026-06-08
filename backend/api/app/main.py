@@ -58,6 +58,7 @@ from .schemas import (
 from .services import (
     build_game_state,
     get_team_record,
+    get_team_records,
     insert_events,
     normalize_status,
     sync_snapshot_details,
@@ -881,6 +882,21 @@ async def _send_live_activity_update(
         *(send_live_activity_push(token, content_state, event_type=event_type) for token in tokens),
         return_exceptions=True,
     )
+
+
+@app.get("/team-records", response_model=list[TeamRecordOut])
+def get_team_record_standings(
+    category_id: str = Query(default="kbo", alias="categoryId"),
+    season_code: str | None = Query(default=None, alias="seasonCode"),
+    db: Session = Depends(get_db),
+) -> list[TeamRecordOut]:
+    normalized_season_code = (season_code or str(datetime.now(UTC).year)).strip()
+    rows = get_team_records(
+        db,
+        category_id=category_id.strip(),
+        season_code=normalized_season_code,
+    )
+    return [to_team_record_out(row) for row in rows]
 
 
 @app.get("/team-records/{team_id}", response_model=TeamRecordOut)

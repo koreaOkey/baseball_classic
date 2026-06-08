@@ -1083,6 +1083,34 @@ def test_get_team_record_by_team_id() -> None:
         assert body["wra"] == 1.0
 
 
+def test_get_team_record_standings_returns_ranked_list() -> None:
+    with TestClient(app) as client:
+        ingest = client.post(
+            "/internal/crawler/team-records",
+            headers={"X-API-Key": "test-key"},
+            json=sample_team_records_payload(),
+        )
+        assert ingest.status_code == 200
+
+        response = client.get("/team-records?categoryId=kbo&seasonCode=2026")
+        assert response.status_code == 200
+        body = response.json()
+        assert [item["teamId"] for item in body] == ["LG", "OB"]
+        assert body[0]["ranking"] == 1
+        assert body[0]["gameCount"] == 2
+        assert body[0]["winGameCount"] == 1
+        assert body[0]["drawnGameCount"] == 1
+        assert body[0]["loseGameCount"] == 0
+        assert body[0]["continuousGameResult"] == "1승"
+
+
+def test_get_team_record_standings_returns_empty_list_when_not_found() -> None:
+    with TestClient(app) as client:
+        response = client.get("/team-records?categoryId=kbo&seasonCode=2099")
+        assert response.status_code == 200
+        assert response.json() == []
+
+
 def test_get_team_record_returns_404_when_not_found() -> None:
     with TestClient(app) as client:
         response = client.get("/team-records/NOPE?categoryId=kbo&seasonCode=2026")

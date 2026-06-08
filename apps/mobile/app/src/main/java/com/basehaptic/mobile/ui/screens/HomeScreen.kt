@@ -1,5 +1,6 @@
 package com.basehaptic.mobile.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,7 +18,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.basehaptic.mobile.R
 import com.basehaptic.mobile.ui.components.BannerAd
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.*
@@ -34,6 +37,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     selectedTeam: Team,
@@ -45,6 +49,33 @@ fun HomeScreen(
     val context = LocalContext.current
     var teamRecordStats by remember(selectedTeam) {
         mutableStateOf<BackendGamesRepository.TeamRecordStats?>(null)
+    }
+    var showStandingsSheet by remember { mutableStateOf(false) }
+    var standingsLoadRequest by remember { mutableIntStateOf(0) }
+    var standingsLoading by remember { mutableStateOf(false) }
+    var standingsError by remember { mutableStateOf<String?>(null) }
+    var standingsItems by remember {
+        mutableStateOf<List<BackendGamesRepository.TeamRecordStanding>>(emptyList())
+    }
+    val standingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    LaunchedEffect(showStandingsSheet, standingsLoadRequest) {
+        if (!showStandingsSheet) return@LaunchedEffect
+
+        standingsLoading = true
+        standingsError = null
+        val loaded = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.fetchTeamRecordStandings()
+            }
+        }.getOrNull()
+        if (loaded == null) {
+            standingsItems = emptyList()
+            standingsError = "팀 순위를 불러오지 못했습니다."
+        } else {
+            standingsItems = loaded
+        }
+        standingsLoading = false
     }
 
     LaunchedEffect(selectedTeam) {
@@ -206,14 +237,17 @@ fun HomeScreen(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.2f)),
+                                .background(Color.White.copy(alpha = 0.2f))
+                                .clickable {
+                                    showStandingsSheet = true
+                                    standingsLoadRequest += 1
+                                },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
+                            Image(
+                                painter = painterResource(id = R.drawable.kbo_team_standings_icon),
+                                contentDescription = "KBO 팀 순위",
+                                modifier = Modifier.size(30.dp)
                             )
                         }
                     }
@@ -378,6 +412,188 @@ fun HomeScreen(
 
         item {
             Spacer(modifier = Modifier.height(AppSpacing.bottomSafeSpacer))
+        }
+    }
+
+    if (showStandingsSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showStandingsSheet = false },
+            sheetState = standingsSheetState,
+            containerColor = Gray950,
+            contentColor = Color.White
+        ) {
+            TeamStandingsSheetContent(
+                standings = standingsItems,
+                loading = standingsLoading,
+                error = standingsError,
+                onRetry = { standingsLoadRequest += 1 },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = AppSpacing.xxl)
+                    .padding(bottom = AppSpacing.xxxl)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TeamStandingsSheetContent(
+    standings: List<BackendGamesRepository.TeamRecordStanding>,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = "KBO 팀 순위",
+            style = AppFont.h4Bold,
+            color = Color.White
+        )
+        Text(
+            text = "크롤러가 수집한 최신 팀 기록 기준",
+            style = AppFont.micro,
+            color = Gray400,
+            modifier = Modifier.padding(top = AppSpacing.xs)
+        )
+
+        Spacer(modifier = Modifier.height(AppSpacing.lg))
+
+        when {
+            loading -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = AppSpacing.xxxl),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(color = Yellow500)
+                    Text(
+                        text = "순위를 불러오는 중입니다",
+                        style = AppFont.body,
+                        color = Gray400,
+                        modifier = Modifier.padding(top = AppSpacing.md)
+                    )
+                }
+            }
+
+            error != null -> {
+                TeamStandingsMessage(
+                    title = error,
+                    actionLabel = "다시 시도",
+                    onAction = onRetry
+                )
+            }
+
+            standings.isEmpty() -> {
+                TeamStandingsMessage(
+                    title = "저장된 팀 순위가 없습니다",
+                    actionLabel = "새로고침",
+                    onAction = onRetry
+                )
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 520.dp),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+                ) {
+                    items(standings, key = { it.teamId }) { item ->
+                        TeamStandingRow(item = item)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeamStandingsMessage(
+    title: String,
+    actionLabel: String,
+    onAction: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = AppSpacing.xxxl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
+    ) {
+        Text(text = title, style = AppFont.bodyLgMedium, color = Gray300)
+        TextButton(onClick = onAction) {
+            Text(text = actionLabel, color = Yellow500)
+        }
+    }
+}
+
+@Composable
+private fun TeamStandingRow(item: BackendGamesRepository.TeamRecordStanding) {
+    val team = teamFromKboTeamId(item.teamId)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.md,
+        color = Gray900
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(AppSpacing.md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.ranking?.let { "$it" } ?: "-",
+                style = AppFont.bodyLgBold,
+                color = if ((item.ranking ?: 99) <= 3) Yellow500 else Gray300,
+                modifier = Modifier.width(30.dp)
+            )
+            if (team != null) {
+                TeamLogo(team = team, size = 36.dp)
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Gray800),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = item.teamName.take(1),
+                        style = AppFont.microBold,
+                        color = Color.White
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(AppSpacing.md))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.teamName,
+                    style = AppFont.bodyLgMedium,
+                    color = Color.White,
+                    maxLines = 1
+                )
+                Text(
+                    text = teamRecordLine(item),
+                    style = AppFont.micro,
+                    color = Gray400,
+                    modifier = Modifier.padding(top = AppSpacing.xxs)
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = item.wra?.let { String.format(Locale.US, "%.3f", it) } ?: "-.--",
+                    style = AppFont.bodyMedium,
+                    color = Blue400
+                )
+                Text(
+                    text = "게임차 ${formatGameBehind(item.gameBehind)}",
+                    style = AppFont.tiny,
+                    color = Gray500,
+                    modifier = Modifier.padding(top = AppSpacing.xxs)
+                )
+            }
         }
     }
 }
@@ -738,6 +954,42 @@ private fun formatUpcomingDateTime(gameDate: LocalDate, rawTime: String?): Strin
     val dateText = gameDate.format(DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN))
     val timeText = if (rawTime.isNullOrBlank()) "--:--" else rawTime
     return "$dateText $timeText"
+}
+
+private fun teamRecordLine(item: BackendGamesRepository.TeamRecordStanding): String {
+    val games = item.gameCount?.let { "${it}경기" } ?: "-경기"
+    val wins = item.winGameCount ?: 0
+    val draws = item.drawnGameCount ?: 0
+    val losses = item.loseGameCount ?: 0
+    val streak = item.continuousGameResult?.let { " · $it" }.orEmpty()
+    return "$games ${wins}승 ${draws}무 ${losses}패$streak"
+}
+
+private fun formatGameBehind(value: Double?): String {
+    return when (value) {
+        null -> "-"
+        0.0 -> "0"
+        else -> {
+            val whole = value.toInt()
+            if (value == whole.toDouble()) whole.toString() else String.format(Locale.US, "%.1f", value)
+        }
+    }
+}
+
+private fun teamFromKboTeamId(teamId: String): Team? {
+    return when (teamId.uppercase(Locale.US)) {
+        "OB" -> Team.DOOSAN
+        "LG" -> Team.LG
+        "WO" -> Team.KIWOOM
+        "SS" -> Team.SAMSUNG
+        "LT" -> Team.LOTTE
+        "SK" -> Team.SSG
+        "KT" -> Team.KT
+        "HH" -> Team.HANWHA
+        "HT" -> Team.KIA
+        "NC" -> Team.NC
+        else -> null
+    }
 }
 
 private fun sortHomeGames(games: List<Game>): List<Game> {
