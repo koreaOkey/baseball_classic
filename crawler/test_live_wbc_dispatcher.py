@@ -177,6 +177,24 @@ def test_parser_team_record_sync_options() -> None:
     assert args_disabled.team_record_season_code == "2026"
 
 
+def test_parser_schedule_import_start_date_option() -> None:
+    parser = build_parser()
+    args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
+    assert args_default.schedule_import_start_date is None
+
+    args = parser.parse_args(
+        [
+            "--backend-base-url",
+            "http://localhost:8080",
+            "--backend-api-key",
+            "x",
+            "--schedule-import-start-date",
+            "2026-03-01",
+        ]
+    )
+    assert args.schedule_import_start_date == date(2026, 3, 1)
+
+
 def test_build_schedule_import_dates_defaults_to_at_least_one_day() -> None:
     dates = _build_schedule_import_dates(date(2026, 3, 14), 0)
     assert len(dates) == 1
@@ -204,6 +222,7 @@ def test_build_schedule_import_dates_until_overrides_days() -> None:
 
 def test_build_schedule_import_dates_for_refresh_respects_start_date() -> None:
     args = argparse.Namespace(
+        schedule_import_start_date=None,
         schedule_import_days=1,
         schedule_import_until=None,
         schedule_refresh_start_date=date(2026, 8, 15),
@@ -216,6 +235,24 @@ def test_build_schedule_import_dates_for_refresh_respects_start_date() -> None:
     after = _build_schedule_import_dates_for_mode(args, today=date(2026, 8, 15), mode="refresh")
     assert after[0] == date(2026, 8, 15)
     assert after[-1] == date(2026, 9, 30)
+
+
+def test_build_schedule_import_dates_for_daily_respects_start_date() -> None:
+    args = argparse.Namespace(
+        schedule_import_start_date=date(2026, 3, 1),
+        schedule_import_days=1,
+        schedule_import_until=date(2026, 3, 3),
+        schedule_refresh_start_date=None,
+        schedule_refresh_until=None,
+    )
+
+    dates = _build_schedule_import_dates_for_mode(args, today=date(2026, 6, 9), mode="daily")
+
+    assert dates == [
+        date(2026, 3, 1),
+        date(2026, 3, 2),
+        date(2026, 3, 3),
+    ]
 
 
 def test_parser_schedule_import_days_default_and_override() -> None:

@@ -1033,7 +1033,7 @@ def _build_schedule_import_dates_until(
 def _build_schedule_import_dates_for_mode(args: argparse.Namespace, *, today: date, mode: str) -> list[date]:
     if mode == "daily":
         return _build_schedule_import_dates_until(
-            start_date=today,
+            start_date=args.schedule_import_start_date or today,
             days=args.schedule_import_days,
             until_date=args.schedule_import_until,
         )
@@ -1513,8 +1513,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
         help=(
-            "Number of days to import from the current date during daily import "
+            "Number of days to import from the import start date during daily import "
             "(default: 1). Refresh import keeps using only today's date."
+        ),
+    )
+    parser.add_argument(
+        "--schedule-import-start-date",
+        type=_parse_cli_date,
+        default=None,
+        help=(
+            "Import schedule from this YYYY-MM-DD date during daily import. "
+            "When omitted, daily import starts from today."
         ),
     )
     parser.add_argument(

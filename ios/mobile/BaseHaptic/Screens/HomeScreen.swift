@@ -103,7 +103,7 @@ struct HomeScreen: View {
                     onSelectGame(game)
                 }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
     }
@@ -461,6 +461,7 @@ private struct MyTeamScheduleSheet: View {
                 )
             } else {
                 ScheduleCalendarView(
+                    selectedTeam: selectedTeam,
                     currentMonth: currentMonth,
                     selectedDate: selectedDate,
                     schedulesByDay: schedulesByDay,
@@ -508,6 +509,7 @@ private struct MyTeamScheduleSheet: View {
 }
 
 private struct ScheduleCalendarView: View {
+    let selectedTeam: Team
     let currentMonth: Date
     let selectedDate: Date
     let schedulesByDay: [Date: [UpcomingGameSchedule]]
@@ -555,9 +557,10 @@ private struct ScheduleCalendarView: View {
 
                 ForEach(Array(monthGridDates(for: currentMonth).enumerated()), id: \.offset) { _, date in
                     ScheduleCalendarDayCell(
+                        selectedTeam: selectedTeam,
                         date: date,
                         isSelected: date.map { Calendar.current.isDate($0, inSameDayAs: selectedDate) } ?? false,
-                        scheduleCount: date.map { schedulesByDay[Calendar.current.startOfDay(for: $0)]?.count ?? 0 } ?? 0,
+                        schedules: date.map { schedulesByDay[Calendar.current.startOfDay(for: $0)] ?? [] } ?? [],
                         onSelectDate: onSelectDate
                     )
                 }
@@ -570,10 +573,15 @@ private struct ScheduleCalendarView: View {
 }
 
 private struct ScheduleCalendarDayCell: View {
+    let selectedTeam: Team
     let date: Date?
     let isSelected: Bool
-    let scheduleCount: Int
+    let schedules: [UpcomingGameSchedule]
     let onSelectDate: (Date) -> Void
+
+    private var label: ScheduleCalendarDayLabel? {
+        calendarDayLabel(selectedTeam: selectedTeam, schedules: schedules)
+    }
 
     var body: some View {
         Button {
@@ -581,22 +589,54 @@ private struct ScheduleCalendarDayCell: View {
                 onSelectDate(date)
             }
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: AppSpacing.xs) {
                 Text(date.map { "\(Calendar.current.component(.day, from: $0))" } ?? "")
                     .font(isSelected ? AppFont.bodyMedium : AppFont.body)
-                    .foregroundColor(isSelected ? AppColors.gray950 : .white)
-                Circle()
-                    .fill(isSelected ? AppColors.gray950 : AppColors.yellow500)
-                    .frame(width: scheduleCount > 0 ? 5 : 0, height: scheduleCount > 0 ? 5 : 0)
+                    .foregroundColor(.white)
+                Spacer(minLength: 0)
+                if let label {
+                    if let opponentTeam = label.opponentTeam {
+                        HStack(spacing: 0) {
+                            Text(label.text)
+                                .font(AppFont.microBold)
+                                .foregroundColor(label.color)
+                                .lineLimit(1)
+                            TeamLogo(team: opponentTeam, size: 22)
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        Text(label.text)
+                            .font(AppFont.microBold)
+                            .foregroundColor(label.color)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                            .frame(maxWidth: .infinity)
+                    }
+                } else {
+                    Spacer()
+                        .frame(height: 14)
+                }
             }
+            .padding(.horizontal, 2)
+            .padding(.vertical, AppSpacing.xs)
             .frame(maxWidth: .infinity)
-            .aspectRatio(1, contentMode: .fit)
-            .background(isSelected ? AppColors.yellow500 : Color.clear)
+            .frame(height: 72)
+            .background(isSelected ? AppColors.gray800 : (schedules.isEmpty ? Color.clear : AppColors.gray950))
             .cornerRadius(AppRadius.md)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .stroke(isSelected ? AppColors.yellow500 : (schedules.isEmpty ? Color.clear : AppColors.gray700), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .disabled(date == nil)
     }
+}
+
+private struct ScheduleCalendarDayLabel {
+    let text: String
+    let color: Color
+    var opponentTeam: Team? = nil
 }
 
 private struct ScheduleMessage: View {
@@ -644,6 +684,9 @@ private struct MyTeamScheduleRow: View {
     private var isMyTeamHome: Bool { game.homeTeamId == selectedTeam }
     private var opponent: String { isMyTeamHome ? game.awayTeamId.teamName : game.homeTeamId.teamName }
     private var venueText: String { isMyTeamHome ? "홈 경기" : "원정 경기" }
+    private var venueWithStadium: String { "\(venueText) (\(stadiumName(forHomeTeam: game.homeTeamId)))" }
+    private var resultLabel: ScheduleCalendarDayLabel? { myTeamResultLabel(selectedTeam: selectedTeam, game: game) }
+    private var scoreText: String? { myTeamScoreText(selectedTeam: selectedTeam, game: game) }
 
     var body: some View {
         Button(action: onTap) {
@@ -656,9 +699,24 @@ private struct MyTeamScheduleRow: View {
                         .font(AppFont.bodyLgMedium)
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    Text(venueText)
-                        .font(AppFont.micro)
-                        .foregroundColor(AppColors.gray500)
+                    if let resultLabel, let scoreText {
+                        HStack(spacing: AppSpacing.xs) {
+                            Text(resultLabel.text)
+                                .font(AppFont.microBold)
+                                .foregroundColor(resultLabel.color)
+                                .padding(.horizontal, AppSpacing.sm)
+                                .padding(.vertical, AppSpacing.xxs)
+                                .background(resultLabel.color.opacity(0.16))
+                                .clipShape(Capsule())
+                            Text("\(scoreText) · \(venueWithStadium)")
+                                .font(AppFont.micro)
+                                .foregroundColor(AppColors.gray400)
+                        }
+                    } else {
+                        Text(venueWithStadium)
+                            .font(AppFont.micro)
+                            .foregroundColor(AppColors.gray500)
+                    }
                 }
                 Spacer(minLength: AppSpacing.md)
                 ScheduleStatusBadge(status: game.status)
@@ -1029,6 +1087,77 @@ private func formatScheduleDateTime(_ date: Date, time: String?) -> String {
     let dateText = formatter.string(from: date)
     let timeText = (time?.isEmpty ?? true) ? "--:--" : time!
     return "\(dateText) \(timeText)"
+}
+
+private func calendarDayLabel(selectedTeam: Team, schedules: [UpcomingGameSchedule]) -> ScheduleCalendarDayLabel? {
+    guard !schedules.isEmpty else { return nil }
+    if schedules.count > 1 {
+        return ScheduleCalendarDayLabel(text: "\(schedules.count)경기", color: AppColors.yellow500)
+    }
+
+    let game = schedules[0].game
+    switch game.status {
+    case .finished:
+        return myTeamResultLabel(selectedTeam: selectedTeam, game: game)
+    case .live:
+        return ScheduleCalendarDayLabel(text: "LIVE", color: AppColors.red500)
+    case .canceled:
+        return ScheduleCalendarDayLabel(text: "취소", color: AppColors.gray400)
+    case .postponed:
+        return ScheduleCalendarDayLabel(text: "연기", color: AppColors.yellow500)
+    case .scheduled:
+        let opponent = game.homeTeamId == selectedTeam ? game.awayTeamId : game.homeTeamId
+        return ScheduleCalendarDayLabel(text: "vs", color: AppColors.gray100, opponentTeam: opponent)
+    }
+}
+
+private func myTeamResultLabel(selectedTeam: Team, game: Game) -> ScheduleCalendarDayLabel? {
+    guard game.status == .finished else { return nil }
+
+    let isHome = game.homeTeamId == selectedTeam
+    let myScore = isHome ? game.homeScore : game.awayScore
+    let opponentScore = isHome ? game.awayScore : game.homeScore
+    if myScore > opponentScore {
+        return ScheduleCalendarDayLabel(text: "승", color: AppColors.green500)
+    }
+    if myScore < opponentScore {
+        return ScheduleCalendarDayLabel(text: "패", color: AppColors.red500)
+    }
+    return ScheduleCalendarDayLabel(text: "무", color: AppColors.gray400)
+}
+
+private func myTeamScoreText(selectedTeam: Team, game: Game) -> String? {
+    guard game.status == .finished else { return nil }
+
+    let isHome = game.homeTeamId == selectedTeam
+    let myScore = isHome ? game.homeScore : game.awayScore
+    let opponentScore = isHome ? game.awayScore : game.homeScore
+    return "\(myScore) : \(opponentScore)"
+}
+
+private func stadiumName(forHomeTeam team: Team) -> String {
+    switch team {
+    case .doosan, .lg:
+        return "잠실야구장"
+    case .kiwoom:
+        return "고척스카이돔"
+    case .ssg:
+        return "인천SSG랜더스필드"
+    case .kt:
+        return "수원KT위즈파크"
+    case .hanwha:
+        return "대전한화생명이글스파크"
+    case .samsung:
+        return "대구삼성라이온즈파크"
+    case .lotte:
+        return "사직야구장"
+    case .kia:
+        return "광주기아챔피언스필드"
+    case .nc:
+        return "창원NC파크"
+    case .none:
+        return "오늘 경기장"
+    }
 }
 
 private func formatScheduleDate(_ date: Date) -> String {

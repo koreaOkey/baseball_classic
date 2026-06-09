@@ -4,14 +4,15 @@
 
 현재 `crawler/live_wbc_dispatcher.py`는 `--schedule-import-days`로 오늘부터 N일간의 스케줄을 import할 수 있다. 이 기능을 유지하면서 종료일 기반 옵션을 추가한다.
 
-- `--schedule-import-until YYYY-MM-DD`: daily import 범위를 `today`부터 지정 날짜까지로 만든다.
+- `--schedule-import-start-date YYYY-MM-DD`: daily import 범위를 해당 날짜부터 시작한다. 없으면 기존처럼 `today`부터 시작한다.
+- `--schedule-import-until YYYY-MM-DD`: daily import 범위를 시작 날짜부터 지정 날짜까지로 만든다.
 - `--schedule-refresh-until YYYY-MM-DD`: refresh import도 오늘 하루가 아니라 지정 날짜까지 반복 갱신할 수 있게 한다.
 - `--schedule-refresh-start-date YYYY-MM-DD`: 해당 날짜 이후에만 장기 refresh를 활성화한다. 기본값은 비활성이다.
 - `--schedule-import-days`는 기존 호환을 위해 유지하고, `--schedule-import-until`이 있으면 종료일 옵션이 우선한다.
 
 정책 예시는 다음과 같다.
 
-- 상시: `--schedule-import-until 2026-09-07`
+- 상시: `--schedule-import-start-date 2026-03-01 --schedule-import-until 2026-09-07`
 - 8월 중순 이후: `--schedule-refresh-start-date 2026-08-15 --schedule-refresh-until 2026-09-30`
 
 백엔드는 기존 `/games?date=YYYY-MM-DD`를 유지하고, 날짜 범위 조회를 추가한다.
@@ -59,7 +60,7 @@ Android/iOS repository는 일정 달력용 범위 조회 함수를 추가한다.
 하단:
 
 - 선택 날짜 경기 목록
-- 경기 row에는 시간, 상대팀, 홈/원정, 상태를 표시한다.
+- 경기 row에는 시간, 상대팀, 홈/원정, 경기장명, 상태를 표시한다.
 - row tap은 기존 `onSelectGame` 콜백을 재사용한다.
 
 상태:

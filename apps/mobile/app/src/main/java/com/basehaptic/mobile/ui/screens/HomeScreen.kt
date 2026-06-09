@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.basehaptic.mobile.R
@@ -513,6 +514,7 @@ fun HomeScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .fillMaxHeight(0.92f)
                     .padding(horizontal = AppSpacing.xxl)
                     .padding(bottom = AppSpacing.xxxl)
             )
@@ -666,6 +668,7 @@ private fun MyTeamScheduleSheetContent(
 
             else -> {
                 ScheduleCalendar(
+                    selectedTeam = selectedTeam,
                     month = currentMonth,
                     selectedDate = selectedDate,
                     schedulesByDate = schedulesByDate,
@@ -721,6 +724,7 @@ private fun MyTeamScheduleSheetContent(
 
 @Composable
 private fun ScheduleCalendar(
+    selectedTeam: Team,
     month: YearMonth,
     selectedDate: LocalDate,
     schedulesByDate: Map<LocalDate, List<BackendGamesRepository.UpcomingGameSchedule>>,
@@ -781,9 +785,10 @@ private fun ScheduleCalendar(
                 ) {
                     week.forEach { date ->
                         CalendarDayCell(
+                            selectedTeam = selectedTeam,
                             date = date,
                             isSelected = date == selectedDate,
-                            scheduleCount = date?.let { schedulesByDate[it]?.size } ?: 0,
+                            schedules = date?.let { schedulesByDate[it] }.orEmpty(),
                             onSelectDate = onSelectDate,
                             modifier = Modifier.weight(1f)
                         )
@@ -797,50 +802,95 @@ private fun ScheduleCalendar(
 
 @Composable
 private fun CalendarDayCell(
+    selectedTeam: Team,
     date: LocalDate?,
     isSelected: Boolean,
-    scheduleCount: Int,
+    schedules: List<BackendGamesRepository.UpcomingGameSchedule>,
     onSelectDate: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val background = if (isSelected) Yellow500 else Color.Transparent
+    val label = remember(selectedTeam, schedules) { calendarDayLabel(selectedTeam, schedules) }
+    val hasGame = schedules.isNotEmpty()
+    val background = when {
+        isSelected -> Gray800
+        hasGame -> Gray950
+        else -> Color.Transparent
+    }
+    val borderColor = when {
+        isSelected -> Yellow500
+        hasGame -> Gray700
+        else -> Color.Transparent
+    }
     val textColor = when {
         date == null -> Color.Transparent
-        isSelected -> Gray950
         else -> Color.White
     }
 
     Box(
         modifier = modifier
-            .aspectRatio(1f)
+            .height(72.dp)
             .clip(AppShapes.md)
             .background(background)
+            .border(width = 1.dp, color = borderColor, shape = AppShapes.md)
             .clickable(enabled = date != null) {
                 if (date != null) onSelectDate(date)
             },
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
         if (date != null) {
             Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 2.dp, vertical = AppSpacing.xs),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = date.dayOfMonth.toString(),
                     style = if (isSelected) AppFont.bodyMedium else AppFont.body,
                     color = textColor
                 )
-                Spacer(modifier = Modifier.height(3.dp))
-                Box(
-                    modifier = Modifier
-                        .size(if (scheduleCount > 0) 5.dp else 0.dp)
-                        .clip(CircleShape)
-                        .background(if (isSelected) Gray950 else Yellow500)
-                )
+                if (label != null) {
+                    if (label.opponentTeam != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label.text,
+                                style = AppFont.microBold,
+                                color = label.color,
+                                maxLines = 1,
+                                overflow = TextOverflow.Clip,
+                                textAlign = TextAlign.Center
+                            )
+                            TeamLogo(team = label.opponentTeam, size = 22.dp)
+                        }
+                    } else {
+                        Text(
+                            text = label.text,
+                            style = AppFont.microBold,
+                            color = label.color,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
             }
         }
     }
 }
+
+private data class CalendarDayLabel(
+    val text: String,
+    val color: Color,
+    val opponentTeam: Team? = null
+)
 
 @Composable
 private fun ScheduleMessageState(
@@ -897,6 +947,10 @@ private fun MyTeamScheduleRow(
     val isMyTeamHome = game.homeTeamId == selectedTeam
     val opponent = if (isMyTeamHome) game.awayTeamId.teamName else game.homeTeamId.teamName
     val venueText = if (isMyTeamHome) "홈" else "원정"
+    val stadiumName = stadiumNameForHomeTeam(game.homeTeamId)
+    val venueWithStadium = "$venueText 경기 ($stadiumName)"
+    val resultLabel = myTeamResultLabel(selectedTeam, game)
+    val scoreText = myTeamScoreText(selectedTeam, game)
 
     Surface(
         modifier = Modifier
@@ -925,12 +979,40 @@ private fun MyTeamScheduleRow(
                     style = AppFont.bodyLgMedium,
                     color = Color.White
                 )
-                Text(
-                    text = "$venueText 경기",
-                    style = AppFont.micro,
-                    color = Gray500,
-                    modifier = Modifier.padding(top = AppSpacing.xs)
-                )
+                if (resultLabel != null && scoreText != null) {
+                    Row(
+                        modifier = Modifier.padding(top = AppSpacing.xs),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)
+                    ) {
+                        Surface(
+                            shape = AppShapes.pill,
+                            color = resultLabel.color.copy(alpha = 0.16f)
+                        ) {
+                            Text(
+                                text = resultLabel.text,
+                                style = AppFont.microBold,
+                                color = resultLabel.color,
+                                modifier = Modifier.padding(
+                                    horizontal = AppSpacing.sm,
+                                    vertical = AppSpacing.xxs
+                                )
+                            )
+                        }
+                        Text(
+                            text = "$scoreText · $venueWithStadium",
+                            style = AppFont.micro,
+                            color = Gray400
+                        )
+                    }
+                } else {
+                    Text(
+                        text = venueWithStadium,
+                        style = AppFont.micro,
+                        color = Gray500,
+                        modifier = Modifier.padding(top = AppSpacing.xs)
+                    )
+                }
             }
 
             ScheduleStatusBadge(status = game.status)
@@ -1511,6 +1593,65 @@ private fun gameStartTime(game: Game): LocalTime {
     return runCatching {
         LocalTime.parse(raw, formatter)
     }.getOrElse { LocalTime.MAX }
+}
+
+private fun calendarDayLabel(
+    selectedTeam: Team,
+    schedules: List<BackendGamesRepository.UpcomingGameSchedule>
+): CalendarDayLabel? {
+    if (schedules.isEmpty()) return null
+    if (schedules.size > 1) return CalendarDayLabel("${schedules.size}경기", Yellow500)
+
+    val game = schedules.first().game
+    return when (game.status) {
+        GameStatus.FINISHED -> myTeamResultLabel(selectedTeam, game)
+
+        GameStatus.LIVE -> CalendarDayLabel("LIVE", Red500)
+        GameStatus.CANCELED -> CalendarDayLabel("취소", Gray400)
+        GameStatus.POSTPONED -> CalendarDayLabel("연기", Yellow500)
+        GameStatus.SCHEDULED -> {
+            val opponent = if (game.homeTeamId == selectedTeam) game.awayTeamId else game.homeTeamId
+            CalendarDayLabel("vs", Gray100, opponentTeam = opponent)
+        }
+    }
+}
+
+private fun myTeamResultLabel(selectedTeam: Team, game: Game): CalendarDayLabel? {
+    if (game.status != GameStatus.FINISHED) return null
+
+    val isHome = game.homeTeamId == selectedTeam
+    val myScore = if (isHome) game.homeScore else game.awayScore
+    val opponentScore = if (isHome) game.awayScore else game.homeScore
+    return when {
+        myScore > opponentScore -> CalendarDayLabel("승", Green500)
+        myScore < opponentScore -> CalendarDayLabel("패", Red500)
+        else -> CalendarDayLabel("무", Gray400)
+    }
+}
+
+private fun myTeamScoreText(selectedTeam: Team, game: Game): String? {
+    if (game.status != GameStatus.FINISHED) return null
+
+    val isHome = game.homeTeamId == selectedTeam
+    val myScore = if (isHome) game.homeScore else game.awayScore
+    val opponentScore = if (isHome) game.awayScore else game.homeScore
+    return "$myScore : $opponentScore"
+}
+
+private fun stadiumNameForHomeTeam(team: Team): String {
+    return when (team) {
+        Team.DOOSAN,
+        Team.LG -> "잠실야구장"
+        Team.KIWOOM -> "고척스카이돔"
+        Team.SSG -> "인천SSG랜더스필드"
+        Team.KT -> "수원KT위즈파크"
+        Team.HANWHA -> "대전한화생명이글스파크"
+        Team.SAMSUNG -> "대구삼성라이온즈파크"
+        Team.LOTTE -> "사직야구장"
+        Team.KIA -> "광주기아챔피언스필드"
+        Team.NC -> "창원NC파크"
+        Team.NONE -> "오늘 경기장"
+    }
 }
 
 private fun monthGridDates(month: YearMonth): List<LocalDate?> {
