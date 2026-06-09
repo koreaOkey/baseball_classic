@@ -2,7 +2,11 @@ import Foundation
 
 // MARK: - Configuration
 enum BackendConfig {
+    #if DEBUG
+    private static let defaultBaseURL = "https://baseballclassic-production-4796.up.railway.app"
+    #else
     private static let defaultBaseURL = "https://baseballclassic-production.up.railway.app"
+    #endif
 
     private static func infoString(_ key: String) -> String? {
         guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return nil }
@@ -488,8 +492,15 @@ final class BackendGamesRepository {
     private func fetchGamesByDateRangeRaw(fromDate: Date, toDate: Date) async -> String? {
         let fromString = dateFormatter.string(from: fromDate)
         let toString = dateFormatter.string(from: toDate)
-        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/games?from=\(fromString)&to=\(toString)&limit=500"
-        return await getJSON(endpoint: endpoint) { data in
+        let baseURL = BackendConfig.baseURL.trimmingSuffix("/")
+        let fullRangeEndpoint = "\(baseURL)/games?from=\(fromString)&to=\(toString)&limit=500"
+        if let payload = await getJSON(endpoint: fullRangeEndpoint, parser: { data in
+            String(data: data, encoding: .utf8)
+        }) {
+            return payload
+        }
+        let compatibleEndpoint = "\(baseURL)/games?from=\(fromString)&to=\(toString)&limit=100"
+        return await getJSON(endpoint: compatibleEndpoint) { data in
             String(data: data, encoding: .utf8)
         }
     }

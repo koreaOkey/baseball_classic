@@ -446,8 +446,10 @@ object BackendGamesRepository {
     }
 
     private fun fetchGamesByDateRangeRaw(fromDate: LocalDate, toDate: LocalDate): String? {
-        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games?from=${fromDate}&to=${toDate}&limit=500"
-        return getJson(endpoint) { body -> body }
+        val baseUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
+        val fullRangeEndpoint = "$baseUrl/games?from=${fromDate}&to=${toDate}&limit=500"
+        return getJson(fullRangeEndpoint) { body -> body }
+            ?: getJson("$baseUrl/games?from=${fromDate}&to=${toDate}&limit=100") { body -> body }
     }
 
     private fun parseGamesPayload(payload: String, selectedTeam: Team): List<Game>? {

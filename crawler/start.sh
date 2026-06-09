@@ -13,5 +13,8 @@ exec python crawler/live_baseball_dispatcher.py \
   --dispatch-interval-sec "${DISPATCH_INTERVAL_SEC:-15}" \
   --crawler-interval-sec "${CRAWLER_INTERVAL_SEC:-15}" \
   --schedule-import-days "${SCHEDULE_IMPORT_DAYS:-7}" \
+  --schedule-import-until "${SCHEDULE_IMPORT_UNTIL:-2026-09-07}" \
+  --schedule-refresh-start-date "${SCHEDULE_REFRESH_START_DATE:-2026-08-15}" \
+  --schedule-refresh-until "${SCHEDULE_REFRESH_UNTIL:-2026-09-30}" \
   --enable-preview-lineup-precheck \
   --log-dir log
