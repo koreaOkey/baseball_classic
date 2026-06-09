@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +47,9 @@ fun HomeScreen(
     selectedTeam: Team,
     todayGames: List<Game>,
     syncedGameId: String?,
+    activeLiveScoreGameId: String?,
+    onToggleWatchSync: (Game) -> Unit,
+    onToggleLiveScore: (Game) -> Unit,
     onSelectGame: (Game) -> Unit
 ) {
     val games = remember(todayGames) { sortHomeGames(todayGames) }
@@ -104,7 +108,7 @@ fun HomeScreen(
         scheduleLoading = true
         scheduleError = null
         val today = LocalDate.now()
-        val rangeFrom = YearMonth.from(today).atDay(1)
+        val rangeFrom = scheduleSeasonStartDate(today)
         val rangeTo = scheduleSeasonEndDate(today)
         val loaded = runCatching {
             withContext(Dispatchers.IO) {
@@ -437,7 +441,10 @@ fun HomeScreen(
                     game = game,
                     primaryColor = primaryColor,
                     isWatchSynced = isWatchSynced,
-                    onClick = { onSelectGame(game) }
+                    isLiveScoreActive = activeLiveScoreGameId == game.id,
+                    onClick = { onSelectGame(game) },
+                    onWatchSyncClick = { onToggleWatchSync(game) },
+                    onLiveScoreClick = { onToggleLiveScore(game) }
                 )
             }
         }
@@ -945,6 +952,7 @@ private fun MyTeamScheduleRow(
 ) {
     val game = schedule.game
     val isMyTeamHome = game.homeTeamId == selectedTeam
+    val opponentTeam = if (isMyTeamHome) game.awayTeamId else game.homeTeamId
     val opponent = if (isMyTeamHome) game.awayTeamId.teamName else game.homeTeamId.teamName
     val venueText = if (isMyTeamHome) "홈" else "원정"
     val stadiumName = stadiumNameForHomeTeam(game.homeTeamId)
@@ -974,11 +982,32 @@ private fun MyTeamScheduleRow(
                     color = Gray400
                 )
                 Spacer(modifier = Modifier.height(AppSpacing.xs))
-                Text(
-                    text = "${selectedTeam.teamName} vs $opponent",
-                    style = AppFont.bodyLgMedium,
-                    color = Color.White
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)
+                ) {
+                    TeamLogo(team = selectedTeam, size = 22.dp)
+                    Text(
+                        text = selectedTeam.teamName,
+                        style = AppFont.bodyLgMedium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "vs",
+                        style = AppFont.bodyLgMedium,
+                        color = Gray400
+                    )
+                    TeamLogo(team = opponentTeam, size = 22.dp)
+                    Text(
+                        text = opponent,
+                        style = AppFont.bodyLgMedium,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (resultLabel != null && scoreText != null) {
                     Row(
                         modifier = Modifier.padding(top = AppSpacing.xs),
@@ -1246,7 +1275,10 @@ private fun GameCard(
     game: Game,
     primaryColor: Color,
     isWatchSynced: Boolean,
-    onClick: () -> Unit
+    isLiveScoreActive: Boolean,
+    onClick: () -> Unit,
+    onWatchSyncClick: () -> Unit,
+    onLiveScoreClick: () -> Unit
 ) {
     val backgroundColor = if (game.isMyTeam) {
         primaryColor.copy(alpha = 0.15f)
@@ -1257,184 +1289,296 @@ private fun GameCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xs)
-            .clickable(onClick = onClick),
+            .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xs),
         shape = AppShapes.lg,
         color = backgroundColor,
-        tonalElevation = if (isWatchSynced || game.isMyTeam) 2.dp else 1.dp
+        tonalElevation = if (isWatchSynced || isLiveScoreActive || game.isMyTeam) 2.dp else 1.dp
     ) {
         Box {
-            if (isWatchSynced || game.isMyTeam) {
+            if (isWatchSynced || isLiveScoreActive || game.isMyTeam) {
                 // Gradient border effect
                 Box(
                     modifier = Modifier
                         .matchParentSize()
                         .border(
-                            width = if (isWatchSynced) 2.dp else 1.dp,
-                            color = if (isWatchSynced) Yellow500 else Yellow500.copy(alpha = 0.5f),
+                            width = if (isWatchSynced || isLiveScoreActive) 2.dp else 1.dp,
+                            color = if (isWatchSynced || isLiveScoreActive) Green500 else Yellow500.copy(alpha = 0.5f),
                             shape = AppShapes.lg
                         )
                 )
             }
 
-            Column(
-                modifier = Modifier.padding(AppSpacing.xl)
-            ) {
-                // Status and Badge
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onClick)
+                        .padding(AppSpacing.xl)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        when (game.status) {
-                            GameStatus.LIVE -> {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(Red500)
-                                )
-                                Spacer(modifier = Modifier.width(AppSpacing.sm))
-                                Text(
-                                    text = "LIVE",
-                                    style = AppFont.bodyMedium,
-                                    color = Red500
-                                )
-                                Spacer(modifier = Modifier.width(AppSpacing.md))
-                                Text(
-                                    text = game.inning,
-                                    style = AppFont.body,
-                                    color = if (game.isMyTeam) Color.White.copy(alpha = 0.9f) else Gray400
-                                )
-                                if (isWatchSynced) {
+                    // Status and Badge
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            when (game.status) {
+                                GameStatus.LIVE -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Red500)
+                                    )
                                     Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
-                                        text = "(워치에서 중계중)",
-                                        style = AppFont.microMedium,
-                                        color = Yellow400
+                                        text = "LIVE",
+                                        style = AppFont.bodyMedium,
+                                        color = Red500
+                                    )
+                                    Spacer(modifier = Modifier.width(AppSpacing.md))
+                                    Text(
+                                        text = game.inning,
+                                        style = AppFont.body,
+                                        color = if (game.isMyTeam) Color.White.copy(alpha = 0.9f) else Gray400
+                                    )
+                                    if (isWatchSynced || isLiveScoreActive) {
+                                        Spacer(modifier = Modifier.width(AppSpacing.sm))
+                                        Text(
+                                            text = "(중계중)",
+                                            style = AppFont.microMedium,
+                                            color = Yellow400
+                                        )
+                                    }
+                                }
+                                GameStatus.SCHEDULED -> {
+                                    Icon(
+                                        imageVector = Icons.Default.Schedule,
+                                        contentDescription = null,
+                                        tint = Gray400,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(AppSpacing.sm))
+                                    Text(
+                                        text = if (game.time.isNullOrBlank()) "" else "경기 시작 시간 ${game.time}",
+                                        style = AppFont.body,
+                                        color = Gray400
                                     )
                                 }
-                            }
-                            GameStatus.SCHEDULED -> {
-                                Icon(
-                                    imageVector = Icons.Default.Schedule,
-                                    contentDescription = null,
-                                    tint = Gray400,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(AppSpacing.sm))
-                                Text(
-                                    text = if (game.time.isNullOrBlank()) "" else "경기 시작 시간 ${game.time}",
-                                    style = AppFont.body,
-                                    color = Gray400
-                                )
-                            }
-                            GameStatus.FINISHED -> {
-                                Text(
-                                    text = "\uACBD\uAE30 \uC885\uB8CC",
-                                    style = AppFont.body,
-                                    color = Gray500
-                                )
-                            }
-                            GameStatus.CANCELED -> {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(Red500)
-                                )
-                                Spacer(modifier = Modifier.width(AppSpacing.sm))
-                                Text(
-                                    text = "경기 취소",
-                                    style = AppFont.bodyMedium,
-                                    color = Red500
-                                )
-                                if (!game.time.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.width(AppSpacing.sm))
+                                GameStatus.FINISHED -> {
                                     Text(
-                                        text = "예정 ${game.time}",
-                                        style = AppFont.micro,
+                                        text = "\uACBD\uAE30 \uC885\uB8CC",
+                                        style = AppFont.body,
                                         color = Gray500
                                     )
                                 }
-                            }
-                            GameStatus.POSTPONED -> {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(Orange500)
-                                )
-                                Spacer(modifier = Modifier.width(AppSpacing.sm))
-                                Text(
-                                    text = "경기 연기",
-                                    style = AppFont.bodyMedium,
-                                    color = Orange500
-                                )
-                                if (!game.time.isNullOrBlank()) {
+                                GameStatus.CANCELED -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Red500)
+                                    )
                                     Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
-                                        text = "기존 예정 ${game.time}",
-                                        style = AppFont.micro,
-                                        color = Gray500
+                                        text = "경기 취소",
+                                        style = AppFont.bodyMedium,
+                                        color = Red500
                                     )
+                                    if (!game.time.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.width(AppSpacing.sm))
+                                        Text(
+                                            text = "예정 ${game.time}",
+                                            style = AppFont.micro,
+                                            color = Gray500
+                                        )
+                                    }
+                                }
+                                GameStatus.POSTPONED -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Orange500)
+                                    )
+                                    Spacer(modifier = Modifier.width(AppSpacing.sm))
+                                    Text(
+                                        text = "경기 연기",
+                                        style = AppFont.bodyMedium,
+                                        color = Orange500
+                                    )
+                                    if (!game.time.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.width(AppSpacing.sm))
+                                        Text(
+                                            text = "기존 예정 ${game.time}",
+                                            style = AppFont.micro,
+                                            color = Gray500
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if (game.isMyTeam) {
-                        Surface(
-                            shape = AppShapes.xl,
-                            color = Yellow500
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = AppSpacing.xs),
-                                verticalAlignment = Alignment.CenterVertically
+                        if (game.isMyTeam) {
+                            Surface(
+                                shape = AppShapes.xl,
+                                color = Yellow500
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(AppSpacing.xs))
-                                Text(
-                                    text = "응원팀",
-                                    style = AppFont.microBold,
-                                    color = Color.White
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = AppSpacing.xs),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(AppSpacing.xs))
+                                    Text(
+                                        text = "응원팀",
+                                        style = AppFont.microBold,
+                                        color = Color.White
+                                    )
+                                }
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(AppSpacing.lg))
+
+                    // Teams and Scores
+                    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
+                        TeamScoreRow(
+                            team = game.awayTeamId,
+                            teamName = game.awayTeamId.teamName,
+                            score = game.awayScore,
+                            pitcher = game.awayPitcher,
+                            isScheduled = isNotStartedStatus(game.status),
+                            isWinner = game.status == GameStatus.FINISHED && game.awayScore > game.homeScore,
+                            isMyTeam = game.isMyTeam
+                        )
+
+                        TeamScoreRow(
+                            team = game.homeTeamId,
+                            teamName = game.homeTeamId.teamName,
+                            score = game.homeScore,
+                            pitcher = game.homePitcher,
+                            isScheduled = isNotStartedStatus(game.status),
+                            isWinner = game.status == GameStatus.FINISHED && game.homeScore > game.awayScore,
+                            isMyTeam = game.isMyTeam
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(AppSpacing.lg))
-
-                // Teams and Scores
-                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
-                    TeamScoreRow(
-                        team = game.awayTeamId,
-                        teamName = game.awayTeamId.teamName,
-                        score = game.awayScore,
-                        pitcher = game.awayPitcher,
-                        isScheduled = isNotStartedStatus(game.status),
-                        isWinner = game.status == GameStatus.FINISHED && game.awayScore > game.homeScore,
-                        isMyTeam = game.isMyTeam
-                    )
-
-                    TeamScoreRow(
-                        team = game.homeTeamId,
-                        teamName = game.homeTeamId.teamName,
-                        score = game.homeScore,
-                        pitcher = game.homePitcher,
-                        isScheduled = isNotStartedStatus(game.status),
-                        isWinner = game.status == GameStatus.FINISHED && game.homeScore > game.awayScore,
-                        isMyTeam = game.isMyTeam
-                    )
-                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Gray800)
+                )
+                LiveActionRow(
+                    isLiveScoreActive = isLiveScoreActive,
+                    isWatchSynced = isWatchSynced,
+                    onLiveScoreClick = onLiveScoreClick,
+                    onWatchSyncClick = onWatchSyncClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppSpacing.xl, vertical = AppSpacing.md)
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun LiveActionRow(
+    isLiveScoreActive: Boolean,
+    isWatchSynced: Boolean,
+    onLiveScoreClick: () -> Unit,
+    onWatchSyncClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+    ) {
+        GameToggleCell(
+            title = "잠금화면",
+            icon = if (isLiveScoreActive) Icons.Default.Lock else Icons.Default.LockOpen,
+            isActive = isLiveScoreActive,
+            onClick = onLiveScoreClick,
+            modifier = Modifier.weight(1f)
+        )
+        GameToggleCell(
+            title = "Watch",
+            icon = Icons.Default.Watch,
+            isActive = isWatchSynced,
+            onClick = onWatchSyncClick,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun GameToggleCell(
+    title: String,
+    icon: ImageVector,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = AppShapes.md,
+        color = if (isActive) Green500.copy(alpha = 0.12f) else Gray950.copy(alpha = 0.42f),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = if (isActive) Green500.copy(alpha = 0.38f) else Gray800
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(start = AppSpacing.sm, end = AppSpacing.md, top = AppSpacing.sm, bottom = AppSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .background(if (isActive) Green500.copy(alpha = 0.18f) else Gray800),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isActive) Green400 else Gray300,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(AppSpacing.sm))
+            Text(
+                text = title,
+                style = AppFont.captionBold,
+                color = if (isActive) Green400 else Gray300,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Switch(
+                checked = isActive,
+                onCheckedChange = { onClick() },
+                modifier = Modifier.size(width = 38.dp, height = 26.dp),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Green400,
+                    checkedTrackColor = Green500.copy(alpha = 0.42f),
+                    uncheckedThumbColor = Gray400,
+                    uncheckedTrackColor = Gray800,
+                    uncheckedBorderColor = Gray700
+                )
+            )
         }
     }
 }
@@ -1671,6 +1815,10 @@ private fun monthGridDates(month: YearMonth): List<LocalDate?> {
 private fun scheduleSeasonEndDate(today: LocalDate): LocalDate {
     val septemberEnd = LocalDate.of(today.year, 9, 30)
     return if (!today.isAfter(septemberEnd)) septemberEnd else today.plusDays(30)
+}
+
+private fun scheduleSeasonStartDate(today: LocalDate): LocalDate {
+    return LocalDate.of(today.year, 3, 1)
 }
 
 private fun getMockGames(selectedTeam: Team): List<Game> {

@@ -20,7 +20,7 @@
 
 - [x] 4.1 Confirm no DB migration is required.
 - [x] 4.2 Confirm Android/iOS mobile impacts and Android/iOS watch impacts.
-- [ ] 4.3 Run backend tests for changed API/crawler logic.
+- [x] 4.3 Run backend tests for changed API/crawler logic.
 - [x] 4.4 Run Android compile verification.
 - [x] 4.5 Run iOS build verification.
 - [x] 4.6 Review OpenSpec status and completed task checkboxes.

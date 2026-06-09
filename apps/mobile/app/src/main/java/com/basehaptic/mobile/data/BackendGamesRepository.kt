@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
@@ -414,7 +415,7 @@ object BackendGamesRepository {
             parseUpcomingGamesPayload(cachedPayload)?.let { return it }
         }
 
-        val freshPayload = fetchGamesByDateRangeRaw(fromDate = fromDate, toDate = normalizedToDate)
+        val freshPayload = fetchGamesByDateRangePayload(fromDate = fromDate, toDate = normalizedToDate)
         if (!freshPayload.isNullOrBlank()) {
             val fresh = parseScheduleRangePayload(freshPayload, selectedTeam)
             if (fresh != null) {
@@ -450,6 +451,35 @@ object BackendGamesRepository {
         val fullRangeEndpoint = "$baseUrl/games?from=${fromDate}&to=${toDate}&limit=500"
         return getJson(fullRangeEndpoint) { body -> body }
             ?: getJson("$baseUrl/games?from=${fromDate}&to=${toDate}&limit=100") { body -> body }
+    }
+
+    private fun fetchGamesByDateRangePayload(fromDate: LocalDate, toDate: LocalDate): String? {
+        if (YearMonth.from(fromDate) == YearMonth.from(toDate)) {
+            return fetchGamesByDateRangeRaw(fromDate = fromDate, toDate = toDate)
+        }
+
+        val merged = JSONArray()
+        val seenIds = mutableSetOf<String>()
+        var cursor = YearMonth.from(fromDate)
+        val lastMonth = YearMonth.from(toDate)
+
+        while (!cursor.isAfter(lastMonth)) {
+            val chunkStart = maxOf(fromDate, cursor.atDay(1))
+            val chunkEnd = minOf(toDate, cursor.atEndOfMonth())
+            val payload = fetchGamesByDateRangeRaw(fromDate = chunkStart, toDate = chunkEnd) ?: return null
+            val array = runCatching { JSONArray(payload) }.getOrNull() ?: return null
+
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val gameId = item.optString("id")
+                if (gameId.isNotBlank() && !seenIds.add(gameId)) continue
+                merged.put(item)
+            }
+
+            cursor = cursor.plusMonths(1)
+        }
+
+        return merged.toString()
     }
 
     private fun parseGamesPayload(payload: String, selectedTeam: Team): List<Game>? {

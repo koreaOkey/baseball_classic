@@ -437,7 +437,7 @@ final class BackendGamesRepository {
             return cached
         }
 
-        if let freshPayload = await fetchGamesByDateRangeRaw(fromDate: normalizedFrom, toDate: normalizedTo),
+        if let freshPayload = await fetchGamesByDateRangePayload(fromDate: normalizedFrom, toDate: normalizedTo),
            let fresh = parseScheduleRangePayload(freshPayload, selectedTeam: selectedTeam) {
             defaults.set(selectedTeam.rawValue, forKey: "\(keyPrefix)_team")
             defaults.set(fromString, forKey: "\(keyPrefix)_from")
@@ -503,6 +503,50 @@ final class BackendGamesRepository {
         return await getJSON(endpoint: compatibleEndpoint) { data in
             String(data: data, encoding: .utf8)
         }
+    }
+
+    private func fetchGamesByDateRangePayload(fromDate: Date, toDate: Date) async -> String? {
+        let calendar = Calendar.current
+        if calendar.isDate(fromDate, equalTo: toDate, toGranularity: .month) {
+            return await fetchGamesByDateRangeRaw(fromDate: fromDate, toDate: toDate)
+        }
+
+        var mergedItems: [[String: Any]] = []
+        var seenIds = Set<String>()
+        let normalizedFrom = calendar.startOfDay(for: fromDate)
+        let normalizedTo = max(calendar.startOfDay(for: toDate), normalizedFrom)
+        var cursor = monthStartDate(for: normalizedFrom, calendar: calendar)
+
+        while cursor <= normalizedTo {
+            guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: cursor) else { return nil }
+            let monthEnd = calendar.date(byAdding: .day, value: -1, to: nextMonth) ?? cursor
+            let chunkStart = max(normalizedFrom, cursor)
+            let chunkEnd = min(normalizedTo, monthEnd)
+
+            guard let payload = await fetchGamesByDateRangeRaw(fromDate: chunkStart, toDate: chunkEnd),
+                  let data = payload.data(using: .utf8),
+                  let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                return nil
+            }
+
+            for item in items {
+                let gameId = item["id"] as? String ?? ""
+                if !gameId.isEmpty {
+                    guard seenIds.insert(gameId).inserted else { continue }
+                }
+                mergedItems.append(item)
+            }
+
+            cursor = nextMonth
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: mergedItems) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func monthStartDate(for date: Date, calendar: Calendar) -> Date {
+        let components = calendar.dateComponents([.year, .month], from: date)
+        return calendar.date(from: components) ?? calendar.startOfDay(for: date)
     }
 
     private func parseGamesPayload(_ payload: String, selectedTeam: Team) -> [Game]? {

@@ -5,10 +5,14 @@ struct HomeScreen: View {
     let todayGames: [Game]
     let activeTheme: ThemeData?
     let syncedGameId: String?
+    let activeLiveActivityGameId: String?
+    let isWatchAppInstalled: Bool
     let checkinStadium: Stadium?
     let onConfirmCheckin: () -> Void
     let onDismissCheckin: () -> Void
     let onSelectGame: (Game) -> Void
+    let onToggleLiveActivity: (Game) -> Void
+    let onToggleWatchSync: (Game) -> Void
 
     @Environment(\.teamTheme) private var teamTheme
     @State private var teamRecordStats: TeamRecordStats?
@@ -222,10 +226,18 @@ struct HomeScreen: View {
             .padding(.vertical, 6)
         } else {
             ForEach(games) { game in
-                let isWatchSynced = game.status == .live && syncedGameId == game.id
-                GameCard(game: game, primaryColor: primaryColor, isWatchSynced: isWatchSynced) {
-                    onSelectGame(game)
-                }
+                let isWatchSynced = syncedGameId == game.id
+                let isLiveActivityActive = activeLiveActivityGameId == game.id
+                GameCard(
+                    game: game,
+                    primaryColor: primaryColor,
+                    isWatchSynced: isWatchSynced,
+                    isLiveActivityActive: isLiveActivityActive,
+                    showsWatchToggle: isWatchAppInstalled,
+                    onTap: { onSelectGame(game) },
+                    onLiveActivityTap: { onToggleLiveActivity(game) },
+                    onWatchSyncTap: { onToggleWatchSync(game) }
+                )
             }
         }
     }
@@ -300,7 +312,7 @@ struct HomeScreen: View {
         let today = Date()
         let loaded = await BackendGamesRepository.shared.fetchMyTeamScheduleRangeCached(
             selectedTeam: selectedTeam,
-            fromDate: monthStart(for: today),
+            fromDate: scheduleSeasonStartDate(today),
             toDate: scheduleSeasonEndDate(today),
             forceRefresh: !scheduleItems.isEmpty
         )
@@ -683,6 +695,7 @@ private struct MyTeamScheduleRow: View {
     private var game: Game { schedule.game }
     private var isMyTeamHome: Bool { game.homeTeamId == selectedTeam }
     private var opponent: String { isMyTeamHome ? game.awayTeamId.teamName : game.homeTeamId.teamName }
+    private var opponentTeam: Team { isMyTeamHome ? game.awayTeamId : game.homeTeamId }
     private var venueText: String { isMyTeamHome ? "홈 경기" : "원정 경기" }
     private var venueWithStadium: String { "\(venueText) (\(stadiumName(forHomeTeam: game.homeTeamId)))" }
     private var resultLabel: ScheduleCalendarDayLabel? { myTeamResultLabel(selectedTeam: selectedTeam, game: game) }
@@ -695,10 +708,21 @@ private struct MyTeamScheduleRow: View {
                     Text(formatScheduleDateTime(schedule.gameDate, time: game.time))
                         .font(AppFont.captionBold)
                         .foregroundColor(AppColors.gray400)
-                    Text("\(selectedTeam.teamName) vs \(opponent)")
-                        .font(AppFont.bodyLgMedium)
-                        .foregroundColor(.white)
-                        .lineLimit(1)
+                    HStack(spacing: AppSpacing.xs) {
+                        TeamLogo(team: selectedTeam, size: 22)
+                        Text(selectedTeam.teamName)
+                            .font(AppFont.bodyLgMedium)
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Text("vs")
+                            .font(AppFont.bodyLgMedium)
+                            .foregroundColor(AppColors.gray400)
+                        TeamLogo(team: opponentTeam, size: 22)
+                        Text(opponent)
+                            .font(AppFont.bodyLgMedium)
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                    }
                     if let resultLabel, let scoreText {
                         HStack(spacing: AppSpacing.xs) {
                             Text(resultLabel.text)
@@ -849,47 +873,62 @@ private struct GameCard: View {
     let game: Game
     let primaryColor: Color
     let isWatchSynced: Bool
+    let isLiveActivityActive: Bool
+    let showsWatchToggle: Bool
     let onTap: () -> Void
+    let onLiveActivityTap: () -> Void
+    let onWatchSyncTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 0) {
-                // Status row
-                HStack {
-                    statusView
-                    Spacer()
-                    if game.isMyTeam {
-                        myTeamBadge
+        VStack(spacing: 0) {
+            Button(action: onTap) {
+                VStack(spacing: 0) {
+                    // Status row
+                    HStack {
+                        statusView
+                        Spacer()
+                        if game.isMyTeam {
+                            myTeamBadge
+                        }
+                    }
+
+                    Spacer().frame(height: AppSpacing.lg)
+
+                    // Score rows
+                    VStack(spacing: AppSpacing.md) {
+                        TeamScoreRow(team: game.awayTeamId, teamName: game.awayTeamId.teamName, score: game.awayScore,
+                                     isScheduled: isNotStartedStatus(game.status),
+                                     isWinner: game.status == .finished && game.awayScore > game.homeScore,
+                                     isMyTeam: game.isMyTeam)
+                        TeamScoreRow(team: game.homeTeamId, teamName: game.homeTeamId.teamName, score: game.homeScore,
+                                     isScheduled: isNotStartedStatus(game.status),
+                                     isWinner: game.status == .finished && game.homeScore > game.awayScore,
+                                     isMyTeam: game.isMyTeam)
                     }
                 }
-
-                Spacer().frame(height: AppSpacing.lg)
-
-                // Score rows
-                VStack(spacing: AppSpacing.md) {
-                    TeamScoreRow(team: game.awayTeamId, teamName: game.awayTeamId.teamName, score: game.awayScore,
-                                 isScheduled: isNotStartedStatus(game.status),
-                                 isWinner: game.status == .finished && game.awayScore > game.homeScore,
-                                 isMyTeam: game.isMyTeam)
-                    TeamScoreRow(team: game.homeTeamId, teamName: game.homeTeamId.teamName, score: game.homeScore,
-                                 isScheduled: isNotStartedStatus(game.status),
-                                 isWinner: game.status == .finished && game.homeScore > game.awayScore,
-                                 isMyTeam: game.isMyTeam)
-                }
+                .padding(AppSpacing.xl)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(AppSpacing.xl)
-            .background(game.isMyTeam ? primaryColor.opacity(0.15) : AppColors.gray900)
-            .cornerRadius(AppRadius.lg)
-            .overlay(
-                RoundedRectangle(cornerRadius: AppRadius.lg)
-                    .stroke(
-                        isWatchSynced ? AppColors.yellow500 :
-                            (game.isMyTeam ? AppColors.yellow500.opacity(0.5) : Color.clear),
-                        lineWidth: isWatchSynced ? 2 : 1
-                    )
-            )
+            .frame(maxWidth: .infinity)
+            .buttonStyle(.plain)
+
+            Divider()
+                .background(AppColors.gray800)
+            liveActionRow
+                .padding(.horizontal, AppSpacing.xl)
+                .padding(.vertical, AppSpacing.md)
         }
-        .buttonStyle(.plain)
+        .background(game.isMyTeam ? primaryColor.opacity(0.15) : AppColors.gray900)
+        .cornerRadius(AppRadius.lg)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.lg)
+                .stroke(
+                    (isLiveActivityActive || isWatchSynced) ? AppColors.green500 :
+                        (game.isMyTeam ? AppColors.yellow500.opacity(0.5) : Color.clear),
+                    lineWidth: (isLiveActivityActive || isWatchSynced) ? 2 : 1
+                )
+        )
         .padding(.horizontal, AppSpacing.xxl)
         // Reason: 카드 간 간격을 최소화하기 위한 미세 조정값
         .padding(.vertical, 6)
@@ -907,8 +946,8 @@ private struct GameCard: View {
                 Text(game.inning)
                     .font(AppFont.body)
                     .foregroundColor(game.isMyTeam ? .white.opacity(0.9) : AppColors.gray400)
-                if isWatchSynced {
-                    Text("(워치에서 중계중)")
+                if isLiveActivityActive || isWatchSynced {
+                    Text("(중계중)")
                         .font(AppFont.microMedium)
                         .foregroundColor(AppColors.yellow400)
                 }
@@ -953,6 +992,77 @@ private struct GameCard: View {
         .padding(.vertical, 6)
         .background(AppColors.yellow500)
         .cornerRadius(AppRadius.xl)
+    }
+
+    private var liveActionRow: some View {
+        HStack(spacing: AppSpacing.sm) {
+            gameToggleCell(
+                title: "잠금화면",
+                systemImage: isLiveActivityActive ? "lock.fill" : "lock",
+                isActive: isLiveActivityActive,
+                action: onLiveActivityTap
+            )
+            if showsWatchToggle {
+                Rectangle()
+                    .fill(AppColors.gray800)
+                    .frame(width: 1, height: 34)
+                gameToggleCell(
+                    title: "Watch",
+                    systemImage: isWatchSynced ? "applewatch.radiowaves.left.and.right" : "applewatch",
+                    isActive: isWatchSynced,
+                    action: onWatchSyncTap
+                )
+            }
+        }
+    }
+
+    private func gameToggleCell(
+        title: String,
+        systemImage: String,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            HStack(spacing: AppSpacing.sm) {
+                Image(systemName: systemImage)
+                    .font(AppFont.captionBold)
+                    .foregroundColor(isActive ? AppColors.green400 : AppColors.gray300)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        Circle()
+                            .fill(isActive ? AppColors.green500.opacity(0.18) : AppColors.gray800)
+                    )
+                Text(title)
+                    .font(AppFont.captionBold)
+                    .foregroundColor(isActive ? AppColors.green400 : AppColors.gray100)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { isActive },
+                    set: { _ in action() }
+                )
+            )
+            .labelsHidden()
+            .tint(AppColors.green500)
+            .scaleEffect(0.72)
+            .frame(width: 38, height: 26)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.leading, AppSpacing.sm)
+        .padding(.trailing, AppSpacing.md)
+        .padding(.vertical, AppSpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                .fill(isActive ? AppColors.green500.opacity(0.12) : AppColors.gray950.opacity(game.isMyTeam ? 0.34 : 0.46))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                .stroke(isActive ? AppColors.green500.opacity(0.38) : AppColors.gray800.opacity(0.8), lineWidth: 1)
+        )
+        .accessibilityLabel(isActive ? "\(title) 활성화됨" : title)
     }
 }
 
@@ -1205,6 +1315,12 @@ private func scheduleSeasonEndDate(_ today: Date) -> Date {
         return septemberEnd
     }
     return calendar.date(byAdding: .day, value: 30, to: today) ?? today
+}
+
+private func scheduleSeasonStartDate(_ today: Date) -> Date {
+    let calendar = Calendar.current
+    let year = calendar.component(.year, from: today)
+    return calendar.date(from: DateComponents(year: year, month: 3, day: 1)) ?? monthStart(for: today)
 }
 
 private func teamFromKboTeamId(_ teamId: String) -> Team? {
