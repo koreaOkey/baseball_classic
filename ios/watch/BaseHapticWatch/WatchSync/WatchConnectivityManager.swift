@@ -332,14 +332,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             }
         }
 
-        // 라이브 스코어 ongoing 노티: 차단된 이벤트가 동반된 푸시는 post 자체를 생략.
-        // 같은 identifier 재전송이 silent replace 되면서 다음 허용 이벤트 (HR/득점/안타) 의
-        // lock-screen wake 를 죽여버리는 것을 막기 위함이다.
-        if !isFinished, let updated = gameData, incomingEventAllowed {
-            Self.postOngoingLiveScoreNotification(gameData: updated, latestEventType: latestEventType)
-        } else if isFinished {
-            Self.removeOngoingLiveScoreNotification()
-        }
+        // Long notification으로 경기 진행상황을 보는 기능은 임시 비활성화.
+        // if !isFinished, let updated = gameData, incomingEventAllowed {
+        //     Self.postOngoingLiveScoreNotification(gameData: updated, latestEventType: latestEventType)
+        // } else if isFinished {
+        //     Self.removeOngoingLiveScoreNotification()
+        // }
+        Self.removeOngoingLiveScoreNotification()
 
         // 경기가 LIVE이면 Extended Session 시작, 종료되면 정지
         if !isFinished {

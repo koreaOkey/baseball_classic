@@ -17,6 +17,9 @@ struct BaseballGameAttributes: ActivityAttributes {
         let batter: String
         let status: String       // "LIVE", "FINISHED" 등
         let lastEventType: String?
+        let lastEventDescription: String?
+        let highlightEventType: String?
+        let highlightEventText: String?
     }
 
     // 경기 시작 시 고정 (변경 불가)

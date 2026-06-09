@@ -4,8 +4,6 @@ import SwiftUI
 struct LiveGameScreen: View {
     let activeTheme: ThemeData?
     let gameId: String?
-    let syncedGameId: String?
-    let onSetSyncedGame: (String?) -> Void
     let onBack: () -> Void
 
     @State private var gameState: LiveGameState?
@@ -57,9 +55,6 @@ struct LiveGameScreen: View {
         VStack(spacing: 0) {
             DetailTopBar(
                 state: gameState,
-                gameId: gameId,
-                syncedGameId: syncedGameId,
-                onSetSyncedGame: onSetSyncedGame,
                 onBack: onBack
             )
 
@@ -430,9 +425,6 @@ private enum DebugDummyLiveGame {
 
 private struct DetailTopBar: View {
     let state: LiveGameState?
-    let gameId: String?
-    let syncedGameId: String?
-    let onSetSyncedGame: (String?) -> Void
     let onBack: () -> Void
 
     var body: some View {
@@ -446,12 +438,6 @@ private struct DetailTopBar: View {
                 }
 
                 Spacer()
-
-                WatchSyncBadge(
-                    gameId: gameId,
-                    syncedGameId: syncedGameId,
-                    onSetSyncedGame: onSetSyncedGame
-                )
             }
 
             HStack(spacing: AppSpacing.sm) {
@@ -852,118 +838,6 @@ private struct EventSummaryLine: View {
                 .foregroundColor(AppColors.gray100)
                 .lineLimit(1)
         }
-    }
-}
-
-private struct WatchSyncBadge: View {
-    let gameId: String?
-    let syncedGameId: String?
-    let onSetSyncedGame: (String?) -> Void
-
-    @State private var visualOn: Bool = false
-    @State private var ignoreNextChange: Bool = false
-    @State private var showEnableAlert: Bool = false
-    @State private var showDisableAlert: Bool = false
-    @State private var isAdLoading: Bool = false
-
-    private var isSyncedToCurrent: Bool {
-        guard let gameId, !gameId.isEmpty else { return false }
-        return syncedGameId == gameId
-    }
-
-    private var isInteractive: Bool {
-        guard let gameId else { return false }
-        return !gameId.isEmpty
-    }
-
-    private var accent: Color {
-        if isSyncedToCurrent { return AppColors.green500 }
-        if syncedGameId?.isEmpty ?? true { return AppColors.gray500 }
-        return AppColors.yellow400
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Image(systemName: "applewatch")
-                .font(AppFont.microBold)
-                .foregroundColor(accent)
-
-            if isAdLoading {
-                ProgressView()
-                    .scaleEffect(0.6)
-                    .padding(.leading, 2)
-                    .padding(.trailing, AppSpacing.xs)
-            } else if isInteractive {
-                Toggle("", isOn: $visualOn)
-                    .labelsHidden()
-                    .tint(AppColors.green500)
-                    .scaleEffect(0.6)
-                Text(visualOn ? "ON" : "OFF")
-                    .font(AppFont.microBold)
-                    .foregroundColor(accent)
-                    .padding(.trailing, 2)
-            } else {
-                Circle()
-                    .fill(accent)
-                    .frame(width: AppSpacing.sm, height: AppSpacing.sm)
-                    .padding(.leading, AppSpacing.xs)
-                    .padding(.trailing, AppSpacing.xs)
-            }
-        }
-        .padding(.leading, AppSpacing.sm)
-        .onAppear { visualOn = isSyncedToCurrent }
-        .onChange(of: syncedGameId) { _, _ in
-            ignoreNextChange = true
-            visualOn = isSyncedToCurrent
-        }
-        .onChange(of: visualOn) { _, newValue in
-            if ignoreNextChange {
-                ignoreNextChange = false
-                return
-            }
-            if newValue {
-                showEnableAlert = true
-            } else {
-                showDisableAlert = true
-            }
-        }
-        .alert("워치로 보시겠습니까?", isPresented: $showEnableAlert) {
-            Button("확인") { handleEnableConfirm() }
-            Button("취소", role: .cancel) { revertVisual() }
-        } message: {
-            Text("광고 관람 후 동기화됩니다.")
-        }
-        .alert("워치 동기화를 끄시겠습니까?", isPresented: $showDisableAlert) {
-            Button("확인") { handleDisableConfirm() }
-            Button("취소", role: .cancel) { revertVisual() }
-        }
-    }
-
-    private func handleEnableConfirm() {
-        guard let gameId, !gameId.isEmpty else { return }
-        if WatchSyncAdLedger.hasViewed(gameId: gameId) {
-            onSetSyncedGame(gameId)
-            return
-        }
-        isAdLoading = true
-        RewardedAdManager.shared.loadAndShowAd(
-            adUnitID: RewardedAdManager.watchSyncAdUnitID
-        ) { rewardEarned in
-            isAdLoading = false
-            if rewardEarned {
-                WatchSyncAdLedger.markViewed(gameId: gameId)
-            }
-            onSetSyncedGame(gameId)
-        }
-    }
-
-    private func handleDisableConfirm() {
-        onSetSyncedGame(nil)
-    }
-
-    private func revertVisual() {
-        ignoreNextChange = true
-        visualOn = isSyncedToCurrent
     }
 }
 

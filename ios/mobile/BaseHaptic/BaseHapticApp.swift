@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 import UserNotifications
 import CoreLocation
+import Darwin
 
 @main
 struct BaseHapticApp: App {
@@ -19,6 +20,7 @@ struct BaseHapticApp: App {
         _showOnboarding = State(initialValue: savedTeam == Team.none.rawValue)
         UserDefaults.standard.register(defaults: [
             "live_haptic_enabled": true,
+            "lock_screen_live_score_enabled": true,
             "ball_strike_haptic_enabled": true,
             "event_video_enabled": true,
             "stadium_cheer_enabled": true,
@@ -85,8 +87,7 @@ struct BaseHapticApp: App {
                     enabled: UserDefaults.standard.bool(forKey: "live_haptic_enabled")
                 )
                 Task { await TeamSubscriptionManager.syncIfNeeded() }
-                // TODO: Live Activity 배포 시 활성화
-                // LiveActivityManager.shared.cleanupStaleActivities()
+                LiveActivityManager.shared.cleanupStaleActivities()
             }
             .task {
                 await authManager.initialize()
@@ -149,12 +150,16 @@ struct ContentView: View {
     @State private var activeCheerTheme: ThemeData? = StadiumCheerThemes.allThemes.first { $0.id == UserDefaults.standard.string(forKey: "active_cheer_theme_id") }
     @State private var selectedGameId: String?
     @State private var syncedGameId: String?
+    @State private var activeLiveActivityGameId: String?
     @State private var showWatchSyncDialog = false
+    @State private var showLiveActivityDialog = false
+    @State private var showGameNotStartedAlert = false
     @State private var pendingReleaseNote: ReleaseNote?
     @State private var pendingWatchSyncGameId: String?
     @State private var pendingWatchSyncNavigateToLive = false
     @State private var pendingWatchSyncHomeTeam: String = ""
     @State private var pendingWatchSyncAwayTeam: String = ""
+    @State private var pendingLiveActivityGame: Game?
     @State private var todayGames: [Game] = []
     @State private var purchasedThemes: [ThemeData] = []
     @State private var unlockedThemeIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "unlocked_theme_ids") ?? ["default"])
@@ -244,7 +249,7 @@ struct ContentView: View {
             if connectivity.watchCompanionStatus == .installed {
                 pendingWatchSyncHomeTeam = homeTeam
                 pendingWatchSyncAwayTeam = awayTeam
-                requestWatchSyncPrompt(gameId: gameId, navigateToLive: true)
+                requestWatchSyncPrompt(gameId: gameId, navigateToLive: false)
             }
         }
         .onAppear {
@@ -285,17 +290,14 @@ struct ContentView: View {
                 if let oldGameId = oldId, !oldGameId.isEmpty {
                     await PushTokenManager.unregister(gameId: oldGameId)
                     await PushTokenManager.unregisterWatchToken(gameId: oldGameId)
-                    // TODO: Live Activity 배포 시 활성화
-                    // await PushTokenManager.unregisterLiveActivityToken(gameId: oldGameId)
-                    // LiveActivityManager.shared.endCurrentActivity()
+                    if activeLiveActivityGameId != oldGameId {
+                        await PushTokenManager.unregisterLiveActivityToken(gameId: oldGameId)
+                        LiveActivityManager.shared.endActivity(gameId: oldGameId)
+                    }
                 }
                 if let newGameId = newId, !newGameId.isEmpty {
                     await PushTokenManager.register(gameId: newGameId, myTeam: selectedTeam.rawValue)
                     await PushTokenManager.registerWatchToken(gameId: newGameId, myTeam: selectedTeam.rawValue)
-                    // TODO: Live Activity 배포 시 활성화
-                    // if let game = todayGames.first(where: { $0.id == newGameId }), game.status == .live {
-                    //     LiveActivityManager.shared.startActivity(...)
-                    // }
                 }
             }
 
@@ -321,6 +323,8 @@ struct ContentView: View {
                         todayGames: gamesForHome,
                         activeTheme: nil,
                         syncedGameId: syncedGameId,
+                        activeLiveActivityGameId: activeLiveActivityGameId,
+                        isWatchAppInstalled: connectivity.watchCompanionStatus == .installed,
                         checkinStadium: nil,
                         onConfirmCheckin: {
                             confirmPendingCheckin()
@@ -330,22 +334,31 @@ struct ContentView: View {
                         },
                         onSelectGame: { game in
                             selectedGameId = game.id
-                            let isDebugDummy = game.id == debugDummyLiveGameId
-                            if !isDebugDummy && game.status == .live && syncedGameId != game.id {
-                                pendingWatchSyncHomeTeam = game.homeTeamId.teamName
-                                pendingWatchSyncAwayTeam = game.awayTeamId.teamName
-                                requestWatchSyncPrompt(gameId: game.id, navigateToLive: true)
-                            } else {
-                                navigateTo(.liveGame)
+                            navigateTo(.liveGame)
+                        },
+                        onToggleLiveActivity: { game in
+                            toggleHomeLiveActivity(for: game)
+                        },
+                        onToggleWatchSync: { game in
+                            selectedGameId = game.id
+                            if syncedGameId == game.id {
+                                syncedGameId = nil
+                                return
                             }
+                            guard game.status == .live else {
+                                showGameNotStartedAlert = true
+                                return
+                            }
+                            guard connectivity.watchCompanionStatus == .installed else { return }
+                            pendingWatchSyncHomeTeam = game.homeTeamId.teamName
+                            pendingWatchSyncAwayTeam = game.awayTeamId.teamName
+                            requestWatchSyncPrompt(gameId: game.id, navigateToLive: false)
                         }
                     )
                 case .liveGame:
                     LiveGameScreen(
                         activeTheme: nil,
                         gameId: selectedGameId,
-                        syncedGameId: syncedGameId,
-                        onSetSyncedGame: { next in syncedGameId = next },
                         onBack: { navigateBack() }
                     )
                 case .watchTest:
@@ -489,6 +502,19 @@ struct ContentView: View {
                 Text(suffix)
             }
         }
+        .alert("잠금화면에서 보시겠습니까?", isPresented: $showLiveActivityDialog) {
+            Button("확인") {
+                confirmPendingLiveActivity()
+            }
+            Button("취소", role: .cancel) {
+                closeLiveActivityDialog()
+            }
+        } message: {
+            Text(liveActivityPromptMessage)
+        }
+        .alert("경기 시작 전입니다", isPresented: $showGameNotStartedAlert) {
+            Button("확인", role: .cancel) {}
+        }
         .onAppear {
             activateStadiumCheer()
         }
@@ -553,6 +579,89 @@ struct ContentView: View {
     }
 
     // MARK: - Watch Sync
+    private func toggleHomeLiveActivity(for game: Game) {
+        selectedGameId = game.id
+
+        if activeLiveActivityGameId == game.id {
+            activeLiveActivityGameId = nil
+            LiveActivityManager.shared.endActivity(gameId: game.id)
+            Task {
+                await PushTokenManager.unregisterLiveActivityToken(gameId: game.id)
+            }
+            return
+        }
+
+        guard game.status == .live else {
+            showGameNotStartedAlert = true
+            return
+        }
+
+        pendingLiveActivityGame = game
+        showLiveActivityDialog = true
+    }
+
+    private func closeLiveActivityDialog() {
+        showLiveActivityDialog = false
+        pendingLiveActivityGame = nil
+    }
+
+    private func confirmPendingLiveActivity() {
+        guard let game = pendingLiveActivityGame else {
+            closeLiveActivityDialog()
+            return
+        }
+
+        let completeStart: () -> Void = {
+            startHomeLiveActivity(for: game)
+            closeLiveActivityDialog()
+        }
+
+        if LiveActivityAdLedger.hasViewed(gameId: game.id) {
+            completeStart()
+            return
+        }
+
+        showLiveActivityDialog = false
+        RewardedAdManager.shared.loadAndShowAd(
+            adUnitID: RewardedAdManager.liveActivityAdUnitID
+        ) { rewardEarned in
+            guard rewardEarned else {
+                closeLiveActivityDialog()
+                return
+            }
+            LiveActivityAdLedger.markViewed(gameId: game.id)
+            completeStart()
+        }
+    }
+
+    private func startHomeLiveActivity(for game: Game) {
+        if let previousGameId = activeLiveActivityGameId, !previousGameId.isEmpty {
+            LiveActivityManager.shared.endActivity(gameId: previousGameId)
+            Task {
+                await PushTokenManager.unregisterLiveActivityToken(gameId: previousGameId)
+            }
+        }
+
+        activeLiveActivityGameId = game.id
+        LiveActivityManager.shared.startActivity(
+            gameId: game.id,
+            homeTeam: game.homeTeamId.rawValue,
+            awayTeam: game.awayTeamId.rawValue,
+            homeScore: game.homeScore,
+            awayScore: game.awayScore,
+            inning: game.inning,
+            status: game.status.rawValue,
+            myTeam: selectedTeam.rawValue
+        )
+    }
+
+    private var liveActivityPromptMessage: String {
+        if DeviceCapability.supportsDynamicIsland {
+            return "광고 관람 후 잠금화면과 다이내믹 아일랜드에서 볼 수 있습니다."
+        }
+        return "광고 관람 후 잠금화면에서 볼 수 있습니다."
+    }
+
     private func requestWatchSyncPrompt(gameId: String, navigateToLive: Bool) {
         guard syncedGameId != gameId else { return }
         pendingWatchSyncGameId = gameId
@@ -578,8 +687,8 @@ struct ContentView: View {
         let completeSync: () -> Void = {
             syncedGameId = gameId
             closeWatchSyncDialog()
-            if shouldNavigate && currentView != .liveGame {
-                navigateTo(.liveGame)
+            if shouldNavigate && currentView != .home {
+                navigateTo(.home)
             }
         }
 
@@ -603,8 +712,11 @@ struct ContentView: View {
         guard let response = connectivity.consumePendingResponse() else { return }
         if response.accepted {
             selectedGameId = response.gameId
+            if currentView != .home {
+                navigateTo(.home)
+            }
             pendingWatchSyncGameId = response.gameId
-            pendingWatchSyncNavigateToLive = true
+            pendingWatchSyncNavigateToLive = false
             pendingWatchSyncHomeTeam = ""
             pendingWatchSyncAwayTeam = ""
             confirmPendingWatchSync()
@@ -853,6 +965,12 @@ struct ContentView: View {
                 pitcherPitchCount: initialState.pitcherPitchCount,
                 myTeam: selectedTeam.rawValue
             )
+            LiveActivityManager.shared.startOrUpdateActivity(
+                state: initialState,
+                myTeam: selectedTeam.rawValue,
+                latestEvent: nil,
+                alert: false
+            )
             lastWatchSignature = "\(initialState.gameId)|\(initialState.status)|\(initialState.inning)|\(initialState.homeScore)|\(initialState.awayScore)|\(initialState.ball)|\(initialState.strike)|\(initialState.out)|\(initialState.pitcherPitchCount ?? -1)"
         }
 
@@ -888,6 +1006,12 @@ struct ContentView: View {
                             batter: state.batter,
                             pitcherPitchCount: state.pitcherPitchCount,
                             myTeam: selectedTeam.rawValue
+                        )
+                        LiveActivityManager.shared.startOrUpdateActivity(
+                            state: state,
+                            myTeam: selectedTeam.rawValue,
+                            latestEvent: nil,
+                            alert: false
                         )
                         lastWatchSignature = signature
 
@@ -966,6 +1090,7 @@ struct ContentView: View {
                             try? await Task.sleep(nanoseconds: 1_500_000_000)
                         }
                         let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)|\(state.pitcherPitchCount ?? -1)"
+                        let latestEvent = newEvents.last ?? sortedEvents.last
                         if signature != lastWatchSignature {
                             let wasLive = lastWatchSignature.contains("|live|") || lastWatchSignature.contains("|LIVE|")
                             WatchGameSyncManager.shared.sendGameData(
@@ -987,6 +1112,12 @@ struct ContentView: View {
                                 pitcherPitchCount: state.pitcherPitchCount,
                                 myTeam: selectedTeam.rawValue
                             )
+                            LiveActivityManager.shared.startOrUpdateActivity(
+                                state: state,
+                                myTeam: selectedTeam.rawValue,
+                                latestEvent: latestEvent,
+                                alert: latestEvent != nil
+                            )
                             lastWatchSignature = signature
 
                             if wasLive && state.status == .finished {
@@ -998,6 +1129,13 @@ struct ContentView: View {
                                     WatchGameSyncManager.shared.sendHapticEvent(eventType: "VICTORY")
                                 }
                             }
+                        } else if latestEvent != nil {
+                            LiveActivityManager.shared.startOrUpdateActivity(
+                                state: state,
+                                myTeam: selectedTeam.rawValue,
+                                latestEvent: latestEvent,
+                                alert: true
+                            )
                         }
                     }
                 case .pong:
@@ -1056,5 +1194,47 @@ private func isTerminalStatus(_ status: GameStatus) -> Bool {
     switch status {
     case .finished, .canceled, .postponed: return true
     case .live, .scheduled: return false
+    }
+}
+
+private enum DeviceCapability {
+    static var supportsDynamicIsland: Bool {
+        let identifier = modelIdentifier
+        guard identifier.hasPrefix("iPhone") else { return false }
+
+        let versionText = String(identifier.dropFirst("iPhone".count))
+        let parts = versionText.split(separator: ",").compactMap { Int($0) }
+        guard parts.count == 2 else { return false }
+
+        let major = parts[0]
+        let minor = parts[1]
+
+        switch major {
+        case 15:
+            return [2, 3, 4, 5].contains(minor)
+        case 16:
+            return [1, 2].contains(minor)
+        case 17:
+            return [1, 2, 3, 4].contains(minor)
+        default:
+            return major >= 18
+        }
+    }
+
+    private static var modelIdentifier: String {
+        #if targetEnvironment(simulator)
+        if let simulatorModel = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"],
+           !simulatorModel.isEmpty {
+            return simulatorModel
+        }
+        #endif
+
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        return withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                String(validatingUTF8: $0) ?? ""
+            }
+        }
     }
 }

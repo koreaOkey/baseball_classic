@@ -16,6 +16,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return true
     }
 
+    func applicationWillTerminate(_ application: UIApplication) {
+        LiveActivityManager.shared.endPreviewActivities()
+    }
+
     /// 경기 시작 알림에 "관람하기" 액션 버튼을 노출하기 위한 카테고리 등록.
     /// APNs payload 의 aps.category="OPEN_LIVE_GAME" 일 때 적용된다.
     private func registerNotificationCategories() {
@@ -73,6 +77,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             // 이벤트가 아닌 경우: 게임 상태 업데이트만 시도
             if let gameId = userInfo["game_id"] as? String, !gameId.isEmpty {
                 sendGameDataToWatch(from: userInfo)
+                LiveActivityManager.shared.updateFromPushPayload(userInfo)
                 completionHandler(.newData)
             } else {
                 completionHandler(.noData)
@@ -82,13 +87,16 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
         // 햅틱 이벤트 워치로 전달 (마스터 스위치 OFF 시 차단 + 사용자 이벤트 필터 가드)
         let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
-        if liveHapticEnabled && EventFilterGate.isAllowed(eventType: eventType) {
+        if liveHapticEnabled,
+           EventFilterGate.isAllowed(eventType: eventType),
+           isWatchSyncActive(for: userInfo["game_id"] as? String) {
             let cursor = userInfo["event_cursor"] as? Int64
             WatchGameSyncManager.shared.sendHapticEvent(eventType: eventType, cursor: cursor)
         }
 
         // 게임 상태도 함께 왔으면 워치 UI 업데이트
         sendGameDataToWatch(from: userInfo)
+        LiveActivityManager.shared.updateFromPushPayload(userInfo)
 
         completionHandler(.newData)
     }
@@ -97,6 +105,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         guard let gameId = userInfo["game_id"] as? String,
               let homeTeam = userInfo["home_team"] as? String,
               let awayTeam = userInfo["away_team"] as? String else { return }
+        guard isWatchSyncActive(for: gameId) else { return }
 
         let homeDisplay = Team.fromBackendName(homeTeam).teamName
         let awayDisplay = Team.fromBackendName(awayTeam).teamName
@@ -131,6 +140,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         )
     }
 
+    private func isWatchSyncActive(for gameId: String?) -> Bool {
+        guard let gameId, !gameId.isEmpty else { return false }
+        return UserDefaults.standard.string(forKey: "synced_game_id") == gameId
+    }
+
     // MARK: - Foreground에서 알림 표시 (silent push는 여기 안 옴)
 
     func userNotificationCenter(
@@ -156,7 +170,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return [.banner, .sound, .badge]
     }
 
-    // MARK: - 알림 탭 시 라이브 화면 진입
+    // MARK: - 알림 탭 시 홈 화면 진입
 
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -179,6 +193,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 }
 
 extension Notification.Name {
-    /// 푸시 알림 탭 시 라이브 화면으로 이동 요청
+    /// 푸시 알림 탭 시 홈 화면으로 이동 요청
     static let openLiveGameRequested = Notification.Name("openLiveGameRequested")
 }

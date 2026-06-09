@@ -19,6 +19,7 @@ final class RewardedAdManager: NSObject, ObservableObject {
 
     private static let themeStoreAdUnitProd = "ca-app-pub-7935544989894266/6775093261"
     private static let watchSyncAdUnitProd = "ca-app-pub-7935544989894266/6602098213"
+    private static let liveActivityAdUnitProd = "ca-app-pub-7935544989894266/2584558049"
 
     static var themeStoreAdUnitID: String {
         #if DEBUG
@@ -33,6 +34,14 @@ final class RewardedAdManager: NSObject, ObservableObject {
         return testAdUnitID
         #else
         return watchSyncAdUnitProd
+        #endif
+    }
+
+    static var liveActivityAdUnitID: String {
+        #if DEBUG
+        return testAdUnitID
+        #else
+        return liveActivityAdUnitProd
         #endif
     }
 
@@ -104,6 +113,20 @@ private final class AdDelegate: NSObject, FullScreenContentDelegate {
 
 enum WatchSyncAdLedger {
     private static let keyPrefix = "watchSyncAdViewed."
+
+    static func hasViewed(gameId: String) -> Bool {
+        guard !gameId.isEmpty else { return false }
+        return UserDefaults.standard.bool(forKey: keyPrefix + gameId)
+    }
+
+    static func markViewed(gameId: String) {
+        guard !gameId.isEmpty else { return }
+        UserDefaults.standard.set(true, forKey: keyPrefix + gameId)
+    }
+}
+
+enum LiveActivityAdLedger {
+    private static let keyPrefix = "liveActivityAdViewed."
 
     static func hasViewed(gameId: String) -> Bool {
         guard !gameId.isEmpty else { return false }

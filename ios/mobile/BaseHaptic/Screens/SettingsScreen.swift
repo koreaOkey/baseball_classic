@@ -18,6 +18,7 @@ struct SettingsScreen: View {
     @ObservedObject private var connectivity = PhoneConnectivityManager.shared
     @State private var showTeamPicker = false
     @AppStorage("live_haptic_enabled") private var hapticEnabled = true
+    @AppStorage("lock_screen_live_score_enabled") private var lockScreenCardEnabled = true
     @State private var highFiveEnabled = true
     @AppStorage("ball_strike_haptic_enabled") private var ballStrikeHapticEnabled = true
     @AppStorage("event_video_enabled") private var eventVideoEnabled = true
@@ -172,9 +173,21 @@ struct SettingsScreen: View {
                 SettingsSection(title: "알림")
 
                 SettingsItemWithToggle(
+                    icon: "rectangle.on.rectangle",
+                    title: "잠금화면 경기 카드",
+                    subtitle: "경기 중 점수와 진행 상황을 잠금화면에서 보기",
+                    isOn: $lockScreenCardEnabled
+                )
+                .onChange(of: lockScreenCardEnabled) { _, newValue in
+                    if !newValue {
+                        LiveActivityManager.shared.endAllActivities()
+                    }
+                }
+
+                SettingsItemWithToggle(
                     icon: "waveform",
-                    title: "경기 라이브 알림",
-                    subtitle: "실시간 경기 내용을 워치로 알림 받기",
+                    title: "이벤트 강한 알림",
+                    subtitle: "득점·홈런 등 선택한 이벤트를 워치 햅틱으로 받기",
                     isOn: $hapticEnabled
                 )
                 .onChange(of: hapticEnabled) { _, newValue in
