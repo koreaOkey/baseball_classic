@@ -15,7 +15,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Qu
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -246,7 +246,9 @@ async def debug_relay_stats() -> dict[str, Any]:
 def list_games(
     status: GameStatus | None = None,
     game_date: date | None = Query(default=None, alias="date"),
-    limit: int = Query(default=20, ge=1, le=100),
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    limit: int = Query(default=20, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> list[GameSummaryOut]:
     query = select(Game)
@@ -261,8 +263,32 @@ def list_games(
                 and_(Game.game_date.is_(None), Game.id.like(f"{prefix}%")),
             )
         )
+    elif from_date is not None or to_date is not None:
+        if from_date is None or to_date is None:
+            raise HTTPException(status_code=400, detail="from and to must be provided together")
+        if to_date < from_date:
+            raise HTTPException(status_code=400, detail="to must be greater than or equal to from")
 
-    query = query.order_by(Game.updated_at.desc()).limit(limit)
+        from_iso = from_date.isoformat()
+        to_iso = to_date.isoformat()
+        from_prefix = from_date.strftime("%Y%m%d")
+        to_prefix = to_date.strftime("%Y%m%d")
+        game_id_date = func.substr(Game.id, 1, 8)
+        query = query.where(
+            or_(
+                and_(Game.game_date >= from_iso, Game.game_date <= to_iso),
+                and_(
+                    Game.game_date.is_(None),
+                    game_id_date >= from_prefix,
+                    game_id_date <= to_prefix,
+                ),
+            )
+        )
+
+    if from_date is not None or to_date is not None:
+        query = query.order_by(Game.game_date.asc(), Game.start_time.asc(), Game.id.asc()).limit(limit)
+    else:
+        query = query.order_by(Game.updated_at.desc()).limit(limit)
 
     games = db.execute(query).scalars().all()
     return [to_game_summary(game) for game in games]

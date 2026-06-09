@@ -874,6 +874,49 @@ def test_list_games_filters_by_game_date_column() -> None:
         assert "WBCGAMEB001" not in ids
 
 
+def test_list_games_filters_by_date_range_and_sorts_schedule() -> None:
+    with TestClient(app) as client:
+        payload_a = sample_snapshot()
+        payload_a["gameDate"] = "2026-06-12"
+        payload_a["startTime"] = "18:30"
+        payload_b = sample_snapshot()
+        payload_b["gameDate"] = "2026-06-10"
+        payload_b["startTime"] = "19:00"
+        payload_c = sample_snapshot()
+        payload_c["gameDate"] = "2026-06-10"
+        payload_c["startTime"] = "14:00"
+        payload_outside = sample_snapshot()
+        payload_outside["gameDate"] = "2026-06-20"
+
+        for game_id, payload in [
+            ("RANGEGAME003", payload_a),
+            ("RANGEGAME002", payload_b),
+            ("RANGEGAME001", payload_c),
+            ("RANGEGAME999", payload_outside),
+        ]:
+            response = client.post(
+                f"/internal/crawler/games/{game_id}/snapshot",
+                headers={"X-API-Key": "test-key"},
+                json=payload,
+            )
+            assert response.status_code == 200
+
+        games = client.get("/games?from=2026-06-10&to=2026-06-12&limit=10")
+        assert games.status_code == 200
+        ids = [item["id"] for item in games.json()]
+        assert ids[:3] == ["RANGEGAME001", "RANGEGAME002", "RANGEGAME003"]
+        assert "RANGEGAME999" not in ids
+
+
+def test_list_games_rejects_invalid_date_range() -> None:
+    with TestClient(app) as client:
+        missing_to = client.get("/games?from=2026-06-10")
+        assert missing_to.status_code == 400
+
+        reversed_range = client.get("/games?from=2026-06-12&to=2026-06-10")
+        assert reversed_range.status_code == 400
+
+
 def test_list_games_filters_by_new_status_values() -> None:
     with TestClient(app) as client:
         canceled_payload = sample_snapshot()

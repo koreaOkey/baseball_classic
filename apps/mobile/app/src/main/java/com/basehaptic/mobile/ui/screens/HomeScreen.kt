@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.basehaptic.mobile.R
 import com.basehaptic.mobile.ui.components.BannerAd
@@ -28,6 +29,7 @@ import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.*
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.currentCoroutineContext
@@ -58,6 +60,16 @@ fun HomeScreen(
         mutableStateOf<List<BackendGamesRepository.TeamRecordStanding>>(emptyList())
     }
     val standingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showScheduleSheet by remember { mutableStateOf(false) }
+    var scheduleLoadRequest by remember { mutableIntStateOf(0) }
+    var scheduleLoading by remember { mutableStateOf(false) }
+    var scheduleError by remember { mutableStateOf<String?>(null) }
+    var scheduleItems by remember {
+        mutableStateOf<List<BackendGamesRepository.UpcomingGameSchedule>>(emptyList())
+    }
+    var scheduleMonth by remember { mutableStateOf(YearMonth.now()) }
+    var selectedScheduleDate by remember { mutableStateOf(LocalDate.now()) }
+    val scheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     LaunchedEffect(showStandingsSheet, standingsLoadRequest) {
         if (!showStandingsSheet) return@LaunchedEffect
@@ -76,6 +88,41 @@ fun HomeScreen(
             standingsItems = loaded
         }
         standingsLoading = false
+    }
+
+    LaunchedEffect(showScheduleSheet, scheduleLoadRequest, selectedTeam) {
+        if (!showScheduleSheet) return@LaunchedEffect
+
+        if (selectedTeam == Team.NONE) {
+            scheduleItems = emptyList()
+            scheduleError = null
+            scheduleLoading = false
+            return@LaunchedEffect
+        }
+
+        scheduleLoading = true
+        scheduleError = null
+        val today = LocalDate.now()
+        val rangeFrom = YearMonth.from(today).atDay(1)
+        val rangeTo = scheduleSeasonEndDate(today)
+        val loaded = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.fetchMyTeamScheduleRangeCached(
+                    context = context.applicationContext,
+                    selectedTeam = selectedTeam,
+                    fromDate = rangeFrom,
+                    toDate = rangeTo,
+                    forceRefresh = scheduleLoadRequest > 1
+                )
+            }
+        }.getOrNull()
+        if (loaded == null) {
+            scheduleItems = emptyList()
+            scheduleError = "응원팀 일정을 불러오지 못했습니다."
+        } else {
+            scheduleItems = loaded
+        }
+        scheduleLoading = false
     }
 
     LaunchedEffect(selectedTeam) {
@@ -255,7 +302,14 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(AppSpacing.lg))
 
                     Surface(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showScheduleSheet = true
+                                scheduleMonth = YearMonth.now()
+                                selectedScheduleDate = LocalDate.now()
+                                scheduleLoadRequest += 1
+                            },
                         shape = AppShapes.lg,
                         color = Color.White.copy(alpha = 0.15f)
                     ) {
@@ -434,6 +488,36 @@ fun HomeScreen(
             )
         }
     }
+
+    if (showScheduleSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showScheduleSheet = false },
+            sheetState = scheduleSheetState,
+            containerColor = Gray950,
+            contentColor = Color.White
+        ) {
+            MyTeamScheduleSheetContent(
+                selectedTeam = selectedTeam,
+                schedules = scheduleItems,
+                currentMonth = scheduleMonth,
+                selectedDate = selectedScheduleDate,
+                loading = scheduleLoading,
+                error = scheduleError,
+                onRetry = { scheduleLoadRequest += 1 },
+                onPreviousMonth = { scheduleMonth = scheduleMonth.minusMonths(1) },
+                onNextMonth = { scheduleMonth = scheduleMonth.plusMonths(1) },
+                onSelectDate = { selectedScheduleDate = it },
+                onSelectSchedule = { game ->
+                    showScheduleSheet = false
+                    onSelectGame(game)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = AppSpacing.xxl)
+                    .padding(bottom = AppSpacing.xxxl)
+            )
+        }
+    }
 }
 
 @Composable
@@ -500,6 +584,380 @@ private fun TeamStandingsSheetContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MyTeamScheduleSheetContent(
+    selectedTeam: Team,
+    schedules: List<BackendGamesRepository.UpcomingGameSchedule>,
+    currentMonth: YearMonth,
+    selectedDate: LocalDate,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onSelectDate: (LocalDate) -> Unit,
+    onSelectSchedule: (Game) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val schedulesByDate = remember(schedules) { schedules.groupBy { it.gameDate } }
+    val selectedSchedules = schedulesByDate[selectedDate].orEmpty()
+
+    Column(modifier = modifier) {
+        Text(
+            text = "응원팀 경기 일정",
+            style = AppFont.h4Bold,
+            color = Color.White
+        )
+        Text(
+            text = if (selectedTeam == Team.NONE) "응원팀을 선택하면 일정을 볼 수 있습니다." else "${selectedTeam.teamName} 시즌 일정",
+            style = AppFont.body,
+            color = Gray400,
+            modifier = Modifier.padding(top = AppSpacing.xs)
+        )
+
+        Spacer(modifier = Modifier.height(AppSpacing.lg))
+
+        when {
+            selectedTeam == Team.NONE -> {
+                ScheduleMessageState(
+                    icon = Icons.Default.SportsBaseball,
+                    title = "응원팀이 선택되지 않았습니다",
+                    body = "마이팀에서 응원팀을 먼저 선택해주세요."
+                )
+            }
+
+            loading -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = AppSpacing.xxxl),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
+                ) {
+                    CircularProgressIndicator(color = Color.White)
+                    Text(
+                        text = "일정을 불러오는 중입니다",
+                        style = AppFont.body,
+                        color = Gray400
+                    )
+                }
+            }
+
+            error != null -> {
+                ScheduleMessageState(
+                    icon = Icons.Default.ErrorOutline,
+                    title = error,
+                    body = "네트워크 상태를 확인한 뒤 다시 시도해주세요.",
+                    actionLabel = "다시 시도",
+                    onAction = onRetry
+                )
+            }
+
+            schedules.isEmpty() -> {
+                ScheduleMessageState(
+                    icon = Icons.Default.EventBusy,
+                    title = "표시할 일정이 없습니다",
+                    body = "저장된 응원팀 경기 일정이 없습니다."
+                )
+            }
+
+            else -> {
+                ScheduleCalendar(
+                    month = currentMonth,
+                    selectedDate = selectedDate,
+                    schedulesByDate = schedulesByDate,
+                    onPreviousMonth = onPreviousMonth,
+                    onNextMonth = onNextMonth,
+                    onSelectDate = onSelectDate
+                )
+
+                Spacer(modifier = Modifier.height(AppSpacing.lg))
+
+                Text(
+                    text = selectedDate.format(DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN)),
+                    style = AppFont.bodyLgMedium,
+                    color = Color.White
+                )
+
+                Spacer(modifier = Modifier.height(AppSpacing.sm))
+
+                if (selectedSchedules.isEmpty()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = AppShapes.md,
+                        color = Gray900
+                    ) {
+                        Text(
+                            text = "선택한 날짜에 등록된 경기가 없습니다.",
+                            style = AppFont.body,
+                            color = Gray400,
+                            modifier = Modifier.padding(AppSpacing.lg)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 260.dp),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+                    ) {
+                        items(
+                            items = selectedSchedules,
+                            key = { "${it.gameDate}:${it.game.id}" }
+                        ) { schedule ->
+                            MyTeamScheduleRow(
+                                selectedTeam = selectedTeam,
+                                schedule = schedule,
+                                onClick = { onSelectSchedule(schedule.game) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleCalendar(
+    month: YearMonth,
+    selectedDate: LocalDate,
+    schedulesByDate: Map<LocalDate, List<BackendGamesRepository.UpcomingGameSchedule>>,
+    onPreviousMonth: () -> Unit,
+    onNextMonth: () -> Unit,
+    onSelectDate: (LocalDate) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.lg,
+        color = Gray900
+    ) {
+        Column(modifier = Modifier.padding(AppSpacing.md)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = onPreviousMonth) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronLeft,
+                        contentDescription = "이전 달",
+                        tint = Color.White
+                    )
+                }
+                Text(
+                    text = month.format(DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)),
+                    style = AppFont.bodyLgBold,
+                    color = Color.White
+                )
+                IconButton(onClick = onNextMonth) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "다음 달",
+                        tint = Color.White
+                    )
+                }
+            }
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                listOf("일", "월", "화", "수", "목", "금", "토").forEach { weekday ->
+                    Text(
+                        text = weekday,
+                        style = AppFont.microBold,
+                        color = Gray500,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(AppSpacing.sm))
+
+            monthGridDates(month).chunked(7).forEach { week ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)
+                ) {
+                    week.forEach { date ->
+                        CalendarDayCell(
+                            date = date,
+                            isSelected = date == selectedDate,
+                            scheduleCount = date?.let { schedulesByDate[it]?.size } ?: 0,
+                            onSelectDate = onSelectDate,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(AppSpacing.xs))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarDayCell(
+    date: LocalDate?,
+    isSelected: Boolean,
+    scheduleCount: Int,
+    onSelectDate: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val background = if (isSelected) Yellow500 else Color.Transparent
+    val textColor = when {
+        date == null -> Color.Transparent
+        isSelected -> Gray950
+        else -> Color.White
+    }
+
+    Box(
+        modifier = modifier
+            .aspectRatio(1f)
+            .clip(AppShapes.md)
+            .background(background)
+            .clickable(enabled = date != null) {
+                if (date != null) onSelectDate(date)
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        if (date != null) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = date.dayOfMonth.toString(),
+                    style = if (isSelected) AppFont.bodyMedium else AppFont.body,
+                    color = textColor
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Box(
+                    modifier = Modifier
+                        .size(if (scheduleCount > 0) 5.dp else 0.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected) Gray950 else Yellow500)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleMessageState(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    body: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.lg,
+        color = Gray900
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(AppSpacing.xxl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Gray500,
+                modifier = Modifier.size(32.dp)
+            )
+            Text(
+                text = title,
+                style = AppFont.bodyLgMedium,
+                color = Color.White
+            )
+            Text(
+                text = body,
+                style = AppFont.body,
+                color = Gray400
+            )
+            if (actionLabel != null && onAction != null) {
+                TextButton(onClick = onAction) {
+                    Text(actionLabel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MyTeamScheduleRow(
+    selectedTeam: Team,
+    schedule: BackendGamesRepository.UpcomingGameSchedule,
+    onClick: () -> Unit
+) {
+    val game = schedule.game
+    val isMyTeamHome = game.homeTeamId == selectedTeam
+    val opponent = if (isMyTeamHome) game.awayTeamId.teamName else game.homeTeamId.teamName
+    val venueText = if (isMyTeamHome) "홈" else "원정"
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = AppShapes.md,
+        color = Gray900,
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(AppSpacing.lg),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = formatUpcomingDateTime(schedule.gameDate, game.time),
+                    style = AppFont.captionBold,
+                    color = Gray400
+                )
+                Spacer(modifier = Modifier.height(AppSpacing.xs))
+                Text(
+                    text = "${selectedTeam.teamName} vs $opponent",
+                    style = AppFont.bodyLgMedium,
+                    color = Color.White
+                )
+                Text(
+                    text = "$venueText 경기",
+                    style = AppFont.micro,
+                    color = Gray500,
+                    modifier = Modifier.padding(top = AppSpacing.xs)
+                )
+            }
+
+            ScheduleStatusBadge(status = game.status)
+        }
+    }
+}
+
+@Composable
+private fun ScheduleStatusBadge(status: GameStatus) {
+    val (label, color) = when (status) {
+        GameStatus.LIVE -> "LIVE" to Red500
+        GameStatus.FINISHED -> "종료" to Gray500
+        GameStatus.SCHEDULED -> "예정" to Blue500
+        GameStatus.POSTPONED -> "연기" to Yellow500
+        GameStatus.CANCELED -> "취소" to Gray500
+    }
+
+    Surface(
+        shape = AppShapes.pill,
+        color = color.copy(alpha = 0.16f)
+    ) {
+        Text(
+            text = label,
+            style = AppFont.microBold,
+            color = color,
+            modifier = Modifier.padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs)
+        )
     }
 }
 
@@ -1053,6 +1511,25 @@ private fun gameStartTime(game: Game): LocalTime {
     return runCatching {
         LocalTime.parse(raw, formatter)
     }.getOrElse { LocalTime.MAX }
+}
+
+private fun monthGridDates(month: YearMonth): List<LocalDate?> {
+    val firstDay = month.atDay(1)
+    val leadingEmptyDays = firstDay.dayOfWeek.value % 7
+    val days = mutableListOf<LocalDate?>()
+    repeat(leadingEmptyDays) { days.add(null) }
+    for (day in 1..month.lengthOfMonth()) {
+        days.add(month.atDay(day))
+    }
+    while (days.size % 7 != 0) {
+        days.add(null)
+    }
+    return days
+}
+
+private fun scheduleSeasonEndDate(today: LocalDate): LocalDate {
+    val septemberEnd = LocalDate.of(today.year, 9, 30)
+    return if (!today.isAfter(septemberEnd)) septemberEnd else today.plusDays(30)
 }
 
 private fun getMockGames(selectedTeam: Team): List<Game> {

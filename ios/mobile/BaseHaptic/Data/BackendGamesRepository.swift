@@ -2,6 +2,8 @@ import Foundation
 
 // MARK: - Configuration
 enum BackendConfig {
+    private static let defaultBaseURL = "https://baseballclassic-production.up.railway.app"
+
     private static func infoString(_ key: String) -> String? {
         guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -11,7 +13,7 @@ enum BackendConfig {
 
     /// 백엔드 베이스 URL - Info.plist의 BACKEND_BASE_URL 또는 기본값 사용
     static var baseURL: String {
-        infoString("BACKEND_BASE_URL") ?? "http://localhost:8080"
+        infoString("BACKEND_BASE_URL") ?? defaultBaseURL
     }
 
     static var wsBaseURL: String {
@@ -371,6 +373,86 @@ final class BackendGamesRepository {
         return items
     }
 
+    func fetchMyTeamScheduleGames(selectedTeam: Team, daysAhead: Int = 30) async -> [UpcomingGameSchedule]? {
+        guard selectedTeam != .none else { return [] }
+        let normalizedDaysAhead = max(daysAhead, 0)
+        let calendar = Calendar.current
+        var items: [UpcomingGameSchedule] = []
+
+        for offset in 0...normalizedDaysAhead {
+            guard let targetDate = calendar.date(byAdding: .day, value: offset, to: Date()) else { continue }
+            guard let dayGames = await fetchGamesByDate(selectedTeam: selectedTeam, targetDate: targetDate) else {
+                return nil
+            }
+            let myTeamGames = dayGames
+                .filter { $0.isMyTeam }
+                .map { UpcomingGameSchedule(gameDate: targetDate, game: $0) }
+            items.append(contentsOf: myTeamGames)
+        }
+
+        return items.sorted {
+            let dateOrder = calendar.compare($0.gameDate, to: $1.gameDate, toGranularity: .day)
+            if dateOrder != .orderedSame {
+                return dateOrder == .orderedAscending
+            }
+            let lhsTime = parseGameTimeToSortKey($0.game.time)
+            let rhsTime = parseGameTimeToSortKey($1.game.time)
+            if lhsTime != rhsTime {
+                return lhsTime < rhsTime
+            }
+            return $0.game.id < $1.game.id
+        }
+    }
+
+    func fetchMyTeamScheduleRangeCached(
+        selectedTeam: Team,
+        fromDate: Date,
+        toDate: Date,
+        forceRefresh: Bool = false
+    ) async -> [UpcomingGameSchedule]? {
+        guard selectedTeam != .none else { return [] }
+        let calendar = Calendar.current
+        let normalizedFrom = calendar.startOfDay(for: fromDate)
+        let normalizedTo = max(calendar.startOfDay(for: toDate), normalizedFrom)
+        let fromString = dateFormatter.string(from: normalizedFrom)
+        let toString = dateFormatter.string(from: normalizedTo)
+        let defaults = UserDefaults.standard
+        let keyPrefix = "schedule_range"
+        let cachedTeam = defaults.string(forKey: "\(keyPrefix)_team")
+        let cachedFrom = defaults.string(forKey: "\(keyPrefix)_from")
+        let cachedTo = defaults.string(forKey: "\(keyPrefix)_to")
+        let cachedPayload = defaults.string(forKey: "\(keyPrefix)_payload")
+
+        if !forceRefresh,
+           cachedTeam == selectedTeam.rawValue,
+           cachedFrom == fromString,
+           cachedTo == toString,
+           let cachedPayload,
+           !cachedPayload.isEmpty,
+           let cached = parseScheduleRangePayload(cachedPayload, selectedTeam: selectedTeam) {
+            return cached
+        }
+
+        if let freshPayload = await fetchGamesByDateRangeRaw(fromDate: normalizedFrom, toDate: normalizedTo),
+           let fresh = parseScheduleRangePayload(freshPayload, selectedTeam: selectedTeam) {
+            defaults.set(selectedTeam.rawValue, forKey: "\(keyPrefix)_team")
+            defaults.set(fromString, forKey: "\(keyPrefix)_from")
+            defaults.set(toString, forKey: "\(keyPrefix)_to")
+            defaults.set(freshPayload, forKey: "\(keyPrefix)_payload")
+            return fresh
+        }
+
+        if cachedTeam == selectedTeam.rawValue,
+           cachedFrom == fromString,
+           cachedTo == toString,
+           let cachedPayload,
+           !cachedPayload.isEmpty {
+            return parseScheduleRangePayload(cachedPayload, selectedTeam: selectedTeam)
+        }
+
+        return nil
+    }
+
     // MARK: - WebSocket Stream
     func streamGame(gameId: String) -> AsyncStream<LiveStreamMessage> {
         let endpoint = "\(BackendConfig.wsBaseURL.trimmingSuffix("/"))/ws/games/\(gameId)"
@@ -403,10 +485,44 @@ final class BackendGamesRepository {
         }
     }
 
+    private func fetchGamesByDateRangeRaw(fromDate: Date, toDate: Date) async -> String? {
+        let fromString = dateFormatter.string(from: fromDate)
+        let toString = dateFormatter.string(from: toDate)
+        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/games?from=\(fromString)&to=\(toString)&limit=500"
+        return await getJSON(endpoint: endpoint) { data in
+            String(data: data, encoding: .utf8)
+        }
+    }
+
     private func parseGamesPayload(_ payload: String, selectedTeam: Team) -> [Game]? {
         guard let data = payload.data(using: .utf8),
               let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
         return array.compactMap { parseGame($0, selectedTeam: selectedTeam) }
+    }
+
+    private func parseScheduleRangePayload(_ payload: String, selectedTeam: Team) -> [UpcomingGameSchedule]? {
+        guard let data = payload.data(using: .utf8),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return nil }
+        let calendar = Calendar.current
+        let items = array.compactMap { item -> UpcomingGameSchedule? in
+            guard let game = parseGame(item, selectedTeam: selectedTeam), game.isMyTeam else { return nil }
+            let gameDate = (item["gameDate"] as? String).flatMap { dateFormatter.date(from: $0) }
+                ?? gameDateFromId(game.id)
+            guard let gameDate else { return nil }
+            return UpcomingGameSchedule(gameDate: calendar.startOfDay(for: gameDate), game: game)
+        }
+        return items.sorted {
+            let dateOrder = calendar.compare($0.gameDate, to: $1.gameDate, toGranularity: .day)
+            if dateOrder != .orderedSame {
+                return dateOrder == .orderedAscending
+            }
+            let lhsTime = parseGameTimeToSortKey($0.game.time)
+            let rhsTime = parseGameTimeToSortKey($1.game.time)
+            if lhsTime != rhsTime {
+                return lhsTime < rhsTime
+            }
+            return $0.game.id < $1.game.id
+        }
     }
 
     private func parseGame(_ json: [String: Any], selectedTeam: Team) -> Game? {
@@ -739,6 +855,15 @@ final class BackendGamesRepository {
               let hour = Int(parts[0]),
               let minute = Int(parts[1]) else { return Int.max }
         return hour * 60 + minute
+    }
+
+    private func gameDateFromId(_ gameId: String) -> Date? {
+        guard gameId.count >= 8 else { return nil }
+        let prefix = String(gameId.prefix(8))
+        guard prefix.allSatisfy(\.isNumber) else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.date(from: prefix)
     }
 
     private func todayString() -> String {

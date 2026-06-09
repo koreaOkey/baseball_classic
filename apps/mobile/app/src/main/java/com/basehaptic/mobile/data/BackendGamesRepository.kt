@@ -42,6 +42,10 @@ object BackendGamesRepository {
     private const val KEY_UPCOMING_GAMES_MAX_ITEMS = "upcoming_games_max_items"
     private const val KEY_UPCOMING_GAMES_DAYS_AHEAD = "upcoming_games_days_ahead"
     private const val KEY_UPCOMING_GAMES_PAYLOAD = "upcoming_games_payload"
+    private const val KEY_SCHEDULE_RANGE_TEAM = "schedule_range_team"
+    private const val KEY_SCHEDULE_RANGE_FROM = "schedule_range_from"
+    private const val KEY_SCHEDULE_RANGE_TO = "schedule_range_to"
+    private const val KEY_SCHEDULE_RANGE_PAYLOAD = "schedule_range_payload"
     private val hhmmFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     private val webSocketClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -360,6 +364,77 @@ object BackendGamesRepository {
         return items
     }
 
+    fun fetchMyTeamScheduleGames(
+        selectedTeam: Team,
+        daysAhead: Int = 30
+    ): List<UpcomingGameSchedule>? {
+        if (selectedTeam == Team.NONE) return emptyList()
+        val normalizedDaysAhead = daysAhead.coerceAtLeast(0)
+        val today = LocalDate.now()
+        val items = mutableListOf<UpcomingGameSchedule>()
+
+        for (offset in 0..normalizedDaysAhead) {
+            val targetDate = today.plusDays(offset.toLong())
+            val dayGames = fetchGamesByDate(selectedTeam = selectedTeam, targetDate = targetDate) ?: return null
+            val myTeamGames = dayGames
+                .asSequence()
+                .filter { it.isMyTeam }
+                .map { game -> UpcomingGameSchedule(gameDate = targetDate, game = game) }
+                .toList()
+            items.addAll(myTeamGames)
+        }
+
+        return items.sortedWith(
+            compareBy<UpcomingGameSchedule> { it.gameDate }
+                .thenBy { parseGameTimeToSortKey(it.game.time) }
+                .thenBy { it.game.id }
+        )
+    }
+
+    fun fetchMyTeamScheduleRangeCached(
+        context: Context,
+        selectedTeam: Team,
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        forceRefresh: Boolean = false
+    ): List<UpcomingGameSchedule>? {
+        if (selectedTeam == Team.NONE) return emptyList()
+        val normalizedToDate = if (toDate.isBefore(fromDate)) fromDate else toDate
+        val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
+        val cachedTeam = prefs.getString(KEY_SCHEDULE_RANGE_TEAM, null)
+        val cachedFrom = prefs.getString(KEY_SCHEDULE_RANGE_FROM, null)
+        val cachedTo = prefs.getString(KEY_SCHEDULE_RANGE_TO, null)
+        val cachedPayload = prefs.getString(KEY_SCHEDULE_RANGE_PAYLOAD, null)
+        val cacheMatches =
+            cachedTeam == selectedTeam.name &&
+                cachedFrom == fromDate.toString() &&
+                cachedTo == normalizedToDate.toString()
+
+        if (!forceRefresh && cacheMatches && !cachedPayload.isNullOrBlank()) {
+            parseUpcomingGamesPayload(cachedPayload)?.let { return it }
+        }
+
+        val freshPayload = fetchGamesByDateRangeRaw(fromDate = fromDate, toDate = normalizedToDate)
+        if (!freshPayload.isNullOrBlank()) {
+            val fresh = parseScheduleRangePayload(freshPayload, selectedTeam)
+            if (fresh != null) {
+                prefs.edit()
+                    .putString(KEY_SCHEDULE_RANGE_TEAM, selectedTeam.name)
+                    .putString(KEY_SCHEDULE_RANGE_FROM, fromDate.toString())
+                    .putString(KEY_SCHEDULE_RANGE_TO, normalizedToDate.toString())
+                    .putString(KEY_SCHEDULE_RANGE_PAYLOAD, toUpcomingGamesPayload(fresh))
+                    .apply()
+                return fresh
+            }
+        }
+
+        if (cacheMatches && !cachedPayload.isNullOrBlank()) {
+            return parseUpcomingGamesPayload(cachedPayload)
+        }
+
+        return null
+    }
+
     private fun fetchGamesByDate(selectedTeam: Team, targetDate: LocalDate): List<Game>? {
         val payload = fetchGamesByDateRaw(targetDate) ?: return null
         return parseGamesPayload(payload, selectedTeam)
@@ -367,6 +442,11 @@ object BackendGamesRepository {
 
     private fun fetchGamesByDateRaw(targetDate: LocalDate): String? {
         val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games?date=${targetDate}&limit=100"
+        return getJson(endpoint) { body -> body }
+    }
+
+    private fun fetchGamesByDateRangeRaw(fromDate: LocalDate, toDate: LocalDate): String? {
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games?from=${fromDate}&to=${toDate}&limit=500"
         return getJson(endpoint) { body -> body }
     }
 
@@ -381,6 +461,29 @@ object BackendGamesRepository {
             items
         }.onFailure { e ->
             Log.w(TAG, "parseGamesPayload failed", e)
+        }.getOrNull()
+    }
+
+    private fun parseScheduleRangePayload(payload: String, selectedTeam: Team): List<UpcomingGameSchedule>? {
+        return runCatching {
+            val array = JSONArray(payload)
+            val items = ArrayList<UpcomingGameSchedule>(array.length())
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val game = item.toGame(selectedTeam)
+                if (!game.isMyTeam) continue
+                val gameDate = item.optString("gameDate").ifBlank { null }?.let { raw ->
+                    runCatching { LocalDate.parse(raw) }.getOrNull()
+                } ?: gameDateFromId(game.id) ?: continue
+                items.add(UpcomingGameSchedule(gameDate = gameDate, game = game))
+            }
+            items.sortedWith(
+                compareBy<UpcomingGameSchedule> { it.gameDate }
+                    .thenBy { parseGameTimeToSortKey(it.game.time) }
+                    .thenBy { it.game.id }
+            )
+        }.onFailure { e ->
+            Log.w(TAG, "parseScheduleRangePayload failed", e)
         }.getOrNull()
     }
 
@@ -853,6 +956,15 @@ object BackendGamesRepository {
 
     private fun parseTeamEnum(raw: String): Team {
         return runCatching { Team.valueOf(raw) }.getOrDefault(Team.NONE)
+    }
+
+    private fun gameDateFromId(gameId: String): LocalDate? {
+        if (gameId.length < 8) return null
+        val raw = gameId.take(8)
+        if (!raw.all { it.isDigit() }) return null
+        return runCatching {
+            LocalDate.parse(raw, DateTimeFormatter.BASIC_ISO_DATE)
+        }.getOrNull()
     }
 
     private fun statusFromBackend(raw: String): GameStatus {

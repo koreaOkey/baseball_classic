@@ -3,6 +3,8 @@ from datetime import date
 
 from live_wbc_dispatcher import (
     _build_schedule_import_dates,
+    _build_schedule_import_dates_for_mode,
+    _build_schedule_import_dates_until,
     _build_team_record_payload,
     _map_schedule_status,
     _parse_schedule_url,
@@ -190,10 +192,39 @@ def test_build_schedule_import_dates_builds_range() -> None:
     ]
 
 
+def test_build_schedule_import_dates_until_overrides_days() -> None:
+    dates = _build_schedule_import_dates_until(date(2026, 6, 9), 1, date(2026, 6, 12))
+    assert dates == [
+        date(2026, 6, 9),
+        date(2026, 6, 10),
+        date(2026, 6, 11),
+        date(2026, 6, 12),
+    ]
+
+
+def test_build_schedule_import_dates_for_refresh_respects_start_date() -> None:
+    args = argparse.Namespace(
+        schedule_import_days=1,
+        schedule_import_until=None,
+        schedule_refresh_start_date=date(2026, 8, 15),
+        schedule_refresh_until=date(2026, 9, 30),
+    )
+
+    before = _build_schedule_import_dates_for_mode(args, today=date(2026, 8, 14), mode="refresh")
+    assert before == [date(2026, 8, 14)]
+
+    after = _build_schedule_import_dates_for_mode(args, today=date(2026, 8, 15), mode="refresh")
+    assert after[0] == date(2026, 8, 15)
+    assert after[-1] == date(2026, 9, 30)
+
+
 def test_parser_schedule_import_days_default_and_override() -> None:
     parser = build_parser()
     args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
     assert args_default.schedule_import_days == 1
+    assert args_default.schedule_import_until is None
+    assert args_default.schedule_refresh_start_date is None
+    assert args_default.schedule_refresh_until is None
 
     args_custom = parser.parse_args(
         [
@@ -203,9 +234,18 @@ def test_parser_schedule_import_days_default_and_override() -> None:
             "x",
             "--schedule-import-days",
             "45",
+            "--schedule-import-until",
+            "2026-09-07",
+            "--schedule-refresh-start-date",
+            "2026-08-15",
+            "--schedule-refresh-until",
+            "2026-09-30",
         ]
     )
     assert args_custom.schedule_import_days == 45
+    assert args_custom.schedule_import_until == date(2026, 9, 7)
+    assert args_custom.schedule_refresh_start_date == date(2026, 8, 15)
+    assert args_custom.schedule_refresh_until == date(2026, 9, 30)
 
 
 def test_parser_crawler_backend_retry_options_default_and_override() -> None:

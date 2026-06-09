@@ -17,6 +17,12 @@ struct HomeScreen: View {
     @State private var standingsItems: [TeamRecordStanding] = []
     @State private var standingsLoading = false
     @State private var standingsError: String?
+    @State private var showingSchedule = false
+    @State private var scheduleItems: [UpcomingGameSchedule] = []
+    @State private var scheduleLoading = false
+    @State private var scheduleError: String?
+    @State private var scheduleMonth = monthStart(for: Date())
+    @State private var selectedScheduleDate = Calendar.current.startOfDay(for: Date())
 
     private var primaryColor: Color {
         activeTheme?.colors.primary ?? teamTheme.primary
@@ -72,6 +78,34 @@ struct HomeScreen: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showingSchedule) {
+            MyTeamScheduleSheet(
+                selectedTeam: selectedTeam,
+                schedules: scheduleItems,
+                currentMonth: scheduleMonth,
+                selectedDate: selectedScheduleDate,
+                loading: scheduleLoading,
+                error: scheduleError,
+                onRetry: {
+                    Task { await loadMyTeamSchedule() }
+                },
+                onPreviousMonth: {
+                    scheduleMonth = Calendar.current.date(byAdding: .month, value: -1, to: scheduleMonth) ?? scheduleMonth
+                },
+                onNextMonth: {
+                    scheduleMonth = Calendar.current.date(byAdding: .month, value: 1, to: scheduleMonth) ?? scheduleMonth
+                },
+                onSelectDate: { date in
+                    selectedScheduleDate = Calendar.current.startOfDay(for: date)
+                },
+                onSelectSchedule: { game in
+                    showingSchedule = false
+                    onSelectGame(game)
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Header
@@ -110,23 +144,31 @@ struct HomeScreen: View {
 
             Spacer().frame(height: AppSpacing.lg)
 
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                HStack(spacing: AppSpacing.sm) {
-                    Image(systemName: "calendar")
-                        .foregroundColor(.white)
-                        .font(AppFont.bodyLg)
-                    Text(todayDateString)
+            Button {
+                showingSchedule = true
+                selectedScheduleDate = Calendar.current.startOfDay(for: Date())
+                scheduleMonth = monthStart(for: Date())
+                Task { await loadMyTeamSchedule() }
+            } label: {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    HStack(spacing: AppSpacing.sm) {
+                        Image(systemName: "calendar")
+                            .foregroundColor(.white)
+                            .font(AppFont.bodyLg)
+                        Text(todayDateString)
+                            .font(AppFont.body)
+                            .foregroundColor(.white)
+                    }
+                    Text("오늘의 경기 \(games.filter { isPlayableGameStatus($0.status) }.count)개")
                         .font(AppFont.body)
-                        .foregroundColor(.white)
+                        .foregroundColor(.white.opacity(0.8))
                 }
-                Text("오늘의 경기 \(games.filter { isPlayableGameStatus($0.status) }.count)개")
-                    .font(AppFont.body)
-                    .foregroundColor(.white.opacity(0.8))
+                .padding(AppSpacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.15))
+                .cornerRadius(AppRadius.lg)
             }
-            .padding(AppSpacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.15))
-            .cornerRadius(AppRadius.lg)
+            .buttonStyle(.plain)
         }
         .padding(AppSpacing.xxl)
         .padding(.bottom, AppSpacing.xxxl)
@@ -245,6 +287,33 @@ struct HomeScreen: View {
     }
 
     @MainActor
+    private func loadMyTeamSchedule() async {
+        guard selectedTeam != .none else {
+            scheduleItems = []
+            scheduleError = nil
+            scheduleLoading = false
+            return
+        }
+
+        scheduleLoading = true
+        scheduleError = nil
+        let today = Date()
+        let loaded = await BackendGamesRepository.shared.fetchMyTeamScheduleRangeCached(
+            selectedTeam: selectedTeam,
+            fromDate: monthStart(for: today),
+            toDate: scheduleSeasonEndDate(today),
+            forceRefresh: !scheduleItems.isEmpty
+        )
+        if let loaded {
+            scheduleItems = loaded
+        } else {
+            scheduleItems = []
+            scheduleError = "응원팀 일정을 불러오지 못했습니다."
+        }
+        scheduleLoading = false
+    }
+
+    @MainActor
     private func loadTeamStandings() async {
         standingsLoading = true
         standingsError = nil
@@ -324,6 +393,316 @@ private struct StandingsMessage: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, AppSpacing.xxxl)
+    }
+}
+
+// MARK: - MyTeamScheduleSheet
+private struct MyTeamScheduleSheet: View {
+    let selectedTeam: Team
+    let schedules: [UpcomingGameSchedule]
+    let currentMonth: Date
+    let selectedDate: Date
+    let loading: Bool
+    let error: String?
+    let onRetry: () -> Void
+    let onPreviousMonth: () -> Void
+    let onNextMonth: () -> Void
+    let onSelectDate: (Date) -> Void
+    let onSelectSchedule: (Game) -> Void
+
+    private var schedulesByDay: [Date: [UpcomingGameSchedule]] {
+        Dictionary(grouping: schedules) { Calendar.current.startOfDay(for: $0.gameDate) }
+    }
+
+    private var selectedSchedules: [UpcomingGameSchedule] {
+        schedulesByDay[Calendar.current.startOfDay(for: selectedDate)] ?? []
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("응원팀 경기 일정")
+                    .font(AppFont.h4Bold)
+                    .foregroundColor(.white)
+                Text(selectedTeam == .none ? "응원팀을 선택하면 일정을 볼 수 있습니다." : "\(selectedTeam.teamName) 시즌 일정")
+                    .font(AppFont.body)
+                    .foregroundColor(AppColors.gray400)
+            }
+
+            if selectedTeam == .none {
+                ScheduleMessage(
+                    systemImage: "baseball",
+                    title: "응원팀이 선택되지 않았습니다",
+                    message: "마이팀에서 응원팀을 먼저 선택해주세요."
+                )
+            } else if loading {
+                VStack(spacing: AppSpacing.md) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("일정을 불러오는 중입니다")
+                        .font(AppFont.body)
+                        .foregroundColor(AppColors.gray400)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.xxxl)
+            } else if let error {
+                ScheduleMessage(
+                    systemImage: "exclamationmark.triangle",
+                    title: error,
+                    message: "네트워크 상태를 확인한 뒤 다시 시도해주세요.",
+                    actionLabel: "다시 시도",
+                    onAction: onRetry
+                )
+            } else if schedules.isEmpty {
+                ScheduleMessage(
+                    systemImage: "calendar.badge.exclamationmark",
+                    title: "표시할 일정이 없습니다",
+                    message: "저장된 응원팀 경기 일정이 없습니다."
+                )
+            } else {
+                ScheduleCalendarView(
+                    currentMonth: currentMonth,
+                    selectedDate: selectedDate,
+                    schedulesByDay: schedulesByDay,
+                    onPreviousMonth: onPreviousMonth,
+                    onNextMonth: onNextMonth,
+                    onSelectDate: onSelectDate
+                )
+
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    Text(formatScheduleDate(selectedDate))
+                        .font(AppFont.bodyLgMedium)
+                        .foregroundColor(.white)
+
+                    if selectedSchedules.isEmpty {
+                        Text("선택한 날짜에 등록된 경기가 없습니다.")
+                            .font(AppFont.body)
+                            .foregroundColor(AppColors.gray400)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(AppSpacing.lg)
+                            .background(AppColors.gray900)
+                            .cornerRadius(AppRadius.md)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: AppSpacing.sm) {
+                                ForEach(selectedSchedules) { schedule in
+                                    MyTeamScheduleRow(
+                                        selectedTeam: selectedTeam,
+                                        schedule: schedule,
+                                        onTap: { onSelectSchedule(schedule.game) }
+                                    )
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 260)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.top, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.xxxl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppColors.gray950)
+    }
+}
+
+private struct ScheduleCalendarView: View {
+    let currentMonth: Date
+    let selectedDate: Date
+    let schedulesByDay: [Date: [UpcomingGameSchedule]]
+    let onPreviousMonth: () -> Void
+    let onNextMonth: () -> Void
+    let onSelectDate: (Date) -> Void
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: AppSpacing.xs), count: 7)
+
+    var body: some View {
+        VStack(spacing: AppSpacing.sm) {
+            HStack {
+                Button(action: onPreviousMonth) {
+                    Image(systemName: "chevron.left")
+                        .font(AppFont.bodyLgBold)
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text(formatScheduleMonth(currentMonth))
+                    .font(AppFont.bodyLgBold)
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Button(action: onNextMonth) {
+                    Image(systemName: "chevron.right")
+                        .font(AppFont.bodyLgBold)
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+            }
+
+            LazyVGrid(columns: columns, spacing: AppSpacing.xs) {
+                ForEach(["일", "월", "화", "수", "목", "금", "토"], id: \.self) { weekday in
+                    Text(weekday)
+                        .font(AppFont.microBold)
+                        .foregroundColor(AppColors.gray500)
+                        .frame(maxWidth: .infinity)
+                }
+
+                ForEach(Array(monthGridDates(for: currentMonth).enumerated()), id: \.offset) { _, date in
+                    ScheduleCalendarDayCell(
+                        date: date,
+                        isSelected: date.map { Calendar.current.isDate($0, inSameDayAs: selectedDate) } ?? false,
+                        scheduleCount: date.map { schedulesByDay[Calendar.current.startOfDay(for: $0)]?.count ?? 0 } ?? 0,
+                        onSelectDate: onSelectDate
+                    )
+                }
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.lg)
+    }
+}
+
+private struct ScheduleCalendarDayCell: View {
+    let date: Date?
+    let isSelected: Bool
+    let scheduleCount: Int
+    let onSelectDate: (Date) -> Void
+
+    var body: some View {
+        Button {
+            if let date {
+                onSelectDate(date)
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Text(date.map { "\(Calendar.current.component(.day, from: $0))" } ?? "")
+                    .font(isSelected ? AppFont.bodyMedium : AppFont.body)
+                    .foregroundColor(isSelected ? AppColors.gray950 : .white)
+                Circle()
+                    .fill(isSelected ? AppColors.gray950 : AppColors.yellow500)
+                    .frame(width: scheduleCount > 0 ? 5 : 0, height: scheduleCount > 0 ? 5 : 0)
+            }
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1, contentMode: .fit)
+            .background(isSelected ? AppColors.yellow500 : Color.clear)
+            .cornerRadius(AppRadius.md)
+        }
+        .buttonStyle(.plain)
+        .disabled(date == nil)
+    }
+}
+
+private struct ScheduleMessage: View {
+    let systemImage: String
+    let title: String
+    let message: String
+    var actionLabel: String?
+    var onAction: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: AppSpacing.sm) {
+            Image(systemName: systemImage)
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundColor(AppColors.gray500)
+            Text(title)
+                .font(AppFont.bodyLgMedium)
+                .foregroundColor(.white)
+            Text(message)
+                .font(AppFont.body)
+                .foregroundColor(AppColors.gray400)
+                .multilineTextAlignment(.center)
+            if let actionLabel, let onAction {
+                Button(action: onAction) {
+                    Text(actionLabel)
+                        .font(AppFont.bodyMedium)
+                        .foregroundColor(AppColors.yellow500)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, AppSpacing.xs)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(AppSpacing.xxl)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.lg)
+    }
+}
+
+private struct MyTeamScheduleRow: View {
+    let selectedTeam: Team
+    let schedule: UpcomingGameSchedule
+    let onTap: () -> Void
+
+    private var game: Game { schedule.game }
+    private var isMyTeamHome: Bool { game.homeTeamId == selectedTeam }
+    private var opponent: String { isMyTeamHome ? game.awayTeamId.teamName : game.homeTeamId.teamName }
+    private var venueText: String { isMyTeamHome ? "홈 경기" : "원정 경기" }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: AppSpacing.md) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text(formatScheduleDateTime(schedule.gameDate, time: game.time))
+                        .font(AppFont.captionBold)
+                        .foregroundColor(AppColors.gray400)
+                    Text("\(selectedTeam.teamName) vs \(opponent)")
+                        .font(AppFont.bodyLgMedium)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(venueText)
+                        .font(AppFont.micro)
+                        .foregroundColor(AppColors.gray500)
+                }
+                Spacer(minLength: AppSpacing.md)
+                ScheduleStatusBadge(status: game.status)
+            }
+            .padding(AppSpacing.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppColors.gray900)
+            .cornerRadius(AppRadius.md)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ScheduleStatusBadge: View {
+    let status: GameStatus
+
+    private var label: String {
+        switch status {
+        case .live: return "LIVE"
+        case .finished: return "종료"
+        case .scheduled: return "예정"
+        case .postponed: return "연기"
+        case .canceled: return "취소"
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case .live: return AppColors.red500
+        case .finished: return AppColors.gray500
+        case .scheduled: return AppColors.blue500
+        case .postponed: return AppColors.yellow500
+        case .canceled: return AppColors.gray500
+        }
+    }
+
+    var body: some View {
+        Text(label)
+            .font(AppFont.microBold)
+            .foregroundColor(color)
+            .padding(.horizontal, AppSpacing.sm)
+            .padding(.vertical, AppSpacing.xs)
+            .background(color.opacity(0.16))
+            .clipShape(Capsule())
     }
 }
 
@@ -641,6 +1020,62 @@ private func formatGameBehind(_ value: Double?) -> String {
     let whole = Int(value)
     if value == Double(whole) { return "\(whole)" }
     return String(format: "%.1f", value)
+}
+
+private func formatScheduleDateTime(_ date: Date, time: String?) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "ko_KR")
+    formatter.dateFormat = "M월 d일"
+    let dateText = formatter.string(from: date)
+    let timeText = (time?.isEmpty ?? true) ? "--:--" : time!
+    return "\(dateText) \(timeText)"
+}
+
+private func formatScheduleDate(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "ko_KR")
+    formatter.dateFormat = "M월 d일 (E)"
+    return formatter.string(from: date)
+}
+
+private func formatScheduleMonth(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "ko_KR")
+    formatter.dateFormat = "yyyy년 M월"
+    return formatter.string(from: date)
+}
+
+private func monthStart(for date: Date) -> Date {
+    let calendar = Calendar.current
+    let components = calendar.dateComponents([.year, .month], from: date)
+    return calendar.date(from: components) ?? calendar.startOfDay(for: date)
+}
+
+private func monthGridDates(for month: Date) -> [Date?] {
+    let calendar = Calendar.current
+    let start = monthStart(for: month)
+    guard let range = calendar.range(of: .day, in: .month, for: start) else { return [] }
+    let weekday = calendar.component(.weekday, from: start)
+    var dates = Array<Date?>(repeating: nil, count: weekday - 1)
+    for day in range {
+        if let date = calendar.date(byAdding: .day, value: day - 1, to: start) {
+            dates.append(calendar.startOfDay(for: date))
+        }
+    }
+    while dates.count % 7 != 0 {
+        dates.append(nil)
+    }
+    return dates
+}
+
+private func scheduleSeasonEndDate(_ today: Date) -> Date {
+    let calendar = Calendar.current
+    let year = calendar.component(.year, from: today)
+    let septemberEnd = calendar.date(from: DateComponents(year: year, month: 9, day: 30)) ?? today
+    if calendar.startOfDay(for: today) <= septemberEnd {
+        return septemberEnd
+    }
+    return calendar.date(byAdding: .day, value: 30, to: today) ?? today
 }
 
 private func teamFromKboTeamId(_ teamId: String) -> Team? {

@@ -1013,8 +1013,41 @@ def _run_schedule_import(
 
 
 def _build_schedule_import_dates(start_date: date, days: int) -> list[date]:
+    return _build_schedule_import_dates_until(start_date=start_date, days=days, until_date=None)
+
+
+def _build_schedule_import_dates_until(
+    start_date: date,
+    days: int,
+    until_date: date | None,
+) -> list[date]:
+    if until_date is not None:
+        if until_date < start_date:
+            return [start_date]
+        return [start_date + timedelta(days=offset) for offset in range((until_date - start_date).days + 1)]
+
     normalized_days = max(1, days)
     return [start_date + timedelta(days=offset) for offset in range(normalized_days)]
+
+
+def _build_schedule_import_dates_for_mode(args: argparse.Namespace, *, today: date, mode: str) -> list[date]:
+    if mode == "daily":
+        return _build_schedule_import_dates_until(
+            start_date=today,
+            days=args.schedule_import_days,
+            until_date=args.schedule_import_until,
+        )
+
+    refresh_start_date = args.schedule_refresh_start_date
+    refresh_until = args.schedule_refresh_until
+    if refresh_start_date is not None and refresh_until is not None and today >= refresh_start_date:
+        return _build_schedule_import_dates_until(
+            start_date=today,
+            days=1,
+            until_date=refresh_until,
+        )
+
+    return _build_schedule_import_dates(start_date=today, days=1)
 
 
 def _start_crawler(
@@ -1230,9 +1263,10 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                     last_import_attempt_at = now
                     LOGGER.info("[import] due mode=%s date=%s", mode, now.date().isoformat())
                     all_success = True
-                    import_dates = _build_schedule_import_dates(
-                        start_date=now.date(),
-                        days=args.schedule_import_days if should_daily_import else 1,
+                    import_dates = _build_schedule_import_dates_for_mode(
+                        args,
+                        today=now.date(),
+                        mode=mode,
                     )
                     LOGGER.info(
                         "[import] date_range mode=%s days=%s from=%s to=%s",
@@ -1376,6 +1410,13 @@ def run_dispatcher(args: argparse.Namespace) -> None:
         _release_dispatcher_lock(lock_handle)
 
 
+def _parse_cli_date(raw: str) -> date:
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("expected date in YYYY-MM-DD format") from exc
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -1474,6 +1515,31 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Number of days to import from the current date during daily import "
             "(default: 1). Refresh import keeps using only today's date."
+        ),
+    )
+    parser.add_argument(
+        "--schedule-import-until",
+        type=_parse_cli_date,
+        default=None,
+        help=(
+            "Import schedule from today through this YYYY-MM-DD date during daily import. "
+            "When set, this takes precedence over --schedule-import-days."
+        ),
+    )
+    parser.add_argument(
+        "--schedule-refresh-start-date",
+        type=_parse_cli_date,
+        default=None,
+        help=(
+            "Start date for long-range refresh import. Before this date, refresh still imports only today."
+        ),
+    )
+    parser.add_argument(
+        "--schedule-refresh-until",
+        type=_parse_cli_date,
+        default=None,
+        help=(
+            "After --schedule-refresh-start-date, refresh schedule from today through this YYYY-MM-DD date."
         ),
     )
     parser.add_argument(
