@@ -309,6 +309,55 @@ def test_ingest_and_query_flow() -> None:
             assert db.query(GameNote).filter(GameNote.game_id == "20250501SSSK02025").count() == 1
 
 
+def test_game_state_http_cache_uses_redis_payload() -> None:
+    class FakeRedisRelay:
+        def __init__(self) -> None:
+            self.store = {}
+
+        async def start(self, on_message):
+            return None
+
+        async def stop(self):
+            return None
+
+        async def get_cache(self, key):
+            return self.store.get(key)
+
+        async def set_cache(self, key, value, ttl_sec=300):
+            self.store[key] = value
+
+        async def delete_cache(self, key):
+            self.store.pop(key, None)
+
+        async def publish(self, game_id, message):
+            return None
+
+    fake_redis = FakeRedisRelay()
+    game_id = "20250501SSSK02025_CACHE"
+    with patch.object(main_module, "redis_relay", fake_redis):
+        with TestClient(app) as client:
+            ingest = client.post(
+                f"/internal/crawler/games/{game_id}/snapshot",
+                headers={"X-API-Key": "test-key"},
+                json=sample_snapshot(),
+            )
+            assert ingest.status_code == 200
+
+            first = client.get(f"/games/{game_id}/state")
+            assert first.status_code == 200
+            assert first.json()["homeScore"] == 3
+
+            with SessionLocal() as db:
+                game = db.get(Game, game_id)
+                assert game is not None
+                game.home_score = 99
+                db.commit()
+
+            second = client.get(f"/games/{game_id}/state")
+            assert second.status_code == 200
+            assert second.json()["homeScore"] == 3
+
+
 def test_ingest_idempotent_and_auth() -> None:
     with TestClient(app) as client:
         unauthorized = client.post(

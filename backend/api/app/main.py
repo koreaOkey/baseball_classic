@@ -89,6 +89,9 @@ redis_relay = RedisBroadcastRelay(
     source_instance_id=settings.instance_id,
 )
 
+HTTP_LIVE_CACHE_TTL_SEC = 2
+HTTP_STANDINGS_CACHE_TTL_SEC = 5
+
 
 def _is_snapshot_lock_timeout(exc: DBAPIError) -> bool:
     # Supabase/Postgres can raise statement timeout while waiting on row lock:
@@ -245,14 +248,45 @@ async def debug_relay_stats() -> dict[str, Any]:
 
 
 @app.get("/games", response_model=list[GameSummaryOut])
-def list_games(
+async def list_games(
     status: GameStatus | None = None,
     game_date: date | None = Query(default=None, alias="date"),
     from_date: date | None = Query(default=None, alias="from"),
     to_date: date | None = Query(default=None, alias="to"),
     limit: int = Query(default=20, ge=1, le=500),
-    db: Session = Depends(get_db),
-) -> list[GameSummaryOut]:
+) -> list[dict[str, Any]]:
+    cache_key = (
+        "http:games:v1:"
+        f"status={(status.value if status else '')}:"
+        f"date={(game_date.isoformat() if game_date else '')}:"
+        f"from={(from_date.isoformat() if from_date else '')}:"
+        f"to={(to_date.isoformat() if to_date else '')}:"
+        f"limit={limit}"
+    )
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None:
+        return cached.get("items") or []
+
+    items = await asyncio.to_thread(
+        _list_games_payload,
+        status=status,
+        game_date=game_date,
+        from_date=from_date,
+        to_date=to_date,
+        limit=limit,
+    )
+    await redis_relay.set_cache(cache_key, {"items": items}, ttl_sec=HTTP_LIVE_CACHE_TTL_SEC)
+    return items
+
+
+def _list_games_payload(
+    *,
+    status: GameStatus | None,
+    game_date: date | None,
+    from_date: date | None,
+    to_date: date | None,
+    limit: int,
+) -> list[dict[str, Any]]:
     query = select(Game)
     if status is not None:
         query = query.where(Game.status == status.value)
@@ -292,58 +326,112 @@ def list_games(
     else:
         query = query.order_by(Game.updated_at.desc()).limit(limit)
 
-    games = db.execute(query).scalars().all()
-    return [to_game_summary(game) for game in games]
+    with SessionLocal() as db:
+        games = db.execute(query).scalars().all()
+        return [to_game_summary(game).model_dump(mode="json") for game in games]
 
 
 @app.get("/games/{game_id}", response_model=GameSummaryOut)
-def get_game(game_id: str, db: Session = Depends(get_db)) -> GameSummaryOut:
-    game = db.get(Game, game_id)
-    if game is None:
-        raise HTTPException(status_code=404, detail="game not found")
-    return to_game_summary(game)
+async def get_game(game_id: str) -> dict[str, Any]:
+    cache_key = f"http:game:v1:{game_id}"
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None and cached.get("item") is not None:
+        return cached["item"]
+
+    item = await asyncio.to_thread(_get_game_payload, game_id)
+    await redis_relay.set_cache(cache_key, {"item": item}, ttl_sec=HTTP_LIVE_CACHE_TTL_SEC)
+    return item
+
+
+def _get_game_payload(game_id: str) -> dict[str, Any]:
+    with SessionLocal() as db:
+        game = db.get(Game, game_id)
+        if game is None:
+            raise HTTPException(status_code=404, detail="game not found")
+        return to_game_summary(game).model_dump(mode="json")
 
 
 @app.get("/games/{game_id}/state", response_model=GameStateOut)
-def get_game_state(game_id: str, db: Session = Depends(get_db)) -> GameStateOut:
-    game = db.get(Game, game_id)
-    if game is None:
-        raise HTTPException(status_code=404, detail="game not found")
-    return build_game_state(db, game)
+async def get_game_state(game_id: str) -> dict[str, Any]:
+    cache_key = f"http:game_state:v1:{game_id}"
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    item = await asyncio.to_thread(_get_game_state_payload, game_id)
+    await redis_relay.set_cache(cache_key, item, ttl_sec=HTTP_LIVE_CACHE_TTL_SEC)
+    return item
+
+
+def _get_game_state_payload(game_id: str) -> dict[str, Any]:
+    with SessionLocal() as db:
+        game = db.get(Game, game_id)
+        if game is None:
+            raise HTTPException(status_code=404, detail="game not found")
+        return build_game_state(db, game).model_dump(mode="json")
 
 
 @app.get("/games/{game_id}/events", response_model=EventsResponse)
-def get_game_events(
+async def get_game_events(
     game_id: str,
     after: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     inning_number: int | None = Query(default=None, alias="inningNumber", ge=1, le=12),
     scoring_only: bool = Query(default=False, alias="scoringOnly"),
-    db: Session = Depends(get_db),
-) -> EventsResponse:
-    game = db.get(Game, game_id)
-    if game is None:
-        raise HTTPException(status_code=404, detail="game not found")
-
-    filters = [GameEvent.game_id == game_id, GameEvent.cursor > after]
-    if inning_number is not None:
-        filters.append(GameEvent.inning.like(f"{inning_number}회%"))
-    if scoring_only:
-        filters.append(GameEvent.event_type.in_(("SCORE", "SAC_FLY_SCORE")))
-
-    rows = db.execute(
-        select(GameEvent)
-        .where(*filters)
-        .order_by(GameEvent.cursor.asc())
-        .limit(limit + 1)
-    ).scalars().all()
-
-    chunk = rows[:limit]
-    next_cursor = chunk[-1].cursor if len(rows) > limit and chunk else None
-    return EventsResponse(
-        items=[to_event_out(row) for row in chunk],
-        nextCursor=next_cursor,
+) -> dict[str, Any]:
+    cache_key = (
+        f"http:game_events:v1:{game_id}:after={after}:limit={limit}:"
+        f"inning={(inning_number if inning_number is not None else '')}:"
+        f"scoring={int(scoring_only)}"
     )
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    item = await asyncio.to_thread(
+        _get_game_events_payload,
+        game_id=game_id,
+        after=after,
+        limit=limit,
+        inning_number=inning_number,
+        scoring_only=scoring_only,
+    )
+    await redis_relay.set_cache(cache_key, item, ttl_sec=HTTP_LIVE_CACHE_TTL_SEC)
+    return item
+
+
+def _get_game_events_payload(
+    *,
+    game_id: str,
+    after: int,
+    limit: int,
+    inning_number: int | None,
+    scoring_only: bool,
+) -> dict[str, Any]:
+    with SessionLocal() as db:
+        game = db.get(Game, game_id)
+        if game is None:
+            raise HTTPException(status_code=404, detail="game not found")
+
+        filters = [GameEvent.game_id == game_id, GameEvent.cursor > after]
+        if inning_number is not None:
+            filters.append(GameEvent.inning.like(f"{inning_number}회%"))
+        if scoring_only:
+            filters.append(GameEvent.event_type.in_(("SCORE", "SAC_FLY_SCORE")))
+
+        rows = db.execute(
+            select(GameEvent)
+            .where(*filters)
+            .order_by(GameEvent.cursor.asc())
+            .limit(limit + 1)
+        ).scalars().all()
+
+        chunk = rows[:limit]
+        next_cursor = chunk[-1].cursor if len(rows) > limit and chunk else None
+        return {
+            "items": [to_event_out(row).model_dump(mode="json") for row in chunk],
+            "nextCursor": next_cursor,
+        }
 
 
 # MARK: - Account Deletion
@@ -967,37 +1055,91 @@ async def _send_live_activity_update(
 
 
 @app.get("/team-records", response_model=list[TeamRecordOut])
-def get_team_record_standings(
+async def get_team_record_standings(
     category_id: str = Query(default="kbo", alias="categoryId"),
     season_code: str | None = Query(default=None, alias="seasonCode"),
-    db: Session = Depends(get_db),
-) -> list[TeamRecordOut]:
+) -> list[dict[str, Any]]:
     normalized_season_code = (season_code or str(datetime.now(UTC).year)).strip()
-    rows = get_team_records(
-        db,
-        category_id=category_id.strip(),
+    normalized_category_id = category_id.strip()
+    cache_key = f"http:team_records:v1:{normalized_category_id}:{normalized_season_code}"
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None:
+        return cached.get("items") or []
+
+    items = await asyncio.to_thread(
+        _get_team_record_standings_payload,
+        category_id=normalized_category_id,
         season_code=normalized_season_code,
     )
-    return [to_team_record_out(row) for row in rows]
+    await redis_relay.set_cache(cache_key, {"items": items}, ttl_sec=HTTP_STANDINGS_CACHE_TTL_SEC)
+    return items
+
+
+def _get_team_record_standings_payload(
+    *,
+    category_id: str,
+    season_code: str,
+) -> list[dict[str, Any]]:
+    with SessionLocal() as db:
+        rows = get_team_records(
+            db,
+            category_id=category_id,
+            season_code=season_code,
+        )
+        return [to_team_record_out(row).model_dump(mode="json") for row in rows]
 
 
 @app.get("/team-records/{team_id}", response_model=TeamRecordOut)
-def get_team_record_by_team(
+async def get_team_record_by_team(
     team_id: str,
     category_id: str = Query(default="kbo", alias="categoryId"),
     season_code: str | None = Query(default=None, alias="seasonCode"),
-    db: Session = Depends(get_db),
-) -> TeamRecordOut:
+) -> dict[str, Any]:
     normalized_season_code = (season_code or str(datetime.now(UTC).year)).strip()
-    row = get_team_record(
-        db,
-        category_id=category_id.strip(),
-        season_code=normalized_season_code,
-        team_id=team_id.strip(),
+    normalized_category_id = category_id.strip()
+    normalized_team_id = team_id.strip()
+    cache_key = (
+        f"http:team_record:v1:{normalized_category_id}:"
+        f"{normalized_season_code}:{normalized_team_id}"
     )
-    if row is None:
-        raise HTTPException(status_code=404, detail="team record not found")
-    return to_team_record_out(row)
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None and cached.get("item") is not None:
+        return cached["item"]
+
+    item = await asyncio.to_thread(
+        _get_team_record_by_team_payload,
+        team_id=normalized_team_id,
+        category_id=normalized_category_id,
+        season_code=normalized_season_code,
+    )
+    await redis_relay.set_cache(cache_key, {"item": item}, ttl_sec=HTTP_STANDINGS_CACHE_TTL_SEC)
+    return item
+
+
+def _get_team_record_by_team_payload(
+    *,
+    team_id: str,
+    category_id: str,
+    season_code: str,
+) -> dict[str, Any]:
+    with SessionLocal() as db:
+        row = get_team_record(
+            db,
+            category_id=category_id,
+            season_code=season_code,
+            team_id=team_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="team record not found")
+        return to_team_record_out(row).model_dump(mode="json")
+
+
+def _team_record_http_cache_key(*, category_id: str, season_code: str, team_id: str) -> str:
+    return f"http:team_record:v1:{category_id}:{season_code}:{team_id}"
+
+
+def _team_records_http_cache_key(*, category_id: str, season_code: str) -> str:
+    return f"http:team_records:v1:{category_id}:{season_code}"
 
 
 @app.post("/internal/crawler/games/{game_id}/snapshot", response_model=IngestResult)
@@ -1028,6 +1170,7 @@ def _ingest_crawler_snapshot_locked(
     duplicate_count = 0
     state_payload: dict[str, Any] | None = None
     inserted_event_payload: list[dict[str, Any]] = []
+    game_summary_payload: dict[str, Any] | None = None
     response_status: GameStatus | None = None
     response_updated_at: datetime | None = None
 
@@ -1046,11 +1189,13 @@ def _ingest_crawler_snapshot_locked(
             current_state = build_game_state(db, game)
             current_state_payload = current_state.model_dump(mode="json")
             current_event_payload = [to_event_out(item).model_dump(mode="json") for item in inserted_events]
+            current_game_summary_payload = to_game_summary(game).model_dump(mode="json")
             response_status = normalize_status(game.status)
             response_updated_at = game.updated_at
             db.commit()
             state_payload = current_state_payload
             inserted_event_payload = current_event_payload
+            game_summary_payload = current_game_summary_payload
             break
         except DBAPIError as exc:
             rollback_ok = _rollback_session_safely(db, game_id=game_id, attempt=attempt + 1)
@@ -1093,6 +1238,19 @@ def _ingest_crawler_snapshot_locked(
     # Cache state and recent events in Redis for fast WS on-connect
     background_tasks.add_task(
         _cache_game_data, game_id, state_payload, inserted_event_payload,
+    )
+    if game_summary_payload is not None:
+        background_tasks.add_task(
+            redis_relay.set_cache,
+            f"http:game:v1:{game_id}",
+            {"item": game_summary_payload},
+            HTTP_LIVE_CACHE_TTL_SEC,
+        )
+    background_tasks.add_task(
+        redis_relay.set_cache,
+        f"http:game_state:v1:{game_id}",
+        state_payload,
+        HTTP_LIVE_CACHE_TTL_SEC,
     )
 
     # APNs silent push 전송 (백그라운드에서도 워치로 이벤트 전달)
@@ -1149,8 +1307,32 @@ def ingest_crawler_team_records(
             season_code=row.season_code,
             team_id=row.team_id,
         )
-        message = _team_record_message(row=to_team_record_out(row))
+        row_payload = to_team_record_out(row).model_dump(mode="json")
+        message = {"type": "team_record", "payload": row_payload}
         background_tasks.add_task(_broadcast_live_message, channel, message)
+        background_tasks.add_task(
+            redis_relay.set_cache,
+            f"team-record:{row.category_id}:{row.season_code}:{row.team_id}",
+            message,
+            300,
+        )
+        background_tasks.add_task(
+            redis_relay.set_cache,
+            _team_record_http_cache_key(
+                category_id=row.category_id,
+                season_code=row.season_code,
+                team_id=row.team_id,
+            ),
+            {"item": row_payload},
+            HTTP_STANDINGS_CACHE_TTL_SEC,
+        )
+        background_tasks.add_task(
+            redis_relay.delete_cache,
+            _team_records_http_cache_key(
+                category_id=row.category_id,
+                season_code=row.season_code,
+            ),
+        )
 
     return TeamRecordIngestResult(
         categoryId=payload.categoryId,
