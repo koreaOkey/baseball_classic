@@ -67,3 +67,27 @@ WebSocket과 이벤트 버스를 통한 실시간 경기 데이터 브로드캐�
 - GIVEN 동일 게임에 두 개의 broadcast가 거의 동시에 트리거될 때
 - WHEN 둘 다 같은 WebSocket으로 송신되면
 - THEN per-connection send lock에 의해 두 송신이 순차 실행되어 메시지 손실/프레임 깨짐 없이 모두 전달된다
+
+### Requirement: 토글 기반 라이브 관람 집계
+시스템은 사용자가 경기 관람 surface를 켜고 끄는 토글 상태를 기준으로 라이브 관람 세션을 집계해야 한다(MUST).
+
+#### Scenario: 관람 surface 활성화
+- GIVEN 사용자가 라이브 경기의 잠금화면 카드 또는 워치 관람 토글을 켤 때
+- WHEN 앱이 관람 세션을 활성 상태로 등록하면
+- THEN 해당 경기, 사용자 식별자, surface 조합은 활성 관람 surface로 집계된다
+
+#### Scenario: 관람 surface 비활성화
+- GIVEN 사용자가 잠금화면 카드 또는 워치 관람 토글을 끄거나 경기가 종료되었을 때
+- WHEN 앱이 관람 세션을 비활성 상태로 등록하면
+- THEN 해당 surface는 활성 관람 surface 집계에서 제외된다
+
+#### Scenario: 활성 수와 사람 수 분리 집계
+- GIVEN 한 사용자가 같은 경기에서 휴대폰과 워치를 동시에 켠 상태일 때
+- WHEN 운영 모니터가 라이브 관람 현황을 집계하면
+- THEN 활성 surface 수는 켜진 surface 개수로 계산된다
+- AND 사람 수는 동일 사용자 식별자를 중복 제거하여 계산된다
+
+#### Scenario: 비로그인 사용자 집계
+- GIVEN 사용자가 로그인하지 않은 상태로 경기 관람 surface를 켤 때
+- WHEN 앱이 설치 단위 식별자로 관람 세션을 등록하면
+- THEN 로그인 없이도 같은 설치에서 발생한 여러 surface는 동일 사람으로 묶을 수 있다

@@ -22,7 +22,7 @@ os.environ["BASEHAPTIC_CORS_ALLOW_ORIGINS"] = "*"
 from app.main import app  # noqa: E402
 from app import main as main_module  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
-from app.models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, TeamRecord  # noqa: E402
+from app.models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord  # noqa: E402
 from app.services import _event_out_count, normalize_event_type, normalize_status  # noqa: E402
 
 
@@ -1342,6 +1342,50 @@ def test_event_inning_populated_from_payload_and_fallback() -> None:
         # game.inning "7B" 는 정규화돼 저장되므로 응답은 정규화된 값(예: "7회말")
         assert by_source["inning-fallback-001"]["inning"] is not None
         assert by_source["inning-fallback-001"]["inning"] != ""
+
+
+def test_live_view_session_upsert_tracks_active_surface() -> None:
+    from app.db import init_db
+
+    init_db()
+    with TestClient(app) as client:
+        created = client.post(
+            "/live-view-sessions",
+            json={
+                "game_id": "20260611LIVEVIEW01",
+                "user_key": "install-1",
+                "surface": "android",
+                "token_key": "fcm-token-1",
+                "my_team": "DOOSAN",
+                "active": True,
+            },
+        )
+        assert created.status_code == 200
+        assert created.json()["status"] == "ok"
+
+        disabled = client.post(
+            "/live-view-sessions",
+            json={
+                "game_id": "20260611LIVEVIEW01",
+                "user_key": "install-1",
+                "surface": "android",
+                "token_key": "fcm-token-2",
+                "my_team": "LG",
+                "active": False,
+            },
+        )
+        assert disabled.status_code == 200
+
+    with SessionLocal() as db:
+        rows = db.query(LiveViewSession).filter_by(
+            game_id="20260611LIVEVIEW01",
+            user_key="install-1",
+            surface="android",
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].active is False
+        assert rows[0].token_key == "fcm-token-2"
+        assert rows[0].my_team == "LG"
 
 
 def test_event_at_bat_id_and_seqno_populated_from_source_event_id() -> None:

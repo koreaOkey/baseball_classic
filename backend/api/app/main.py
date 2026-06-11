@@ -28,6 +28,7 @@ from .models import (
     DeviceToken,
     Game,
     GameEvent,
+    LiveViewSession,
     LiveActivityToken,
     TeamCheckinDaily,
     TeamCheckinSeason,
@@ -45,6 +46,7 @@ from .schemas import (
     CrawlerSnapshotRequest,
     CrawlerTeamRecordRequest,
     DeviceTokenRequest,
+    LiveViewSessionRequest,
     LiveActivityTokenRequest,
     EventsResponse,
     GameStateOut,
@@ -461,6 +463,60 @@ def unregister_device_token(
         db.delete(row)
         db.commit()
     background_tasks.add_task(_invalidate_push_token_cache, game_id)
+    return {"status": "ok"}
+
+
+@app.post("/live-view-sessions")
+def upsert_live_view_session(
+    payload: LiveViewSessionRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    now = datetime.now(UTC)
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        stmt = pg_insert(LiveViewSession).values(
+            game_id=payload.game_id,
+            user_key=payload.user_key,
+            surface=payload.surface,
+            token_key=payload.token_key,
+            my_team=payload.my_team,
+            active=payload.active,
+            updated_at=now,
+        ).on_conflict_do_update(
+            constraint="uq_live_view_session_surface",
+            set_={
+                "token_key": payload.token_key,
+                "my_team": payload.my_team,
+                "active": payload.active,
+                "updated_at": now,
+            },
+        )
+        db.execute(stmt)
+    else:
+        existing = db.execute(
+            select(LiveViewSession).where(
+                LiveViewSession.game_id == payload.game_id,
+                LiveViewSession.user_key == payload.user_key,
+                LiveViewSession.surface == payload.surface,
+            )
+        ).scalar_one_or_none()
+        if existing:
+            existing.token_key = payload.token_key
+            existing.my_team = payload.my_team
+            existing.active = payload.active
+            existing.updated_at = now
+        else:
+            db.add(LiveViewSession(
+                game_id=payload.game_id,
+                user_key=payload.user_key,
+                surface=payload.surface,
+                token_key=payload.token_key,
+                my_team=payload.my_team,
+                active=payload.active,
+                updated_at=now,
+            ))
+    db.commit()
     return {"status": "ok"}
 
 

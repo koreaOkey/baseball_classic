@@ -290,6 +290,13 @@ struct ContentView: View {
                 if let oldGameId = oldId, !oldGameId.isEmpty {
                     await PushTokenManager.unregister(gameId: oldGameId)
                     await PushTokenManager.unregisterWatchToken(gameId: oldGameId)
+                    await LiveViewSessionManager.setActive(
+                        gameId: oldGameId,
+                        surface: .watchos,
+                        active: false,
+                        myTeam: selectedTeam.rawValue,
+                        tokenKey: UserDefaults.standard.string(forKey: "watch_apns_device_token")
+                    )
                     if activeLiveActivityGameId != oldGameId {
                         await PushTokenManager.unregisterLiveActivityToken(gameId: oldGameId)
                         LiveActivityManager.shared.endActivity(gameId: oldGameId)
@@ -298,6 +305,13 @@ struct ContentView: View {
                 if let newGameId = newId, !newGameId.isEmpty {
                     await PushTokenManager.register(gameId: newGameId, myTeam: selectedTeam.rawValue)
                     await PushTokenManager.registerWatchToken(gameId: newGameId, myTeam: selectedTeam.rawValue)
+                    await LiveViewSessionManager.setActive(
+                        gameId: newGameId,
+                        surface: .watchos,
+                        active: true,
+                        myTeam: selectedTeam.rawValue,
+                        tokenKey: UserDefaults.standard.string(forKey: "watch_apns_device_token")
+                    )
                 }
             }
 
@@ -587,6 +601,13 @@ struct ContentView: View {
             LiveActivityManager.shared.endActivity(gameId: game.id)
             Task {
                 await PushTokenManager.unregisterLiveActivityToken(gameId: game.id)
+                await LiveViewSessionManager.setActive(
+                    gameId: game.id,
+                    surface: .ios,
+                    active: false,
+                    myTeam: selectedTeam.rawValue,
+                    tokenKey: UserDefaults.standard.string(forKey: "apns_device_token")
+                )
             }
             return
         }
@@ -639,10 +660,26 @@ struct ContentView: View {
             LiveActivityManager.shared.endActivity(gameId: previousGameId)
             Task {
                 await PushTokenManager.unregisterLiveActivityToken(gameId: previousGameId)
+                await LiveViewSessionManager.setActive(
+                    gameId: previousGameId,
+                    surface: .ios,
+                    active: false,
+                    myTeam: selectedTeam.rawValue,
+                    tokenKey: UserDefaults.standard.string(forKey: "apns_device_token")
+                )
             }
         }
 
         activeLiveActivityGameId = game.id
+        Task {
+            await LiveViewSessionManager.setActive(
+                gameId: game.id,
+                surface: .ios,
+                active: true,
+                myTeam: selectedTeam.rawValue,
+                tokenKey: UserDefaults.standard.string(forKey: "apns_device_token")
+            )
+        }
         LiveActivityManager.shared.startActivity(
             gameId: game.id,
             homeTeam: game.homeTeamId.rawValue,

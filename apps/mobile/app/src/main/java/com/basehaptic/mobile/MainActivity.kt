@@ -37,6 +37,7 @@ import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.auth.SupabaseClientProvider
 import io.github.jan.supabase.auth.handleDeeplinks
 import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.LiveViewSessionRegistrar
 import com.basehaptic.mobile.data.LiveScoreAdLedger
 import com.basehaptic.mobile.data.WatchSyncAdLedger
 import com.basehaptic.mobile.data.model.Game
@@ -321,6 +322,8 @@ fun BaseHapticApp(
     var selectedGameId by remember { mutableStateOf<String?>(null) }
     var syncedGameId by remember { mutableStateOf<String?>(null) }
     var activeLiveScoreGameId by remember { mutableStateOf<String?>(null) }
+    var registeredLiveScoreSessionGameId by remember { mutableStateOf<String?>(null) }
+    var registeredWatchSessionGameId by remember { mutableStateOf<String?>(null) }
     var showWatchSyncDialog by remember { mutableStateOf(false) }
     var showLiveScoreDialog by remember { mutableStateOf(false) }
     var showGameNotStartedDialog by remember { mutableStateOf(false) }
@@ -617,6 +620,50 @@ fun BaseHapticApp(
     // Service 는 워치 관람 시작 시점부터만 가동 (아래 LaunchedEffect).
 
     // Start/stop streaming via service when watch sync or live_score lockscreen card changes.
+    LaunchedEffect(activeLiveScoreGameId, syncedGameId, selectedTeam) {
+        val previousLiveScore = registeredLiveScoreSessionGameId
+        if (!previousLiveScore.isNullOrBlank() && previousLiveScore != activeLiveScoreGameId) {
+            LiveViewSessionRegistrar.setActive(
+                context = context,
+                gameId = previousLiveScore,
+                surface = "android",
+                active = false,
+                myTeam = selectedTeam.name,
+            )
+        }
+        if (!activeLiveScoreGameId.isNullOrBlank() && activeLiveScoreGameId != previousLiveScore) {
+            LiveViewSessionRegistrar.setActive(
+                context = context,
+                gameId = activeLiveScoreGameId!!,
+                surface = "android",
+                active = true,
+                myTeam = selectedTeam.name,
+            )
+        }
+        registeredLiveScoreSessionGameId = activeLiveScoreGameId
+
+        val previousWatch = registeredWatchSessionGameId
+        if (!previousWatch.isNullOrBlank() && previousWatch != syncedGameId) {
+            LiveViewSessionRegistrar.setActive(
+                context = context,
+                gameId = previousWatch,
+                surface = "wearos",
+                active = false,
+                myTeam = selectedTeam.name,
+            )
+        }
+        if (!syncedGameId.isNullOrBlank() && syncedGameId != previousWatch) {
+            LiveViewSessionRegistrar.setActive(
+                context = context,
+                gameId = syncedGameId!!,
+                surface = "wearos",
+                active = true,
+                myTeam = selectedTeam.name,
+            )
+        }
+        registeredWatchSessionGameId = syncedGameId
+    }
+
     LaunchedEffect(syncedGameId, activeLiveScoreGameId, selectedTeam) {
         val gameId = syncedGameId ?: activeLiveScoreGameId
         if (!gameId.isNullOrBlank()) {

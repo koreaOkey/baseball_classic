@@ -252,6 +252,31 @@ class DeviceToken(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
 
+class LiveViewSession(Base):
+    """토글 기반 경기 관람 집계 세션.
+
+    device_tokens 는 푸시 송신 대상이고, live_view_sessions 는 운영 모니터링용
+    활성 관람 surface/person 집계 원천이다.
+    """
+
+    __tablename__ = "live_view_sessions"
+    __table_args__ = (
+        UniqueConstraint("game_id", "user_key", "surface", name="uq_live_view_session_surface"),
+        Index("idx_live_view_sessions_game_active", "game_id", "active"),
+        Index("idx_live_view_sessions_updated_at", "updated_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    game_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    surface: Mapped[str] = mapped_column(String(16), nullable=False)
+    token_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    my_team: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class TeamSubscriptionToken(Base):
     """응원팀 단위 글로벌 푸시 구독.
 

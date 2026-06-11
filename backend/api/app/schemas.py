@@ -320,6 +320,15 @@ class DeviceTokenRequest(BaseModel):
     is_sandbox: bool = Field(default=False)
 
 
+class LiveViewSessionRequest(BaseModel):
+    game_id: str = Field(min_length=1, max_length=64)
+    user_key: str = Field(min_length=1, max_length=128)
+    surface: Literal["ios", "android", "watchos", "wearos"]
+    token_key: str | None = Field(default=None, max_length=256)
+    my_team: str | None = Field(default=None, max_length=64)
+    active: bool = True
+
+
 class LiveActivityTokenRequest(BaseModel):
     token: str = Field(min_length=1, max_length=256)
     game_id: str = Field(min_length=1, max_length=64)
