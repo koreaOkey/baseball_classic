@@ -122,6 +122,9 @@ fun LiveGameScreen(
     var selectedInningNumber by remember(gameId) { mutableStateOf<Int?>(null) }
     var hasManualInningSelection by remember(gameId) { mutableStateOf(false) }
     var isScoreFilterActive by remember(gameId) { mutableStateOf(false) }
+    var backfilledEvents by remember(gameId) { mutableStateOf<List<BackendGamesRepository.LiveEvent>>(emptyList()) }
+    var loadedEventFilterKeys by remember(gameId) { mutableStateOf<Set<String>>(emptySet()) }
+    var loadingEventFilterKey by remember(gameId) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(gameState?.inning) {
         val inning = gameState?.inning ?: return@LaunchedEffect
@@ -130,15 +133,27 @@ fun LiveGameScreen(
         if (n > 0) selectedInningNumber = n
     }
 
+    val allEvents = remember(events, backfilledEvents) {
+        (events + backfilledEvents)
+            .distinctBy { it.cursor }
+            .sortedByDescending { it.cursor }
+    }
+
+    val selectedEventFilterKey = when {
+        isScoreFilterActive -> "score"
+        selectedInningNumber != null -> "inning:${selectedInningNumber}"
+        else -> null
+    }
+
     val filteredEvents = run {
         if (isScoreFilterActive) {
-            return@run events.filter { event ->
+            return@run allEvents.filter { event ->
                 val t = event.type.uppercase()
                 t == "SCORE" || t == "SAC_FLY_SCORE"
             }
         }
-        val n = selectedInningNumber ?: return@run events
-        events.filter { event ->
+        val n = selectedInningNumber ?: return@run allEvents
+        allEvents.filter { event ->
             val inn = event.inning ?: return@filter false
             inningNumber(inn) == n
         }
@@ -249,6 +264,43 @@ fun LiveGameScreen(
         }
     }
 
+    LaunchedEffect(gameId, selectedEventFilterKey) {
+        val targetGameId = gameId ?: return@LaunchedEffect
+        val key = selectedEventFilterKey ?: return@LaunchedEffect
+        if (BuildConfig.DEBUG && targetGameId == "debug-watch-sync-test") return@LaunchedEffect
+        if (loadedEventFilterKeys.contains(key)) return@LaunchedEffect
+
+        loadingEventFilterKey = key
+        val fetched = withContext(Dispatchers.IO) {
+            val items = mutableListOf<BackendGamesRepository.LiveEvent>()
+            var after = 0L
+            repeat(10) {
+                val page = BackendGamesRepository.fetchGameEvents(
+                    gameId = targetGameId,
+                    after = after,
+                    limit = 200,
+                    inningNumber = if (key.startsWith("inning:")) key.removePrefix("inning:").toIntOrNull() else null,
+                    scoringOnly = key == "score",
+                ) ?: return@withContext null
+                items.addAll(page.items)
+                val next = page.nextCursor ?: return@withContext items
+                if (next <= after) return@withContext items
+                after = next
+            }
+            items
+        }
+
+        if (fetched != null) {
+            backfilledEvents = (fetched + backfilledEvents)
+                .distinctBy { it.cursor }
+                .sortedByDescending { it.cursor }
+            loadedEventFilterKeys = loadedEventFilterKeys + key
+        }
+        if (loadingEventFilterKey == key) {
+            loadingEventFilterKey = null
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -291,11 +343,11 @@ fun LiveGameScreen(
                 verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
             ) {
                 item {
-                    ScoreboardCard(state = state, latestEvent = events.firstOrNull())
+                    ScoreboardCard(state = state, latestEvent = allEvents.firstOrNull())
                 }
 
                 item {
-                    BaseballFieldCard(state = state, latestEvent = events.firstOrNull(), lineup = currentLineup)
+                    BaseballFieldCard(state = state, latestEvent = allEvents.firstOrNull(), lineup = currentLineup)
                 }
 
                 item {
@@ -317,7 +369,7 @@ fun LiveGameScreen(
                 }
 
                 item {
-                    CurrentMatchupCard(state = state, latestEvent = events.firstOrNull())
+                    CurrentMatchupCard(state = state, latestEvent = allEvents.firstOrNull())
                 }
 
                 item {
@@ -331,7 +383,7 @@ fun LiveGameScreen(
 
                 if (filteredEvents.isEmpty()) {
                     item {
-                        EmptyInningEventCard()
+                        EmptyInningEventCard(isLoading = loadingEventFilterKey == selectedEventFilterKey)
                     }
                 } else {
                     itemsIndexed(filteredAtBats, key = { _, g -> g.id }) { index, group ->
@@ -383,6 +435,7 @@ private fun DetailTopBar(
 
             WatchSyncBadge(
                 gameId = gameId,
+                gameStatus = state?.status,
                 syncedGameId = syncedGameId,
                 onSetSyncedGame = onSetSyncedGame
             )
@@ -624,43 +677,60 @@ private fun BaseballFieldCard(
                 contentScale = ContentScale.Crop
             )
 
-            FieldLabel(lineup?.leftFielder, FieldPositions.leftField, w, h)
-            FieldLabel(lineup?.centerFielder, FieldPositions.centerField, w, h)
-            FieldLabel(lineup?.rightFielder, FieldPositions.rightField, w, h)
-            FieldLabel(lineup?.shortstop, FieldPositions.shortstop, w, h)
-            FieldLabel(lineup?.secondBaseman, FieldPositions.secondBaseman, w, h)
-            FieldLabel(lineup?.thirdBaseman, FieldPositions.thirdBaseman, w, h)
-            FieldLabel(lineup?.firstBaseman, FieldPositions.firstBaseman, w, h)
-            FieldLabel(lineup?.catcher, FieldPositions.catcher, w, h)
+            val hasLineupLabels = lineup?.hasDefensiveLabels == true
+            val showPregamePlaceholder = state.status == GameStatus.SCHEDULED && !hasLineupLabels
 
-            val pitcherName = displayPitcher(state, latestEvent, placeholder = "")
-            if (pitcherName.isNotEmpty()) {
-                AtFieldPosition(FieldPositions.pitcher, w, h) {
-                    PositionPill(text = pitcherName, modifier = Modifier, highlighted = false)
-                }
-            }
+            if (showPregamePlaceholder) {
+                Text(
+                    text = "경기 시작 전입니다.",
+                    style = AppFont.bodyBold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = AppSpacing.xl)
+                        .background(Color.Black.copy(alpha = 0.42f), AppShapes.pill)
+                        .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.sm)
+                )
+            } else {
+                FieldLabel(lineup?.leftFielder, FieldPositions.leftField, w, h)
+                FieldLabel(lineup?.centerFielder, FieldPositions.centerField, w, h)
+                FieldLabel(lineup?.rightFielder, FieldPositions.rightField, w, h)
+                FieldLabel(lineup?.shortstop, FieldPositions.shortstop, w, h)
+                FieldLabel(lineup?.secondBaseman, FieldPositions.secondBaseman, w, h)
+                FieldLabel(lineup?.thirdBaseman, FieldPositions.thirdBaseman, w, h)
+                FieldLabel(lineup?.firstBaseman, FieldPositions.firstBaseman, w, h)
+                FieldLabel(lineup?.catcher, FieldPositions.catcher, w, h)
 
-            val batterName = displayBatter(state, latestEvent, placeholder = "")
-            if (batterName.isNotEmpty()) {
-                AtFieldPosition(FieldPositions.batter, w, h) {
-                    PositionPill(text = batterName, modifier = Modifier, highlighted = true)
+                val pitcherName = displayPitcher(state, latestEvent, placeholder = "")
+                if (pitcherName.isNotEmpty()) {
+                    AtFieldPosition(FieldPositions.pitcher, w, h) {
+                        PositionPill(text = pitcherName, modifier = Modifier, highlighted = false)
+                    }
                 }
-            }
 
-            val inferredRunners = FieldRunners.from(state, latestEvent, lineup)
-            if (state.baseFirst) {
-                AtFieldPosition(FieldPositions.firstBase, w, h) {
-                    PositionPill(text = inferredRunners.first ?: "1루", modifier = Modifier, highlighted = true)
+                val batterName = displayBatter(state, latestEvent, placeholder = "")
+                if (batterName.isNotEmpty()) {
+                    AtFieldPosition(FieldPositions.batter, w, h) {
+                        PositionPill(text = batterName, modifier = Modifier, highlighted = true)
+                    }
                 }
-            }
-            if (state.baseSecond) {
-                AtFieldPosition(FieldPositions.secondBase, w, h) {
-                    PositionPill(text = inferredRunners.second ?: "2루", modifier = Modifier, highlighted = true)
+
+                val inferredRunners = FieldRunners.from(state, latestEvent, lineup)
+                if (state.baseFirst) {
+                    AtFieldPosition(FieldPositions.firstBase, w, h) {
+                        PositionPill(text = inferredRunners.first ?: "1루", modifier = Modifier, highlighted = true)
+                    }
                 }
-            }
-            if (state.baseThird) {
-                AtFieldPosition(FieldPositions.thirdBase, w, h) {
-                    PositionPill(text = inferredRunners.third ?: "3루", modifier = Modifier, highlighted = true)
+                if (state.baseSecond) {
+                    AtFieldPosition(FieldPositions.secondBase, w, h) {
+                        PositionPill(text = inferredRunners.second ?: "2루", modifier = Modifier, highlighted = true)
+                    }
+                }
+                if (state.baseThird) {
+                    AtFieldPosition(FieldPositions.thirdBase, w, h) {
+                        PositionPill(text = inferredRunners.third ?: "3루", modifier = Modifier, highlighted = true)
+                    }
                 }
             }
         }
@@ -681,6 +751,18 @@ data class FieldLineup(
     val secondRunner: String? = null,
     val thirdRunner: String? = null,
 ) {
+    val hasDefensiveLabels: Boolean
+        get() = listOf(
+            leftFielder,
+            centerFielder,
+            rightFielder,
+            shortstop,
+            secondBaseman,
+            thirdBaseman,
+            firstBaseman,
+            catcher,
+        ).any { !cleanPlayerName(it).isNullOrEmpty() }
+
     companion object {
         /// 백엔드 응답의 라인업을 수비팀 기준으로 매핑.
         /// 이닝 "초"=홈수비, "말"=어웨이수비. 라이브 외(SCHEDULED "경기전" 등)는 1회초가
@@ -794,9 +876,9 @@ private fun BoxWithConstraintsScope.FieldLabel(
     w: androidx.compose.ui.unit.Dp,
     h: androidx.compose.ui.unit.Dp
 ) {
-    if (name.isNullOrEmpty()) return
+    val cleanName = cleanPlayerName(name) ?: return
     AtFieldPosition(point, w, h) {
-        PositionPill(text = name, modifier = Modifier, highlighted = false)
+        PositionPill(text = cleanName, modifier = Modifier, highlighted = false)
     }
 }
 
@@ -876,14 +958,14 @@ private fun InningTabs(
 }
 
 @Composable
-private fun EmptyInningEventCard() {
+private fun EmptyInningEventCard(isLoading: Boolean) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = AppShapes.lg,
         color = Gray900,
     ) {
         Text(
-            text = "해당 회 이벤트가 없습니다",
+            text = if (isLoading) "이벤트를 불러오는 중..." else "해당 회 이벤트가 없습니다",
             style = AppFont.bodyMedium,
             color = Gray400,
             textAlign = TextAlign.Center,
@@ -962,6 +1044,7 @@ private fun EventSummaryLine(event: BackendGamesRepository.LiveEvent) {
 @Composable
 private fun WatchSyncBadge(
     gameId: String?,
+    gameStatus: GameStatus?,
     syncedGameId: String?,
     onSetSyncedGame: (String?) -> Unit
 ) {
@@ -977,6 +1060,7 @@ private fun WatchSyncBadge(
     var visualOn by remember(gameId, syncedGameId) { mutableStateOf(isSyncedToCurrent) }
     var showEnableDialog by remember { mutableStateOf(false) }
     var showDisableDialog by remember { mutableStateOf(false) }
+    var showGameNotStartedDialog by remember { mutableStateOf(false) }
     var isAdLoading by remember { mutableStateOf(false) }
 
     Surface(
@@ -1008,6 +1092,11 @@ private fun WatchSyncBadge(
                     checked = visualOn,
                     onCheckedChange = { requested ->
                         if (isAdLoading) return@Switch
+                        if (requested && gameStatus != GameStatus.LIVE) {
+                            visualOn = isSyncedToCurrent
+                            showGameNotStartedDialog = true
+                            return@Switch
+                        }
                         visualOn = requested
                         if (requested) showEnableDialog = true else showDisableDialog = true
                     },
@@ -1035,6 +1124,18 @@ private fun WatchSyncBadge(
                 Spacer(modifier = Modifier.width(AppSpacing.xs))
             }
         }
+    }
+
+    if (showGameNotStartedDialog) {
+        AlertDialog(
+            onDismissRequest = { showGameNotStartedDialog = false },
+            title = { Text(text = "경기 시작 전입니다.") },
+            confirmButton = {
+                TextButton(onClick = { showGameNotStartedDialog = false }) {
+                    Text(text = "확인")
+                }
+            }
+        )
     }
 
     if (showEnableDialog && gameId != null) {
@@ -1763,14 +1864,12 @@ private fun displayPitcher(
     event: BackendGamesRepository.LiveEvent?,
     placeholder: String = "-"
 ): String {
-    val direct = state.pitcher.trim()
-    if (direct.isNotEmpty()) return direct
-    val fromEvent = event?.pitcher?.trim().orEmpty()
-    if (fromEvent.isNotEmpty()) return fromEvent
+    cleanPlayerName(state.pitcher)?.let { return it }
+    cleanPlayerName(event?.pitcher)?.let { return it }
     // 라인업 공개 후 라이브 진입 전: 수비팀 선발투수로 폴백. FieldLineup.from 과 동일 규칙.
     val preferHome = !state.inning.contains("말")
-    val starter = if (preferHome) state.homeStartingPitcher?.trim() else state.awayStartingPitcher?.trim()
-    if (!starter.isNullOrEmpty()) return starter
+    val starter = if (preferHome) state.homeStartingPitcher else state.awayStartingPitcher
+    cleanPlayerName(starter)?.let { return it }
     return placeholder
 }
 
@@ -1779,10 +1878,14 @@ private fun displayBatter(
     event: BackendGamesRepository.LiveEvent?,
     placeholder: String = "-"
 ): String {
-    val direct = state.batter.trim()
-    if (direct.isNotEmpty()) return direct
-    val fromEvent = event?.batter?.trim().orEmpty()
-    return if (fromEvent.isNotEmpty()) fromEvent else placeholder
+    cleanPlayerName(state.batter)?.let { return it }
+    cleanPlayerName(event?.batter)?.let { return it }
+    return placeholder
+}
+
+private fun cleanPlayerName(name: String?): String? {
+    val value = name?.trim().orEmpty()
+    return value.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
 }
 
 private fun baseText(state: BackendGamesRepository.LiveGameState): String {

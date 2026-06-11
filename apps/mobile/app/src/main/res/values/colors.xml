@@ -9,5 +9,15 @@
     <color name="white">#FFFFFFFF</color>
     <color name="blue_500">#3B82F6</color>
     <color name="gray_950">#0A0A0B</color>
+    <color name="live_score_card">#111216</color>
+    <color name="live_score_border">#2B2F38</color>
+    <color name="live_score_recent_bg">#272112</color>
+    <color name="live_score_text_secondary">#B6BAC4</color>
+    <color name="live_score_yellow">#FACC15</color>
+    <color name="live_score_green">#22C55E</color>
+    <color name="live_score_red">#EF4444</color>
+    <color name="live_score_dot_empty">#3F4652</color>
+    <color name="live_score_base_empty">#252B35</color>
+    <color name="live_score_base_stroke">#050507</color>
+    <color name="live_score_home_base">#151922</color>
 </resources>
-

@@ -526,8 +526,20 @@ object BackendGamesRepository {
         }
     }
 
-    fun fetchGameEvents(gameId: String, after: Long, limit: Int = 50): LiveEventsPage? {
-        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games/$gameId/events?after=$after&limit=$limit"
+    fun fetchGameEvents(
+        gameId: String,
+        after: Long,
+        limit: Int = 50,
+        inningNumber: Int? = null,
+        scoringOnly: Boolean = false
+    ): LiveEventsPage? {
+        val params = buildList {
+            add("after=$after")
+            add("limit=$limit")
+            if (inningNumber != null) add("inningNumber=$inningNumber")
+            if (scoringOnly) add("scoringOnly=true")
+        }.joinToString("&")
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games/$gameId/events?$params"
         return getJson(endpoint) { body ->
             val root = JSONObject(body)
             val array = root.optJSONArray("items") ?: JSONArray()

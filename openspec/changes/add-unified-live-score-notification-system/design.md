@@ -9,7 +9,7 @@
 - **Android 워치 ongoing 노티 shell** ([apps/watch/app/src/main/java/com/basehaptic/watch/MainActivity.kt:124-185](apps/watch/app/src/main/java/com/basehaptic/watch/MainActivity.kt#L124)): IMPORTANCE_LOW, OngoingActivity API 사용. **현재는 정적 "경기 관람 중" 텍스트**만 표시.
 - **Android 워치 wake/launch** ([apps/watch/app/src/main/java/com/basehaptic/watch/DataLayerListenerService.kt:402](apps/watch/app/src/main/java/com/basehaptic/watch/DataLayerListenerService.kt#L402) `wakeScreenForEvent`): 모든 이벤트에 wake lock + `FLAG_ACTIVITY_NEW_TASK`로 앱 자동 진입.
 - **Android Wear OS 타일** ([apps/watch/app/src/main/java/com/basehaptic/watch/tile/GameTileService.kt](apps/watch/app/src/main/java/com/basehaptic/watch/tile/GameTileService.kt)): 스코어/이닝/BSO 표시, 5초 freshness + 이벤트 트리거 갱신.
-- **현재 설정 토글**: `live_haptic_enabled`, `ball_strike_haptic_enabled`, `event_video_enabled` (이벤트 멀티 셀렉트 미구현)
+- **현재 설정 토글**: `live_haptic_enabled`, `lock_screen_live_score_enabled`, `ball_strike_haptic_enabled`, `event_video_enabled` (이벤트 멀티 셀렉트 미구현)
 
 **제약**: watchOS는 백그라운드에서 앱 강제 foreground launch 불가(Apple OS 정책). Android Wear OS는 가능하지만 손목 미착용 가능성 고려. 양 플랫폼 모두 노티는 같은 identifier 사용 시 in-place replace 가능. iPhone Live Activity는 ActivityKit으로만 갱신 가능(별도 채널).
 
@@ -19,7 +19,7 @@
 
 **Goals:**
 - 워치 홈/잠금 상태에서도 사용자가 손목 들면 즉시 최신 스코어 확인 가능
-- 폰 잠금 상태에서도 iOS·Android 동등하게 라이브 스코어 노출
+- 폰 잠금 상태에서도 iOS·Android 동등하게 라이브 스코어 노출(사용자 토글 기본 ON)
 - 사용자가 선택한 이벤트만 long-look expand로 강하게 알림. 미선택 이벤트는 ongoing 스코어 갱신으로만 조용히 처리
 - 워치+폰 동시 진동 등 중복 알림 제거 (한 이벤트 = 한 채널)
 - 이미 구현된 자산(iOS Live Activity, 워치 독립 APNs, 워치 fg 마스코트 애니, Android 워치 ongoing shell)을 그대로 활용·확장
@@ -51,10 +51,10 @@
 ### 2) 워치 우선 햅틱 정책 (suppress 룰)
 
 **선택**: 폰 측 햅틱·헤드업 노티 트리거 직전에 가드:
-- iOS 폰: `WCSession.default.isPaired && WCSession.default.isReachable` 체크. true면 햅틱·헤드업 suppress(단, Live Activity는 갱신).
-- Android 폰: `Wearable.NodeClient`로 연결된 watch node 존재 확인. 있으면 햅틱·헤드업 suppress(단, ongoing notification은 갱신).
+- iOS 폰: `WCSession.default.isPaired && WCSession.default.isReachable` 체크. true면 햅틱·헤드업 suppress(단, "잠금화면 경기 카드"가 켜져 있으면 Live Activity는 갱신).
+- Android 폰: `Wearable.NodeClient`로 연결된 watch node 존재 확인. 있으면 햅틱·헤드업 suppress(단, "잠금화면 경기 카드"가 켜져 있으면 ongoing notification은 갱신).
 
-워치 측은 기존대로 정상 발화. ongoing 스코어 갱신과 Live Activity 갱신은 항상 동작(시각 채널이라 시끄럽지 않음).
+워치 측은 기존대로 정상 발화. ongoing 스코어 갱신과 Live Activity 갱신은 기본 ON인 시각 채널로 동작하되, 사용자가 "잠금화면 경기 카드"를 끄면 폰 표시 채널은 즉시 제거한다.
 
 **근거**:
 - 워치 페어링된 사용자에게 폰+워치 동시 진동은 최대 불편 요소
@@ -66,7 +66,7 @@
 
 ### 3) "워치 OFF / 미착용" 상황은 폰도 발화 안 함 (시나리오 3)
 
-**선택**: 워치가 페어링되어 있으면 워치 측에서만 햅틱 발화. 워치가 OFF/잠금/미착용이면 폰도 햅틱 안 함(시나리오 3, 6). 단, **Live Activity·ongoing 스코어 갱신은 항상 양쪽 동작**.
+**선택**: 워치가 페어링되어 있으면 워치 측에서만 햅틱 발화. 워치가 OFF/잠금/미착용이면 폰도 햅틱 안 함(시나리오 3, 6). 단, **Live Activity·ongoing 스코어 갱신은 "잠금화면 경기 카드"가 켜진 경우 양쪽 동작**.
 
 **근거**: 손목 미착용 = 폰을 보고 있을 가능성 높음. 폰 fg면 in-app UI로 충분. 폰 bg면 Live Activity로 확인 가능. 굳이 진동까지 보낼 필요 없음.
 
@@ -88,6 +88,8 @@
 ### 5) Android 폰 Live Activity = Custom ongoing notification + 잠금화면 노출
 
 **선택**: Android는 ActivityKit 같은 OS API 없음. `NotificationCompat.Builder` + `setOngoing(true)` + custom RemoteViews(BigContentView)로 잠금화면에 스코어/이닝/BSO 노출. Category `MSG`/`STATUS`. Same notification id로 in-place replace.
+
+오늘의 경기 카드에서 "잠금화면" 토글을 ON으로 전환할 때는 Android 잠금화면 경기 카드 전용 보상형 광고 게이트를 통과한다. 프로덕션 광고 단위 ID는 `ca-app-pub-7935544989894266/5260195991`이다.
 
 **근거**:
 - 이미 워치쪽 ongoing 패턴과 동일 → 코드 패턴 재사용
@@ -114,13 +116,13 @@
 
 **근거**: 큐잉은 폭탄 노티 위험·정보 가치 낮음. "지금 어떻게 됐지?" 알면 충분.
 
-### 9) ongoing 영역은 설정 UI 미노출
+### 9) "잠금화면 경기 카드" 토글로 폰 표시 채널 제어
 
-**선택**: 사용자 설정에는 "선택한 이벤트만 알림" 한 줄(이벤트 멀티 셀렉트)만 표시. ongoing 스코어 노티는 "항상 진행 중" 영역으로 시각적·문구적 분리, 토글 없음.
+**선택**: 오늘의 경기 카드 하단에는 "잠금화면"과 "Watch" 토글을 노출하고, 사용자 설정에는 "잠금화면 경기 카드" 토글과 "선택한 이벤트만 알림" 항목을 분리해 표시한다. iOS에서는 "잠금화면" 토글이 Live Activity를 제어하고, Android에서는 동일한 UX의 live_score ongoing notification을 제어한다. 기본값은 ON이다.
 
-**근거**: 사용자 멘탈 모델 단순화. ongoing은 라이브 경기 중 자연스러운 status indicator로 인식.
+**근거**: 사용자는 iOS 잠금화면 카드와 Android live_score ongoing notification을 같은 기능으로 인식한다. 반면 `live_haptic_enabled`는 강한 이벤트 알림/워치 햅틱 성격이므로 정보 표시 채널과 섞으면 OFF 의미가 불명확해진다.
 
-**Trade-off**: ongoing 자체 끄고 싶은 사용자 일부 있을 수 있음. → 기존 `live_haptic_enabled` 마스터 OFF로 우회 가능.
+**Trade-off**: 설정 항목이 하나 늘어난다. 대신 "점수 카드 보기"와 "이벤트 강한 알림 받기"를 분리해 플랫폼 간 UI와 사용자의 기대를 맞춘다.
 
 ## Risks / Trade-offs
 
@@ -134,7 +136,7 @@
 ## Migration Plan
 
 1. 백엔드: `user_preferences.preferred_event_types` 컬럼 추가(Supabase migration). 기본값 = 모든 이벤트 선택. push payload에 이벤트 타입이 이미 포함되어 있으면 재활용, 없으면 추가.
-2. iOS 폰·Android 폰 동시 배포: 설정 UI에 이벤트 멀티 셀렉트 추가, 워치 우선 햅틱 suppress 가드 추가, Android 폰 라이브 스코어 ongoing notification 신설.
+2. iOS 폰·Android 폰 동시 배포: 오늘의 경기 카드 하단에 "잠금화면"·"Watch" 토글 추가, 설정 UI에 "잠금화면 경기 카드" 토글과 이벤트 멀티 셀렉트 추가, 워치 우선 햅틱 suppress 가드 추가, Android 폰 라이브 스코어 ongoing notification 신설.
 3. iOS 워치·Android 워치 동시 배포: ongoing 노티 동적 콘텐츠 갱신, long-look expand 필터 가드 추가.
 4. 폰·워치 버전 mismatch 대응: 워치가 구버전이면 ongoing 정적 텍스트 유지. 폰이 구버전이면 워치만 신규 동작(폰은 기존 헤드업). 단방향 호환.
 5. 롤아웃: 내부 테스트 → 실기기 검증(iOS Live Activity + push 중복 여부 포함) → 점진 배포(staged rollout 옵션 검토).

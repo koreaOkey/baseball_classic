@@ -1,12 +1,12 @@
 ## ADDED Requirements
 
 ### Requirement: 워치 우선 햅틱 suppress
-iOS 폰은 페어링된 Apple Watch가 활성·도달 가능 상태일 때 햅틱·헤드업 노티를 발화하지 않아야 한다(MUST). 단, Live Activity 갱신은 항상 동작한다.
+iOS 폰은 페어링된 Apple Watch가 활성·도달 가능 상태일 때 햅틱·헤드업 노티를 발화하지 않아야 한다(MUST). 단, "잠금화면 경기 카드"가 켜져 있으면 Live Activity 갱신은 정상 동작한다.
 
 #### Scenario: 워치 활성 시 폰 햅틱 suppress
 - **GIVEN** 폰이 페어링된 Apple Watch와 연결되어 활성 상태일 때
 - **WHEN** 선택 이벤트가 발생하면
-- **THEN** 폰은 햅틱·헤드업 노티를 발화하지 않고 Live Activity만 갱신된다
+- **THEN** 폰은 햅틱·헤드업 노티를 발화하지 않고 "잠금화면 경기 카드"가 켜진 경우 Live Activity만 갱신된다
 
 #### Scenario: 워치 비활성 시 폰 발화
 - **GIVEN** 폰이 워치와 페어링되지 않았거나 워치가 비활성 상태일 때
@@ -14,7 +14,17 @@ iOS 폰은 페어링된 Apple Watch가 활성·도달 가능 상태일 때 햅�
 - **THEN** 폰은 헤드업 노티와 햅틱을 정상 발화한다
 
 ### Requirement: 사용자 이벤트 선택 UI
-설정 화면에 "선택한 이벤트만 알림" 항목을 노출하고 사용자가 SCORE·HOMERUN·HIT·WALK·STEAL 등 이벤트 타입을 멀티 셀렉트로 지정할 수 있어야 한다(MUST). Live Activity·ongoing 스코어 노티는 설정 UI에 노출하지 않는다.
+오늘의 경기 카드 하단에 "잠금화면" 토글과 "Watch" 토글을 노출하고, 설정 화면에도 "잠금화면 경기 카드" 토글과 "선택한 이벤트만 알림" 항목을 노출해야 한다(MUST). "잠금화면" 및 "잠금화면 경기 카드"는 Live Activity 표시 여부를 제어하고, "Watch"는 워치 동기화 여부를 제어한다. "선택한 이벤트만 알림"은 SCORE·HOMERUN·HIT·WALK·STEAL 등 강한 이벤트 알림 타입을 멀티 셀렉트로 지정한다.
+
+#### Scenario: 오늘의 경기 카드에서 토글 제어
+- **GIVEN** 오늘의 경기 카드가 표시된 상태에서
+- **WHEN** 사용자가 카드 하단의 "잠금화면" 또는 "Watch" 토글을 누르면
+- **THEN** 해당 경기의 Live Activity 또는 워치 동기화 상태가 즉시 ON/OFF로 전환되고 카드 하단 토글 상태에 반영된다
+
+#### Scenario: 잠금화면 경기 카드 OFF
+- **GIVEN** Live Activity가 표시된 상태에서
+- **WHEN** 사용자가 설정 화면에서 "잠금화면 경기 카드"를 끄면
+- **THEN** 기존 Live Activity가 즉시 종료되고 이후 같은 경기의 상태 갱신으로 다시 시작되지 않는다
 
 #### Scenario: 이벤트 선택 저장·반영
 - **WHEN** 사용자가 설정 화면에서 이벤트 타입을 선택·해제하고 저장하면
@@ -23,7 +33,7 @@ iOS 폰은 페어링된 Apple Watch가 활성·도달 가능 상태일 때 햅�
 ## MODIFIED Requirements
 
 ### Requirement: 푸시 알림
-LIVE 전환 등 주요 이벤트를 푸시 알림으로 전달해야 한다(SHOULD). 단, 폰 앱이 foreground 상태이거나 페어링된 Apple Watch가 활성 상태인 경우 헤드업 노티는 suppress 한다.
+LIVE 전환 등 주요 이벤트를 푸시 알림으로 전달해야 한다(MUST). 단, 폰 앱이 foreground 상태이거나 페어링된 Apple Watch가 활성 상태인 경우 헤드업 노티는 suppress 한다.
 
 #### Scenario: LIVE 전환 알림
 - **GIVEN** 관심 팀 경기가 LIVE로 전환되었을 때

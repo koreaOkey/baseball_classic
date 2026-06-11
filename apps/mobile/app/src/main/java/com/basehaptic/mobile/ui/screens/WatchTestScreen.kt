@@ -41,8 +41,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.basehaptic.mobile.ui.components.BannerAd
+import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.EventType
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.push.LiveScoreNotificationManager
 import com.basehaptic.mobile.ui.theme.AppEventColors
 import com.basehaptic.mobile.ui.theme.AppFont
 import com.basehaptic.mobile.ui.theme.AppShapes
@@ -276,6 +279,61 @@ fun WatchTestScreen(
         addLog("[CHEER] ${team.teamName} 응원 화면 테스트 전송")
     }
 
+    fun postLiveScorePreview(alert: Boolean = false) {
+        val homeTeam = Team.fromString(gameState.homeTeam).takeIf { it != Team.NONE } ?: Team.KIA
+        val awayTeam = Team.fromString(gameState.awayTeam).takeIf { it != Team.NONE } ?: Team.SSG
+        val eventType = if (alert) "SCORE" else null
+        val eventText = if (alert) "${gameState.batter} 적시타 · 1점 추가" else null
+        val nextState = if (alert) {
+            if (gameState.inning.contains("초")) {
+                gameState.copy(awayScore = gameState.awayScore + 1, baseThird = true)
+            } else {
+                gameState.copy(homeScore = gameState.homeScore + 1, baseThird = true)
+            }
+        } else {
+            gameState
+        }
+        if (alert) {
+            gameState = nextState
+        }
+        val previewState = BackendGamesRepository.LiveGameState(
+            gameId = "live_score_preview",
+            homeTeam = homeTeam.name,
+            awayTeam = awayTeam.name,
+            homeTeamId = homeTeam,
+            awayTeamId = awayTeam,
+            homeScore = nextState.homeScore,
+            awayScore = nextState.awayScore,
+            inning = nextState.inning,
+            status = GameStatus.LIVE,
+            ball = nextState.ball.coerceIn(0, 3),
+            strike = nextState.strike.coerceIn(0, 2),
+            out = nextState.out.coerceIn(0, 2),
+            baseFirst = nextState.baseFirst,
+            baseSecond = nextState.baseSecond,
+            baseThird = nextState.baseThird,
+            pitcher = nextState.pitcher,
+            batter = nextState.batter,
+            pitcherPitchCount = nextState.pitchCount,
+            lastEventType = eventType
+        )
+        val posted = LiveScoreNotificationManager.post(
+            context = context,
+            state = previewState,
+            latestEventType = eventType,
+            latestEventDescription = eventText
+        )
+        addLog(
+            when {
+                !LiveScoreNotificationManager.isLockScreenCardEnabled(context) ->
+                    "[LIVE_SCORE] 잠금화면 경기 카드 설정이 꺼져 있어 게시하지 않음"
+                posted && alert -> "[LIVE_SCORE] 득점 강조 알림 갱신"
+                posted -> "[LIVE_SCORE] 알림 미리보기 시작"
+                else -> "[LIVE_SCORE] 알림 권한이 없어 게시하지 못함"
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             Row(
@@ -430,6 +488,60 @@ fun WatchTestScreen(
                                 color = teamTheme.primary,
                                 trackColor = Gray700
                             )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Surface(
+                    shape = AppShapes.md,
+                    color = Gray900,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                        Text("라이브 스코어 알림 미리보기", style = AppFont.bodyBold, color = Gray300)
+                        Spacer(Modifier.height(AppSpacing.xs))
+                        Text(
+                            "Android 잠금화면·알림창에서 iOS Live Activity와 같은 정보 카드로 표시합니다.",
+                            style = AppFont.caption,
+                            color = Gray500
+                        )
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                            Button(
+                                onClick = { postLiveScorePreview(alert = false) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(AppSpacing.buttonHeight),
+                                colors = ButtonDefaults.buttonColors(containerColor = teamTheme.primary),
+                                shape = AppShapes.sm
+                            ) {
+                                Text("Live Score 시작", style = AppFont.bodyBold)
+                            }
+                            Button(
+                                onClick = { postLiveScorePreview(alert = true) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(AppSpacing.buttonHeight),
+                                colors = ButtonDefaults.buttonColors(containerColor = Yellow400),
+                                shape = AppShapes.sm
+                            ) {
+                                Text("득점 강조", color = Color.Black, style = AppFont.bodyBold)
+                            }
+                        }
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        OutlinedButton(
+                            onClick = {
+                                LiveScoreNotificationManager.remove(context)
+                                addLog("[LIVE_SCORE] 미리보기 알림 제거")
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(AppSpacing.buttonHeight),
+                            shape = AppShapes.sm
+                        ) {
+                            Text("Live Score 종료", color = Color.White, style = AppFont.bodyBold)
                         }
                     }
                 }

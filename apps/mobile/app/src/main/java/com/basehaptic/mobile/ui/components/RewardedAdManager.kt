@@ -20,12 +20,16 @@ object RewardedAdManager {
 
     private const val THEME_STORE_AD_UNIT_PROD = "ca-app-pub-7935544989894266/3246911798"
     private const val WATCH_SYNC_AD_UNIT_PROD = "ca-app-pub-7935544989894266/8231864339"
+    private const val LIVE_SCORE_AD_UNIT_PROD = "ca-app-pub-7935544989894266/5260195991"
 
     val THEME_STORE_AD_UNIT: String =
         if (BuildConfig.DEBUG) TEST_AD_UNIT_ID else THEME_STORE_AD_UNIT_PROD
 
     val WATCH_SYNC_AD_UNIT: String =
         if (BuildConfig.DEBUG) TEST_AD_UNIT_ID else WATCH_SYNC_AD_UNIT_PROD
+
+    val LIVE_SCORE_AD_UNIT: String =
+        if (BuildConfig.DEBUG) TEST_AD_UNIT_ID else LIVE_SCORE_AD_UNIT_PROD
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()

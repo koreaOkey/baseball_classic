@@ -39,6 +39,7 @@ import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.auth.SupabaseClientProvider
 import io.github.jan.supabase.auth.handleDeeplinks
 import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.LiveScoreAdLedger
 import com.basehaptic.mobile.data.WatchSyncAdLedger
 import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
@@ -49,6 +50,7 @@ import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.data.model.ThemeStore
 import com.basehaptic.mobile.data.ThemeRepository
 import com.basehaptic.mobile.push.BaseHapticMessagingService
+import com.basehaptic.mobile.push.LiveScoreNotificationManager
 import com.basehaptic.mobile.push.NotificationIntentBus
 import com.basehaptic.mobile.push.PushSetup
 import com.basehaptic.mobile.push.TeamSubscriptionRegistrar
@@ -316,11 +318,15 @@ fun BaseHapticApp(
     var activeCheerTheme by remember { mutableStateOf(initialActiveCheerTheme) }
     var selectedGameId by remember { mutableStateOf<String?>(null) }
     var syncedGameId by remember { mutableStateOf<String?>(null) }
+    var activeLiveScoreGameId by remember { mutableStateOf<String?>(null) }
     var showWatchSyncDialog by remember { mutableStateOf(false) }
+    var showLiveScoreDialog by remember { mutableStateOf(false) }
+    var showGameNotStartedDialog by remember { mutableStateOf(false) }
     var pendingWatchSyncGameId by remember { mutableStateOf<String?>(null) }
     var pendingWatchSyncNavigateToLive by remember { mutableStateOf(false) }
     var pendingWatchSyncHomeTeam by remember { mutableStateOf("") }
     var pendingWatchSyncAwayTeam by remember { mutableStateOf("") }
+    var pendingLiveScoreGame by remember { mutableStateOf<Game?>(null) }
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
     val autoPromptedLiveGames = remember { mutableStateMapOf<String, Boolean>() }
     var unlockedThemeIds by remember { mutableStateOf(initialUnlockedThemeIds) }
@@ -338,6 +344,10 @@ fun BaseHapticApp(
         awayTeam: String = "",
     ) {
         if (syncedGameId == gameId) return
+        if (!activeLiveScoreGameId.isNullOrBlank() && activeLiveScoreGameId != gameId) {
+            activeLiveScoreGameId = null
+            LiveScoreNotificationManager.remove(context)
+        }
         pendingWatchSyncGameId = gameId
         pendingWatchSyncNavigateToLive = navigateToLive
         pendingWatchSyncHomeTeam = homeTeam
@@ -369,6 +379,10 @@ fun BaseHapticApp(
 
         fun completeSync() {
             syncedGameId = gameId
+            if (!activeLiveScoreGameId.isNullOrBlank() && activeLiveScoreGameId != gameId) {
+                activeLiveScoreGameId = null
+                LiveScoreNotificationManager.remove(context)
+            }
             closeWatchSyncDialog()
             if (shouldNavigate && currentView != Screen.LiveGame) {
                 navigateTo(Screen.LiveGame)
@@ -406,6 +420,62 @@ fun BaseHapticApp(
         } else if (pendingWatchSyncGameId == gameId) {
             closeWatchSyncDialog()
         }
+    }
+
+    fun closeLiveScoreDialog() {
+        showLiveScoreDialog = false
+        pendingLiveScoreGame = null
+    }
+
+    fun confirmPendingLiveScore() {
+        val game = pendingLiveScoreGame ?: run {
+            closeLiveScoreDialog()
+            return
+        }
+
+        fun completeLiveScoreStart() {
+            if (!syncedGameId.isNullOrBlank() && syncedGameId != game.id) {
+                syncedGameId = null
+            }
+            context.getSharedPreferences(USER_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, true)
+                .apply()
+            activeLiveScoreGameId = game.id
+            closeLiveScoreDialog()
+        }
+
+        if (LiveScoreAdLedger.hasViewed(context, game.id)) {
+            completeLiveScoreStart()
+            return
+        }
+
+        showLiveScoreDialog = false
+        RewardedAdManager.loadAndShowAd(
+            context = context,
+            adUnitId = RewardedAdManager.LIVE_SCORE_AD_UNIT,
+        ) { rewardEarned ->
+            if (rewardEarned) {
+                LiveScoreAdLedger.markViewed(context, game.id)
+            }
+            completeLiveScoreStart()
+        }
+    }
+
+    fun toggleHomeLiveScore(game: Game) {
+        if (activeLiveScoreGameId == game.id) {
+            activeLiveScoreGameId = null
+            LiveScoreNotificationManager.remove(context)
+            return
+        }
+
+        if (game.status != GameStatus.LIVE) {
+            showGameNotStartedDialog = true
+            return
+        }
+
+        pendingLiveScoreGame = game
+        showLiveScoreDialog = true
     }
 
     fun consumePendingWatchSyncResponse() {
@@ -544,14 +614,16 @@ fun BaseHapticApp(
     // 폴링 service 는 제거됨 (백엔드 visible push 가 응원팀 경기 시작 알림 대체).
     // Service 는 워치 관람 시작 시점부터만 가동 (아래 LaunchedEffect).
 
-    // Start/stop streaming via service when syncedGameId changes
-    LaunchedEffect(syncedGameId, selectedTeam) {
-        val gameId = syncedGameId
+    // Start/stop streaming via service when watch sync or live_score lockscreen card changes.
+    LaunchedEffect(syncedGameId, activeLiveScoreGameId, selectedTeam) {
+        val gameId = syncedGameId ?: activeLiveScoreGameId
         if (!gameId.isNullOrBlank()) {
             val intent = Intent(context, GameSyncForegroundService::class.java).apply {
                 action = GameSyncForegroundService.ACTION_START_STREAMING
                 putExtra(GameSyncForegroundService.EXTRA_GAME_ID, gameId)
                 putExtra(GameSyncForegroundService.EXTRA_SELECTED_TEAM, selectedTeam.name)
+                putExtra(GameSyncForegroundService.EXTRA_WATCH_SYNC_ENABLED, syncedGameId == gameId)
+                putExtra(GameSyncForegroundService.EXTRA_LIVE_SCORE_ENABLED, activeLiveScoreGameId == gameId)
             }
             context.startService(intent)
         } else {
@@ -625,19 +697,27 @@ fun BaseHapticApp(
                             todayGamesSnapshot
                         },
                         syncedGameId = syncedGameId,
-                        onSelectGame = { game ->
-                            selectedGameId = game.id
-                            val isDebugDummy = BuildConfig.DEBUG && game.id == DEBUG_DUMMY_LIVE_GAME_ID
-                            if (!isDebugDummy && game.status == GameStatus.LIVE && syncedGameId != game.id) {
+                        activeLiveScoreGameId = activeLiveScoreGameId,
+                        onToggleWatchSync = { game ->
+                            if (syncedGameId == game.id) {
+                                syncedGameId = null
+                            } else if (game.status != GameStatus.LIVE) {
+                                showGameNotStartedDialog = true
+                            } else {
                                 requestWatchSyncPrompt(
                                     gameId = game.id,
-                                    navigateToLive = true,
+                                    navigateToLive = false,
                                     homeTeam = game.homeTeamId.teamName,
                                     awayTeam = game.awayTeamId.teamName,
                                 )
-                            } else {
-                                navigateTo(Screen.LiveGame)
                             }
+                        },
+                        onToggleLiveScore = { game ->
+                            toggleHomeLiveScore(game)
+                        },
+                        onSelectGame = { game ->
+                            selectedGameId = game.id
+                            navigateTo(Screen.LiveGame)
                         }
                     )
                     Screen.LiveGame -> LiveGameScreen(
@@ -772,6 +852,44 @@ fun BaseHapticApp(
                         }
                     ) {
                         Text("취소")
+                    }
+                }
+            )
+        }
+
+        if (showLiveScoreDialog && pendingLiveScoreGame != null) {
+            AlertDialog(
+                onDismissRequest = { closeLiveScoreDialog() },
+                title = { Text(text = "잠금화면에서 보시겠습니까?") },
+                text = { Text(text = "광고 관람 후 경기 확인 가능합니다.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            confirmPendingLiveScore()
+                        }
+                    ) {
+                        Text("확인")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            closeLiveScoreDialog()
+                        }
+                    ) {
+                        Text("취소")
+                    }
+                }
+            )
+        }
+
+        if (showGameNotStartedDialog) {
+            AlertDialog(
+                onDismissRequest = { showGameNotStartedDialog = false },
+                title = { Text(text = "경기 시작 전입니다.") },
+                confirmButton = {
+                    TextButton(onClick = { showGameNotStartedDialog = false }) {
+                        Text("확인")
                     }
                 }
             )

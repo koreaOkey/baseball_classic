@@ -50,10 +50,15 @@ data class AtBatGroup(
         fun group(events: List<LiveEvent>): List<AtBatGroup> {
             if (events.isEmpty()) return emptyList()
 
-            // atBatId 기준 묶기. null 인 이벤트는 cursor 를 폴백 키로 써서 각자 단일 그룹.
+            // atBatId 기준 묶기. 백엔드 atBatId 는 회차 숫자만 담을 수 있으므로 초/말 텍스트까지
+            // 포함해 공수교대 직후 같은 relayNo 가 다음 공격 카드와 섞이지 않게 한다.
             val buckets = LinkedHashMap<String, MutableList<LiveEvent>>()
             for (event in events) {
-                val key = event.atBatId ?: "__solo_${event.cursor}"
+                val key = if (event.atBatId != null && !event.inning.isNullOrEmpty()) {
+                    "${event.inning}:${event.atBatId}"
+                } else {
+                    "__solo_${event.cursor}"
+                }
                 buckets.getOrPut(key) { mutableListOf() }.add(event)
             }
 

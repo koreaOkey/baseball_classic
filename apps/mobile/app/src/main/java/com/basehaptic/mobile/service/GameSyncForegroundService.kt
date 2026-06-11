@@ -41,6 +41,8 @@ class GameSyncForegroundService : Service() {
 
         const val EXTRA_SELECTED_TEAM = "selected_team"
         const val EXTRA_GAME_ID = "game_id"
+        const val EXTRA_WATCH_SYNC_ENABLED = "watch_sync_enabled"
+        const val EXTRA_LIVE_SCORE_ENABLED = "live_score_enabled"
 
         private const val NOTIFICATION_CHANNEL_ID = "game_sync_channel"
         private const val NOTIFICATION_ID = 1001
@@ -51,6 +53,8 @@ class GameSyncForegroundService : Service() {
 
     private var selectedTeam: Team = Team.NONE
     private var syncedGameId: String? = null
+    private var watchSyncEnabled: Boolean = true
+    private var liveScoreEnabled: Boolean = true
     private var lastNotificationText: String? = null
 
     override fun onCreate() {
@@ -72,9 +76,15 @@ class GameSyncForegroundService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
+                watchSyncEnabled = intent.getBooleanExtra(EXTRA_WATCH_SYNC_ENABLED, true)
+                liveScoreEnabled = intent.getBooleanExtra(EXTRA_LIVE_SCORE_ENABLED, true)
+                if (!watchSyncEnabled && !liveScoreEnabled) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 syncedGameId = gameId
 
-                val initialText = "워치로 관람 중..."
+                val initialText = if (watchSyncEnabled) "워치로 관람 중..." else "잠금화면 경기 카드 업데이트 중..."
                 lastNotificationText = initialText
                 val notification = buildNotification(initialText)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -93,6 +103,9 @@ class GameSyncForegroundService : Service() {
                 streamingJob?.cancel()
                 streamingJob = null
                 syncedGameId = null
+                watchSyncEnabled = false
+                liveScoreEnabled = false
+                com.basehaptic.mobile.push.LiveScoreNotificationManager.remove(applicationContext)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                 } else {
@@ -132,14 +145,16 @@ class GameSyncForegroundService : Service() {
 
             fun pushStateToWatch(state: BackendGamesRepository.LiveGameState) {
                 // 폰 라이브 스코어 ongoing notification (잠금화면·드로어 표시)
-                if (state.status == GameStatus.LIVE) {
-                    val latestForNoti = localEvents.firstOrNull()?.type ?: state.lastEventType
+                if (liveScoreEnabled && state.status == GameStatus.LIVE) {
+                    val latestEventForNoti = localEvents.firstOrNull()
+                    val latestForNoti = latestEventForNoti?.type ?: state.lastEventType
                     com.basehaptic.mobile.push.LiveScoreNotificationManager.post(
                         applicationContext,
                         state,
-                        latestForNoti
+                        latestForNoti,
+                        latestEventForNoti?.description
                     )
-                } else if (state.status == GameStatus.FINISHED) {
+                } else if (!liveScoreEnabled || state.status == GameStatus.FINISHED) {
                     com.basehaptic.mobile.push.LiveScoreNotificationManager.remove(applicationContext)
                 }
 
@@ -154,7 +169,11 @@ class GameSyncForegroundService : Service() {
                     ?.takeIf { it.isNotBlank() }
                     ?: state.homeTeam
                 if (awayMascot.isNotBlank() && homeMascot.isNotBlank()) {
-                    val notifText = "$awayMascot vs $homeMascot 경기 워치로 관람 중..."
+                    val notifText = if (watchSyncEnabled) {
+                        "$awayMascot vs $homeMascot 경기 워치로 관람 중..."
+                    } else {
+                        "$awayMascot vs $homeMascot 잠금화면 경기 카드 업데이트 중..."
+                    }
                     if (notifText != lastNotificationText) {
                         lastNotificationText = notifText
                         updateNotification(notifText)
@@ -179,7 +198,7 @@ class GameSyncForegroundService : Service() {
                     latestEventType.orEmpty()
                 ).joinToString("|")
 
-                if (signature != lastWatchSignature) {
+                if (watchSyncEnabled && signature != lastWatchSignature) {
                     val wasLive = lastWatchSignature.contains("|LIVE|")
                     WearGameSyncManager.sendGameData(
                         context = applicationContext,
@@ -229,6 +248,17 @@ class GameSyncForegroundService : Service() {
                         }
                         stopSelf()
                     }
+                } else if (!watchSyncEnabled && state.status == GameStatus.FINISHED) {
+                    syncedGameId = null
+                    streamingJob?.cancel()
+                    streamingJob = null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                    stopSelf()
                 }
             }
 
@@ -300,7 +330,7 @@ class GameSyncForegroundService : Service() {
                             is BackendGamesRepository.LiveStreamMessage.Events -> {
                                 applyIncomingEvents(
                                     incoming = message.items,
-                                    sendHaptics = hasConsumedInitialEventsSnapshot
+                                    sendHaptics = watchSyncEnabled && hasConsumedInitialEventsSnapshot
                                 )
                                 hasConsumedInitialEventsSnapshot = true
                             }
@@ -310,7 +340,7 @@ class GameSyncForegroundService : Service() {
                             }
 
                             is BackendGamesRepository.LiveStreamMessage.Update -> {
-                                applyIncomingEvents(message.events, sendHaptics = true)
+                                applyIncomingEvents(message.events, sendHaptics = watchSyncEnabled)
                                 message.state?.let { pushStateToWatch(it) }
                             }
 

@@ -31,7 +31,8 @@ struct WatchInstallCard: View {
                         enabled: true,
                         color: teamTheme.primary
                     ),
-                    secondary: nil
+                    secondary: nil,
+                    tertiary: nil
                 )
             case .pairedNoApp:
                 stateBody(
@@ -39,15 +40,22 @@ struct WatchInstallCard: View {
                     badgeColor: Self.warnRed,
                     badgeIcon: "exclamationmark",
                     title: "워치 앱 설치 필요",
-                    description: "Apple Watch앱에서 야구봄을 설치해 주세요.\n자동 설치가 켜져 있다면 잠시 후 자동으로 설치됩니다.",
+                    description: "워치가 없어도 iPhone에서 알림 미리보기를 먼저 확인할 수 있습니다.",
                     primary: ActionSpec(
+                        label: "워치 테스트",
+                        sfSymbol: "applewatch.radiowaves.left.and.right",
+                        action: onWatchTest,
+                        enabled: true,
+                        color: teamTheme.primary
+                    ),
+                    secondary: ActionSpec(
                         label: "연결 방법 상세 보기",
                         sfSymbol: "info.circle.fill",
                         action: { showInstructions = true },
                         enabled: true,
-                        color: teamTheme.primary
+                        color: .clear
                     ),
-                    secondary: nil
+                    tertiary: nil
                 )
             case .pairedNone:
                 stateBody(
@@ -55,15 +63,22 @@ struct WatchInstallCard: View {
                     badgeColor: AppColors.gray700,
                     badgeIcon: "exclamationmark",
                     title: "워치 페어링 필요",
-                    description: "iPhone에 Apple Watch를 먼저 페어링해 주세요.",
+                    description: "워치 연결 전에도 iPhone에서 라이브 스코어 알림 미리보기를 확인할 수 있습니다.",
                     primary: ActionSpec(
-                        label: "Watch 앱 열기",
-                        sfSymbol: "arrow.up.right.square.fill",
-                        action: onOpenWatchApp,
+                        label: "워치 테스트",
+                        sfSymbol: "applewatch.radiowaves.left.and.right",
+                        action: onWatchTest,
                         enabled: true,
                         color: teamTheme.primary
                     ),
                     secondary: ActionSpec(
+                        label: "Watch 앱 열기",
+                        sfSymbol: "arrow.up.right.square.fill",
+                        action: onOpenWatchApp,
+                        enabled: true,
+                        color: .clear
+                    ),
+                    tertiary: ActionSpec(
                         label: "연결 확인",
                         sfSymbol: "link",
                         action: onRecheck,
@@ -115,7 +130,8 @@ struct WatchInstallCard: View {
         title: String,
         description: String,
         primary: ActionSpec?,
-        secondary: ActionSpec?
+        secondary: ActionSpec?,
+        tertiary: ActionSpec?
     ) -> some View {
         VStack(spacing: 0) {
             HStack {
@@ -145,6 +161,10 @@ struct WatchInstallCard: View {
             }
             if let secondary = secondary {
                 secondaryButton(secondary)
+                    .padding(.top, AppSpacing.sm)
+            }
+            if let tertiary = tertiary {
+                secondaryButton(tertiary)
                     .padding(.top, AppSpacing.sm)
             }
         }

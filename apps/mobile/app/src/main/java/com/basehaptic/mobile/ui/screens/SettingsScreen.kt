@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.SportsBaseball
 import androidx.compose.material.icons.filled.Vibration
@@ -50,6 +51,7 @@ import androidx.compose.runtime.LaunchedEffect
 import com.basehaptic.mobile.BuildConfig
 import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.push.LiveScoreNotificationManager
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.components.WatchInstallCard
 import com.basehaptic.mobile.wear.WatchCompanionStatus
@@ -353,13 +355,43 @@ fun SettingsScreen(
             val prefs = remember {
                 context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
             }
+            var lockScreenCardEnabled by remember {
+                mutableStateOf(
+                    prefs.getBoolean(
+                        LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED,
+                        true
+                    )
+                )
+            }
+            SettingsItemWithSwitch(
+                icon = Icons.Default.Notifications,
+                title = "잠금화면 경기 카드",
+                subtitle = "경기 중 점수와 진행 상황을 잠금화면에서 보기",
+                checked = lockScreenCardEnabled,
+                onCheckedChange = {
+                    lockScreenCardEnabled = it
+                    prefs.edit()
+                        .putBoolean(LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, it)
+                        .apply()
+                    if (!it) {
+                        LiveScoreNotificationManager.remove(context)
+                    }
+                }
+            )
+        }
+
+        item {
+            val context = LocalContext.current
+            val prefs = remember {
+                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+            }
             var hapticEnabled by remember {
                 mutableStateOf(prefs.getBoolean("live_haptic_enabled", true))
             }
             SettingsItemWithSwitch(
                 icon = Icons.Default.Vibration,
-                title = "경기 라이브 알림",
-                subtitle = "실시간 경기 내용을 워치로 알림 받기",
+                title = "이벤트 강한 알림",
+                subtitle = "득점·홈런 등 선택한 이벤트를 워치 햅틱으로 받기",
                 checked = hapticEnabled,
                 onCheckedChange = {
                     hapticEnabled = it

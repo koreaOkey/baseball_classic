@@ -185,6 +185,7 @@ struct WatchTestScreen: View {
                         .padding(.bottom, AppSpacing.md)
 
                     scoreCard
+                    liveScorePreviewCard
                     autoSimulationCard
                     manualEventCard
                     pushSimulationCard
@@ -250,6 +251,171 @@ struct WatchTestScreen: View {
         .padding(AppSpacing.lg)
         .background(AppColors.gray900)
         .cornerRadius(AppRadius.lg)
+    }
+
+    // MARK: - Live Score Preview
+    private var liveScorePreviewCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("라이브 스코어 알림 미리보기")
+                .font(AppFont.bodyBold)
+                .foregroundColor(AppColors.gray300)
+
+            Text("iOS는 알림 내부 커스텀 카드가 제한되어 앱 안 미리보기와 기본 로컬 알림을 함께 확인합니다.")
+                .font(AppFont.caption)
+                .foregroundColor(AppColors.gray500)
+
+            iOSLiveScoreNotificationPreview(state: gameState)
+                .padding(.top, AppSpacing.xs)
+
+            HStack(spacing: AppSpacing.sm) {
+                Button {
+                    scheduleLiveScorePreviewNotification()
+                } label: {
+                    Text("iOS 알림 보기")
+                        .font(AppFont.bodyBold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: AppSpacing.buttonHeight)
+                        .background(teamTheme.primary)
+                        .cornerRadius(AppRadius.sm)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [LiveActivityManager.previewGameId])
+                    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [LiveActivityManager.previewGameId])
+                    addLog("[LIVE_SCORE] iOS 미리보기 알림 제거")
+                } label: {
+                    Text("알림 제거")
+                        .font(AppFont.bodyBold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: AppSpacing.buttonHeight)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppColors.gray600, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: AppSpacing.sm) {
+                Button {
+                    startLiveActivityPreview(alert: false)
+                } label: {
+                    Text("Live Activity 시작")
+                        .font(AppFont.bodyBold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: AppSpacing.buttonHeight)
+                        .background(AppColors.blue600)
+                        .cornerRadius(AppRadius.sm)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    startLiveActivityPreview(alert: true)
+                } label: {
+                    Text("득점 강조")
+                        .font(AppFont.bodyBold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: AppSpacing.buttonHeight)
+                        .background(AppColors.yellow500)
+                        .cornerRadius(AppRadius.sm)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                LiveActivityManager.shared.endPreviewActivities()
+                addLog("[LIVE_SCORE] Live Activity 미리보기 종료")
+            } label: {
+                Text("Live Activity 종료")
+                    .font(AppFont.bodyBold)
+                    .foregroundColor(AppColors.gray300)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: AppSpacing.buttonHeight)
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.sm).stroke(AppColors.gray600, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(AppSpacing.lg)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.md)
+    }
+
+    private func startLiveActivityPreview(alert: Bool) {
+        let eventType = alert ? "SCORE" : nil
+        let eventText = alert ? "\(gameState.batter) 적시타 · 1점 추가" : nil
+        var next = gameState
+        if alert {
+            next.homeScore += 1
+            next.baseThird = true
+            gameState = next
+        }
+        LiveActivityManager.shared.startPreviewActivity(
+            homeTeam: Team.fromString(next.homeTeam).rawValue,
+            awayTeam: Team.fromString(next.awayTeam).rawValue,
+            myTeam: selectedTeam == .none ? Team.fromString(next.homeTeam).rawValue : selectedTeam.rawValue,
+            state: liveActivityState(from: next, eventType: eventType, eventText: eventText),
+            alert: alert
+        )
+        addLog(alert ? "[LIVE_SCORE] Live Activity 득점 강조" : "[LIVE_SCORE] Live Activity 미리보기 시작")
+    }
+
+    private func liveActivityState(
+        from state: SimGameState,
+        eventType: String?,
+        eventText: String?
+    ) -> BaseballGameAttributes.ContentState {
+        BaseballGameAttributes.ContentState(
+            homeScore: state.homeScore,
+            awayScore: state.awayScore,
+            inning: state.inning,
+            ball: state.ball,
+            strike: state.strike,
+            out: state.out,
+            baseFirst: state.baseFirst,
+            baseSecond: state.baseSecond,
+            baseThird: state.baseThird,
+            pitcher: state.pitcher,
+            batter: state.batter,
+            status: "live",
+            lastEventType: eventType,
+            lastEventDescription: eventText,
+            highlightEventType: eventType,
+            highlightEventText: eventText
+        )
+    }
+
+    private func scheduleLiveScorePreviewNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            guard granted else {
+                DispatchQueue.main.async { addLog("[LIVE_SCORE] 알림 권한 거부됨") }
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = "야구봄 · 라이브 스코어"
+            content.subtitle = attackLabel(for: gameState)
+            content.body = "\(displayTeam(.fromString(gameState.awayTeam), fallback: gameState.awayTeam)) \(gameState.awayScore) : \(gameState.homeScore) \(displayTeam(.fromString(gameState.homeTeam), fallback: gameState.homeTeam)) · \(gameState.out)아웃 · \(baseText(for: gameState))"
+            content.sound = nil
+            content.userInfo = [
+                "game_id": LiveActivityManager.previewGameId,
+                "event_type": "SCORE",
+                "home_team": gameState.homeTeam,
+                "away_team": gameState.awayTeam,
+                "inning": gameState.inning
+            ]
+            let request = UNNotificationRequest(identifier: LiveActivityManager.previewGameId, content: content, trigger: nil)
+            center.add(request) { error in
+                DispatchQueue.main.async {
+                    if let error {
+                        addLog("[LIVE_SCORE] iOS 알림 실패: \(error.localizedDescription)")
+                    } else {
+                        addLog("[LIVE_SCORE] iOS 기본 알림 게시")
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Auto Simulation
@@ -623,4 +789,144 @@ struct WatchTestScreen: View {
         simTask?.cancel()
         addLog("자동 시뮬레이션 중단")
     }
+}
+
+private struct iOSLiveScoreNotificationPreview: View {
+    let state: SimGameState
+
+    private var awayTeam: Team { .fromString(state.awayTeam) }
+    private var homeTeam: Team { .fromString(state.homeTeam) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(attackLabel(for: state))
+                .font(AppFont.captionBold)
+                .foregroundColor(AppColors.yellow400)
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            Spacer().frame(height: AppSpacing.md)
+
+            HStack(alignment: .top, spacing: AppSpacing.sm) {
+                previewTeamBlock(team: awayTeam, fallbackName: state.awayTeam, score: state.awayScore)
+                VStack(spacing: 0) {
+                    previewBaseDiamond
+                        .frame(width: 86, height: 78)
+                    Spacer().frame(height: AppSpacing.sm)
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        previewCountDots(label: "B", value: state.ball, max: 3, activeColor: AppColors.green400)
+                        previewCountDots(label: "S", value: state.strike, max: 2, activeColor: AppColors.yellow400)
+                        previewCountDots(label: "O", value: state.out, max: 2, activeColor: AppColors.red500)
+                    }
+                }
+                .frame(width: 110)
+                previewTeamBlock(team: homeTeam, fallbackName: state.homeTeam, score: state.homeScore)
+            }
+
+            Spacer().frame(height: AppSpacing.sm)
+
+            Text("P \(state.pitcher)  |  B \(state.batter)")
+                .font(AppFont.microBold)
+                .foregroundColor(AppColors.gray400)
+                .lineLimit(1)
+
+            Text("최근: \(state.batter) 적시타 · 1점 추가")
+                .font(AppFont.captionBold)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, AppSpacing.md)
+                .padding(.vertical, AppSpacing.xs)
+                .background(AppColors.yellow500.opacity(0.16))
+                .cornerRadius(AppRadius.sm)
+                .padding(.top, AppSpacing.sm)
+        }
+        .padding(AppSpacing.lg)
+        .background(
+            LinearGradient(
+                colors: [
+                    AppColors.gray950,
+                    AppColors.gray900,
+                    AppColors.yellow500.opacity(0.10)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .cornerRadius(AppRadius.lg)
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppColors.gray800, lineWidth: 1))
+    }
+
+    private func previewTeamBlock(team: Team, fallbackName: String, score: Int) -> some View {
+        VStack(spacing: AppSpacing.xs) {
+            TeamLogo(team: team, size: 46)
+            Text(displayTeam(team, fallback: fallbackName))
+                .font(AppFont.bodyBold)
+                .foregroundColor(.white)
+                .lineLimit(1)
+            Text("\(score)")
+                .font(AppFont.h1)
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var previewBaseDiamond: some View {
+        Canvas { context, size in
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            drawBase(context: context, center: CGPoint(x: center.x, y: center.y - 18), occupied: state.baseSecond)
+            drawBase(context: context, center: CGPoint(x: center.x + 18, y: center.y), occupied: state.baseFirst)
+            drawBase(context: context, center: CGPoint(x: center.x - 18, y: center.y), occupied: state.baseThird)
+            drawBase(context: context, center: CGPoint(x: center.x, y: center.y + 18), occupied: false)
+        }
+    }
+
+    private func drawBase(context: GraphicsContext, center: CGPoint, occupied: Bool) {
+        let baseSize: CGFloat = 30
+        var path = Path()
+        path.move(to: CGPoint(x: center.x, y: center.y - baseSize / 2))
+        path.addLine(to: CGPoint(x: center.x + baseSize / 2, y: center.y))
+        path.addLine(to: CGPoint(x: center.x, y: center.y + baseSize / 2))
+        path.addLine(to: CGPoint(x: center.x - baseSize / 2, y: center.y))
+        path.closeSubpath()
+        context.fill(path, with: .color(occupied ? AppColors.yellow500 : AppColors.gray800))
+        context.stroke(path, with: .color(Color.black.opacity(0.36)), lineWidth: 1)
+    }
+
+    private func previewCountDots(label: String, value: Int, max: Int, activeColor: Color) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(AppFont.microBold)
+                .foregroundColor(AppColors.gray400)
+                .frame(width: 10, alignment: .leading)
+            ForEach(0..<max, id: \.self) { idx in
+                Circle()
+                    .fill(idx < value ? activeColor : AppColors.gray700)
+                    .frame(width: 8, height: 8)
+            }
+        }
+    }
+}
+
+private func displayTeam(_ team: Team, fallback: String) -> String {
+    team == .none ? fallback : team.teamName
+}
+
+private func attackLabel(for state: SimGameState) -> String {
+    let inning = state.inning.isEmpty ? "경기 중" : state.inning
+    if state.inning.contains("초") {
+        return "\(inning) · \(displayTeam(.fromString(state.awayTeam), fallback: state.awayTeam)) 공격"
+    }
+    if state.inning.contains("말") {
+        return "\(inning) · \(displayTeam(.fromString(state.homeTeam), fallback: state.homeTeam)) 공격"
+    }
+    return inning
+}
+
+private func baseText(for state: SimGameState) -> String {
+    let bases = [
+        state.baseFirst ? "1루" : nil,
+        state.baseSecond ? "2루" : nil,
+        state.baseThird ? "3루" : nil
+    ].compactMap { $0 }
+    return bases.isEmpty ? "주자 없음" : bases.joined(separator: "·")
 }

@@ -17,15 +17,19 @@
 - [ ] 2.3 푸시 노티 핸들러에 워치 활성 가드 추가: `WCSession.default.isPaired && WCSession.default.isReachable`이면 헤드업/햅틱 suppress, Live Activity·인앱 갱신만 수행
 - [ ] 2.4 폰 foreground 상태에서 헤드업 노티 suppress 확인 (`willPresent`에서 빈 옵션 반환)
 - [ ] 2.5 Live Activity가 활성인 동안 같은 정보의 push 헤드업 노출 여부 실기기 테스트 → 시각적 노이즈 발생 시 suppress 가드 추가
+- [x] 2.6 설정 화면에 "잠금화면 경기 카드" 토글 추가: OFF 시 기존 Live Activity 즉시 종료 및 이후 갱신 차단, ON 시 다음 동기화/푸시부터 재개
 
 ## 3. Android 폰 (mobile-android)
 
 - [ ] 3.1 설정 화면에 "선택한 이벤트만 알림" 멀티 셀렉트 추가, `preferred_event_types` 저장
-- [ ] 3.2 폰 라이브 스코어 ongoing notification 신규 구현: 같은 notification id로 in-place replace, `setOngoing(true)`, 잠금화면 가시성 채널 설정
-- [ ] 3.3 ongoing 콘텐츠에 스코어·이닝·BSO·최근 이벤트 1개 라인 포함
+- [x] 3.2 폰 라이브 스코어 ongoing notification 신규 구현: 같은 notification id로 in-place replace, `setOngoing(true)`, 잠금화면 가시성 채널 설정
+- [x] 3.3 ongoing 콘텐츠에 스코어·이닝·BSO·최근 이벤트 1개 라인 포함
 - [ ] 3.4 LIVE 진입/종료 시 ongoing notification 자동 게시/제거 라이프사이클 연결
 - [ ] 3.5 푸시 핸들러에 워치 노드 페어링·연결 가드 추가 (`Wearable.NodeClient`로 연결된 워치 노드 확인), 있으면 햅틱/헤드업 suppress
 - [ ] 3.6 폰 foreground 시 헤드업 노티 suppress 동작 확인
+- [x] 3.7 설정 화면에 "잠금화면 경기 카드" 토글 추가: Android에서는 live_score ongoing notification을 제어하고, OFF 시 기존 노티 즉시 제거 및 이후 게시 차단
+- [x] 3.8 오늘의 경기 카드 하단에 iOS와 동일한 "잠금화면"·"Watch" 토글 추가: Android에서는 잠금화면 토글이 live_score ongoing notification을 제어하고 Watch 토글이 워치 동기화를 제어
+- [x] 3.9 Android "잠금화면" 토글 ON 경로에 확인 팝업 + 전용 보상형 광고 단위 ID `ca-app-pub-7935544989894266/5260195991` 적용 및 경기별 시청 완료 기록 추가
 
 ## 4. iOS 워치 (watch-ios)
 

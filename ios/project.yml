@@ -48,10 +48,28 @@ targets:
           SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNucmFmcW9xcG10b2Fubm5ud2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMjQ5MjQsImV4cCI6MjA4NjkwMDkyNH0.ufw8jQw9K8vhn9lS_9JA7Yetdi_D_9_ZNpJeukx53bY
     dependencies:
       - target: BaseHapticWatch Watch App
+      - target: BaseHapticLiveActivity
+        embed: true
       - package: supabase-swift
         product: Supabase
       - package: GoogleMobileAds
         product: GoogleMobileAds
+
+  BaseHapticLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: liveactivity/BaseHapticLiveActivity
+      - path: shared/BaseHapticShared
+    settings:
+      base:
+        INFOPLIST_FILE: liveactivity/BaseHapticLiveActivity/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app.liveactivity
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: "YES"
+        DEVELOPMENT_TEAM: 8G4LG3694Q
 
   BaseHapticWatch Watch App:
     type: application
@@ -73,7 +91,4 @@ targets:
         Release:
           BACKEND_BASE_URL: https://baseballclassic-production.up.railway.app
 
-# BaseHapticLiveActivity 타겟은 현재 비활성.
-# 원본 pbxproj에 네이티브 타겟으로 등록된 적이 없고 소스 파일은 dead code 상태.
-# 추후 LiveActivity 위젯을 실제로 활성화할 때 별도 change로 다시 추가한다.
-# liveactivity/BaseHapticLiveActivity/ 의 Widget 코드는 유지되지만 컴파일되지 않는다.
+# BaseHapticLiveActivity는 ActivityKit/WidgetKit 기반 iOS Live Activity extension이다.
