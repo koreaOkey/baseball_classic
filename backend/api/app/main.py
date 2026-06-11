@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from collections import defaultdict
 from datetime import UTC, date, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Callable
 import asyncio
 import hashlib
 import httpx
@@ -89,8 +89,64 @@ redis_relay = RedisBroadcastRelay(
     source_instance_id=settings.instance_id,
 )
 
-HTTP_LIVE_CACHE_TTL_SEC = 2
-HTTP_STANDINGS_CACHE_TTL_SEC = 5
+HTTP_LIVE_CACHE_TTL_SEC = 5
+HTTP_STANDINGS_CACHE_TTL_SEC = 30
+HTTP_STALE_CACHE_TTL_SEC = 300
+
+_http_cache_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+_http_cache_stats: dict[str, int] = defaultdict(int)
+
+
+def _stale_http_cache_key(cache_key: str) -> str:
+    return f"{cache_key}:stale"
+
+
+async def _set_http_cache_payload(cache_key: str, payload: dict[str, Any], ttl_sec: int) -> None:
+    await redis_relay.set_cache(cache_key, payload, ttl_sec=ttl_sec)
+    await redis_relay.set_cache(_stale_http_cache_key(cache_key), payload, ttl_sec=HTTP_STALE_CACHE_TTL_SEC)
+
+
+async def _delete_http_cache_payload(cache_key: str, *, delete_stale: bool = False) -> None:
+    await redis_relay.delete_cache(cache_key)
+    if delete_stale:
+        await redis_relay.delete_cache(_stale_http_cache_key(cache_key))
+
+
+async def _get_or_set_http_cache_payload(
+    *,
+    cache_key: str,
+    ttl_sec: int,
+    loader: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    cached = await redis_relay.get_cache(cache_key)
+    if cached is not None:
+        _http_cache_stats["hit"] += 1
+        return cached
+
+    _http_cache_stats["miss"] += 1
+    lock = _http_cache_locks[cache_key]
+    async with lock:
+        cached = await redis_relay.get_cache(cache_key)
+        if cached is not None:
+            _http_cache_stats["hit_after_wait"] += 1
+            return cached
+
+        try:
+            payload = await asyncio.to_thread(loader)
+        except HTTPException:
+            raise
+        except Exception:
+            stale = await redis_relay.get_cache(_stale_http_cache_key(cache_key))
+            if stale is not None:
+                _http_cache_stats["stale_hit"] += 1
+                logger.warning("serving stale http cache payload: key=%s", cache_key)
+                return stale
+            _http_cache_stats["loader_error"] += 1
+            raise
+
+        await _set_http_cache_payload(cache_key, payload, ttl_sec)
+        _http_cache_stats["set"] += 1
+        return payload
 
 
 def _is_snapshot_lock_timeout(exc: DBAPIError) -> bool:
@@ -181,6 +237,22 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def log_unhandled_request_errors(request: Request, call_next):
+    started = time.perf_counter()
+    try:
+        return await call_next(request)
+    except Exception:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        logger.exception(
+            "unhandled request failed: method=%s path=%s elapsed_ms=%.1f",
+            request.method,
+            request.url.path,
+            elapsed_ms,
+        )
+        raise
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     # Keep /health lightweight for platform health checks.
@@ -243,6 +315,7 @@ async def debug_relay_stats() -> dict[str, Any]:
         "source_instance_id": redis_relay._source_instance_id,
         "redis_subscribed_at": redis_relay.subscribed_at,
         "redis_stats": dict(redis_relay.stats),
+        "http_cache_stats": dict(_http_cache_stats),
         "event_bus_stats": event_bus.snapshot_stats(),
     }
 
@@ -263,20 +336,20 @@ async def list_games(
         f"to={(to_date.isoformat() if to_date else '')}:"
         f"limit={limit}"
     )
-    cached = await redis_relay.get_cache(cache_key)
-    if cached is not None:
-        return cached.get("items") or []
-
-    items = await asyncio.to_thread(
-        _list_games_payload,
-        status=status,
-        game_date=game_date,
-        from_date=from_date,
-        to_date=to_date,
-        limit=limit,
+    payload = await _get_or_set_http_cache_payload(
+        cache_key=cache_key,
+        ttl_sec=HTTP_LIVE_CACHE_TTL_SEC,
+        loader=lambda: {
+            "items": _list_games_payload(
+                status=status,
+                game_date=game_date,
+                from_date=from_date,
+                to_date=to_date,
+                limit=limit,
+            )
+        },
     )
-    await redis_relay.set_cache(cache_key, {"items": items}, ttl_sec=HTTP_LIVE_CACHE_TTL_SEC)
-    return items
+    return payload.get("items") or []
 
 
 def _list_games_payload(
@@ -334,13 +407,14 @@ def _list_games_payload(
 @app.get("/games/{game_id}", response_model=GameSummaryOut)
 async def get_game(game_id: str) -> dict[str, Any]:
     cache_key = f"http:game:v1:{game_id}"
-    cached = await redis_relay.get_cache(cache_key)
-    if cached is not None and cached.get("item") is not None:
-        return cached["item"]
-
-    item = await asyncio.to_thread(_get_game_payload, game_id)
-    await redis_relay.set_cache(cache_key, {"item": item}, ttl_sec=HTTP_LIVE_CACHE_TTL_SEC)
-    return item
+    payload = await _get_or_set_http_cache_payload(
+        cache_key=cache_key,
+        ttl_sec=HTTP_LIVE_CACHE_TTL_SEC,
+        loader=lambda: {"item": _get_game_payload(game_id)},
+    )
+    if payload.get("item") is not None:
+        return payload["item"]
+    raise HTTPException(status_code=404, detail="game not found")
 
 
 def _get_game_payload(game_id: str) -> dict[str, Any]:
@@ -354,13 +428,11 @@ def _get_game_payload(game_id: str) -> dict[str, Any]:
 @app.get("/games/{game_id}/state", response_model=GameStateOut)
 async def get_game_state(game_id: str) -> dict[str, Any]:
     cache_key = f"http:game_state:v1:{game_id}"
-    cached = await redis_relay.get_cache(cache_key)
-    if cached is not None:
-        return cached
-
-    item = await asyncio.to_thread(_get_game_state_payload, game_id)
-    await redis_relay.set_cache(cache_key, item, ttl_sec=HTTP_LIVE_CACHE_TTL_SEC)
-    return item
+    return await _get_or_set_http_cache_payload(
+        cache_key=cache_key,
+        ttl_sec=HTTP_LIVE_CACHE_TTL_SEC,
+        loader=lambda: _get_game_state_payload(game_id),
+    )
 
 
 def _get_game_state_payload(game_id: str) -> dict[str, Any]:
@@ -379,25 +451,24 @@ async def get_game_events(
     inning_number: int | None = Query(default=None, alias="inningNumber", ge=1, le=12),
     scoring_only: bool = Query(default=False, alias="scoringOnly"),
 ) -> dict[str, Any]:
-    cache_key = (
-        f"http:game_events:v1:{game_id}:after={after}:limit={limit}:"
-        f"inning={(inning_number if inning_number is not None else '')}:"
-        f"scoring={int(scoring_only)}"
-    )
-    cached = await redis_relay.get_cache(cache_key)
-    if cached is not None:
-        return cached
-
-    item = await asyncio.to_thread(
-        _get_game_events_payload,
+    cache_key = _game_events_http_cache_key(
         game_id=game_id,
         after=after,
         limit=limit,
         inning_number=inning_number,
         scoring_only=scoring_only,
     )
-    await redis_relay.set_cache(cache_key, item, ttl_sec=HTTP_LIVE_CACHE_TTL_SEC)
-    return item
+    return await _get_or_set_http_cache_payload(
+        cache_key=cache_key,
+        ttl_sec=HTTP_LIVE_CACHE_TTL_SEC,
+        loader=lambda: _get_game_events_payload(
+            game_id=game_id,
+            after=after,
+            limit=limit,
+            inning_number=inning_number,
+            scoring_only=scoring_only,
+        ),
+    )
 
 
 def _get_game_events_payload(
@@ -1062,17 +1133,17 @@ async def get_team_record_standings(
     normalized_season_code = (season_code or str(datetime.now(UTC).year)).strip()
     normalized_category_id = category_id.strip()
     cache_key = f"http:team_records:v1:{normalized_category_id}:{normalized_season_code}"
-    cached = await redis_relay.get_cache(cache_key)
-    if cached is not None:
-        return cached.get("items") or []
-
-    items = await asyncio.to_thread(
-        _get_team_record_standings_payload,
-        category_id=normalized_category_id,
-        season_code=normalized_season_code,
+    payload = await _get_or_set_http_cache_payload(
+        cache_key=cache_key,
+        ttl_sec=HTTP_STANDINGS_CACHE_TTL_SEC,
+        loader=lambda: {
+            "items": _get_team_record_standings_payload(
+                category_id=normalized_category_id,
+                season_code=normalized_season_code,
+            )
+        },
     )
-    await redis_relay.set_cache(cache_key, {"items": items}, ttl_sec=HTTP_STANDINGS_CACHE_TTL_SEC)
-    return items
+    return payload.get("items") or []
 
 
 def _get_team_record_standings_payload(
@@ -1102,18 +1173,20 @@ async def get_team_record_by_team(
         f"http:team_record:v1:{normalized_category_id}:"
         f"{normalized_season_code}:{normalized_team_id}"
     )
-    cached = await redis_relay.get_cache(cache_key)
-    if cached is not None and cached.get("item") is not None:
-        return cached["item"]
-
-    item = await asyncio.to_thread(
-        _get_team_record_by_team_payload,
-        team_id=normalized_team_id,
-        category_id=normalized_category_id,
-        season_code=normalized_season_code,
+    payload = await _get_or_set_http_cache_payload(
+        cache_key=cache_key,
+        ttl_sec=HTTP_STANDINGS_CACHE_TTL_SEC,
+        loader=lambda: {
+            "item": _get_team_record_by_team_payload(
+                team_id=normalized_team_id,
+                category_id=normalized_category_id,
+                season_code=normalized_season_code,
+            )
+        },
     )
-    await redis_relay.set_cache(cache_key, {"item": item}, ttl_sec=HTTP_STANDINGS_CACHE_TTL_SEC)
-    return item
+    if payload.get("item") is not None:
+        return payload["item"]
+    raise HTTPException(status_code=404, detail="team record not found")
 
 
 def _get_team_record_by_team_payload(
@@ -1140,6 +1213,21 @@ def _team_record_http_cache_key(*, category_id: str, season_code: str, team_id: 
 
 def _team_records_http_cache_key(*, category_id: str, season_code: str) -> str:
     return f"http:team_records:v1:{category_id}:{season_code}"
+
+
+def _game_events_http_cache_key(
+    *,
+    game_id: str,
+    after: int = 0,
+    limit: int = 50,
+    inning_number: int | None = None,
+    scoring_only: bool = False,
+) -> str:
+    return (
+        f"http:game_events:v1:{game_id}:after={after}:limit={limit}:"
+        f"inning={(inning_number if inning_number is not None else '')}:"
+        f"scoring={int(scoring_only)}"
+    )
 
 
 @app.post("/internal/crawler/games/{game_id}/snapshot", response_model=IngestResult)
@@ -1241,17 +1329,22 @@ def _ingest_crawler_snapshot_locked(
     )
     if game_summary_payload is not None:
         background_tasks.add_task(
-            redis_relay.set_cache,
+            _set_http_cache_payload,
             f"http:game:v1:{game_id}",
             {"item": game_summary_payload},
             HTTP_LIVE_CACHE_TTL_SEC,
         )
     background_tasks.add_task(
-        redis_relay.set_cache,
+        _set_http_cache_payload,
         f"http:game_state:v1:{game_id}",
         state_payload,
         HTTP_LIVE_CACHE_TTL_SEC,
     )
+    if inserted_event_payload:
+        background_tasks.add_task(
+            _delete_http_cache_payload,
+            _game_events_http_cache_key(game_id=game_id),
+        )
 
     # APNs silent push 전송 (백그라운드에서도 워치로 이벤트 전달)
     if inserted_event_payload:
@@ -1317,7 +1410,7 @@ def ingest_crawler_team_records(
             300,
         )
         background_tasks.add_task(
-            redis_relay.set_cache,
+            _set_http_cache_payload,
             _team_record_http_cache_key(
                 category_id=row.category_id,
                 season_code=row.season_code,
@@ -1327,11 +1420,12 @@ def ingest_crawler_team_records(
             HTTP_STANDINGS_CACHE_TTL_SEC,
         )
         background_tasks.add_task(
-            redis_relay.delete_cache,
+            _delete_http_cache_payload,
             _team_records_http_cache_key(
                 category_id=row.category_id,
                 season_code=row.season_code,
             ),
+            delete_stale=True,
         )
 
     return TeamRecordIngestResult(

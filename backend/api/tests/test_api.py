@@ -358,6 +358,60 @@ def test_game_state_http_cache_uses_redis_payload() -> None:
             assert second.json()["homeScore"] == 3
 
 
+def test_game_state_http_cache_serves_stale_payload_on_loader_error() -> None:
+    class FakeRedisRelay:
+        def __init__(self) -> None:
+            self.store = {}
+
+        async def start(self, on_message):
+            return None
+
+        async def stop(self):
+            return None
+
+        async def get_cache(self, key):
+            return self.store.get(key)
+
+        async def set_cache(self, key, value, ttl_sec=300):
+            self.store[key] = value
+
+        async def delete_cache(self, key):
+            self.store.pop(key, None)
+
+        async def publish(self, game_id, message):
+            return None
+
+    fake_redis = FakeRedisRelay()
+    game_id = "20250501SSSK02025_STALE"
+    cache_key = f"http:game_state:v1:{game_id}"
+    main_module._http_cache_locks.clear()
+
+    with patch.object(main_module, "redis_relay", fake_redis):
+        with TestClient(app) as client:
+            ingest = client.post(
+                f"/internal/crawler/games/{game_id}/snapshot",
+                headers={"X-API-Key": "test-key"},
+                json=sample_snapshot(),
+            )
+            assert ingest.status_code == 200
+
+            first = client.get(f"/games/{game_id}/state")
+            assert first.status_code == 200
+            assert first.json()["homeScore"] == 3
+            assert main_module._stale_http_cache_key(cache_key) in fake_redis.store
+
+            fake_redis.store.pop(cache_key, None)
+            with patch.object(
+                main_module,
+                "_get_game_state_payload",
+                side_effect=RuntimeError("db unavailable"),
+            ):
+                second = client.get(f"/games/{game_id}/state")
+
+            assert second.status_code == 200
+            assert second.json()["homeScore"] == 3
+
+
 def test_ingest_idempotent_and_auth() -> None:
     with TestClient(app) as client:
         unauthorized = client.post(
