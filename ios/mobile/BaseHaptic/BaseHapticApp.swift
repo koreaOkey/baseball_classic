@@ -133,7 +133,7 @@ enum Screen: Hashable {
     case myTeam
 }
 
-private let SHOW_MY_TEAM_TAB = true
+private let SHOW_MY_TEAM_TAB = false
 
 // MARK: - ContentView
 struct ContentView: View {
