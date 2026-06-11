@@ -64,6 +64,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.basehaptic.mobile.BuildConfig
 import com.basehaptic.mobile.R
@@ -501,11 +502,11 @@ private fun ScoreboardCard(
                         listOf(
                             Gray950,
                             Gray900,
-                            AppEventColors.eventColor(state.lastEventType.orEmpty()).copy(alpha = 0.12f)
+                            AppEventColors.eventColor(state.lastEventType.orEmpty()).copy(alpha = 0.09f)
                         )
                     )
                 )
-                .padding(AppSpacing.lg)
+                .padding(AppSpacing.md)
         ) {
             Text(
                 text = currentAttackLabel(state),
@@ -518,7 +519,7 @@ private fun ScoreboardCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 ScoreTeamBlock(
                     team = state.awayTeamId,
@@ -531,8 +532,8 @@ private fun ScoreboardCard(
                     state = state,
                     latestEvent = latestEvent,
                     modifier = Modifier
-                        .padding(horizontal = AppSpacing.sm)
-                        .width(118.dp)
+                        .padding(horizontal = AppSpacing.xs)
+                        .width(104.dp)
                 )
 
                 ScoreTeamBlock(
@@ -557,10 +558,16 @@ private fun RowScope.ScoreTeamBlock(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.weight(1f)
     ) {
-        TeamLogo(team = team, size = 60.dp)
+        TeamLogo(team = team, size = 52.dp)
         Spacer(modifier = Modifier.height(AppSpacing.sm))
-        Text(text = teamName, color = Color.White, style = AppFont.h4Bold, maxLines = 1)
-        Text(text = score.toString(), color = Color.White, style = AppFont.h1)
+        Text(
+            text = teamName,
+            color = Color.White,
+            style = AppFont.h5Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(text = score.toString(), color = Color.White, style = AppFont.h2)
         if (showFavorite) {
             Spacer(modifier = Modifier.height(AppSpacing.xs))
             FavoriteTeamBadge()
@@ -589,8 +596,9 @@ private fun ScoreStateBlock(
         Text(
             text = "P ${displayPitcher(state, latestEvent)}  |  B ${displayBatter(state, latestEvent)}",
             color = Gray400,
-            style = AppFont.microBold,
+            style = AppFont.tinyBold,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center
         )
     }

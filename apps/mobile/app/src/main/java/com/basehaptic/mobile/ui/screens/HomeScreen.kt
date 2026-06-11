@@ -1292,17 +1292,20 @@ private fun GameCard(
             .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.xs),
         shape = AppShapes.lg,
         color = backgroundColor,
-        tonalElevation = if (isWatchSynced || isLiveScoreActive || game.isMyTeam) 2.dp else 1.dp
+        tonalElevation = 0.dp
     ) {
         Box {
             if (isWatchSynced || isLiveScoreActive || game.isMyTeam) {
-                // Gradient border effect
                 Box(
                     modifier = Modifier
                         .matchParentSize()
                         .border(
-                            width = if (isWatchSynced || isLiveScoreActive) 2.dp else 1.dp,
-                            color = if (isWatchSynced || isLiveScoreActive) Green500 else Yellow500.copy(alpha = 0.5f),
+                            width = if (isWatchSynced || isLiveScoreActive) 1.5.dp else 1.dp,
+                            color = if (isWatchSynced || isLiveScoreActive) {
+                                Green500.copy(alpha = 0.82f)
+                            } else {
+                                Yellow500.copy(alpha = 0.42f)
+                            },
                             shape = AppShapes.lg
                         )
                 )
@@ -1313,15 +1316,17 @@ private fun GameCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(onClick = onClick)
-                        .padding(AppSpacing.xl)
+                        .padding(horizontal = AppSpacing.xl, vertical = AppSpacing.lg)
                 ) {
-                    // Status and Badge
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             when (game.status) {
                                 GameStatus.LIVE -> {
                                     Box(
@@ -1333,22 +1338,30 @@ private fun GameCard(
                                     Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
                                         text = "LIVE",
-                                        style = AppFont.bodyMedium,
+                                        style = AppFont.captionBold,
                                         color = Red500
                                     )
-                                    Spacer(modifier = Modifier.width(AppSpacing.md))
+                                    Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
                                         text = game.inning,
-                                        style = AppFont.body,
-                                        color = if (game.isMyTeam) Color.White.copy(alpha = 0.9f) else Gray400
+                                        style = AppFont.captionMedium,
+                                        color = if (game.isMyTeam) Color.White.copy(alpha = 0.86f) else Gray400,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     if (isWatchSynced || isLiveScoreActive) {
                                         Spacer(modifier = Modifier.width(AppSpacing.sm))
-                                        Text(
-                                            text = "(중계중)",
-                                            style = AppFont.microMedium,
-                                            color = Yellow400
-                                        )
+                                        Surface(
+                                            shape = AppShapes.pill,
+                                            color = Yellow500.copy(alpha = 0.12f)
+                                        ) {
+                                            Text(
+                                                text = "중계중",
+                                                style = AppFont.tinyBold,
+                                                color = Yellow400,
+                                                modifier = Modifier.padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xxs)
+                                            )
+                                        }
                                     }
                                 }
                                 GameStatus.SCHEDULED -> {
@@ -1360,15 +1373,17 @@ private fun GameCard(
                                     )
                                     Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
-                                        text = if (game.time.isNullOrBlank()) "" else "경기 시작 시간 ${game.time}",
-                                        style = AppFont.body,
-                                        color = Gray400
+                                        text = if (game.time.isNullOrBlank()) "" else "경기 시작 ${game.time}",
+                                        style = AppFont.captionMedium,
+                                        color = Gray400,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                                 GameStatus.FINISHED -> {
                                     Text(
                                         text = "\uACBD\uAE30 \uC885\uB8CC",
-                                        style = AppFont.body,
+                                        style = AppFont.captionMedium,
                                         color = Gray500
                                     )
                                 }
@@ -1382,7 +1397,7 @@ private fun GameCard(
                                     Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
                                         text = "경기 취소",
-                                        style = AppFont.bodyMedium,
+                                        style = AppFont.captionBold,
                                         color = Red500
                                     )
                                     if (!game.time.isNullOrBlank()) {
@@ -1404,7 +1419,7 @@ private fun GameCard(
                                     Spacer(modifier = Modifier.width(AppSpacing.sm))
                                     Text(
                                         text = "경기 연기",
-                                        style = AppFont.bodyMedium,
+                                        style = AppFont.captionBold,
                                         color = Orange500
                                     )
                                     if (!game.time.isNullOrBlank()) {
@@ -1420,24 +1435,25 @@ private fun GameCard(
                         }
 
                         if (game.isMyTeam) {
+                            Spacer(modifier = Modifier.width(AppSpacing.sm))
                             Surface(
-                                shape = AppShapes.xl,
-                                color = Yellow500
+                                shape = AppShapes.pill,
+                                color = Yellow500.copy(alpha = 0.94f)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = AppSpacing.md, vertical = AppSpacing.xs),
+                                    modifier = Modifier.padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xs),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Star,
                                         contentDescription = null,
                                         tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
+                                        modifier = Modifier.size(12.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(AppSpacing.xs))
+                                    Spacer(modifier = Modifier.width(AppSpacing.xxs))
                                     Text(
                                         text = "응원팀",
-                                        style = AppFont.microBold,
+                                        style = AppFont.tinyBold,
                                         color = Color.White
                                     )
                                 }
@@ -1447,7 +1463,6 @@ private fun GameCard(
 
                     Spacer(modifier = Modifier.height(AppSpacing.lg))
 
-                    // Teams and Scores
                     Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
                         TeamScoreRow(
                             team = game.awayTeamId,
@@ -1484,7 +1499,7 @@ private fun GameCard(
                     onWatchSyncClick = onWatchSyncClick,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = AppSpacing.xl, vertical = AppSpacing.md)
+                        .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.sm)
                 )
             }
         }
@@ -1501,7 +1516,7 @@ private fun LiveActionRow(
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)
     ) {
         GameToggleCell(
             title = "잠금화면",
@@ -1531,22 +1546,22 @@ private fun GameToggleCell(
     Surface(
         modifier = modifier,
         shape = AppShapes.md,
-        color = if (isActive) Green500.copy(alpha = 0.12f) else Gray950.copy(alpha = 0.42f),
+        color = if (isActive) Green500.copy(alpha = 0.10f) else Gray950.copy(alpha = 0.28f),
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
-            color = if (isActive) Green500.copy(alpha = 0.38f) else Gray800
+            color = if (isActive) Green500.copy(alpha = 0.30f) else Gray800.copy(alpha = 0.72f)
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(start = AppSpacing.sm, end = AppSpacing.md, top = AppSpacing.sm, bottom = AppSpacing.sm),
+                .padding(start = AppSpacing.sm, end = AppSpacing.sm, top = AppSpacing.xs, bottom = AppSpacing.xs),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(26.dp)
+                    .size(22.dp)
                     .clip(CircleShape)
                     .background(if (isActive) Green500.copy(alpha = 0.18f) else Gray800),
                 contentAlignment = Alignment.Center
@@ -1555,13 +1570,13 @@ private fun GameToggleCell(
                     imageVector = icon,
                     contentDescription = null,
                     tint = if (isActive) Green400 else Gray300,
-                    modifier = Modifier.size(15.dp)
+                    modifier = Modifier.size(13.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(AppSpacing.sm))
+            Spacer(modifier = Modifier.width(AppSpacing.xs))
             Text(
                 text = title,
-                style = AppFont.captionBold,
+                style = AppFont.microBold,
                 color = if (isActive) Green400 else Gray300,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1570,7 +1585,7 @@ private fun GameToggleCell(
             Switch(
                 checked = isActive,
                 onCheckedChange = { onClick() },
-                modifier = Modifier.size(width = 38.dp, height = 26.dp),
+                modifier = Modifier.size(width = 34.dp, height = 22.dp),
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Green400,
                     checkedTrackColor = Green500.copy(alpha = 0.42f),

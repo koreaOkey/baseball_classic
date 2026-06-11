@@ -26,9 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
@@ -56,7 +54,11 @@ import com.basehaptic.mobile.push.PushSetup
 import com.basehaptic.mobile.push.TeamSubscriptionRegistrar
 import com.basehaptic.mobile.service.GameSyncForegroundService
 import com.basehaptic.mobile.ui.screens.*
+import com.basehaptic.mobile.ui.theme.AppFont
+import com.basehaptic.mobile.ui.theme.AppSpacing
 import com.basehaptic.mobile.ui.theme.BaseHapticTheme
+import com.basehaptic.mobile.ui.theme.Gray500
+import com.basehaptic.mobile.ui.theme.Gray800
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.wear.WatchCompanionStatus
@@ -931,7 +933,8 @@ fun BottomNavigationBar(
     
     NavigationBar(
         containerColor = Gray900,
-        tonalElevation = 8.dp
+        tonalElevation = 0.dp,
+        windowInsets = NavigationBarDefaults.windowInsets
     ) {
         BottomNavItem(
             icon = Icons.Default.Home,
@@ -995,13 +998,13 @@ fun RowScope.BottomNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(AppSpacing.xl)
             )
         },
         label = {
             Text(
                 text = label,
-                fontSize = 12.sp
+                style = AppFont.tinyBold
             )
         },
         selected = selected,
@@ -1009,9 +1012,11 @@ fun RowScope.BottomNavItem(
         colors = NavigationBarItemDefaults.colors(
             selectedIconColor = activeColor,
             selectedTextColor = activeColor,
-            unselectedIconColor = Color(0xFF71717A),
-            unselectedTextColor = Color(0xFF71717A),
-            indicatorColor = activeColor.copy(alpha = 0.1f)
+            unselectedIconColor = Gray500,
+            unselectedTextColor = Gray500,
+            indicatorColor = activeColor.copy(alpha = 0.08f),
+            disabledIconColor = Gray800,
+            disabledTextColor = Gray800
         )
     )
 }

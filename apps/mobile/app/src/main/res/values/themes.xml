@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.BaseHaptic" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.BaseHaptic" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/gray_950</item>
         <item name="android:statusBarColor">@color/gray_950</item>
+        <item name="android:navigationBarColor">@color/gray_950</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:forceDarkAllowed">false</item>
     </style>
 
     <style name="LiveScoreCountRow">
