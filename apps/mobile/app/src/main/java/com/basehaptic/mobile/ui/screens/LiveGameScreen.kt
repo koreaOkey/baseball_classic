@@ -71,7 +71,6 @@ import com.basehaptic.mobile.R
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.WatchSyncAdLedger
 import com.basehaptic.mobile.data.model.AtBatGroup
-import com.basehaptic.mobile.data.model.EventFilterGate
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 
@@ -397,6 +396,7 @@ fun LiveGameScreen(
                             group = group,
                             awayTeamName = state.awayTeamId.teamName,
                             homeTeamName = state.homeTeamId.teamName,
+                            highlightScoreOutcome = isScoreFilterActive,
                         )
                     }
                 }
@@ -727,17 +727,29 @@ private fun BaseballFieldCard(
                 val inferredRunners = FieldRunners.from(state, latestEvent, lineup)
                 if (state.baseFirst) {
                     AtFieldPosition(FieldPositions.firstBase, w, h) {
-                        PositionPill(text = inferredRunners.first ?: "1루", modifier = Modifier, highlighted = true)
+                        PositionPill(
+                            text = cleanPlayerName(state.baseFirstRunner) ?: inferredRunners.first ?: "1루",
+                            modifier = Modifier,
+                            highlighted = true
+                        )
                     }
                 }
                 if (state.baseSecond) {
                     AtFieldPosition(FieldPositions.secondBase, w, h) {
-                        PositionPill(text = inferredRunners.second ?: "2루", modifier = Modifier, highlighted = true)
+                        PositionPill(
+                            text = cleanPlayerName(state.baseSecondRunner) ?: inferredRunners.second ?: "2루",
+                            modifier = Modifier,
+                            highlighted = true
+                        )
                     }
                 }
                 if (state.baseThird) {
                     AtFieldPosition(FieldPositions.thirdBase, w, h) {
-                        PositionPill(text = inferredRunners.third ?: "3루", modifier = Modifier, highlighted = true)
+                        PositionPill(
+                            text = cleanPlayerName(state.baseThirdRunner) ?: inferredRunners.third ?: "3루",
+                            modifier = Modifier,
+                            highlighted = true
+                        )
                     }
                 }
             }
@@ -1147,17 +1159,26 @@ private fun WatchSyncBadge(
     }
 
     if (showEnableDialog && gameId != null) {
+        val hasViewedAd = WatchSyncAdLedger.hasViewed(context, gameId)
         AlertDialog(
             onDismissRequest = {
                 showEnableDialog = false
                 visualOn = isSyncedToCurrent
             },
             title = { Text(text = "워치로 보시겠습니까?") },
-            text = { Text(text = "광고 관람 후 동기화됩니다.") },
+            text = {
+                Text(
+                    text = if (hasViewedAd) {
+                        "워치 동기화를 시작할까요?"
+                    } else {
+                        "광고 관람 후 동기화됩니다."
+                    }
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showEnableDialog = false
-                    if (WatchSyncAdLedger.hasViewed(context, gameId)) {
+                    if (hasViewedAd) {
                         onSetSyncedGame(gameId)
                         return@TextButton
                     }
@@ -1385,11 +1406,11 @@ private fun AtBatCard(
     group: AtBatGroup,
     awayTeamName: String,
     homeTeamName: String,
+    highlightScoreOutcome: Boolean,
 ) {
-    val context = LocalContext.current
     val outcomeType = group.outcome?.type?.uppercase() ?: ""
     val isScoreOutcome = outcomeType == "SCORE" || outcomeType == "SAC_FLY_SCORE"
-    val highlighted = group.outcome?.let { EventFilterGate.isAllowed(context, it.type) } ?: false
+    val highlighted = highlightScoreOutcome && isScoreOutcome
     val headerText = when {
         isScoreOutcome && !group.outcome?.description.isNullOrEmpty() -> group.outcome!!.description
         !group.batter.isNullOrEmpty() -> group.batter
@@ -1581,13 +1602,13 @@ private fun AtBatBatterHeader(
 @Composable
 private fun BatterStatGrid(record: Map<String, Any?>) {
     val stats = listOf(
-        "타석" to batterRecordDisplayInt(record, "pa", "plateAppearances"),
-        "타수" to batterRecordDisplayInt(record, "ab", "atBats"),
+        "타석" to batterRecordDisplayInt(record, "pa", "plateAppearance", "plateAppearances"),
+        "타수" to batterRecordDisplayInt(record, "ab", "atBat", "atBats"),
         "안타" to batterRecordDisplayInt(record, "hit", "hits"),
         "득점" to batterRecordDisplayInt(record, "run", "runs", "score"),
         "타점" to batterRecordDisplayInt(record, "rbi"),
         "홈런" to batterRecordDisplayInt(record, "hr", "homeRuns"),
-        "볼넷" to batterRecordDisplayInt(record, "bb", "walks"),
+        "볼넷" to batterRecordDisplayInt(record, "bb", "walk", "walks", "baseOnBalls"),
         "삼진" to batterRecordDisplayInt(record, "so", "strikeOuts", "strikeouts"),
     )
 
@@ -1940,117 +1961,147 @@ private fun eventLabel(type: String): String = when (type.uppercase()) {
 private object DebugDummyLiveGame {
     val state = BackendGamesRepository.LiveGameState(
         gameId = "debug-watch-sync-test",
-        homeTeam = "두산",
-        awayTeam = "LG",
-        homeTeamId = Team.DOOSAN,
-        awayTeamId = Team.LG,
-        homeScore = 3,
-        awayScore = 5,
-        inning = "7회초",
+        homeTeam = "LG",
+        awayTeam = "SSG",
+        homeTeamId = Team.LG,
+        awayTeamId = Team.SSG,
+        homeScore = 10,
+        awayScore = 1,
+        inning = "4회말",
         status = GameStatus.LIVE,
-        ball = 2,
-        strike = 1,
-        out = 1,
+        ball = 0,
+        strike = 0,
+        out = 2,
         baseFirst = true,
         baseSecond = true,
         baseThird = true,
-        pitcher = "곽빈",
+        baseFirstRunner = "박해민",
+        baseSecondRunner = "홍창기",
+        baseThirdRunner = "신민재",
+        pitcher = "최용준",
         batter = "오스틴",
-        pitcherPitchCount = 87,
-        lastEventType = "HIT"
+        pitcherPitchCount = 18,
+        lastEventType = "SCORE",
+        homeStartingPitcher = "김윤식",
+        awayStartingPitcher = "김건우",
     )
 
     private val austinRecord = mapOf(
         "name" to "오스틴",
-        "batOrder" to 4,
-        "seasonHra" to 0.318,
-        "pa" to 4,
+        "batOrder" to 3,
+        "seasonHra" to 0.349,
+        "todayHra" to 0.75,
+        "pa" to 3,
         "ab" to 3,
         "hit" to 2,
-        "run" to 1,
-        "rbi" to 2,
-        "hr" to 1,
+        "run" to 3,
+        "rbi" to 3,
+        "hr" to 0,
+        "bb" to 0,
+        "so" to 1,
+    )
+    private val parkRecord = mapOf(
+        "name" to "박해민",
+        "batOrder" to 2,
+        "seasonHra" to 0.28,
+        "todayHra" to 0.333,
+        "pa" to 3,
+        "ab" to 2,
+        "hit" to 1,
+        "run" to 2,
+        "rbi" to 0,
+        "hr" to 0,
         "bb" to 1,
         "so" to 0,
     )
-
-    // 타석 그룹화 + 정확 점수 + iOS형 투구 상세 시연용 데이터:
-    //   - 오스틴 7회초 타석(relayNo 003) STRIKE→BALL→HIT 3구 → 타자 기록 + 투구 상세 카드
-    //   - 박해민 7회초 타석(relayNo 002) 삼진 아웃 → 1개 카드
-    //   - 신민재 6회말 득점(relayNo 001) → 1개 카드 + 누적 스코어 3-5
+    private val hongRecord = mapOf(
+        "name" to "홍창기",
+        "batOrder" to 1,
+        "seasonHra" to 0.236,
+        "todayHra" to 0.333,
+        "pa" to 3,
+        "ab" to 3,
+        "hit" to 1,
+        "run" to 1,
+        "rbi" to 1,
+        "hr" to 0,
+        "bb" to 0,
+        "so" to 0,
+    )
+    // 2026-06-11 SSG 1 : 15 LG, 네이버 relay 4회말 일부.
+    // 실제 relayNo/seqno 흐름으로 타석 그룹, 선수별 당일 기록, 주자명, 득점 테두리를 확인한다.
     val events: List<BackendGamesRepository.LiveEvent> = listOf(
         BackendGamesRepository.LiveEvent(
-            5,
-            "dbg-5",
-            "HIT",
-            "3구 오스틴 우전 안타로 1루 진루",
-            "19:42",
-            "곽빈",
+            13,
+            "04-045-0283",
+            "SCORE",
+            "3루주자 신민재 : 홈인",
+            "20:12",
+            "최용준",
             "오스틴",
-            "7회초",
-            atBatId = "07-003",
-            seqno = 3,
-            pitchNum = 3,
-            pitchSpeed = 146,
-            pitchStuff = "직구",
-            ballAfter = 1,
-            strikeAfter = 1,
-            outAfter = 1,
+            "4회말",
+            atBatId = "04-045",
+            seqno = 283,
+            homeScoreAfter = 9,
+            awayScoreAfter = 1,
+            batterRecord = austinRecord,
+            homeWinProbability = 98.7,
+            awayWinProbability = 1.3,
+            wpaByPlate = -0.2,
+        ),
+        BackendGamesRepository.LiveEvent(
+            12,
+            "04-045-0282",
+            "SCORE",
+            "2루주자 홍창기 : 홈인",
+            "20:12",
+            "최용준",
+            "오스틴",
+            "4회말",
+            atBatId = "04-045",
+            seqno = 282,
+            homeScoreAfter = 8,
+            awayScoreAfter = 1,
             batterRecord = austinRecord,
         ),
         BackendGamesRepository.LiveEvent(
-            4,
-            "dbg-4",
-            "BALL",
-            "2구 곽빈 → 오스틴 볼",
-            "19:41",
-            "곽빈",
+            11,
+            "04-045-0281",
+            "SCORE",
+            "1루주자 박해민 : 홈인",
+            "20:12",
+            "최용준",
             "오스틴",
-            "7회초",
-            atBatId = "07-003",
-            seqno = 2,
-            pitchNum = 2,
-            pitchSpeed = 134,
-            pitchStuff = "슬라이더",
-            ballAfter = 1,
-            strikeAfter = 1,
-            outAfter = 1,
+            "4회말",
+            atBatId = "04-045",
+            seqno = 281,
+            homeScoreAfter = 7,
+            awayScoreAfter = 1,
             batterRecord = austinRecord,
         ),
-        BackendGamesRepository.LiveEvent(
-            3,
-            "dbg-3",
-            "STRIKE",
-            "1구 곽빈 → 오스틴 스트라이크",
-            "19:40",
-            "곽빈",
-            "오스틴",
-            "7회초",
-            atBatId = "07-003",
-            seqno = 1,
-            pitchNum = 1,
-            pitchSpeed = 148,
-            pitchStuff = "직구",
-            ballAfter = 0,
-            strikeAfter = 1,
-            outAfter = 1,
-            batterRecord = austinRecord,
-        ),
-        BackendGamesRepository.LiveEvent(2, "dbg-2", "OUT", "박해민 삼진 아웃", "19:37", "곽빈", "박해민", "7회초", atBatId = "07-002", seqno = 1),
-        BackendGamesRepository.LiveEvent(1, "dbg-1", "SCORE", "신민재 적시타로 1점 추가", "19:34", "곽빈", "오지환", "6회말", atBatId = "06-001", seqno = 1, homeScoreAfter = 3, awayScoreAfter = 5),
+        BackendGamesRepository.LiveEvent(10, "04-045-0280", "HIT", "오스틴 : 좌중간 2루타", "20:12", "최용준", "오스틴", "4회말", atBatId = "04-045", seqno = 280, batterRecord = austinRecord),
+        BackendGamesRepository.LiveEvent(9, "04-045-0279", "OTHER", "5구 타격", "20:11", "최용준", "오스틴", "4회말", atBatId = "04-045", seqno = 279, pitchNum = 5, pitchSpeed = 146, pitchStuff = "직구", ballAfter = 3, strikeAfter = 1, outAfter = 0, batterRecord = austinRecord),
+        BackendGamesRepository.LiveEvent(8, "04-045-0278", "BALL", "4구 볼", "20:11", "최용준", "오스틴", "4회말", atBatId = "04-045", seqno = 278, pitchNum = 4, pitchSpeed = 132, pitchStuff = "체인지업", ballAfter = 3, strikeAfter = 1, outAfter = 0, batterRecord = austinRecord),
+        BackendGamesRepository.LiveEvent(7, "04-045-0277", "BALL", "3구 볼", "20:10", "최용준", "오스틴", "4회말", atBatId = "04-045", seqno = 277, pitchNum = 3, pitchSpeed = 147, pitchStuff = "직구", ballAfter = 2, strikeAfter = 1, outAfter = 0, batterRecord = austinRecord),
+        BackendGamesRepository.LiveEvent(6, "04-045-0276", "STRIKE", "2구 파울", "20:10", "최용준", "오스틴", "4회말", atBatId = "04-045", seqno = 276, pitchNum = 2, pitchSpeed = 133, pitchStuff = "체인지업", ballAfter = 1, strikeAfter = 1, outAfter = 0, batterRecord = austinRecord),
+        BackendGamesRepository.LiveEvent(5, "04-045-0275", "BALL", "1구 볼", "20:09", "최용준", "오스틴", "4회말", atBatId = "04-045", seqno = 275, pitchNum = 1, pitchSpeed = 146, pitchStuff = "직구", ballAfter = 1, strikeAfter = 0, outAfter = 0, batterRecord = austinRecord),
+        BackendGamesRepository.LiveEvent(4, "04-044-0270", "HIT", "박해민 : 우익수 앞 1루타", "20:07", "김건우", "박해민", "4회말", atBatId = "04-044", seqno = 270, batterRecord = parkRecord),
+        BackendGamesRepository.LiveEvent(3, "04-043-0262", "SCORE", "2루주자 이주헌 : 홈인", "20:05", "김건우", "홍창기", "4회말", atBatId = "04-043", seqno = 262, homeScoreAfter = 6, awayScoreAfter = 1, batterRecord = hongRecord),
+        BackendGamesRepository.LiveEvent(2, "04-043-0260", "HIT", "홍창기 : 중견수 앞 1루타", "20:04", "김건우", "홍창기", "4회말", atBatId = "04-043", seqno = 260, batterRecord = hongRecord),
+        BackendGamesRepository.LiveEvent(1, "04-042-0254", "WALK", "신민재 : 볼넷", "20:01", "김건우", "신민재", "4회말", atBatId = "04-042", seqno = 254),
     )
 
     val lineup = FieldLineup(
-        leftFielder = "김재환",
-        centerFielder = "박해민",
-        rightFielder = "문보경",
-        shortstop = "오지환",
-        secondBaseman = "신민재",
-        thirdBaseman = "허경민",
-        firstBaseman = "오스틴",
-        catcher = "박동원",
-        firstRunner = "문성주",
-        secondRunner = "오스틴",
-        thirdRunner = "김현수"
+        leftFielder = "채현우",
+        centerFielder = "김성욱",
+        rightFielder = "오태곤",
+        shortstop = "안상현",
+        secondBaseman = "홍대인",
+        thirdBaseman = "최윤석",
+        firstBaseman = "전의산",
+        catcher = "신범수",
+        firstRunner = "박해민",
+        secondRunner = "홍창기",
+        thirdRunner = "신민재"
     )
 }

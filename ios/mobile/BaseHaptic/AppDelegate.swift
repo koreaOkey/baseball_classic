@@ -85,10 +85,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // 햅틱 이벤트 워치로 전달 (마스터 스위치 OFF 시 차단 + 사용자 이벤트 필터 가드)
-        let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
-        if liveHapticEnabled,
-           EventFilterGate.isAllowed(eventType: eventType),
+        // 햅틱 이벤트 워치로 전달 (Watch 채널 이벤트 필터 가드)
+        if EventFilterGate.isAllowed(eventType: eventType, channel: .watch),
            isWatchSyncActive(for: userInfo["game_id"] as? String) {
             let cursor = userInfo["event_cursor"] as? Int64
             WatchGameSyncManager.shared.sendHapticEvent(eventType: eventType, cursor: cursor)
@@ -154,8 +152,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         let userInfo = notification.request.content.userInfo
         let eventType = userInfo["event_type"] as? String
 
-        // 사용자 이벤트 필터: 미선택 이벤트는 노티 자체를 노출 안 함
-        if !EventFilterGate.isAllowed(eventType: eventType) {
+        // 잠금화면 이벤트 필터: 미선택 이벤트는 폰 노티 자체를 노출 안 함
+        if !EventFilterGate.isAllowed(eventType: eventType, channel: .lockScreen) {
             return []
         }
 

@@ -92,8 +92,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         "event_filter_hit_enabled",
         "event_filter_steal_enabled",
         "event_filter_walk_enabled",
-        "event_filter_out_enabled",
-        "event_filter_double_play_enabled",
+        "event_filter_pitch_count_enabled",
         "event_filter_pitcher_change_enabled"
     ]
 
@@ -104,8 +103,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         "event_filter_hit_enabled": true,
         "event_filter_steal_enabled": false,
         "event_filter_walk_enabled": false,
-        "event_filter_out_enabled": false,
-        "event_filter_double_play_enabled": false,
+        "event_filter_pitch_count_enabled": false,
         "event_filter_pitcher_change_enabled": false
     ]
 
@@ -116,10 +114,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         case "SCORE", "SAC_FLY_SCORE": key = "event_filter_score_enabled"
         case "HIT": key = "event_filter_hit_enabled"
         case "STEAL", "TAG_UP_ADVANCE": key = "event_filter_steal_enabled"
-        case "WALK": key = "event_filter_walk_enabled"
-        case "OUT": key = "event_filter_out_enabled"
-        case "DOUBLE_PLAY", "TRIPLE_PLAY": key = "event_filter_double_play_enabled"
+        case "WALK", "HIT_BY_PITCH": key = "event_filter_walk_enabled"
+        case "BALL", "STRIKE": key = "event_filter_pitch_count_enabled"
         case "PITCHER_CHANGE": key = "event_filter_pitcher_change_enabled"
+        case "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY": return false
         default: return true
         }
         let fallback = eventFilterDefaults[key] ?? true
@@ -169,10 +167,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         case "SCORE", "SAC_FLY_SCORE": return "득점"
         case "HIT": return "안타"
         case "STEAL", "TAG_UP_ADVANCE": return "도루"
-        case "WALK": return "볼넷"
-        case "OUT": return "아웃"
-        case "DOUBLE_PLAY": return "병살"
-        case "TRIPLE_PLAY": return "삼중살"
+        case "WALK", "HIT_BY_PITCH": return "출루"
+        case "BALL": return "볼"
+        case "STRIKE": return "스트라이크"
         case "PITCHER_CHANGE": return "투수교체"
         case "VICTORY": return "경기 종료"
         default: return ""
@@ -250,11 +247,6 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     }
 
     private func handleGameData(_ message: [String: Any]) {
-        let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
-        guard liveHapticEnabled else {
-            print("[WatchConnectivity] live_haptic_enabled=false, freezing game_data")
-            return
-        }
         let rawStatus = message["status"] as? String ?? ""
         let inning = message["inning"] as? String ?? ""
         let isFinished = rawStatus.uppercased() == "FINISHED" || inning.contains("경기 종료")
@@ -397,13 +389,6 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             return
         }
 
-        // 마스터 스위치 OFF 시 차단
-        let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
-        guard liveHapticEnabled else {
-            print("[WatchConnectivity] live_haptic_enabled=false, skipping: \(eventType)")
-            return
-        }
-
         guard Self.isEventTypeAllowedByFilter(eventType) else {
             print("[WatchConnectivity] event filter blocked: \(eventType)")
             return
@@ -442,11 +427,6 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         print("⌚ [WatchConn] Direct push haptic: \(upper) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
         latestEventType = upper
         latestEventTimestamp = Date()
-        let liveHapticEnabled = (UserDefaults.standard.object(forKey: "live_haptic_enabled") as? Bool) ?? true
-        guard liveHapticEnabled else {
-            print("⌚ [WatchConn] live_haptic_enabled=false, skipping push haptic: \(upper)")
-            return
-        }
         guard Self.isEventTypeAllowedByFilter(eventType) else {
             print("⌚ [WatchConn] event filter blocked push haptic: \(upper)")
             return
@@ -583,7 +563,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 device.play(.click)
             }
-        case "WALK":
+        case "WALK", "HIT_BY_PITCH":
             device.play(.click)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 device.play(.click)

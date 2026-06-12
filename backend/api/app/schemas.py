@@ -48,6 +48,12 @@ class BaseStatus(BaseModel):
     third: bool = False
 
 
+class BaseRunnerStatus(BaseModel):
+    first: str | None = Field(default=None, max_length=128)
+    second: str | None = Field(default=None, max_length=128)
+    third: str | None = Field(default=None, max_length=128)
+
+
 class CrawlerEventIn(BaseModel):
     sourceEventId: str = Field(min_length=1, max_length=80)
     type: str = Field(min_length=1, max_length=32)
@@ -138,6 +144,7 @@ class CrawlerSnapshotRequest(BaseModel):
     strike: int = Field(default=0, ge=0, le=3)
     out: int = Field(default=0, ge=0, le=3)
     bases: BaseStatus = Field(default_factory=BaseStatus)
+    baseRunners: BaseRunnerStatus = Field(default_factory=BaseRunnerStatus)
     pitcher: str | None = Field(default=None, max_length=128)
     batter: str | None = Field(default=None, max_length=128)
     startTime: str | None = Field(default=None, min_length=4, max_length=5)
@@ -204,6 +211,23 @@ class TeamRecordIngestResult(BaseModel):
     updatedAt: IsoDatetime
 
 
+class AppNoticeOut(BaseModel):
+    enabled: bool = False
+    title: str = ""
+    message: str = ""
+
+
+class AppConfigOut(BaseModel):
+    platform: str
+    minSupportedVersion: str = ""
+    latestVersion: str = ""
+    forceUpdate: bool = False
+    updateTitle: str = "업데이트가 필요합니다"
+    updateMessage: str = "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요."
+    storeUrl: str = ""
+    notice: AppNoticeOut = Field(default_factory=AppNoticeOut)
+
+
 class TeamRecordOut(BaseModel):
     upperCategoryId: str | None = None
     categoryId: str
@@ -260,6 +284,7 @@ class GameStateOut(BaseModel):
     strike: int
     out: int
     bases: BaseStatus
+    baseRunners: BaseRunnerStatus = Field(default_factory=BaseRunnerStatus)
     pitcher: str | None = None
     batter: str | None = None
     pitcherPitchCount: int | None = None

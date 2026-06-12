@@ -232,12 +232,11 @@ fun WatchTestScreen(
     }
 
     fun shouldSendEvent(eventType: String?): Boolean {
-        val type = eventType?.uppercase() ?: return true
-        if (type == "BALL" || type == "STRIKE") {
-            return context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
-                .getBoolean("ball_strike_haptic_enabled", true)
-        }
-        return true
+        return com.basehaptic.mobile.data.model.EventFilterGate.isAllowed(
+            context,
+            eventType,
+            com.basehaptic.mobile.data.model.EventNotificationChannel.WATCH
+        )
     }
 
     fun sendCurrentState(eventType: String?) {
@@ -321,7 +320,8 @@ fun WatchTestScreen(
             context = context,
             state = previewState,
             latestEventType = eventType,
-            latestEventDescription = eventText
+            latestEventDescription = eventText,
+            highlightEvent = alert
         )
         addLog(
             when {
@@ -666,7 +666,11 @@ fun WatchTestScreen(
                                     Button(
                                         onClick = {
                                             if (!com.basehaptic.mobile.data.model.EventFilterGate
-                                                    .isAllowed(context, type)) {
+                                                    .isAllowed(
+                                                        context,
+                                                        type,
+                                                        com.basehaptic.mobile.data.model.EventNotificationChannel.LOCK_SCREEN
+                                                    )) {
                                                 addLog("[푸시 시뮬] $type 필터 차단 — 설정에서 OFF")
                                             } else {
                                                 postLocalPush(context, type, label, gameState)

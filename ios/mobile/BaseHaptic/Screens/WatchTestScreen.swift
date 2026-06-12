@@ -563,9 +563,9 @@ struct WatchTestScreen: View {
     }
 
     private func scheduleLocalPush(eventType: String, label: String) {
-        // 사용자 이벤트 필터: 미선택 이벤트는 실제 푸시와 동일하게 차단
-        if !EventFilterGate.isAllowed(eventType: eventType) {
-            addLog("[푸시 시뮬] \(eventType) 필터 차단 — 설정에서 OFF")
+        // 잠금화면 이벤트 필터: 미선택 이벤트는 실제 폰 노티와 동일하게 차단
+        if !EventFilterGate.isAllowed(eventType: eventType, channel: .lockScreen) {
+            addLog("[푸시 시뮬] \(eventType) 잠금화면 필터 차단 — 설정에서 OFF")
             return
         }
         let center = UNUserNotificationCenter.current()
@@ -691,11 +691,7 @@ struct WatchTestScreen: View {
     }
 
     private func shouldSendEvent(_ eventType: String?) -> Bool {
-        guard let type = eventType?.uppercased() else { return true }
-        if type == "BALL" || type == "STRIKE" {
-            return UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
-        }
-        return true
+        EventFilterGate.isAllowed(eventType: eventType, channel: .watch)
     }
 
     private func sendCurrentState(eventType: String?) {

@@ -21,10 +21,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.SportsBaseball
-import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -50,8 +47,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import com.basehaptic.mobile.BuildConfig
 import com.basehaptic.mobile.auth.AuthState
+import com.basehaptic.mobile.data.model.EventFilterOption
+import com.basehaptic.mobile.data.model.EventNotificationChannel
 import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.push.LiveScoreNotificationManager
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.components.WatchInstallCard
 import com.basehaptic.mobile.wear.WatchCompanionStatus
@@ -347,64 +345,17 @@ fun SettingsScreen(
 
         item {
             Spacer(modifier = Modifier.height(AppSpacing.lg))
-            SettingsSection(title = "알림")
-        }
-
-        item {
-            val context = LocalContext.current
-            val prefs = remember {
-                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
-            }
-            var lockScreenCardEnabled by remember {
-                mutableStateOf(
-                    prefs.getBoolean(
-                        LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED,
-                        true
-                    )
-                )
-            }
-            SettingsItemWithSwitch(
-                icon = Icons.Default.Notifications,
-                title = "잠금화면 경기 카드",
-                subtitle = "경기 중 점수와 진행 상황을 잠금화면에서 보기",
-                checked = lockScreenCardEnabled,
-                onCheckedChange = {
-                    lockScreenCardEnabled = it
-                    prefs.edit()
-                        .putBoolean(LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, it)
-                        .apply()
-                    if (!it) {
-                        LiveScoreNotificationManager.remove(context)
-                    }
-                }
+            SettingsSection(title = "알림 이벤트")
+            Text(
+                text = "경기 카드에서 watch나 잠금화면 보기를 켠 경기에만 적용됩니다.",
+                color = Gray400,
+                style = AppFont.body,
+                modifier = Modifier.padding(horizontal = AppSpacing.xs, vertical = AppSpacing.xs)
             )
         }
 
         item {
-            val context = LocalContext.current
-            val prefs = remember {
-                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
-            }
-            var hapticEnabled by remember {
-                mutableStateOf(prefs.getBoolean("live_haptic_enabled", true))
-            }
-            SettingsItemWithSwitch(
-                icon = Icons.Default.Vibration,
-                title = "이벤트 강한 알림",
-                subtitle = "득점·홈런 등 선택한 이벤트를 워치 햅틱으로 받기",
-                checked = hapticEnabled,
-                onCheckedChange = {
-                    hapticEnabled = it
-                    prefs.edit().putBoolean("live_haptic_enabled", it).apply()
-                    com.basehaptic.mobile.wear.WearSettingsSyncManager
-                        .syncLiveHapticEnabledToWatch(context, it)
-                    if (it) {
-                        // OFF→ON 복원: 캐시된 마지막 game_data를 즉시 워치에 push
-                        com.basehaptic.mobile.wear.WearGameSyncManager
-                            .resyncLastGameDataToWatch(context)
-                    }
-                }
-            )
+            EventFilterMatrix()
         }
 
         // TODO(stadium-cheer): Android 활성화 시 SHOW_STADIUM_CHEER_TOGGLE=true로 전환해 UI 노출.
@@ -433,23 +384,8 @@ fun SettingsScreen(
         }
 
         item {
-            val context = LocalContext.current
-            val prefs = remember {
-                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
-            }
-            var ballStrikeEnabled by remember {
-                mutableStateOf(prefs.getBoolean("ball_strike_haptic_enabled", true))
-            }
-            SettingsItemWithSwitch(
-                icon = Icons.Default.SportsBaseball,
-                title = "스트라이크 · 볼 알림",
-                subtitle = "볼, 스트라이크 이벤트를 워치에서 진동으로 받기",
-                checked = ballStrikeEnabled,
-                onCheckedChange = {
-                    ballStrikeEnabled = it
-                    prefs.edit().putBoolean("ball_strike_haptic_enabled", it).apply()
-                }
-            )
+            Spacer(modifier = Modifier.height(AppSpacing.lg))
+            SettingsSection(title = "워치 영상")
         }
 
         item {
@@ -463,47 +399,12 @@ fun SettingsScreen(
             SettingsItemWithSwitch(
                 icon = Icons.Default.PlayCircle,
                 title = "이벤트 영상 알림",
-                subtitle = "홈런·안타·득점 등 이벤트 발생 시 워치 영상 재생",
+                subtitle = "워치에서 캐릭터 영상 재생",
                 checked = eventVideoEnabled,
                 onCheckedChange = {
                     eventVideoEnabled = it
                     prefs.edit().putBoolean("event_video_enabled", it).apply()
                     com.basehaptic.mobile.wear.WearSettingsSyncManager.syncEventVideoEnabledToWatch(context, it)
-                }
-            )
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(AppSpacing.lg))
-            SettingsSection(title = "선택한 이벤트만 알림")
-            Text(
-                text = "선택한 이벤트가 발생할 때만 강한 알림으로 받아요",
-                color = Gray400,
-                style = AppFont.body,
-                modifier = Modifier.padding(horizontal = AppSpacing.xs, vertical = AppSpacing.xs)
-            )
-        }
-
-        items(com.basehaptic.mobile.data.model.EventFilterOption.all, key = { it.id }) { option ->
-            val context = LocalContext.current
-            val prefs = remember {
-                context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
-            }
-            var enabled by remember {
-                mutableStateOf(prefs.getBoolean(option.storageKey, true))
-            }
-            SettingsItemWithSwitch(
-                icon = option.icon,
-                title = option.title,
-                subtitle = option.subtitle,
-                checked = enabled,
-                onCheckedChange = {
-                    enabled = it
-                    prefs.edit().putBoolean(option.storageKey, it).apply()
-                    val filters = com.basehaptic.mobile.data.model.EventFilterOption.all
-                        .associate { opt -> opt.storageKey to prefs.getBoolean(opt.storageKey, true) }
-                    com.basehaptic.mobile.wear.WearSettingsSyncManager
-                        .syncEventFiltersToWatch(context, filters)
                 }
             )
         }
@@ -520,6 +421,11 @@ fun SettingsScreen(
                 subtitle = BuildConfig.VERSION_NAME,
                 onClick = {
                     manuallyOpenedReleaseNote = com.basehaptic.mobile.data.model.ReleaseNotes.notes(BuildConfig.VERSION_NAME)
+                        ?: if (BuildConfig.DEBUG) {
+                            com.basehaptic.mobile.data.model.ReleaseNotes.latest()
+                        } else {
+                            null
+                        }
                 }
             )
         }
@@ -629,6 +535,177 @@ private fun SettingsItem(
                 contentDescription = null,
                 tint = Gray500,
                 modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EventFilterMatrix() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.md,
+        color = Gray900,
+        tonalElevation = 1.dp
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = AppSpacing.lg)
+                    .padding(top = AppSpacing.md, bottom = AppSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "이벤트",
+                    style = AppFont.caption,
+                    color = Gray500
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "Watch",
+                    style = AppFont.caption,
+                    color = Gray400,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.width(58.dp)
+                )
+                Spacer(modifier = Modifier.width(AppSpacing.md))
+                Text(
+                    text = "잠금",
+                    style = AppFont.caption,
+                    color = Gray400,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.width(58.dp)
+                )
+            }
+
+            EventFilterOption.all.forEachIndexed { index, option ->
+                EventFilterMatrixRow(option = option)
+                if (index < EventFilterOption.all.lastIndex) {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .padding(start = AppSpacing.lg)
+                            .background(Gray800)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EventFilterMatrixRow(option: EventFilterOption) {
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    var watchEnabled by remember(option.id) {
+        mutableStateOf(
+            if (prefs.contains(option.storageKey(EventNotificationChannel.WATCH))) {
+                prefs.getBoolean(
+                    option.storageKey(EventNotificationChannel.WATCH),
+                    option.defaultEnabled(EventNotificationChannel.WATCH)
+                )
+            } else {
+                option.defaultEnabled(EventNotificationChannel.WATCH)
+            }
+        )
+    }
+    var lockScreenEnabled by remember(option.id) {
+        mutableStateOf(
+            if (prefs.contains(option.storageKey(EventNotificationChannel.LOCK_SCREEN))) {
+                prefs.getBoolean(
+                    option.storageKey(EventNotificationChannel.LOCK_SCREEN),
+                    option.defaultEnabled(EventNotificationChannel.LOCK_SCREEN)
+                )
+            } else {
+                option.defaultEnabled(EventNotificationChannel.LOCK_SCREEN)
+            }
+        )
+    }
+    val teamTheme = LocalTeamTheme.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = AppSpacing.lg, vertical = AppSpacing.md),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = option.icon,
+            contentDescription = null,
+            tint = teamTheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+
+        Spacer(modifier = Modifier.width(AppSpacing.md))
+
+        Text(
+            text = option.title,
+            style = AppFont.bodyLgMedium,
+            color = Color.White,
+            maxLines = 1,
+            modifier = Modifier.weight(1f)
+        )
+
+        EventChannelToggleChip(
+            checked = watchEnabled,
+            onClick = {
+                watchEnabled = !watchEnabled
+                prefs.edit()
+                    .putBoolean(option.storageKey(EventNotificationChannel.WATCH), watchEnabled)
+                    .apply()
+                com.basehaptic.mobile.wear.WearSettingsSyncManager.syncEventFiltersToWatch(
+                    context,
+                    EventFilterOption.currentValues(context, EventNotificationChannel.WATCH)
+                )
+            }
+        )
+
+        Spacer(modifier = Modifier.width(AppSpacing.md))
+
+        EventChannelToggleChip(
+            checked = lockScreenEnabled,
+            onClick = {
+                lockScreenEnabled = !lockScreenEnabled
+                prefs.edit()
+                    .putBoolean(option.storageKey(EventNotificationChannel.LOCK_SCREEN), lockScreenEnabled)
+                    .apply()
+            }
+        )
+    }
+}
+
+@Composable
+private fun EventChannelToggleChip(
+    checked: Boolean,
+    onClick: () -> Unit
+) {
+    val teamTheme = LocalTeamTheme.current
+    Surface(
+        modifier = Modifier
+            .width(58.dp)
+            .height(32.dp)
+            .clip(AppShapes.sm)
+            .clickable(onClick = onClick),
+        shape = AppShapes.sm,
+        color = if (checked) teamTheme.primary else Gray800,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = if (checked) teamTheme.primary else Gray700
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = if (checked) "ON" else "OFF",
+                style = AppFont.caption,
+                color = if (checked) Gray950 else Gray300
             )
         }
     }

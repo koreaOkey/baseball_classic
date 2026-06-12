@@ -14,17 +14,22 @@ enum ReleaseNotes {
     static let all: [ReleaseNote] = [
         ReleaseNote(
             version: "1.1.3",
-            subtitle: "더 좋아진 야구봄",
+            subtitle: "경기 확인과 워치 연결이 더 쉬워졌어요",
             bullets: [
-                "워치 앱 연동 가이드 추가",
-                "워치로 투구수 확인 기능 추가",
-                "경기 시작 시 푸쉬 알림 추가",
-                "워치 관람 시작 방식 변경: LIVE 경기 카드와 알림에서도 광고 확인 후 자동으로 워치에 연결됩니다",
+                "잠금화면 토글: LIVE 경기를 휴대폰 잠금화면에서 볼 수 있어요",
+                "Watch 토글: LIVE 경기를 스마트워치에서 볼 수 있어요",
+                "전체 순위 보기: 아이콘을 누르면 전체 순위를 바로 확인할 수 있어요",
+                "전체 일정 보기: 응원팀 시즌 일정을 달력으로 한눈에 확인할 수 있어요",
+                "점수 보기: 경기 카드에서 최신 점수와 진행 상황을 더 쉽게 볼 수 있어요",
             ]
         ),
     ]
 
     static func notes(for version: String) -> ReleaseNote? {
         all.first { $0.version == version }
+    }
+
+    static var latest: ReleaseNote? {
+        all.first
     }
 }

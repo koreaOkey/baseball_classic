@@ -22,7 +22,7 @@ os.environ["BASEHAPTIC_CORS_ALLOW_ORIGINS"] = "*"
 from app.main import app  # noqa: E402
 from app import main as main_module  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
-from app.models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord  # noqa: E402
+from app.models import AppConfig, Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord  # noqa: E402
 from app.services import _event_out_count, normalize_event_type, normalize_status  # noqa: E402
 
 
@@ -157,6 +157,55 @@ def sample_snapshot() -> dict:
                 "sourceEventId": "relay-002",
             }
         ],
+    }
+
+
+def test_app_config_returns_default_store_url_when_unconfigured() -> None:
+    with TestClient(app) as client:
+        response = client.get("/app-config?platform=ios&version=1.1.3")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["platform"] == "ios"
+    assert body["forceUpdate"] is False
+    assert body["storeUrl"] == "itms-apps://itunes.apple.com/app/id6761336752"
+    assert body["notice"] == {"enabled": False, "title": "", "message": ""}
+
+
+def test_app_config_returns_platform_specific_remote_update_message() -> None:
+    with SessionLocal() as db:
+        db.add(
+            AppConfig(
+                platform="android",
+                min_supported_version="1.0.4",
+                latest_version="1.0.5",
+                force_update=True,
+                update_title="업데이트 필수",
+                update_message="운영비로 인해 광고가 추가되었습니다. 안정적인 운영에 사용하겠습니다.",
+                store_url="market://details?id=com.basehaptic.mobile",
+                notice_enabled=True,
+                notice_title="운영 안내",
+                notice_message="공지 내용",
+            )
+        )
+        db.commit()
+
+    with TestClient(app) as client:
+        response = client.get("/app-config?platform=android&version=1.0.3")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["platform"] == "android"
+    assert body["minSupportedVersion"] == "1.0.4"
+    assert body["latestVersion"] == "1.0.5"
+    assert body["forceUpdate"] is True
+    assert body["updateTitle"] == "업데이트 필수"
+    assert body["updateMessage"] == "운영비로 인해 광고가 추가되었습니다. 안정적인 운영에 사용하겠습니다."
+    assert body["storeUrl"] == "market://details?id=com.basehaptic.mobile"
+    assert body["notice"] == {
+        "enabled": True,
+        "title": "운영 안내",
+        "message": "공지 내용",
     }
 
 
@@ -815,6 +864,29 @@ def test_event_pitcher_batter_prefers_metadata_values() -> None:
         first = events.json()["items"][0]
         assert first["pitcher"] == "event pitcher"
         assert first["batter"] == "event batter"
+
+
+def test_game_state_includes_base_runner_names() -> None:
+    with TestClient(app) as client:
+        game_id = "20250501SSSK02025_RUNNERS"
+        payload = sample_snapshot()
+        payload["bases"] = {"first": True, "second": False, "third": True}
+        payload["baseRunners"] = {"first": "First Runner", "third": "Third Runner"}
+
+        ingest = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        body = client.get(f"/games/{game_id}/state").json()
+        assert body["bases"] == {"first": True, "second": False, "third": True}
+        assert body["baseRunners"] == {
+            "first": "First Runner",
+            "second": None,
+            "third": "Third Runner",
+        }
 
 
 def test_duplicate_events_backfill_missing_pitcher_batter() -> None:

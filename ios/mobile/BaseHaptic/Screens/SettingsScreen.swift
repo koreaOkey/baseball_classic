@@ -17,10 +17,7 @@ struct SettingsScreen: View {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var connectivity = PhoneConnectivityManager.shared
     @State private var showTeamPicker = false
-    @AppStorage("live_haptic_enabled") private var hapticEnabled = true
-    @AppStorage("lock_screen_live_score_enabled") private var lockScreenCardEnabled = true
     @State private var highFiveEnabled = true
-    @AppStorage("ball_strike_haptic_enabled") private var ballStrikeHapticEnabled = true
     @AppStorage("event_video_enabled") private var eventVideoEnabled = true
     @State private var showDeleteConfirm = false
     @State private var manuallyOpenedReleaseNote: ReleaseNote?
@@ -168,63 +165,28 @@ struct SettingsScreen: View {
                     EmptyView()
                 }
 
-                // 알림 섹션
+                // 알림 이벤트 섹션
                 Spacer().frame(height: AppSpacing.lg)
-                SettingsSection(title: "알림")
-
-                SettingsItemWithToggle(
-                    icon: "rectangle.on.rectangle",
-                    title: "잠금화면 경기 카드",
-                    subtitle: "경기 중 점수와 진행 상황을 잠금화면에서 보기",
-                    isOn: $lockScreenCardEnabled
-                )
-                .onChange(of: lockScreenCardEnabled) { _, newValue in
-                    if !newValue {
-                        LiveActivityManager.shared.endAllActivities()
-                    }
-                }
-
-                SettingsItemWithToggle(
-                    icon: "waveform",
-                    title: "이벤트 강한 알림",
-                    subtitle: "득점·홈런 등 선택한 이벤트를 워치 햅틱으로 받기",
-                    isOn: $hapticEnabled
-                )
-                .onChange(of: hapticEnabled) { _, newValue in
-                    WatchThemeSyncManager.syncLiveHapticEnabledToWatch(enabled: newValue)
-                    if newValue {
-                        // OFF→ON 복원: 캐시된 마지막 game_data를 즉시 워치에 push
-                        WatchGameSyncManager.shared.resyncLastGameDataToWatch()
-                    }
-                }
-
-                SettingsItemWithToggle(
-                    icon: "baseball",
-                    title: "스트라이크 · 볼 알림",
-                    subtitle: "볼, 스트라이크 이벤트를 워치에서 진동으로 받기",
-                    isOn: $ballStrikeHapticEnabled
-                )
-
-                SettingsItemWithToggle(
-                    icon: "play.rectangle.fill",
-                    title: "이벤트 영상 알림",
-                    subtitle: "홈런·안타·득점 등 이벤트 발생 시 워치 영상 재생",
-                    isOn: $eventVideoEnabled
-                )
-                .onChange(of: eventVideoEnabled) { _, newValue in
-                    WatchThemeSyncManager.syncEventVideoEnabledToWatch(enabled: newValue)
-                }
-
-                Spacer().frame(height: AppSpacing.lg)
-                SettingsSection(title: "선택한 이벤트만 알림")
-                Text("선택한 이벤트가 발생할 때만 강한 알림으로 받아요")
+                SettingsSection(title: "알림 이벤트")
+                Text("경기 카드에서 watch나 잠금화면 보기를 켠 경기에만 적용됩니다.")
                     .font(AppFont.body)
                     .foregroundColor(AppColors.gray400)
                     .padding(.horizontal, AppSpacing.xs)
                     .padding(.bottom, AppSpacing.xs)
 
-                ForEach(EventFilterOption.all) { option in
-                    EventFilterToggleRow(option: option)
+                EventFilterMatrix()
+
+                Spacer().frame(height: AppSpacing.lg)
+                SettingsSection(title: "워치 영상")
+
+                SettingsItemWithToggle(
+                    icon: "play.rectangle.fill",
+                    title: "이벤트 영상 알림",
+                    subtitle: "워치에서 캐릭터 영상 재생",
+                    isOn: $eventVideoEnabled
+                )
+                .onChange(of: eventVideoEnabled) { _, newValue in
+                    WatchThemeSyncManager.syncEventVideoEnabledToWatch(enabled: newValue)
                 }
 
                 // 정보 섹션
@@ -233,7 +195,11 @@ struct SettingsScreen: View {
 
                 SettingsItem(icon: "info.circle.fill", title: "버전", subtitle: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "-") {
                     let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+                    #if DEBUG
+                    manuallyOpenedReleaseNote = ReleaseNotes.notes(for: currentVersion) ?? ReleaseNotes.latest
+                    #else
                     manuallyOpenedReleaseNote = ReleaseNotes.notes(for: currentVersion)
+                    #endif
                 }
 
                 Spacer().frame(height: AppSpacing.bottomSafeSpacer)
@@ -362,33 +328,133 @@ private struct SettingsItemWithToggle: View {
     }
 }
 
-private struct EventFilterToggleRow: View {
+private struct EventFilterMatrix: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: AppSpacing.md) {
+                Text("이벤트")
+                    .font(AppFont.caption)
+                    .foregroundColor(AppColors.gray500)
+                Spacer()
+                Text("Watch")
+                    .font(AppFont.caption)
+                    .foregroundColor(AppColors.gray400)
+                    .frame(width: 58)
+                Text("잠금")
+                    .font(AppFont.caption)
+                    .foregroundColor(AppColors.gray400)
+                    .frame(width: 58)
+            }
+            .padding(.horizontal, AppSpacing.lg)
+            .padding(.top, AppSpacing.md)
+            .padding(.bottom, AppSpacing.sm)
+
+            ForEach(Array(EventFilterOption.all.enumerated()), id: \.element.id) { index, option in
+                EventFilterMatrixRow(option: option)
+
+                if index < EventFilterOption.all.count - 1 {
+                    Divider()
+                        .background(AppColors.gray800)
+                        .padding(.leading, AppSpacing.lg)
+                }
+            }
+        }
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.md)
+    }
+}
+
+private struct EventFilterMatrixRow: View {
     let option: EventFilterOption
-    @AppStorage private var isOn: Bool
+    @AppStorage private var watchEnabled: Bool
+    @AppStorage private var lockScreenEnabled: Bool
+
+    @Environment(\.teamTheme) private var teamTheme
 
     init(option: EventFilterOption) {
         self.option = option
-        _isOn = AppStorage(wrappedValue: option.defaultEnabled, option.storageKey)
-    }
-    var body: some View {
-        SettingsItemWithToggle(
-            icon: option.icon,
-            title: option.title,
-            subtitle: option.subtitle,
-            isOn: $isOn
+        _watchEnabled = AppStorage(
+            wrappedValue: option.defaultEnabled(for: .watch),
+            option.storageKey(for: .watch)
         )
-        .onChange(of: isOn) { _, _ in
-            WatchThemeSyncManager.syncEventFiltersToWatch(filters: EventFilterOption.currentValues())
+        _lockScreenEnabled = AppStorage(
+            wrappedValue: option.defaultEnabled(for: .lockScreen),
+            option.storageKey(for: .lockScreen)
+        )
+    }
+
+    var body: some View {
+        HStack(spacing: AppSpacing.md) {
+            Image(systemName: option.icon)
+                .font(AppFont.bodyLg)
+                .foregroundColor(teamTheme.primary)
+                .frame(width: 22)
+
+            Text(option.title)
+                .font(AppFont.bodyLgMedium)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+
+            Spacer(minLength: AppSpacing.sm)
+
+            EventChannelToggleChip(
+                accessibilityTitle: "\(option.title) Watch 알림",
+                isOn: watchEnabled,
+                activeColor: teamTheme.primary
+            ) {
+                watchEnabled.toggle()
+                WatchThemeSyncManager.syncEventFiltersToWatch(
+                    filters: EventFilterOption.currentValues(channel: .watch)
+                )
+            }
+
+            EventChannelToggleChip(
+                accessibilityTitle: "\(option.title) 잠금화면 알림",
+                isOn: lockScreenEnabled,
+                activeColor: teamTheme.primary
+            ) {
+                lockScreenEnabled.toggle()
+            }
         }
+        .padding(.horizontal, AppSpacing.lg)
+        .padding(.vertical, AppSpacing.md)
+    }
+}
+
+private struct EventChannelToggleChip: View {
+    let accessibilityTitle: String
+    let isOn: Bool
+    let activeColor: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(isOn ? "ON" : "OFF")
+                .font(AppFont.caption)
+                .foregroundColor(isOn ? AppColors.gray950 : AppColors.gray300)
+                .frame(width: 58, height: 32)
+                .background(isOn ? activeColor : AppColors.gray800)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
+                        .stroke(isOn ? activeColor : AppColors.gray700, lineWidth: 1)
+                )
+                .cornerRadius(AppRadius.sm)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityTitle)
+        .accessibilityValue(isOn ? "켬" : "끔")
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 }
 
 extension EventFilterOption {
-    static func currentValues() -> [String: Bool] {
+    static func currentValues(channel: EventNotificationChannel) -> [String: Bool] {
         var values: [String: Bool] = [:]
         let defaults = UserDefaults.standard
         for option in EventFilterOption.all {
-            values[option.storageKey] = defaults.object(forKey: option.storageKey) as? Bool ?? option.defaultEnabled
+            let key = option.storageKey(for: channel)
+            values[key] = defaults.object(forKey: key) as? Bool ?? option.defaultEnabled(for: channel)
         }
         return values
     }

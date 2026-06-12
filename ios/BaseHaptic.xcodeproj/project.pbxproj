@@ -66,6 +66,7 @@
 		A0C9662CE8593BB55A41E683 /* StadiumCheerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1FA6639ABE5D86E35AA452 /* StadiumCheerScreen.swift */; };
 		A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C0734BB3B091847ABD41DA /* Colors.swift */; };
 		A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */; };
+		A6D1F9B43C20E7A98B5512D0 /* LiveViewSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43B9A2610D574BE8A2F1193 /* LiveViewSessionManager.swift */; };
 		A870EA84A0BF7DFA4457DC0B /* 루나 시그널.png in Resources */ = {isa = PBXBuildFile; fileRef = 92808772D1756216D41279FD /* 루나 시그널.png */; };
 		A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF14835688DCF81CAB8F7F1 /* GameData.swift */; };
 		A8F8716965E7875ADD434E35 /* WatchAppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */; };
@@ -207,6 +208,7 @@
 		B7CB78FA5792AFDC17056B15 /* RewardedAdManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardedAdManager.swift; sourceTree = "<group>"; };
 		B7DA9E7CF2523E80A298664E /* LiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveGameScreen.swift; sourceTree = "<group>"; };
 		BF37AA1FE0710EF24B0F226C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C43B9A2610D574BE8A2F1193 /* LiveViewSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveViewSessionManager.swift; sourceTree = "<group>"; };
 		C7F73397A462741B40912C00 /* WatchTestScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTestScreen.swift; sourceTree = "<group>"; };
 		C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamTheme.swift; sourceTree = "<group>"; };
 		CA2BDD4EB0C675A029499451 /* ThemeStoreScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeStoreScreen.swift; sourceTree = "<group>"; };
@@ -283,6 +285,7 @@
 			children = (
 				8023EA4247935305BCC333F5 /* AuthManager.swift */,
 				EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */,
+				C43B9A2610D574BE8A2F1193 /* LiveViewSessionManager.swift */,
 				07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */,
 				2E937F5BCECEABDBDF2D9E4C /* ThemeRepository.swift */,
 			);
@@ -656,6 +659,7 @@
 				FF04F10F375D614182ACC91E /* HomeScreen.swift in Sources */,
 				835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */,
 				5149C6E8A8F4998C32890151 /* LiveGameScreen.swift in Sources */,
+				A6D1F9B43C20E7A98B5512D0 /* LiveViewSessionManager.swift in Sources */,
 				2D0ECD50E2CF9899B886E607 /* MyTeamScreen.swift in Sources */,
 				3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */,
 				15AE36C23A5E7E394F13C981 /* PhoneConnectivityManager.swift in Sources */,
@@ -874,7 +878,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
 				SDKROOT = iphoneos;
 				SUPABASE_ANON_KEY = "$(BASEHAPTIC_STAGING_SUPABASE_ANON_KEY)";
@@ -898,7 +902,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
 				SDKROOT = iphoneos;
 				SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNucmFmcW9xcG10b2Fubm5ud2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMjQ5MjQsImV4cCI6MjA4NjkwMDkyNH0.ufw8jQw9K8vhn9lS_9JA7Yetdi_D_9_ZNpJeukx53bY;
@@ -919,7 +923,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.liveactivity;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -935,7 +939,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -953,7 +957,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -974,7 +978,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.liveactivity;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;

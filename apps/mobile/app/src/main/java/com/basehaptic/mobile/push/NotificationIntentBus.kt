@@ -16,14 +16,20 @@ object NotificationIntentBus {
         val gameId: String,
         val homeTeam: String?,
         val awayTeam: String?,
+        val openHomeOnly: Boolean = false,
     )
 
     private val _pending = MutableStateFlow<PendingIntent?>(null)
     val pending: StateFlow<PendingIntent?> = _pending.asStateFlow()
 
-    fun post(gameId: String, homeTeam: String?, awayTeam: String?) {
+    fun post(
+        gameId: String,
+        homeTeam: String?,
+        awayTeam: String?,
+        openHomeOnly: Boolean = false,
+    ) {
         if (gameId.isBlank()) return
-        _pending.value = PendingIntent(gameId, homeTeam, awayTeam)
+        _pending.value = PendingIntent(gameId, homeTeam, awayTeam, openHomeOnly)
     }
 
     fun consume() {

@@ -110,7 +110,8 @@ struct LiveGameScreen: View {
                                 AtBatCard(
                                     group: group,
                                     awayTeamName: state.awayTeamId.teamName,
-                                    homeTeamName: state.homeTeamId.teamName
+                                    homeTeamName: state.homeTeamId.teamName,
+                                    highlightScoreOutcome: isScoreFilterActive
                                 )
                             }
                         }
@@ -370,55 +371,106 @@ private func defendingTeamSide(forInning inning: String) -> DefendingTeamSide? {
 #if DEBUG
 private enum DebugDummyLiveGame {
     static let lineup = FieldLineup(
-        leftFielder: "김재환",
-        centerFielder: "박해민",
-        rightFielder: "문보경",
-        shortstop: "오지환",
-        secondBaseman: "신민재",
-        thirdBaseman: "허경민",
-        firstBaseman: "오스틴",
-        catcher: "박동원",
-        firstRunner: "문성주",
-        secondRunner: "오스틴",
-        thirdRunner: "김현수"
+        leftFielder: "채현우",
+        centerFielder: "김성욱",
+        rightFielder: "오태곤",
+        shortstop: "안상현",
+        secondBaseman: "홍대인",
+        thirdBaseman: "최윤석",
+        firstBaseman: "전의산",
+        catcher: "신범수",
+        firstRunner: "박해민",
+        secondRunner: "홍창기",
+        thirdRunner: "신민재"
     )
 
     static let state = LiveGameState(
         gameId: "debug-watch-sync-test",
-        homeTeam: "두산",
-        awayTeam: "LG",
-        homeTeamId: .doosan,
-        awayTeamId: .lg,
-        homeScore: 3,
-        awayScore: 5,
-        inning: "7회초",
+        homeTeam: "LG",
+        awayTeam: "SSG",
+        homeTeamId: .lg,
+        awayTeamId: .ssg,
+        homeScore: 10,
+        awayScore: 1,
+        inning: "4회말",
         status: .live,
-        ball: 2,
-        strike: 1,
-        out: 1,
+        ball: 0,
+        strike: 0,
+        out: 2,
         baseFirst: true,
         baseSecond: true,
         baseThird: true,
-        pitcher: "곽빈",
+        baseFirstRunner: "박해민",
+        baseSecondRunner: "홍창기",
+        baseThirdRunner: "신민재",
+        pitcher: "최용준",
         batter: "오스틴",
-        pitcherPitchCount: 87,
-        lastEventType: "HIT",
+        pitcherPitchCount: 18,
+        lastEventType: "SCORE",
         homeLineup: [],
         awayLineup: [],
-        homeStartingPitcher: "곽빈",
-        awayStartingPitcher: "임찬규"
+        homeStartingPitcher: "김윤식",
+        awayStartingPitcher: "김건우"
     )
 
-    // 타석 그룹화 시연용 atBatId/seqno 부여:
-    //   - 오스틴 7회초 타석(relayNo 003) STRIKE→BALL→HIT 3구 → 1개 카드
-    //   - 박해민 7회초 타석(relayNo 002) 삼진 아웃 → 1개 카드
-    //   - 신민재 6회말 득점(relayNo 001) → 1개 카드
+    private static let austinRecord: [String: Any] = [
+        "name": "오스틴",
+        "batOrder": 3,
+        "seasonHra": 0.349,
+        "todayHra": 0.75,
+        "pa": 3,
+        "ab": 3,
+        "hit": 2,
+        "run": 3,
+        "rbi": 3,
+        "hr": 0,
+        "bb": 0,
+        "so": 1
+    ]
+    private static let parkRecord: [String: Any] = [
+        "name": "박해민",
+        "batOrder": 2,
+        "seasonHra": 0.28,
+        "todayHra": 0.333,
+        "pa": 3,
+        "ab": 2,
+        "hit": 1,
+        "run": 2,
+        "rbi": 0,
+        "hr": 0,
+        "bb": 1,
+        "so": 0
+    ]
+    private static let hongRecord: [String: Any] = [
+        "name": "홍창기",
+        "batOrder": 1,
+        "seasonHra": 0.236,
+        "todayHra": 0.333,
+        "pa": 3,
+        "ab": 3,
+        "hit": 1,
+        "run": 1,
+        "rbi": 1,
+        "hr": 0,
+        "bb": 0,
+        "so": 0
+    ]
+    // 2026-06-11 SSG 1 : 15 LG, 네이버 relay 4회말 일부.
+    // 실제 relayNo/seqno 흐름으로 타석 그룹, 선수별 당일 기록, 주자명, 득점 테두리를 확인한다.
     static let events: [LiveEvent] = [
-        LiveEvent(cursor: 5, id: "dbg-5", type: "HIT", description: "오스틴 우전 안타로 1루 진루", time: "19:42", pitcher: "곽빈", batter: "오스틴", inning: "7회초", atBatId: "07-003", seqno: 3),
-        LiveEvent(cursor: 4, id: "dbg-4", type: "BALL", description: "곽빈 → 오스틴 볼", time: "19:41", pitcher: "곽빈", batter: "오스틴", inning: "7회초", atBatId: "07-003", seqno: 2),
-        LiveEvent(cursor: 3, id: "dbg-3", type: "STRIKE", description: "곽빈 → 오스틴 스트라이크", time: "19:40", pitcher: "곽빈", batter: "오스틴", inning: "7회초", atBatId: "07-003", seqno: 1),
-        LiveEvent(cursor: 2, id: "dbg-2", type: "OUT", description: "박해민 삼진 아웃", time: "19:37", pitcher: "곽빈", batter: "박해민", inning: "7회초", atBatId: "07-002", seqno: 1),
-        LiveEvent(cursor: 1, id: "dbg-1", type: "SCORE", description: "신민재 적시타로 1점 추가", time: "19:34", pitcher: "곽빈", batter: "오지환", inning: "6회말", atBatId: "06-001", seqno: 1, homeScoreAfter: 3, awayScoreAfter: 5),
+        LiveEvent(cursor: 13, id: "04-045-0283", type: "SCORE", description: "3루주자 신민재 : 홈인", time: "20:12", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 283, homeScoreAfter: 9, awayScoreAfter: 1, batterRecord: austinRecord, homeWinProbability: 98.7, awayWinProbability: 1.3, wpaByPlate: -0.2),
+        LiveEvent(cursor: 12, id: "04-045-0282", type: "SCORE", description: "2루주자 홍창기 : 홈인", time: "20:12", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 282, homeScoreAfter: 8, awayScoreAfter: 1, batterRecord: austinRecord),
+        LiveEvent(cursor: 11, id: "04-045-0281", type: "SCORE", description: "1루주자 박해민 : 홈인", time: "20:12", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 281, homeScoreAfter: 7, awayScoreAfter: 1, batterRecord: austinRecord),
+        LiveEvent(cursor: 10, id: "04-045-0280", type: "HIT", description: "오스틴 : 좌중간 2루타", time: "20:12", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 280, batterRecord: austinRecord),
+        LiveEvent(cursor: 9, id: "04-045-0279", type: "OTHER", description: "5구 타격", time: "20:11", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 279, pitchNum: 5, pitchSpeed: 146, pitchStuff: "직구", ballAfter: 3, strikeAfter: 1, outAfter: 0, batterRecord: austinRecord),
+        LiveEvent(cursor: 8, id: "04-045-0278", type: "BALL", description: "4구 볼", time: "20:11", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 278, pitchNum: 4, pitchSpeed: 132, pitchStuff: "체인지업", ballAfter: 3, strikeAfter: 1, outAfter: 0, batterRecord: austinRecord),
+        LiveEvent(cursor: 7, id: "04-045-0277", type: "BALL", description: "3구 볼", time: "20:10", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 277, pitchNum: 3, pitchSpeed: 147, pitchStuff: "직구", ballAfter: 2, strikeAfter: 1, outAfter: 0, batterRecord: austinRecord),
+        LiveEvent(cursor: 6, id: "04-045-0276", type: "STRIKE", description: "2구 파울", time: "20:10", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 276, pitchNum: 2, pitchSpeed: 133, pitchStuff: "체인지업", ballAfter: 1, strikeAfter: 1, outAfter: 0, batterRecord: austinRecord),
+        LiveEvent(cursor: 5, id: "04-045-0275", type: "BALL", description: "1구 볼", time: "20:09", pitcher: "최용준", batter: "오스틴", inning: "4회말", atBatId: "04-045", seqno: 275, pitchNum: 1, pitchSpeed: 146, pitchStuff: "직구", ballAfter: 1, strikeAfter: 0, outAfter: 0, batterRecord: austinRecord),
+        LiveEvent(cursor: 4, id: "04-044-0270", type: "HIT", description: "박해민 : 우익수 앞 1루타", time: "20:07", pitcher: "김건우", batter: "박해민", inning: "4회말", atBatId: "04-044", seqno: 270, batterRecord: parkRecord),
+        LiveEvent(cursor: 3, id: "04-043-0262", type: "SCORE", description: "2루주자 이주헌 : 홈인", time: "20:05", pitcher: "김건우", batter: "홍창기", inning: "4회말", atBatId: "04-043", seqno: 262, homeScoreAfter: 6, awayScoreAfter: 1, batterRecord: hongRecord),
+        LiveEvent(cursor: 2, id: "04-043-0260", type: "HIT", description: "홍창기 : 중견수 앞 1루타", time: "20:04", pitcher: "김건우", batter: "홍창기", inning: "4회말", atBatId: "04-043", seqno: 260, batterRecord: hongRecord),
+        LiveEvent(cursor: 1, id: "04-042-0254", type: "WALK", description: "신민재 : 볼넷", time: "20:01", pitcher: "김건우", batter: "신민재", inning: "4회말", atBatId: "04-042", seqno: 254),
     ]
 }
 #endif
@@ -655,15 +707,15 @@ private struct BaseballFieldCard: View {
                 }
 
                 if state.baseFirst {
-                    BaseRunnerMarker(name: lineup?.firstRunner)
+                    BaseRunnerMarker(name: cleanPlayerName(state.baseFirstRunner) ?? lineup?.firstRunner ?? "1루")
                         .atFieldPosition(FieldPositions.firstBase, in: geometry.size)
                 }
                 if state.baseSecond {
-                    BaseRunnerMarker(name: lineup?.secondRunner)
+                    BaseRunnerMarker(name: cleanPlayerName(state.baseSecondRunner) ?? lineup?.secondRunner ?? "2루")
                         .atFieldPosition(FieldPositions.secondBase, in: geometry.size)
                 }
                 if state.baseThird {
-                    BaseRunnerMarker(name: lineup?.thirdRunner)
+                    BaseRunnerMarker(name: cleanPlayerName(state.baseThirdRunner) ?? lineup?.thirdRunner ?? "3루")
                         .atFieldPosition(FieldPositions.thirdBase, in: geometry.size)
                 }
             }
@@ -976,6 +1028,7 @@ private struct AtBatCard: View {
     let group: AtBatGroup
     let awayTeamName: String
     let homeTeamName: String
+    let highlightScoreOutcome: Bool
 
     /// SCORE outcome 그룹의 정확한 시점 누적 스코어 라인 ("LG 1 : 3 두산" 형태).
     /// 백엔드 GameEventOut.homeScoreAfter/awayScoreAfter 가 노출된 경우에만 만들어짐.
@@ -987,8 +1040,7 @@ private struct AtBatCard: View {
     }
 
     private var highlighted: Bool {
-        guard let outcomeType = group.outcome?.type else { return false }
-        return EventFilterGate.isAllowed(eventType: outcomeType)
+        highlightScoreOutcome && isScoreOutcome
     }
 
     /// SCORE/SAC_FLY_SCORE outcome 그룹은 "득점 탭" 에서 description 자체가 정보의 핵심
@@ -1198,14 +1250,14 @@ private struct BatterStatGrid: View {
 
     private var rows: [[BatterStatItem]] {
         let stats = [
-            BatterStatItem(label: "타석", value: batterRecordDisplayInt(record, keys: ["pa", "plateAppearances"])),
-            BatterStatItem(label: "타수", value: batterRecordDisplayInt(record, keys: ["ab", "atBats"])),
+            BatterStatItem(label: "타석", value: batterRecordDisplayInt(record, keys: ["pa", "plateAppearance", "plateAppearances"])),
+            BatterStatItem(label: "타수", value: batterRecordDisplayInt(record, keys: ["ab", "atBat", "atBats"])),
             BatterStatItem(label: "안타", value: batterRecordDisplayInt(record, keys: ["hit", "hits"])),
             BatterStatItem(label: "득점", value: batterRecordDisplayInt(record, keys: ["run", "runs", "score"])),
             BatterStatItem(label: "타점", value: batterRecordDisplayInt(record, keys: ["rbi"])),
             BatterStatItem(label: "홈런", value: batterRecordDisplayInt(record, keys: ["hr", "homeRuns"])),
-            BatterStatItem(label: "볼넷", value: batterRecordDisplayInt(record, keys: ["bb", "walks"])),
-            BatterStatItem(label: "삼진", value: batterRecordDisplayInt(record, keys: ["so", "strikeOuts"]))
+            BatterStatItem(label: "볼넷", value: batterRecordDisplayInt(record, keys: ["bb", "walk", "walks", "baseOnBalls"])),
+            BatterStatItem(label: "삼진", value: batterRecordDisplayInt(record, keys: ["so", "strikeOuts", "strikeouts"]))
         ]
         return [Array(stats.prefix(4)), Array(stats.dropFirst(4))]
     }
@@ -1524,30 +1576,34 @@ private func batterRecordDisplayInt(_ record: [String: Any]?, keys: [String]) ->
 }
 
 private func displayPitcher(state: LiveGameState, event: LiveEvent?, placeholder: String = "-") -> String {
-    let direct = state.pitcher.trimmingCharacters(in: .whitespacesAndNewlines)
-    if !direct.isEmpty { return direct }
-    if let eventName = event?.pitcher?.trimmingCharacters(in: .whitespacesAndNewlines), !eventName.isEmpty {
+    if let direct = cleanPlayerName(state.pitcher) { return direct }
+    if let eventName = cleanPlayerName(event?.pitcher) {
         return eventName
     }
     // 라인업 공개 후 라이브 진입 전: 수비팀 선발투수로 폴백.
     // FieldLineup.from(state:) 과 동일 규칙(`말` 이 아니면 home 수비).
     let preferHome = !state.inning.contains("말")
-    if preferHome, let starter = state.homeStartingPitcher?.trimmingCharacters(in: .whitespacesAndNewlines), !starter.isEmpty {
+    if preferHome, let starter = cleanPlayerName(state.homeStartingPitcher) {
         return starter
     }
-    if !preferHome, let starter = state.awayStartingPitcher?.trimmingCharacters(in: .whitespacesAndNewlines), !starter.isEmpty {
+    if !preferHome, let starter = cleanPlayerName(state.awayStartingPitcher) {
         return starter
     }
     return placeholder
 }
 
 private func displayBatter(state: LiveGameState, event: LiveEvent?, placeholder: String = "-") -> String {
-    let direct = state.batter.trimmingCharacters(in: .whitespacesAndNewlines)
-    if !direct.isEmpty { return direct }
-    if let eventName = event?.batter?.trimmingCharacters(in: .whitespacesAndNewlines), !eventName.isEmpty {
+    if let direct = cleanPlayerName(state.batter) { return direct }
+    if let eventName = cleanPlayerName(event?.batter) {
         return eventName
     }
     return placeholder
+}
+
+private func cleanPlayerName(_ name: String?) -> String? {
+    let value = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !value.isEmpty, value.lowercased() != "null" else { return nil }
+    return value
 }
 
 private func baseText(_ state: LiveGameState) -> String {

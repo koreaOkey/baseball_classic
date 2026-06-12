@@ -30,7 +30,7 @@ targets:
       base:
         INFOPLIST_FILE: mobile/BaseHaptic/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.1.3"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_ENTITLEMENTS: BaseHaptic.entitlements
@@ -65,7 +65,7 @@ targets:
       base:
         INFOPLIST_FILE: liveactivity/BaseHapticLiveActivity/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app.liveactivity
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.1.3"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         APPLICATION_EXTENSION_API_ONLY: "YES"
@@ -80,7 +80,7 @@ targets:
       base:
         INFOPLIST_FILE: watch/BaseHapticWatch/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app.watchkitapp
-        MARKETING_VERSION: "1.0.0"
+        MARKETING_VERSION: "1.1.3"
         CURRENT_PROJECT_VERSION: "1"
         SUPPORTS_WATCH_COMPANION: "YES"
         CODE_SIGN_ENTITLEMENTS: "BaseHapticWatch Watch App.entitlements"

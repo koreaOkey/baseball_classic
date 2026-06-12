@@ -71,6 +71,9 @@ object BackendGamesRepository {
         val baseFirst: Boolean,
         val baseSecond: Boolean,
         val baseThird: Boolean,
+        val baseFirstRunner: String? = null,
+        val baseSecondRunner: String? = null,
+        val baseThirdRunner: String? = null,
         val pitcher: String,
         val batter: String,
         val pitcherPitchCount: Int?,
@@ -152,6 +155,23 @@ object BackendGamesRepository {
         val game: Game
     )
 
+    data class AppNotice(
+        val enabled: Boolean,
+        val title: String,
+        val message: String
+    )
+
+    data class AppConfig(
+        val platform: String,
+        val minSupportedVersion: String,
+        val latestVersion: String,
+        val forceUpdate: Boolean,
+        val updateTitle: String,
+        val updateMessage: String,
+        val storeUrl: String,
+        val notice: AppNotice
+    )
+
     sealed interface LiveStreamMessage {
         data object Connected : LiveStreamMessage
         data class State(val state: LiveGameState) : LiveStreamMessage
@@ -172,6 +192,28 @@ object BackendGamesRepository {
 
     fun fetchGames(selectedTeam: Team): List<Game>? {
         return fetchGamesByDate(selectedTeam = selectedTeam, targetDate = LocalDate.now())
+    }
+
+    fun fetchAppConfig(platform: String, version: String): AppConfig? {
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/app-config?platform=$platform&version=$version"
+        return getJson(endpoint) { body ->
+            val json = JSONObject(body)
+            val notice = json.optJSONObject("notice") ?: JSONObject()
+            AppConfig(
+                platform = json.optString("platform"),
+                minSupportedVersion = json.optString("minSupportedVersion"),
+                latestVersion = json.optString("latestVersion"),
+                forceUpdate = json.optBoolean("forceUpdate", false),
+                updateTitle = json.optString("updateTitle", "업데이트가 필요합니다"),
+                updateMessage = json.optString("updateMessage", "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요."),
+                storeUrl = json.optString("storeUrl"),
+                notice = AppNotice(
+                    enabled = notice.optBoolean("enabled", false),
+                    title = notice.optString("title"),
+                    message = notice.optString("message")
+                )
+            )
+        }
     }
 
     fun peekTodayGamesCache(context: Context, selectedTeam: Team): List<Game>? {
@@ -821,6 +863,7 @@ object BackendGamesRepository {
         val homeTeamName = optString("homeTeam")
         val awayTeamName = optString("awayTeam")
         val bases = optJSONObject("bases") ?: JSONObject()
+        val baseRunners = optJSONObject("baseRunners") ?: JSONObject()
         val rawStatus = optString("status")
         return LiveGameState(
             gameId = optString("gameId"),
@@ -838,6 +881,9 @@ object BackendGamesRepository {
             baseFirst = bases.optBoolean("first", false),
             baseSecond = bases.optBoolean("second", false),
             baseThird = bases.optBoolean("third", false),
+            baseFirstRunner = baseRunners.optCleanString("first", "firstRunner", "first_runner"),
+            baseSecondRunner = baseRunners.optCleanString("second", "secondRunner", "second_runner"),
+            baseThirdRunner = baseRunners.optCleanString("third", "thirdRunner", "third_runner"),
             pitcher = optCleanString("pitcher", "currentPitcher", "current_pitcher").orEmpty(),
             batter = optCleanString("batter", "currentBatter", "current_batter").orEmpty(),
             pitcherPitchCount = if (isNull("pitcherPitchCount")) null else optInt("pitcherPitchCount").takeIf { has("pitcherPitchCount") },

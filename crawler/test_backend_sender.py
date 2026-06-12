@@ -165,7 +165,7 @@ def test_snapshot_payload_preserves_naver_pitch_detail_metadata() -> None:
                                 "strike": "3",
                                 "ball": "2",
                                 "out": "0",
-                                "base1": "0",
+                                "base1": "64504",
                                 "base2": "0",
                                 "base3": "0",
                             },
@@ -195,6 +195,8 @@ def test_snapshot_payload_preserves_naver_pitch_detail_metadata() -> None:
     assert metadata["batterRecord"]["batOrder"] == 8
     assert metadata["awayWinProbability"] == 24.0
     assert metadata["wpaByPlate"] == -3.2
+    assert payload["bases"]["first"] is True
+    assert payload["baseRunners"]["first"] == "오윤석"
 
 
 def test_pitcher_stats_pick_up_ballcount_as_pitches_thrown() -> None:

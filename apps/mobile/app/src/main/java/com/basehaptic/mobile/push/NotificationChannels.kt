@@ -8,7 +8,7 @@ import androidx.core.content.getSystemService
 
 object NotificationChannels {
     const val GAME_ALERTS_ID = "game_alerts"
-    const val LIVE_SCORE_ID = "live_score"
+    const val LIVE_SCORE_ID = "live_score_card"
     const val TEST_PUSH_ID = "test_push"
 
     fun ensureCreated(context: Context) {
@@ -29,7 +29,7 @@ object NotificationChannels {
             val channel = NotificationChannel(
                 LIVE_SCORE_ID,
                 "라이브 스코어",
-                NotificationManager.IMPORTANCE_LOW,
+                NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
                 description = "라이브 경기 진행 중 스코어·이닝·BSO 진행 상태 표시"
                 enableVibration(false)

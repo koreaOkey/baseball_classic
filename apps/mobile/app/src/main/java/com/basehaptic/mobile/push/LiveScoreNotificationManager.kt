@@ -3,11 +3,14 @@ package com.basehaptic.mobile.push
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.basehaptic.mobile.MainActivity
 import com.basehaptic.mobile.R
+import com.basehaptic.mobile.data.model.EventFilterGate
+import com.basehaptic.mobile.data.model.EventNotificationChannel
 import com.basehaptic.mobile.data.BackendGamesRepository.LiveGameState
 import com.basehaptic.mobile.data.model.Team
 
@@ -26,7 +29,8 @@ object LiveScoreNotificationManager {
         context: Context,
         state: LiveGameState,
         latestEventType: String? = state.lastEventType,
-        latestEventDescription: String? = null
+        latestEventDescription: String? = null,
+        highlightEvent: Boolean = false
     ): Boolean {
         if (!isLockScreenCardEnabled(context)) {
             remove(context)
@@ -51,6 +55,10 @@ object LiveScoreNotificationManager {
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("extra_game_id", state.gameId)
+            putExtra(
+                BaseHapticMessagingService.EXTRA_NOTIFICATION_SOURCE,
+                BaseHapticMessagingService.SOURCE_LIVE_SCORE
+            )
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -59,15 +67,24 @@ object LiveScoreNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val compactView = buildCompactRemoteViews(context, state, awayName, homeName, statusText, text)
+        val compactView = buildCompactRemoteViews(
+            context = context,
+            state = state,
+            awayName = awayName,
+            homeName = homeName
+        )
+        val shouldHighlight = highlightEvent &&
+            EventFilterGate.isAllowed(context, latestEventType, EventNotificationChannel.LOCK_SCREEN)
         val expandedView = buildExpandedRemoteViews(
             context = context,
             state = state,
             awayName = awayName,
             homeName = homeName,
             statusText = statusText,
+            eventType = latestEventType,
             eventLabel = eventLabel,
-            latestEventDescription = latestEventDescription
+            latestEventDescription = latestEventDescription,
+            highlightEvent = shouldHighlight
         )
 
         val notification = NotificationCompat.Builder(context, NotificationChannels.LIVE_SCORE_ID)
@@ -78,12 +95,13 @@ object LiveScoreNotificationManager {
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(compactView)
             .setCustomBigContentView(expandedView)
+            .setCustomHeadsUpContentView(expandedView)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setSilent(true)
+            .setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .build()
 
@@ -121,14 +139,15 @@ object LiveScoreNotificationManager {
         context: Context,
         state: LiveGameState,
         awayName: String,
-        homeName: String,
-        statusText: String,
-        fallbackText: String
+        homeName: String
     ): RemoteViews {
         return RemoteViews(context.packageName, R.layout.notification_live_score_compact).apply {
-            setTextViewText(R.id.notification_status, statusText)
-            setTextViewText(R.id.notification_score, "$awayName ${state.awayScore} : ${state.homeScore} $homeName")
-            setTextViewText(R.id.notification_meta, fallbackText)
+            setTextViewText(R.id.notification_away_team, awayName)
+            setTextViewText(R.id.notification_home_team, homeName)
+            setTextViewText(R.id.notification_away_score, state.awayScore.toString())
+            setTextViewText(R.id.notification_home_score, state.homeScore.toString())
+            setImageViewResource(R.id.notification_away_logo, teamLogoRes(state.awayTeamId))
+            setImageViewResource(R.id.notification_home_logo, teamLogoRes(state.homeTeamId))
         }
     }
 
@@ -138,19 +157,35 @@ object LiveScoreNotificationManager {
         awayName: String,
         homeName: String,
         statusText: String,
+        eventType: String?,
         eventLabel: String,
-        latestEventDescription: String?
+        latestEventDescription: String?,
+        highlightEvent: Boolean
     ): RemoteViews {
+        val recentText = recentEventText(eventLabel, latestEventDescription)
+        val showHighlight = highlightEvent && recentText.isNotBlank()
+        val inningLabel = state.inning.ifBlank { "경기 중" }
         return RemoteViews(context.packageName, R.layout.notification_live_score_expanded).apply {
-            setTextViewText(R.id.notification_status, statusText)
+            setTextViewText(R.id.notification_status, inningLabel)
             setTextViewText(R.id.notification_away_team, awayName)
             setTextViewText(R.id.notification_home_team, homeName)
             setTextViewText(R.id.notification_away_score, state.awayScore.toString())
             setTextViewText(R.id.notification_home_score, state.homeScore.toString())
             setImageViewResource(R.id.notification_away_logo, teamLogoRes(state.awayTeamId))
             setImageViewResource(R.id.notification_home_logo, teamLogoRes(state.homeTeamId))
+            setTextViewText(R.id.notification_event_label, eventLabel)
+            setTextColor(R.id.notification_event_label, eventColor(eventType))
+            setViewVisibility(
+                R.id.notification_event_label,
+                if (eventLabel.isBlank()) View.GONE else View.VISIBLE
+            )
             setTextViewText(R.id.notification_pitcher_batter, "P ${state.pitcher.ifBlank { "-" }}  |  B ${state.batter.ifBlank { "-" }}")
-            setTextViewText(R.id.notification_recent_event, recentEventText(eventLabel, latestEventDescription))
+            setTextViewText(R.id.notification_recent_event, recentText)
+            setTextViewText(R.id.notification_highlight_event, recentText)
+            setTextColor(R.id.notification_highlight_dot, eventColor(eventType))
+            setInt(R.id.notification_highlight_row, "setBackgroundResource", eventHighlightBackground(eventType))
+            setViewVisibility(R.id.notification_highlight_row, if (showHighlight) View.VISIBLE else View.GONE)
+            setViewVisibility(R.id.notification_detail_row, if (showHighlight) View.GONE else View.VISIBLE)
 
             setBaseBackground(R.id.notification_base_first, state.baseFirst)
             setBaseBackground(R.id.notification_base_second, state.baseSecond)
@@ -212,9 +247,31 @@ object LiveScoreNotificationManager {
             ?.takeIf { it.isNotBlank() }
             ?.take(42)
         return when {
-            !description.isNullOrBlank() -> "최근: $description"
-            eventLabel.isNotBlank() -> "최근: $eventLabel"
-            else -> "최근 이벤트 대기 중"
+            !description.isNullOrBlank() -> description
+            eventLabel.isNotBlank() -> eventLabel
+            else -> "경기 진행 상황을 업데이트 중입니다"
+        }
+    }
+
+    private fun eventColor(type: String?): Int {
+        return when (type?.uppercase()) {
+            "HOMERUN" -> 0xFFFB923C.toInt()
+            "SCORE", "SAC_FLY_SCORE" -> 0xFFFACC15.toInt()
+            "HIT" -> 0xFF60A5FA.toInt()
+            "WALK", "STEAL", "TAG_UP_ADVANCE" -> 0xFF4ADE80.toInt()
+            "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY" -> 0xFFF87171.toInt()
+            else -> 0xFFFACC15.toInt()
+        }
+    }
+
+    private fun eventHighlightBackground(type: String?): Int {
+        return when (type?.uppercase()) {
+            "HOMERUN" -> R.drawable.notification_highlight_orange
+            "SCORE", "SAC_FLY_SCORE" -> R.drawable.notification_highlight_yellow
+            "HIT" -> R.drawable.notification_highlight_blue
+            "WALK", "STEAL", "TAG_UP_ADVANCE" -> R.drawable.notification_highlight_green
+            "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY" -> R.drawable.notification_highlight_red
+            else -> R.drawable.notification_highlight_yellow
         }
     }
 

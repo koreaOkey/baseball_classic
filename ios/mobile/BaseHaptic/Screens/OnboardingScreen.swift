@@ -3,6 +3,7 @@ import AuthenticationServices
 
 struct OnboardingScreen: View {
     let onComplete: (Team) -> Void
+    var initialSelectedTeam: Team = .none
     var authState: AuthState = .loggedOut
     var onSignInWithKakao: () -> Void = {}
     var onSignInWithApple: (ASAuthorization) -> Void = { _ in }
@@ -35,6 +36,11 @@ struct OnboardingScreen: View {
                 Spacer()
             }
             .padding(.horizontal, AppSpacing.xxl)
+        }
+        .onAppear {
+            if selectedTeam == .none, initialSelectedTeam != .none {
+                selectedTeam = initialSelectedTeam
+            }
         }
         .onChange(of: authState) { _, newState in
             if case .loggedIn = newState, step == 3, !didAutoComplete {
@@ -110,6 +116,10 @@ struct OnboardingScreen: View {
 
             FeatureCard(systemImage: "applewatch.radiowaves.left.and.right", title: "워치로 라이브 경기 보기",
                         description: "득점, 홈런 등 주요 이벤트 발생 시 스마트워치로 진동 알림을 보냅니다.")
+
+            FeatureCard(systemImage: "megaphone.fill", title: "광고 안내",
+                        description: "운영비로 인해 부득이하게 광고가 추가되었습니다. 안정적인 운영에 사용하겠습니다.")
+                .padding(.top, AppSpacing.md)
 
             Button(action: { step = 3 }) {
                 Text("계속하기")
@@ -264,6 +274,7 @@ private struct FeatureCard: View {
             }
         }
         .padding(AppSpacing.lg)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
         .overlay(
             RoundedRectangle(cornerRadius: AppRadius.md)
                 .stroke(AppColors.gray800.opacity(0.8), lineWidth: 1)

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from .models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, TeamRecord
 from .schemas import (
+    BaseRunnerStatus,
     BaseStatus,
     CrawlerBatterStatIn,
     CrawlerEventIn,
@@ -291,6 +292,9 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
     incoming_b1 = payload.bases.first
     incoming_b2 = payload.bases.second
     incoming_b3 = payload.bases.third
+    incoming_b1_runner = payload.baseRunners.first
+    incoming_b2_runner = payload.baseRunners.second
+    incoming_b3_runner = payload.baseRunners.third
     inning_advanced = False
 
     if next_status is GameStatus.LIVE:
@@ -307,6 +311,7 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
                 next_status = GameStatus.FINISHED
                 incoming_ball = incoming_strike = incoming_out = 0
                 incoming_b1 = incoming_b2 = incoming_b3 = False
+                incoming_b1_runner = incoming_b2_runner = incoming_b3_runner = None
             else:
                 if new_inning != incoming_inning:
                     logger.info(
@@ -317,6 +322,7 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
                 incoming_inning = new_inning
                 incoming_ball = incoming_strike = incoming_out = 0
                 incoming_b1 = incoming_b2 = incoming_b3 = False
+                incoming_b1_runner = incoming_b2_runner = incoming_b3_runner = None
         # A안: 이전 out>=2 + 현재 out=0 + inning 동일 → transition advance
         elif (
             prev_out is not None and prev_out >= 2
@@ -374,6 +380,9 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
     game.base_first = incoming_b1
     game.base_second = incoming_b2
     game.base_third = incoming_b3
+    game.base_first_runner = incoming_b1_runner if incoming_b1 else None
+    game.base_second_runner = incoming_b2_runner if incoming_b2 else None
+    game.base_third_runner = incoming_b3_runner if incoming_b3 else None
     game.pitcher = payload.pitcher
     game.batter = payload.batter
     normalized_game_date = _game_date_from_game_id(game_id)
@@ -1480,7 +1489,16 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         ball=ball,
         strike=strike,
         out=out,
-        bases=BaseStatus(first=base_first, second=base_second, third=base_third),
+        bases=BaseStatus(
+            first=base_first,
+            second=base_second,
+            third=base_third,
+        ),
+        baseRunners=BaseRunnerStatus(
+            first=game.base_first_runner if base_first else None,
+            second=game.base_second_runner if base_second else None,
+            third=game.base_third_runner if base_third else None,
+        ),
         pitcher=game.pitcher,
         batter=game.batter,
         pitcherPitchCount=pitcher_pitch_count,

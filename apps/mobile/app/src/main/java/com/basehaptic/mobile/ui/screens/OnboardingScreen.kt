@@ -53,10 +53,11 @@ import com.basehaptic.mobile.ui.theme.Gray950
 @Composable
 fun OnboardingScreen(
     onComplete: (Team) -> Unit,
+    initialSelectedTeam: Team = Team.NONE,
     authState: AuthState = AuthState.LoggedOut,
     onSignInWithKakao: () -> Unit = {},
 ) {
-    var selectedTeam by remember { mutableStateOf(Team.NONE) }
+    var selectedTeam by remember(initialSelectedTeam) { mutableStateOf(initialSelectedTeam) }
     var step by remember { mutableIntStateOf(1) }
 
     val teams = listOf(
@@ -186,6 +187,13 @@ fun OnboardingScreen(
                                 emoji = "⌚",
                                 title = "워치로 라이브 경기 보기",
                                 description = "득점, 홈런 등 주요 이벤트 발생 시 스마트워치로 진동 알림을 보냅니다."
+                            )
+
+                            FeatureCard(
+                                emoji = "📣",
+                                title = "광고 안내",
+                                description = "운영비로 인해 부득이하게 광고가 추가되었습니다. 안정적인 운영에 사용하겠습니다.",
+                                modifier = Modifier.padding(top = AppSpacing.md)
                             )
 
                             Button(
@@ -351,6 +359,7 @@ private fun FeatureCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .height(112.dp)
             .clip(AppShapes.md)
             .border(1.dp, Gray800.copy(alpha = 0.8f), AppShapes.md)
             .padding(AppSpacing.lg)

@@ -7,6 +7,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.basehaptic.mobile.MainActivity
 import com.basehaptic.mobile.R
+import com.basehaptic.mobile.data.model.EventFilterGate
+import com.basehaptic.mobile.data.model.EventNotificationChannel
 import com.basehaptic.mobile.wear.WatchCompanionStatus
 import com.basehaptic.mobile.wear.WatchCompanionStatusRepository
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -37,8 +39,8 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
         val awayTeam = data["away_team"]
         val eventType = data["event_type"]
 
-        // 사용자 이벤트 필터 가드: 미선택 이벤트는 폰 노티 자체를 게시 안 함
-        if (!com.basehaptic.mobile.data.model.EventFilterGate.isAllowed(this, eventType)) {
+        // 잠금화면 이벤트 필터 가드: 미선택 이벤트는 폰 강한 알림을 게시 안 함
+        if (!EventFilterGate.isAllowed(this, eventType, EventNotificationChannel.LOCK_SCREEN)) {
             Log.d(TAG, "event filter blocked phone push: $eventType")
             return
         }
@@ -66,6 +68,7 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
             gameId?.let { putExtra(EXTRA_GAME_ID, it) }
             homeTeam?.let { putExtra(EXTRA_HOME_TEAM, it) }
             awayTeam?.let { putExtra(EXTRA_AWAY_TEAM, it) }
+            putExtra(EXTRA_NOTIFICATION_SOURCE, SOURCE_GAME_ALERT)
         }
         val baseRequestCode = gameId?.hashCode() ?: 0
         val pendingIntent = PendingIntent.getActivity(
@@ -121,5 +124,8 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
         const val EXTRA_GAME_ID = "extra_game_id"
         const val EXTRA_HOME_TEAM = "extra_home_team"
         const val EXTRA_AWAY_TEAM = "extra_away_team"
+        const val EXTRA_NOTIFICATION_SOURCE = "extra_notification_source"
+        const val SOURCE_GAME_ALERT = "game_alert"
+        const val SOURCE_LIVE_SCORE = "live_score"
     }
 }

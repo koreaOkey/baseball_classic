@@ -1,12 +1,17 @@
 package com.basehaptic.mobile.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,14 +20,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.basehaptic.mobile.R
 import com.basehaptic.mobile.ui.components.BannerAd
 import com.basehaptic.mobile.data.BackendGamesRepository
@@ -48,11 +65,20 @@ fun HomeScreen(
     todayGames: List<Game>,
     syncedGameId: String?,
     activeLiveScoreGameId: String?,
+    showUpdateHighlights: Boolean = false,
+    onDismissUpdateHighlights: () -> Unit = {},
     onToggleWatchSync: (Game) -> Unit,
     onToggleLiveScore: (Game) -> Unit,
     onSelectGame: (Game) -> Unit
 ) {
-    val games = remember(todayGames) { sortHomeGames(todayGames) }
+    val games = remember(todayGames, selectedTeam, showUpdateHighlights) {
+        val sortedGames = sortHomeGames(todayGames)
+        if (showUpdateHighlights && sortedGames.isEmpty()) {
+            listOf(updateHighlightSampleGame(selectedTeam))
+        } else {
+            sortedGames
+        }
+    }
     val context = LocalContext.current
     var teamRecordStats by remember(selectedTeam) {
         mutableStateOf<BackendGamesRepository.TeamRecordStats?>(null)
@@ -75,6 +101,49 @@ fun HomeScreen(
     var scheduleMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedScheduleDate by remember { mutableStateOf(LocalDate.now()) }
     val scheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val listState = rememberLazyListState()
+    var updateHighlightStepIndex by remember { mutableIntStateOf(0) }
+    var updateHighlightBounds by remember { mutableStateOf<Map<UpdateHighlightStep, Rect>>(emptyMap()) }
+    var updateHighlightRootBounds by remember { mutableStateOf<Rect?>(null) }
+    val updateHighlightStep = if (showUpdateHighlights) {
+        UpdateHighlightStep.values().getOrNull(updateHighlightStepIndex)
+    } else {
+        null
+    }
+
+    fun advanceUpdateHighlight() {
+        if (updateHighlightStepIndex >= UpdateHighlightStep.values().lastIndex) {
+            onDismissUpdateHighlights()
+        } else {
+            updateHighlightStepIndex += 1
+        }
+    }
+
+    LaunchedEffect(showUpdateHighlights) {
+        if (showUpdateHighlights) updateHighlightStepIndex = 0
+    }
+
+    LaunchedEffect(showUpdateHighlights, updateHighlightStep) {
+        if (!showUpdateHighlights) return@LaunchedEffect
+        when (updateHighlightStep) {
+            UpdateHighlightStep.STANDINGS,
+            UpdateHighlightStep.SCHEDULE -> listState.animateScrollToItem(0)
+            UpdateHighlightStep.LOCK_SCREEN,
+            UpdateHighlightStep.WATCH,
+            UpdateHighlightStep.SCORE -> listState.animateScrollToItem(4)
+            null -> Unit
+        }
+    }
+
+    fun Modifier.captureUpdateHighlightBounds(step: UpdateHighlightStep): Modifier {
+        return if (showUpdateHighlights) {
+            this.onGloballyPositioned { coordinates ->
+                updateHighlightBounds = updateHighlightBounds + (step to coordinates.boundsInRoot())
+            }
+        } else {
+            this
+        }
+    }
 
     LaunchedEffect(showStandingsSheet, standingsLoadRequest) {
         if (!showStandingsSheet) return@LaunchedEffect
@@ -238,11 +307,18 @@ fun HomeScreen(
         "${wins}승"
     } ?: "-"
 
-    LazyColumn(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Gray950)
+            .onGloballyPositioned { coordinates ->
+                updateHighlightRootBounds = coordinates.boundsInRoot()
+            }
     ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState
+        ) {
         // Header
         item {
             Box(
@@ -288,6 +364,7 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
+                                .captureUpdateHighlightBounds(UpdateHighlightStep.STANDINGS)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = 0.2f))
                                 .clickable {
@@ -309,6 +386,7 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .captureUpdateHighlightBounds(UpdateHighlightStep.SCHEDULE)
                             .clickable {
                                 showScheduleSheet = true
                                 scheduleMonth = YearMonth.now()
@@ -432,16 +510,20 @@ fun HomeScreen(
                 }
             }
         } else {
-            items(
+            itemsIndexed(
                 items = games,
-                key = { it.id }
-            ) { game ->
+                key = { _, game -> game.id }
+            ) { index, game ->
                 val isWatchSynced = game.status == GameStatus.LIVE && syncedGameId == game.id
                 GameCard(
                     game = game,
                     primaryColor = primaryColor,
                     isWatchSynced = isWatchSynced,
                     isLiveScoreActive = activeLiveScoreGameId == game.id,
+                    captureUpdateHighlights = showUpdateHighlights && index == 0,
+                    onUpdateHighlightBoundsChanged = { step, bounds ->
+                        updateHighlightBounds = updateHighlightBounds + (step to bounds)
+                    },
                     onClick = { onSelectGame(game) },
                     onWatchSyncClick = { onToggleWatchSync(game) },
                     onLiveScoreClick = { onToggleLiveScore(game) }
@@ -474,6 +556,28 @@ fun HomeScreen(
 
         item {
             Spacer(modifier = Modifier.height(AppSpacing.bottomSafeSpacer))
+        }
+    }
+
+        val step = updateHighlightStep
+        val rootBounds = updateHighlightRootBounds
+        val targetBounds = step?.let { updateHighlightBounds[it] }
+        if (step != null && targetBounds != null && rootBounds != null) {
+            val localTargetBounds = Rect(
+                left = targetBounds.left - rootBounds.left,
+                top = targetBounds.top - rootBounds.top,
+                right = targetBounds.right - rootBounds.left,
+                bottom = targetBounds.bottom - rootBounds.top
+            )
+            UpdateHighlightOverlay(
+                step = step,
+                targetBounds = localTargetBounds,
+                onNext = ::advanceUpdateHighlight,
+                onDismiss = onDismissUpdateHighlights,
+                modifier = Modifier
+                    .matchParentSize()
+                    .zIndex(10f)
+            )
         }
     }
 
@@ -1270,12 +1374,171 @@ private fun UpcomingGameCard(
     }
 }
 
+private enum class UpdateHighlightStep(
+    val title: String,
+    val body: String
+) {
+    LOCK_SCREEN(
+        title = "잠금화면 토글",
+        body = "LIVE 경기를 휴대폰 잠금화면에서 볼 수 있어요."
+    ),
+    WATCH(
+        title = "Watch 토글",
+        body = "LIVE 경기를 스마트워치에서 볼 수 있어요."
+    ),
+    STANDINGS(
+        title = "전체 순위 보기",
+        body = "아이콘을 누르면 전체 순위를 바로 확인할 수 있어요."
+    ),
+    SCHEDULE(
+        title = "전체 일정 보기",
+        body = "이 카드를 누르면 응원팀 시즌 일정을 달력으로 한눈에 볼 수 있어요."
+    ),
+    SCORE(
+        title = "점수 보기",
+        body = "경기 카드에서 최신 점수와 진행 상황을 바로 확인할 수 있어요."
+    )
+}
+
+private fun updateHighlightSampleGame(selectedTeam: Team): Game {
+    val homeTeam = if (selectedTeam == Team.NONE) Team.LG else selectedTeam
+    val awayTeam = if (homeTeam == Team.SSG) Team.LG else Team.SSG
+    return Game(
+        id = "update-highlight-sample-game",
+        homeTeam = homeTeam.teamName,
+        awayTeam = awayTeam.teamName,
+        homeTeamId = homeTeam,
+        awayTeamId = awayTeam,
+        homeScore = 10,
+        awayScore = 1,
+        inning = "4회말",
+        status = GameStatus.LIVE,
+        time = "18:30",
+        isMyTeam = selectedTeam != Team.NONE
+    )
+}
+
+@Composable
+private fun UpdateHighlightOverlay(
+    step: UpdateHighlightStep,
+    targetBounds: Rect,
+    onNext: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    val index = UpdateHighlightStep.values().indexOf(step) + 1
+    val total = UpdateHighlightStep.values().size
+    val isLast = index == total
+    val blockedClicks = remember { MutableInteractionSource() }
+
+    BoxWithConstraints(modifier = modifier) {
+        val screenHeightPx = with(density) { maxHeight.toPx() }
+        val cardEstimatedHeightPx = with(density) { 156.dp.toPx() }
+        val cardSpacingPx = with(density) { 12.dp.toPx() }
+        val screenPaddingPx = with(density) { AppSpacing.xxl.toPx() }
+        val cardTopBelow = (targetBounds.bottom + cardSpacingPx)
+            .coerceAtMost(screenHeightPx - cardEstimatedHeightPx - screenPaddingPx)
+            .coerceAtLeast(screenPaddingPx)
+        val cardTopAbove = (targetBounds.top - cardEstimatedHeightPx - cardSpacingPx)
+            .coerceAtLeast(screenPaddingPx)
+        val shouldPlaceAbove =
+            targetBounds.bottom + cardSpacingPx + cardEstimatedHeightPx > screenHeightPx - screenPaddingPx
+        val cardTopPx = if (shouldPlaceAbove) cardTopAbove else cardTopBelow
+        val cardTop = with(density) { cardTopPx.toDp() }
+
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val padding = 8.dp.toPx()
+            val radius = 18.dp.toPx()
+            val highlightRect = Rect(
+                left = (targetBounds.left - padding).coerceAtLeast(0f),
+                top = (targetBounds.top - padding).coerceAtLeast(0f),
+                right = (targetBounds.right + padding).coerceAtMost(size.width),
+                bottom = (targetBounds.bottom + padding).coerceAtMost(size.height)
+            )
+            val scrimPath = Path().apply {
+                fillType = PathFillType.EvenOdd
+                addRect(Rect(Offset.Zero, size))
+                addRoundRect(RoundRect(highlightRect, CornerRadius(radius, radius)))
+            }
+
+            drawPath(scrimPath, Color.Black.copy(alpha = 0.76f))
+            drawRoundRect(
+                color = Yellow500,
+                topLeft = Offset(highlightRect.left, highlightRect.top),
+                size = Size(highlightRect.width, highlightRect.height),
+                cornerRadius = CornerRadius(radius, radius),
+                style = Stroke(width = 2.dp.toPx())
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clickable(
+                    interactionSource = blockedClicks,
+                    indication = null,
+                    onClick = {}
+                )
+        )
+
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = cardTop)
+                .padding(horizontal = AppSpacing.xxl)
+                .widthIn(max = 360.dp),
+            shape = AppShapes.lg,
+            color = Gray950,
+            border = BorderStroke(1.dp, Yellow500.copy(alpha = 0.72f))
+        ) {
+            Column(
+                modifier = Modifier.padding(AppSpacing.lg),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+            ) {
+                Text(
+                    text = "$index/$total  ${step.title}",
+                    style = AppFont.captionBold,
+                    color = Yellow400
+                )
+                Text(
+                    text = step.body,
+                    style = AppFont.body,
+                    color = Gray300
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            text = "건너뛰기",
+                            style = AppFont.captionBold,
+                            color = Gray400
+                        )
+                    }
+                    TextButton(onClick = onNext) {
+                        Text(
+                            text = if (isLast) "끝" else "다음",
+                            style = AppFont.captionBold,
+                            color = Yellow400
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun GameCard(
     game: Game,
     primaryColor: Color,
     isWatchSynced: Boolean,
     isLiveScoreActive: Boolean,
+    captureUpdateHighlights: Boolean,
+    onUpdateHighlightBoundsChanged: (UpdateHighlightStep, Rect) -> Unit,
     onClick: () -> Unit,
     onWatchSyncClick: () -> Unit,
     onLiveScoreClick: () -> Unit
@@ -1463,7 +1726,23 @@ private fun GameCard(
 
                     Spacer(modifier = Modifier.height(AppSpacing.lg))
 
-                    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (captureUpdateHighlights) {
+                                    Modifier.onGloballyPositioned { coordinates ->
+                                        onUpdateHighlightBoundsChanged(
+                                            UpdateHighlightStep.SCORE,
+                                            coordinates.boundsInRoot()
+                                        )
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
+                    ) {
                         TeamScoreRow(
                             team = game.awayTeamId,
                             teamName = game.awayTeamId.teamName,
@@ -1495,6 +1774,8 @@ private fun GameCard(
                 LiveActionRow(
                     isLiveScoreActive = isLiveScoreActive,
                     isWatchSynced = isWatchSynced,
+                    captureUpdateHighlights = captureUpdateHighlights,
+                    onUpdateHighlightBoundsChanged = onUpdateHighlightBoundsChanged,
                     onLiveScoreClick = onLiveScoreClick,
                     onWatchSyncClick = onWatchSyncClick,
                     modifier = Modifier
@@ -1510,6 +1791,8 @@ private fun GameCard(
 private fun LiveActionRow(
     isLiveScoreActive: Boolean,
     isWatchSynced: Boolean,
+    captureUpdateHighlights: Boolean,
+    onUpdateHighlightBoundsChanged: (UpdateHighlightStep, Rect) -> Unit,
     onLiveScoreClick: () -> Unit,
     onWatchSyncClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1523,14 +1806,40 @@ private fun LiveActionRow(
             icon = if (isLiveScoreActive) Icons.Default.Lock else Icons.Default.LockOpen,
             isActive = isLiveScoreActive,
             onClick = onLiveScoreClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (captureUpdateHighlights) {
+                        Modifier.onGloballyPositioned { coordinates ->
+                            onUpdateHighlightBoundsChanged(
+                                UpdateHighlightStep.LOCK_SCREEN,
+                                coordinates.boundsInRoot()
+                            )
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
         )
         GameToggleCell(
             title = "Watch",
             icon = Icons.Default.Watch,
             isActive = isWatchSynced,
             onClick = onWatchSyncClick,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .then(
+                    if (captureUpdateHighlights) {
+                        Modifier.onGloballyPositioned { coordinates ->
+                            onUpdateHighlightBoundsChanged(
+                                UpdateHighlightStep.WATCH,
+                                coordinates.boundsInRoot()
+                            )
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
         )
     }
 }
@@ -1547,7 +1856,7 @@ private fun GameToggleCell(
         modifier = modifier,
         shape = AppShapes.md,
         color = if (isActive) Green500.copy(alpha = 0.10f) else Gray950.copy(alpha = 0.28f),
-        border = androidx.compose.foundation.BorderStroke(
+        border = BorderStroke(
             width = 1.dp,
             color = if (isActive) Green500.copy(alpha = 0.30f) else Gray800.copy(alpha = 0.72f)
         )

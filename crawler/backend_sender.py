@@ -118,6 +118,26 @@ def _is_base_occupied(value: Any) -> bool:
     return raw not in {"0", "false", "none", "null"}
 
 
+def _base_runner_name(value: Any, player_map: Dict[str, str]) -> Optional[str]:
+    if not _is_base_occupied(value):
+        return None
+    if isinstance(value, dict):
+        for key in ("name", "playerName", "player_name"):
+            name = str(value.get(key) or "").strip()
+            if name:
+                return name
+        for key in ("pcode", "playerId", "player_id", "id"):
+            player_id = str(value.get(key) or "").strip()
+            if player_id and player_map.get(player_id):
+                return player_map[player_id]
+        return None
+
+    raw = str(value).strip()
+    if raw in {"1", "true", "True"}:
+        return None
+    return player_map.get(raw)
+
+
 def _normalize_status(raw: Any, status_info: str | None = None) -> str:
     value = str(raw or "").strip().upper()
     if value in LIVE_STATUS:
@@ -844,6 +864,11 @@ def build_snapshot_payload(
             "first": _is_base_occupied(latest_state.get("base1")),
             "second": _is_base_occupied(latest_state.get("base2")),
             "third": _is_base_occupied(latest_state.get("base3")),
+        },
+        "baseRunners": {
+            "first": _base_runner_name(latest_state.get("base1"), player_map),
+            "second": _base_runner_name(latest_state.get("base2"), player_map),
+            "third": _base_runner_name(latest_state.get("base3"), player_map),
         },
         "pitcher": pitcher_name or None,
         "batter": batter_name or None,

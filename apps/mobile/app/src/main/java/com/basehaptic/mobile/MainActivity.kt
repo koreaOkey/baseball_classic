@@ -3,6 +3,7 @@
 import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -77,6 +78,9 @@ private const val REQUEST_CODE_IN_APP_UPDATE = 9001
 private const val SHOW_COMMUNITY_TAB = false
 private const val SHOW_STORE_TAB = true
 private const val SHOW_MY_TEAM_TAB = false
+private const val DEBUG_FORCE_EMPTY_HOME_GAMES_FOR_UPDATE_QA = false
+private const val ACTION_DEBUG_POST_LIVE_SCORE =
+    "com.basehaptic.mobile.DEBUG_POST_LIVE_SCORE"
 private const val USER_PREFS_NAME = "basehaptic_user_prefs"
 private const val KEY_SELECTED_TEAM = "selected_team"
 private const val KEY_UNLOCKED_THEME_IDS = "unlocked_theme_ids"
@@ -84,20 +88,28 @@ private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
 // 워치 페이스 테마와 무관하게 응원 시 풀스크린에 적용될 테마. ThemeStore와 별도로 StadiumCheerThemeStore에서 매칭.
 private const val KEY_ACTIVE_CHEER_THEME_ID = "active_cheer_theme_id"
 private const val KEY_LAST_SEEN_UPDATE_VERSION = "last_seen_update_version"
+private const val KEY_LAST_SEEN_ONBOARDING_VERSION = "last_seen_onboarding_version"
+private const val ANDROID_STORE_URL = "market://details?id=com.basehaptic.mobile"
 
-private const val DEBUG_DUMMY_LIVE_GAME_ID = "debug-watch-sync-test"
-private val DEBUG_DUMMY_LIVE_GAME = Game(
-    id = DEBUG_DUMMY_LIVE_GAME_ID,
-    homeTeam = "LG",
-    awayTeam = "KIA",
-    homeTeamId = Team.LG,
-    awayTeamId = Team.KIA,
-    homeScore = 5,
-    awayScore = 3,
-    inning = "9회초",
-    status = GameStatus.LIVE,
-    time = "18:30"
-)
+private fun compareVersionNames(left: String, right: String): Int {
+    val leftParts = left.split(".", "-", "_").mapNotNull { it.toIntOrNull() }
+    val rightParts = right.split(".", "-", "_").mapNotNull { it.toIntOrNull() }
+    val count = maxOf(leftParts.size, rightParts.size)
+    for (index in 0 until count) {
+        val l = leftParts.getOrElse(index) { 0 }
+        val r = rightParts.getOrElse(index) { 0 }
+        if (l != r) return l.compareTo(r)
+    }
+    return 0
+}
+
+private fun requiresServerUpdate(currentVersion: String, config: BackendGamesRepository.AppConfig): Boolean {
+    if (!config.forceUpdate) return false
+    val minVersion = config.minSupportedVersion.takeIf { it.isNotBlank() }
+    val latestVersion = config.latestVersion.takeIf { it.isNotBlank() }
+    return (minVersion != null && compareVersionNames(currentVersion, minVersion) < 0) ||
+        (latestVersion != null && compareVersionNames(currentVersion, latestVersion) < 0)
+}
 
 class MainActivity : ComponentActivity() {
     private val appUpdateManager by lazy { AppUpdateManagerFactory.create(this) }
@@ -111,13 +123,13 @@ class MainActivity : ComponentActivity() {
     private fun checkForAppUpdate() {
         appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
             if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
-                appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
+                appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
             ) {
                 try {
                     appUpdateManager.startUpdateFlowForResult(
                         appUpdateInfo,
                         this,
-                        AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build(),
+                        AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build(),
                         REQUEST_CODE_IN_APP_UPDATE
                     )
                 } catch (e: Exception) {
@@ -195,6 +207,20 @@ class MainActivity : ComponentActivity() {
             .apply()
     }
 
+    private fun loadLastSeenOnboardingVersion(): String {
+        return getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_LAST_SEEN_ONBOARDING_VERSION, null)
+            .orEmpty()
+    }
+
+    private fun persistLastSeenOnboardingVersion(version: String) {
+        if (version.isBlank()) return
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_SEEN_ONBOARDING_VERSION, version)
+            .apply()
+    }
+
     private fun handleAuthDeeplink(intent: Intent) {
         try {
             SupabaseClientProvider.client.handleDeeplinks(intent) {}
@@ -211,21 +237,76 @@ class MainActivity : ComponentActivity() {
             gameId = gameId,
             homeTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_HOME_TEAM),
             awayTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_AWAY_TEAM),
+            openHomeOnly = true,
         )
+    }
+
+    private fun handleDebugLiveScoreIntent(intent: Intent?): Boolean {
+        if (!BuildConfig.DEBUG || intent?.action != ACTION_DEBUG_POST_LIVE_SCORE) return false
+        val highlight = intent.getBooleanExtra("highlight", false)
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putBoolean(LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, true)
+            .apply()
+        val eventType = if (highlight) "SCORE" else "HIT"
+        val eventText = if (highlight) "김현수 적시타 · 1점 추가" else "경기 진행 상황을 업데이트 중입니다"
+        val posted = LiveScoreNotificationManager.post(
+            context = this,
+            state = BackendGamesRepository.LiveGameState(
+                gameId = "debug-live-score-preview",
+                homeTeam = Team.LG.name,
+                awayTeam = Team.KIA.name,
+                homeTeamId = Team.LG,
+                awayTeamId = Team.KIA,
+                homeScore = if (highlight) 5 else 4,
+                awayScore = 3,
+                inning = "9회초",
+                status = GameStatus.LIVE,
+                ball = 2,
+                strike = 1,
+                out = 1,
+                baseFirst = true,
+                baseSecond = false,
+                baseThird = highlight,
+                pitcher = "임찬규",
+                batter = "김현수",
+                pitcherPitchCount = 87,
+                lastEventType = eventType
+            ),
+            latestEventType = eventType,
+            latestEventDescription = eventText,
+            highlightEvent = highlight
+        )
+        Log.d("LiveScoreDebug", "debug live score notification posted=$posted highlight=$highlight")
+        return true
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleAuthDeeplink(intent)
+        if (handleDebugLiveScoreIntent(intent)) return
         handleNotificationIntent(intent)
     }
 
     override fun onResume() {
         super.onResume()
-        // 업데이트가 다운로드됐지만 설치 안 된 경우 재시도
+        // 즉시 업데이트 플로우가 중단된 경우 앱 사용 전에 다시 이어간다.
         appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
-            if (info.installStatus() == InstallStatus.DOWNLOADED) {
+            if (info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS &&
+                info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+            ) {
+                try {
+                    appUpdateManager.startUpdateFlowForResult(
+                        info,
+                        this,
+                        AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build(),
+                        REQUEST_CODE_IN_APP_UPDATE
+                    )
+                } catch (e: Exception) {
+                    Log.e("InAppUpdate", "Failed to resume immediate update flow", e)
+                }
+            } else if (info.installStatus() == InstallStatus.DOWNLOADED) {
                 appUpdateManager.completeUpdate()
             }
         }
@@ -238,6 +319,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (handleDebugLiveScoreIntent(intent)) {
+            moveTaskToBack(true)
+            return
+        }
         appUpdateManager.registerListener(installStateUpdatedListener)
         checkForAppUpdate()
         MobileAds.initialize(this)
@@ -252,10 +337,18 @@ class MainActivity : ComponentActivity() {
         AuthManager.initialize()
         handleAuthDeeplink(intent)
         PushSetup.initialize(this)
+        handleDebugLiveScoreIntent(intent)
         handleNotificationIntent(intent)
+        val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
         val savedTeam = loadSavedTeamOrNull()
         val initialTeam = savedTeam ?: Team.NONE
-        val initialShowOnboarding = savedTeam == null
+        val shouldShowUpdateOnboarding = savedTeam != null &&
+            currentVersion.isNotBlank() &&
+            loadLastSeenOnboardingVersion() != currentVersion
+        if (shouldShowUpdateOnboarding) {
+            persistLastSeenUpdateVersion(currentVersion)
+        }
+        val initialShowOnboarding = savedTeam == null || shouldShowUpdateOnboarding
         val initialUnlockedIds = loadUnlockedThemeIds()
         val initialActiveThemeId = loadActiveThemeId()
         val initialActiveTheme = initialActiveThemeId?.let { id ->
@@ -282,6 +375,7 @@ class MainActivity : ComponentActivity() {
                     onOnboardingComplete = { team ->
                         selectedTeam = team
                         persistSelectedTeam(team)
+                        persistLastSeenOnboardingVersion(currentVersion)
                         showOnboarding = false
                     },
                     initialUnlockedThemeIds = initialUnlockedIds,
@@ -332,6 +426,7 @@ fun BaseHapticApp(
     var pendingWatchSyncHomeTeam by remember { mutableStateOf("") }
     var pendingWatchSyncAwayTeam by remember { mutableStateOf("") }
     var pendingLiveScoreGame by remember { mutableStateOf<Game?>(null) }
+    var requiredUpdateConfig by remember { mutableStateOf<BackendGamesRepository.AppConfig?>(null) }
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
     val autoPromptedLiveGames = remember { mutableStateMapOf<String, Boolean>() }
     var unlockedThemeIds by remember { mutableStateOf(initialUnlockedThemeIds) }
@@ -430,6 +525,15 @@ fun BaseHapticApp(
     fun closeLiveScoreDialog() {
         showLiveScoreDialog = false
         pendingLiveScoreGame = null
+    }
+
+    fun openRequiredUpdateStore() {
+        val url = requiredUpdateConfig?.storeUrl?.takeIf { it.isNotBlank() } ?: ANDROID_STORE_URL
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.basehaptic.mobile")))
+        }
     }
 
     fun confirmPendingLiveScore() {
@@ -554,6 +658,18 @@ fun BaseHapticApp(
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val config = withContext(Dispatchers.IO) {
+            BackendGamesRepository.fetchAppConfig(
+                platform = "android",
+                version = com.basehaptic.mobile.BuildConfig.VERSION_NAME
+            )
+        }
+        if (config != null && requiresServerUpdate(com.basehaptic.mobile.BuildConfig.VERSION_NAME, config)) {
+            requiredUpdateConfig = config
         }
     }
 
@@ -697,6 +813,10 @@ fun BaseHapticApp(
         if (currentView != Screen.Home) {
             navigateTo(Screen.Home)
         }
+        if (pending.openHomeOnly) {
+            NotificationIntentBus.consume()
+            return@LaunchedEffect
+        }
         val status = withContext(Dispatchers.IO) {
             WatchCompanionStatusRepository.getStatus(context.applicationContext)
         }
@@ -716,6 +836,7 @@ fun BaseHapticApp(
             onComplete = { team ->
                 onOnboardingComplete(team)
             },
+            initialSelectedTeam = selectedTeam,
             authState = authState,
             onSignInWithKakao = {
                 coroutineScope.launch { AuthManager.signInWithKakao() }
@@ -740,13 +861,15 @@ fun BaseHapticApp(
                 when (currentView) {
                     Screen.Home -> HomeScreen(
                         selectedTeam = selectedTeam,
-                        todayGames = if (BuildConfig.DEBUG) {
-                            listOf(DEBUG_DUMMY_LIVE_GAME) + todayGamesSnapshot
+                        todayGames = if (BuildConfig.DEBUG && DEBUG_FORCE_EMPTY_HOME_GAMES_FOR_UPDATE_QA) {
+                            emptyList()
                         } else {
                             todayGamesSnapshot
                         },
                         syncedGameId = syncedGameId,
                         activeLiveScoreGameId = activeLiveScoreGameId,
+                        showUpdateHighlights = BuildConfig.DEBUG && pendingReleaseNote != null,
+                        onDismissUpdateHighlights = { pendingReleaseNote = null },
                         onToggleWatchSync = { game ->
                             if (syncedGameId == game.id) {
                                 syncedGameId = null
@@ -873,13 +996,16 @@ fun BaseHapticApp(
         }
 
         if (showWatchSyncDialog && pendingWatchSyncGameId != null) {
-            val suffix = "광고 관람 후 동기화됩니다."
+            val hasViewedAd = WatchSyncAdLedger.hasViewed(context, pendingWatchSyncGameId!!)
+            val suffix = if (hasViewedAd) "" else "광고 관람 후 동기화됩니다."
             val dialogMessage = if (
                 pendingWatchSyncHomeTeam.isNotEmpty() && pendingWatchSyncAwayTeam.isNotEmpty()
             ) {
-                "$pendingWatchSyncAwayTeam vs $pendingWatchSyncHomeTeam\n$suffix"
+                listOf("$pendingWatchSyncAwayTeam vs $pendingWatchSyncHomeTeam", suffix)
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n")
             } else {
-                suffix
+                suffix.ifBlank { "워치 동기화를 시작할까요?" }
             }
             AlertDialog(
                 onDismissRequest = { closeWatchSyncDialog() },
@@ -907,10 +1033,19 @@ fun BaseHapticApp(
         }
 
         if (showLiveScoreDialog && pendingLiveScoreGame != null) {
+            val hasViewedAd = LiveScoreAdLedger.hasViewed(context, pendingLiveScoreGame!!.id)
             AlertDialog(
                 onDismissRequest = { closeLiveScoreDialog() },
                 title = { Text(text = "잠금화면에서 보시겠습니까?") },
-                text = { Text(text = "광고 관람 후 경기 확인 가능합니다.") },
+                text = {
+                    Text(
+                        text = if (hasViewedAd) {
+                            "잠금화면 라이브 스코어를 시작할까요?"
+                        } else {
+                            "광고 관람 후 경기 확인 가능합니다."
+                        }
+                    )
+                },
                 confirmButton = {
                     TextButton(
                         onClick = {
@@ -944,11 +1079,32 @@ fun BaseHapticApp(
             )
         }
 
-        pendingReleaseNote?.let { note ->
+        requiredUpdateConfig?.let { config ->
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text(text = config.updateTitle.ifBlank { "업데이트가 필요합니다" }) },
+                text = {
+                    Text(
+                        text = config.updateMessage.ifBlank {
+                            "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요."
+                        }
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = { openRequiredUpdateStore() }) {
+                        Text(text = "업데이트")
+                    }
+                }
+            )
+        }
+
+        if (!com.basehaptic.mobile.BuildConfig.DEBUG) {
+            pendingReleaseNote?.let { note ->
             com.basehaptic.mobile.ui.components.WhatsNewDialog(
                 note = note,
                 onConfirm = { pendingReleaseNote = null }
             )
+            }
         }
     }
 
@@ -956,6 +1112,12 @@ fun BaseHapticApp(
         if (showOnboarding) return@LaunchedEffect
         val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
         if (currentVersion.isEmpty()) return@LaunchedEffect
+
+        if (com.basehaptic.mobile.BuildConfig.DEBUG) {
+            pendingReleaseNote = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
+                ?: com.basehaptic.mobile.data.model.ReleaseNotes.latest()
+            return@LaunchedEffect
+        }
 
         val lastSeen = loadLastSeenUpdateVersion()
         if (lastSeen.isEmpty()) {

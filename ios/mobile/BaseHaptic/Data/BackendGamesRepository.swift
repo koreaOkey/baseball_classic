@@ -53,6 +53,9 @@ struct LiveGameState {
     let baseFirst: Bool
     let baseSecond: Bool
     let baseThird: Bool
+    let baseFirstRunner: String?
+    let baseSecondRunner: String?
+    let baseThirdRunner: String?
     let pitcher: String
     let batter: String
     let pitcherPitchCount: Int?
@@ -160,6 +163,23 @@ struct LiveEventsPage {
     let nextCursor: Int64?
 }
 
+struct AppNotice {
+    let enabled: Bool
+    let title: String
+    let message: String
+}
+
+struct AppConfig {
+    let platform: String
+    let minSupportedVersion: String
+    let latestVersion: String
+    let forceUpdate: Bool
+    let updateTitle: String
+    let updateMessage: String
+    let storeUrl: String
+    let notice: AppNotice
+}
+
 struct TeamRecordStats {
     let teamId: String
     let ranking: Int?
@@ -237,6 +257,28 @@ final class BackendGamesRepository {
     // MARK: - Fetch Games
     func fetchGames(selectedTeam: Team) async -> [Game]? {
         await fetchGamesByDate(selectedTeam: selectedTeam, targetDate: Date())
+    }
+
+    func fetchAppConfig(platform: String, version: String) async -> AppConfig? {
+        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/app-config?platform=\(platform)&version=\(version)"
+        return await getJSON(endpoint: endpoint) { data in
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            let notice = json["notice"] as? [String: Any] ?? [:]
+            return AppConfig(
+                platform: json["platform"] as? String ?? platform,
+                minSupportedVersion: json["minSupportedVersion"] as? String ?? "",
+                latestVersion: json["latestVersion"] as? String ?? "",
+                forceUpdate: json["forceUpdate"] as? Bool ?? false,
+                updateTitle: json["updateTitle"] as? String ?? "업데이트가 필요합니다",
+                updateMessage: json["updateMessage"] as? String ?? "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요.",
+                storeUrl: json["storeUrl"] as? String ?? "",
+                notice: AppNotice(
+                    enabled: notice["enabled"] as? Bool ?? false,
+                    title: notice["title"] as? String ?? "",
+                    message: notice["message"] as? String ?? ""
+                )
+            )
+        }
     }
 
     func fetchTodayGamesCached(selectedTeam: Team, forceRefresh: Bool = false) async -> [Game]? {
@@ -610,6 +652,7 @@ final class BackendGamesRepository {
         let homeTeamName = json["homeTeam"] as? String ?? ""
         let awayTeamName = json["awayTeam"] as? String ?? ""
         let bases = json["bases"] as? [String: Any] ?? [:]
+        let baseRunners = json["baseRunners"] as? [String: Any] ?? [:]
         let rawStatus = json["status"] as? String ?? ""
         let status = statusFromBackend(rawStatus)
         let inning = (json["inning"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? defaultInning(for: status)
@@ -632,6 +675,9 @@ final class BackendGamesRepository {
             baseFirst: bases["first"] as? Bool ?? false,
             baseSecond: bases["second"] as? Bool ?? false,
             baseThird: bases["third"] as? Bool ?? false,
+            baseFirstRunner: cleanOptionalString(baseRunners["first"]),
+            baseSecondRunner: cleanOptionalString(baseRunners["second"]),
+            baseThirdRunner: cleanOptionalString(baseRunners["third"]),
             pitcher: json["pitcher"] as? String ?? "",
             batter: json["batter"] as? String ?? "",
             pitcherPitchCount: json["pitcherPitchCount"] as? Int,
@@ -880,6 +926,13 @@ final class BackendGamesRepository {
         guard let raw = raw, !raw.isEmpty else { return nil }
         let formatted = formatBackendTime(raw)
         return formatted == "--:--" ? nil : formatted
+    }
+
+    private func cleanOptionalString(_ raw: Any?) -> String? {
+        guard let raw else { return nil }
+        let value = "\(raw)".trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value.lowercased() != "null" else { return nil }
+        return value
     }
 
     private func formatBackendTime(_ raw: String) -> String {

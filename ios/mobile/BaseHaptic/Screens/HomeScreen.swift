@@ -8,6 +8,8 @@ struct HomeScreen: View {
     let activeLiveActivityGameId: String?
     let isWatchAppInstalled: Bool
     let checkinStadium: Stadium?
+    let showUpdateHighlights: Bool
+    let onDismissUpdateHighlights: () -> Void
     let onConfirmCheckin: () -> Void
     let onDismissCheckin: () -> Void
     let onSelectGame: (Game) -> Void
@@ -27,41 +29,100 @@ struct HomeScreen: View {
     @State private var scheduleError: String?
     @State private var scheduleMonth = monthStart(for: Date())
     @State private var selectedScheduleDate = Calendar.current.startOfDay(for: Date())
+    @State private var updateHighlightStepIndex = 0
+    @State private var updateHighlightFrames: [UpdateHighlightStep: CGRect] = [:]
 
     private var primaryColor: Color {
         activeTheme?.colors.primary ?? teamTheme.primary
     }
 
     private var games: [Game] {
-        sortHomeGames(todayGames)
+        let sortedGames = sortHomeGames(todayGames)
+        if showUpdateHighlights && sortedGames.isEmpty {
+            return [updateHighlightSampleGame(selectedTeam: selectedTeam)]
+        }
+        return sortedGames
+    }
+
+    private var updateHighlightStep: UpdateHighlightStep? {
+        guard showUpdateHighlights else { return nil }
+        return UpdateHighlightStep.allCases[safe: updateHighlightStepIndex]
+    }
+
+    private func advanceUpdateHighlight() {
+        if updateHighlightStepIndex >= UpdateHighlightStep.allCases.count - 1 {
+            onDismissUpdateHighlights()
+        } else {
+            updateHighlightStepIndex += 1
+        }
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                headerSection
-                quickStatsSection
+        ScrollViewReader { proxy in
+            ZStack {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        headerSection
+                            .id(UpdateHighlightScrollTarget.header)
+                        quickStatsSection
 
-                BannerAdView()
-                    .frame(width: 320, height: 50)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.md)
+                        BannerAdView()
+                            .frame(width: 320, height: 50)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, AppSpacing.md)
 
-                gamesListHeader
-                if let checkinStadium {
-                    CheerCheckinCard(
-                        stadiumName: checkinStadium.name,
-                        stadiumRegion: StadiumDirectory.region(forCode: checkinStadium.code),
-                        teamLabel: selectedTeam.teamName,
-                        onConfirm: onConfirmCheckin,
-                        onDismiss: onDismissCheckin
-                    )
-                    .padding(.horizontal, AppSpacing.xxl)
-                    .padding(.bottom, AppSpacing.md)
+                        gamesListHeader
+                        if let checkinStadium {
+                            CheerCheckinCard(
+                                stadiumName: checkinStadium.name,
+                                stadiumRegion: StadiumDirectory.region(forCode: checkinStadium.code),
+                                teamLabel: selectedTeam.teamName,
+                                onConfirm: onConfirmCheckin,
+                                onDismiss: onDismissCheckin
+                            )
+                            .padding(.horizontal, AppSpacing.xxl)
+                            .padding(.bottom, AppSpacing.md)
+                        }
+                        gamesListSection
+                            .id(UpdateHighlightScrollTarget.games)
+                        upcomingGamesSection
+                        Spacer().frame(height: AppSpacing.bottomSafeSpacer)
+                    }
                 }
-                gamesListSection
-                upcomingGamesSection
-                Spacer().frame(height: AppSpacing.bottomSafeSpacer)
+                .coordinateSpace(name: UpdateHighlightCoordinateSpace.name)
+                .onPreferenceChange(UpdateHighlightFramePreferenceKey.self) { frames in
+                    updateHighlightFrames = frames
+                }
+
+                if let step = updateHighlightStep, let targetFrame = updateHighlightFrames[step] {
+                    UpdateHighlightOverlay(
+                        step: step,
+                        targetFrame: targetFrame,
+                        onNext: advanceUpdateHighlight,
+                        onDismiss: onDismissUpdateHighlights
+                    )
+                    .zIndex(10)
+                }
+            }
+            .onChange(of: showUpdateHighlights) { _, showing in
+                if showing {
+                    updateHighlightStepIndex = 0
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(UpdateHighlightScrollTarget.header, anchor: .top)
+                    }
+                }
+            }
+            .onChange(of: updateHighlightStep) { _, step in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    switch step {
+                    case .standings, .schedule:
+                        proxy.scrollTo(UpdateHighlightScrollTarget.header, anchor: .top)
+                    case .lockScreen, .watch, .score:
+                        proxy.scrollTo(UpdateHighlightScrollTarget.games, anchor: .top)
+                    case nil:
+                        break
+                    }
+                }
             }
         }
         .background(AppColors.gray950)
@@ -144,6 +205,7 @@ struct HomeScreen: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("전체 순위")
+                .trackUpdateHighlight(.standings)
             }
 
             Spacer().frame(height: AppSpacing.lg)
@@ -173,6 +235,7 @@ struct HomeScreen: View {
                 .cornerRadius(AppRadius.lg)
             }
             .buttonStyle(.plain)
+            .trackUpdateHighlight(.schedule)
         }
         .padding(AppSpacing.xxl)
         .padding(.bottom, AppSpacing.xxxl)
@@ -225,7 +288,7 @@ struct HomeScreen: View {
             .padding(.horizontal, AppSpacing.xxl)
             .padding(.vertical, 6)
         } else {
-            ForEach(games) { game in
+            ForEach(Array(games.enumerated()), id: \.element.id) { index, game in
                 let isWatchSynced = syncedGameId == game.id
                 let isLiveActivityActive = activeLiveActivityGameId == game.id
                 GameCard(
@@ -233,7 +296,8 @@ struct HomeScreen: View {
                     primaryColor: primaryColor,
                     isWatchSynced: isWatchSynced,
                     isLiveActivityActive: isLiveActivityActive,
-                    showsWatchToggle: isWatchAppInstalled,
+                    showsWatchToggle: isWatchAppInstalled || showUpdateHighlights,
+                    captureUpdateHighlights: showUpdateHighlights && index == 0,
                     onTap: { onSelectGame(game) },
                     onLiveActivityTap: { onToggleLiveActivity(game) },
                     onWatchSyncTap: { onToggleWatchSync(game) }
@@ -868,6 +932,181 @@ private struct StatCard: View {
     }
 }
 
+// MARK: - Update Highlight
+private enum UpdateHighlightCoordinateSpace {
+    static let name = "homeUpdateHighlight"
+}
+
+private enum UpdateHighlightScrollTarget: Hashable {
+    case header
+    case games
+}
+
+private enum UpdateHighlightStep: CaseIterable, Hashable {
+    case lockScreen
+    case watch
+    case standings
+    case schedule
+    case score
+
+    var title: String {
+        switch self {
+        case .lockScreen: return "잠금화면 토글"
+        case .watch: return "Watch 토글"
+        case .standings: return "전체 순위 보기"
+        case .schedule: return "전체 일정 보기"
+        case .score: return "점수 보기"
+        }
+    }
+
+    var body: String {
+        switch self {
+        case .lockScreen:
+            return "LIVE 경기를 휴대폰 잠금화면에서 볼 수 있어요."
+        case .watch:
+            return "LIVE 경기를 스마트워치에서 볼 수 있어요."
+        case .standings:
+            return "아이콘을 누르면 전체 순위를 바로 확인할 수 있어요."
+        case .schedule:
+            return "이 카드를 누르면 응원팀 시즌 일정을 달력으로 한눈에 볼 수 있어요."
+        case .score:
+            return "경기 카드에서 최신 점수와 진행 상황을 바로 확인할 수 있어요."
+        }
+    }
+}
+
+private struct UpdateHighlightFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [UpdateHighlightStep: CGRect] = [:]
+
+    static func reduce(value: inout [UpdateHighlightStep: CGRect], nextValue: () -> [UpdateHighlightStep: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, newValue in newValue })
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func trackUpdateHighlight(_ step: UpdateHighlightStep?) -> some View {
+        if let step {
+            background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: UpdateHighlightFramePreferenceKey.self,
+                        value: [step: proxy.frame(in: .named(UpdateHighlightCoordinateSpace.name))]
+                    )
+                }
+            )
+        } else {
+            self
+        }
+    }
+}
+
+private struct UpdateHighlightOverlay: View {
+    let step: UpdateHighlightStep
+    let targetFrame: CGRect
+    let onNext: () -> Void
+    let onDismiss: () -> Void
+
+    private var index: Int {
+        (UpdateHighlightStep.allCases.firstIndex(of: step) ?? 0) + 1
+    }
+
+    private var isLast: Bool {
+        index == UpdateHighlightStep.allCases.count
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let paddedFrame = targetFrame.insetBy(dx: -8, dy: -8)
+            let cardEstimatedHeight: CGFloat = 156
+            let cardSpacing: CGFloat = 12
+            let cardTopBelow = min(
+                paddedFrame.maxY + cardSpacing,
+                proxy.size.height - cardEstimatedHeight - AppSpacing.xxl
+            )
+            let cardTopAbove = max(
+                AppSpacing.xxl,
+                paddedFrame.minY - cardEstimatedHeight - cardSpacing
+            )
+            let shouldPlaceAbove = paddedFrame.maxY + cardSpacing + cardEstimatedHeight > proxy.size.height - AppSpacing.xxl
+            let cardTop = shouldPlaceAbove ? cardTopAbove : cardTopBelow
+
+            ZStack {
+                Path { path in
+                    path.addRect(CGRect(origin: .zero, size: proxy.size))
+                    path.addRoundedRect(in: paddedFrame, cornerSize: CGSize(width: 18, height: 18))
+                }
+                .fill(Color.black.opacity(0.76), style: FillStyle(eoFill: true))
+
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AppColors.yellow500, lineWidth: 2)
+                    .frame(width: paddedFrame.width, height: paddedFrame.height)
+                    .position(x: paddedFrame.midX, y: paddedFrame.midY)
+
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                        Text("\(index)/\(UpdateHighlightStep.allCases.count)  \(step.title)")
+                            .font(AppFont.captionBold)
+                            .foregroundColor(AppColors.gray950)
+                            .padding(.horizontal, AppSpacing.sm)
+                            .padding(.vertical, AppSpacing.xs)
+                            .background(AppColors.yellow400)
+                            .clipShape(Capsule())
+                        Text(step.body)
+                            .font(AppFont.body)
+                            .foregroundColor(.white)
+                        HStack {
+                            Spacer()
+                            Button("건너뛰기", action: onDismiss)
+                                .font(AppFont.captionBold)
+                                .foregroundColor(AppColors.gray300)
+                            Button(isLast ? "끝" : "다음", action: onNext)
+                                .font(AppFont.captionBold)
+                                .foregroundColor(AppColors.yellow400)
+                        }
+                }
+                .padding(AppSpacing.lg)
+                .frame(maxWidth: 360)
+                .background(Color(red: 0.08, green: 0.13, blue: 0.24))
+                .cornerRadius(AppRadius.lg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
+                        .stroke(Color(red: 0.38, green: 0.70, blue: 1.0).opacity(0.9), lineWidth: 1.5)
+                )
+                .shadow(color: .black.opacity(0.36), radius: 18, x: 0, y: 10)
+                .padding(.horizontal, AppSpacing.xxl)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .position(x: proxy.size.width / 2, y: cardTop + cardEstimatedHeight / 2)
+            }
+            .contentShape(Rectangle())
+        }
+        .ignoresSafeArea(edges: .bottom)
+    }
+}
+
+private func updateHighlightSampleGame(selectedTeam: Team) -> Game {
+    let homeTeam = selectedTeam == .none ? Team.lg : selectedTeam
+    let awayTeam: Team = homeTeam == .ssg ? .lg : .ssg
+    return Game(
+        id: "update-highlight-sample-game",
+        homeTeam: homeTeam.teamName,
+        awayTeam: awayTeam.teamName,
+        homeTeamId: homeTeam,
+        awayTeamId: awayTeam,
+        homeScore: 10,
+        awayScore: 1,
+        inning: "4회말",
+        status: .live,
+        time: "18:30",
+        isMyTeam: selectedTeam != .none
+    )
+}
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
 // MARK: - GameCard
 private struct GameCard: View {
     let game: Game
@@ -875,6 +1114,7 @@ private struct GameCard: View {
     let isWatchSynced: Bool
     let isLiveActivityActive: Bool
     let showsWatchToggle: Bool
+    let captureUpdateHighlights: Bool
     let onTap: () -> Void
     let onLiveActivityTap: () -> Void
     let onWatchSyncTap: () -> Void
@@ -905,6 +1145,7 @@ private struct GameCard: View {
                                      isWinner: game.status == .finished && game.homeScore > game.awayScore,
                                      isMyTeam: game.isMyTeam)
                     }
+                    .trackUpdateHighlight(captureUpdateHighlights ? .score : nil)
                 }
                 .padding(AppSpacing.xl)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1000,6 +1241,7 @@ private struct GameCard: View {
                 title: "잠금화면",
                 systemImage: isLiveActivityActive ? "lock.fill" : "lock",
                 isActive: isLiveActivityActive,
+                highlightStep: captureUpdateHighlights ? .lockScreen : nil,
                 action: onLiveActivityTap
             )
             if showsWatchToggle {
@@ -1010,6 +1252,7 @@ private struct GameCard: View {
                     title: "Watch",
                     systemImage: isWatchSynced ? "applewatch.radiowaves.left.and.right" : "applewatch",
                     isActive: isWatchSynced,
+                    highlightStep: captureUpdateHighlights ? .watch : nil,
                     action: onWatchSyncTap
                 )
             }
@@ -1020,6 +1263,7 @@ private struct GameCard: View {
         title: String,
         systemImage: String,
         isActive: Bool,
+        highlightStep: UpdateHighlightStep?,
         action: @escaping () -> Void
     ) -> some View {
         HStack(spacing: AppSpacing.sm) {
@@ -1063,6 +1307,7 @@ private struct GameCard: View {
                 .stroke(isActive ? AppColors.green500.opacity(0.38) : AppColors.gray800.opacity(0.8), lineWidth: 1)
         )
         .accessibilityLabel(isActive ? "\(title) 활성화됨" : title)
+        .trackUpdateHighlight(highlightStep)
     }
 }
 

@@ -43,8 +43,7 @@ class DataLayerListenerService : WearableListenerService() {
             "event_filter_hit_enabled",
             "event_filter_steal_enabled",
             "event_filter_walk_enabled",
-            "event_filter_out_enabled",
-            "event_filter_double_play_enabled",
+            "event_filter_pitch_count_enabled",
             "event_filter_pitcher_change_enabled"
         )
 
@@ -341,14 +340,20 @@ class DataLayerListenerService : WearableListenerService() {
             "SCORE", "SAC_FLY_SCORE" -> "event_filter_score_enabled"
             "HIT" -> "event_filter_hit_enabled"
             "STEAL", "TAG_UP_ADVANCE" -> "event_filter_steal_enabled"
-            "WALK" -> "event_filter_walk_enabled"
-            "OUT" -> "event_filter_out_enabled"
-            "DOUBLE_PLAY", "TRIPLE_PLAY" -> "event_filter_double_play_enabled"
+            "WALK", "HIT_BY_PITCH" -> "event_filter_walk_enabled"
+            "BALL", "STRIKE" -> "event_filter_pitch_count_enabled"
             "PITCHER_CHANGE" -> "event_filter_pitcher_change_enabled"
+            "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY" -> return false
             else -> return true
         }
+        val fallback = when (key) {
+            "event_filter_homerun_enabled",
+            "event_filter_score_enabled",
+            "event_filter_hit_enabled" -> true
+            else -> false
+        }
         return getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(key, true)
+            .getBoolean(key, fallback)
     }
 
     private fun saveLatestEvent(eventType: String, eventCursor: Long?) {
@@ -365,14 +370,6 @@ class DataLayerListenerService : WearableListenerService() {
     }
     
     private fun triggerHapticFeedback(eventType: String) {
-        // 마스터 스위치 OFF 시 햅틱·화면 깨우기 모두 차단
-        val liveHapticEnabled = getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)
-        if (!liveHapticEnabled) {
-            Log.d(TAG, "live_haptic_enabled=false, skipping: $eventType")
-            return
-        }
-
         // 사용자 선택 이벤트 필터: 미선택 이벤트는 햅틱·화면 깨우기 모두 차단
         if (!isEventTypeAllowedByFilter(eventType)) {
             Log.d(TAG, "event filter blocked: $eventType")
@@ -402,7 +399,7 @@ class DataLayerListenerService : WearableListenerService() {
                     intArrayOf(0, 255, 0, 255, 0, 255)
             "HIT" -> longArrayOf(0, 150, 100, 150) to
                     intArrayOf(0, 180, 0, 180)
-            "WALK" -> longArrayOf(0, 150, 100, 150) to
+            "WALK", "HIT_BY_PITCH" -> longArrayOf(0, 150, 100, 150) to
                     intArrayOf(0, 180, 0, 180)
             "STEAL", "TAG_UP_ADVANCE" -> longArrayOf(0, 150, 100, 150) to
                     intArrayOf(0, 180, 0, 180)

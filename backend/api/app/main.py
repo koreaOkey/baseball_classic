@@ -24,6 +24,7 @@ from .cheer_signals import build_cheer_signals, stadium_payloads
 from .db import SessionLocal, get_db, init_db
 from .event_bus import event_bus
 from .models import (
+    AppConfig,
     CheerEvent,
     DeviceToken,
     Game,
@@ -43,6 +44,8 @@ from .apns import (
 )
 from .fcm import send_visible_push_to_tokens as send_fcm_visible_push_to_tokens
 from .schemas import (
+    AppConfigOut,
+    AppNoticeOut,
     CrawlerSnapshotRequest,
     CrawlerTeamRecordRequest,
     DeviceTokenRequest,
@@ -92,6 +95,10 @@ redis_relay = RedisBroadcastRelay(
 HTTP_LIVE_CACHE_TTL_SEC = 5
 HTTP_STANDINGS_CACHE_TTL_SEC = 30
 HTTP_STALE_CACHE_TTL_SEC = 300
+DEFAULT_STORE_URLS = {
+    "android": "market://details?id=com.basehaptic.mobile",
+    "ios": "itms-apps://itunes.apple.com/app/id6761336752",
+}
 
 _http_cache_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 _http_cache_stats: dict[str, int] = defaultdict(int)
@@ -303,6 +310,47 @@ async def health_verbose() -> dict[str, Any]:
         "redis": redis_detail if not redis_connected else "connected",
         "time": datetime.now(UTC),
     }
+
+
+def _app_config_out(row: AppConfig | None, *, platform: str) -> AppConfigOut:
+    normalized_platform = platform.strip().lower() or "unknown"
+    if row is None:
+        return AppConfigOut(
+            platform=normalized_platform,
+            storeUrl=DEFAULT_STORE_URLS.get(normalized_platform, ""),
+        )
+
+    return AppConfigOut(
+        platform=normalized_platform,
+        minSupportedVersion=row.min_supported_version,
+        latestVersion=row.latest_version,
+        forceUpdate=row.force_update,
+        updateTitle=row.update_title,
+        updateMessage=row.update_message,
+        storeUrl=row.store_url or DEFAULT_STORE_URLS.get(normalized_platform, ""),
+        notice=AppNoticeOut(
+            enabled=row.notice_enabled,
+            title=row.notice_title,
+            message=row.notice_message,
+        ),
+    )
+
+
+@app.get("/app-config", response_model=AppConfigOut)
+def get_app_config(
+    platform: str = Query(default="unknown", min_length=1, max_length=16),
+    version: str | None = Query(default=None, max_length=32),
+    db: Session = Depends(get_db),
+) -> AppConfigOut:
+    del version
+    normalized_platform = platform.strip().lower()
+    row = db.execute(
+        select(AppConfig)
+        .where(AppConfig.platform.in_([normalized_platform, "all"]))
+        .order_by((AppConfig.platform == normalized_platform).desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return _app_config_out(row, platform=normalized_platform)
 
 
 @app.get("/debug/relay-stats")

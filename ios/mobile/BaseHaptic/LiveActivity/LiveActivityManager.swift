@@ -420,7 +420,16 @@ final class LiveActivityManager {
         myTeam: String
     ) -> Bool {
         guard let type = eventType?.uppercased() else { return false }
-        guard ["SCORE", "HOMERUN", "HIT", "WALK", "STEAL"].contains(type) else { return false }
+        guard EventFilterGate.isAllowed(eventType: type, channel: .lockScreen) else { return false }
+        guard [
+            "SCORE", "SAC_FLY_SCORE",
+            "HOMERUN",
+            "HIT",
+            "WALK", "HIT_BY_PITCH",
+            "STEAL", "TAG_UP_ADVANCE",
+            "BALL", "STRIKE",
+            "PITCHER_CHANGE"
+        ].contains(type) else { return false }
         guard !myTeam.isEmpty, myTeam != Team.none.rawValue else { return true }
         guard let inning else { return true }
         if inning.contains("초") {
@@ -437,10 +446,14 @@ final class LiveActivityManager {
         let name = (batter?.isEmpty == false ? batter! : "우리 팀")
         switch type {
         case "SCORE": return "\(name) 득점!"
+        case "SAC_FLY_SCORE": return "\(name) 득점!"
         case "HOMERUN": return "\(name) 홈런!"
         case "HIT": return "\(name) 안타"
-        case "WALK": return "\(name) 볼넷 출루"
-        case "STEAL": return "\(name) 도루 성공"
+        case "WALK", "HIT_BY_PITCH": return "\(name) 출루"
+        case "STEAL", "TAG_UP_ADVANCE": return "\(name) 주루 플레이"
+        case "BALL": return "\(name) 볼"
+        case "STRIKE": return "\(name) 스트라이크"
+        case "PITCHER_CHANGE": return "투수 교체"
         default: return nil
         }
     }
@@ -448,10 +461,14 @@ final class LiveActivityManager {
     private func eventLabel(_ type: String) -> String {
         switch type.uppercased() {
         case "SCORE": return "득점"
+        case "SAC_FLY_SCORE": return "득점"
         case "HOMERUN": return "홈런"
         case "HIT": return "안타"
-        case "WALK": return "볼넷"
-        case "STEAL": return "도루"
+        case "WALK", "HIT_BY_PITCH": return "출루"
+        case "STEAL", "TAG_UP_ADVANCE": return "주루"
+        case "BALL": return "볼"
+        case "STRIKE": return "스트라이크"
+        case "PITCHER_CHANGE": return "투수교체"
         default: return "경기 업데이트"
         }
     }

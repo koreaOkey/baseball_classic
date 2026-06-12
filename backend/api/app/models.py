@@ -46,6 +46,9 @@ class Game(Base):
     base_first: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     base_second: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     base_third: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    base_first_runner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    base_second_runner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    base_third_runner: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
     pitcher: Mapped[str | None] = mapped_column(String(128), nullable=True)
     batter: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -311,6 +314,28 @@ class LiveActivityToken(Base):
     token: Mapped[str] = mapped_column(String(256), nullable=False)
     game_id: Mapped[str] = mapped_column(String(64), nullable=False)
     my_team: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class AppConfig(Base):
+    __tablename__ = "app_config"
+    __table_args__ = (
+        UniqueConstraint("platform", name="uq_app_config_platform"),
+        Index("idx_app_config_platform", "platform"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    min_supported_version: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    latest_version: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    force_update: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    update_title: Mapped[str] = mapped_column(String(128), nullable=False, default="업데이트가 필요합니다")
+    update_message: Mapped[str] = mapped_column(Text, nullable=False, default="안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요.")
+    store_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    notice_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notice_title: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    notice_message: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 

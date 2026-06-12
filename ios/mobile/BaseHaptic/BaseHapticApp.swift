@@ -12,30 +12,90 @@ struct BaseHapticApp: App {
     @AppStorage("selected_team") private var selectedTeamRaw: String = Team.none.rawValue
     @State private var showOnboarding: Bool
     @State private var showAppUpdateAlert = false
-    @State private var appStoreVersion: String = ""
+    @State private var requiredUpdateTitle = "업데이트가 필요합니다"
+    @State private var requiredUpdateMessage = "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요."
+    @State private var requiredUpdateStoreUrl = "itms-apps://itunes.apple.com/app/id6761336752"
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         let savedTeam = UserDefaults.standard.string(forKey: "selected_team") ?? Team.none.rawValue
-        _showOnboarding = State(initialValue: savedTeam == Team.none.rawValue)
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        let lastSeenOnboardingVersion = UserDefaults.standard.string(forKey: "last_seen_onboarding_version") ?? ""
+        let shouldShowUpdateOnboarding = Team.fromString(savedTeam) != .none &&
+            !currentVersion.isEmpty &&
+            lastSeenOnboardingVersion != currentVersion
+        if shouldShowUpdateOnboarding {
+            UserDefaults.standard.set(currentVersion, forKey: "last_seen_update_version")
+        }
+        _showOnboarding = State(initialValue: Team.fromString(savedTeam) == .none || shouldShowUpdateOnboarding)
         UserDefaults.standard.register(defaults: [
             "live_haptic_enabled": true,
             "lock_screen_live_score_enabled": true,
             "ball_strike_haptic_enabled": true,
             "event_video_enabled": true,
             "stadium_cheer_enabled": true,
+            "event_filter_score_enabled": true,
+            "event_filter_homerun_enabled": true,
+            "event_filter_hit_enabled": true,
+            "event_filter_walk_enabled": false,
+            "event_filter_steal_enabled": false,
+            "event_filter_pitch_count_enabled": false,
+            "event_filter_pitcher_change_enabled": false,
+            "lock_screen_event_filter_score_enabled": true,
+            "lock_screen_event_filter_homerun_enabled": true,
+            "lock_screen_event_filter_hit_enabled": true,
+            "lock_screen_event_filter_walk_enabled": false,
+            "lock_screen_event_filter_steal_enabled": false,
+            "lock_screen_event_filter_pitch_count_enabled": false,
+            "lock_screen_event_filter_pitcher_change_enabled": false,
         ])
+        UserDefaults.standard.set(true, forKey: "lock_screen_live_score_enabled")
+        UserDefaults.standard.set(true, forKey: "live_haptic_enabled")
     }
 
     private var selectedTeam: Team {
         Team.fromString(selectedTeamRaw)
     }
 
+    private func compareVersions(_ left: String, _ right: String) -> ComparisonResult {
+        let leftParts = left.split { ".-_".contains($0) }.compactMap { Int($0) }
+        let rightParts = right.split { ".-_".contains($0) }.compactMap { Int($0) }
+        let count = max(leftParts.count, rightParts.count)
+        for index in 0..<count {
+            let l = index < leftParts.count ? leftParts[index] : 0
+            let r = index < rightParts.count ? rightParts[index] : 0
+            if l < r { return .orderedAscending }
+            if l > r { return .orderedDescending }
+        }
+        return .orderedSame
+    }
+
+    private func requiresServerUpdate(currentVersion: String, config: AppConfig) -> Bool {
+        guard config.forceUpdate else { return false }
+        let minRequiresUpdate = !config.minSupportedVersion.isEmpty &&
+            compareVersions(currentVersion, config.minSupportedVersion) == .orderedAscending
+        let latestRequiresUpdate = !config.latestVersion.isEmpty &&
+            compareVersions(currentVersion, config.latestVersion) == .orderedAscending
+        return minRequiresUpdate || latestRequiresUpdate
+    }
+
     private func checkForAppStoreUpdate() async {
         guard let bundleId = Bundle.main.bundleIdentifier,
-              let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
-              let url = URL(string: "https://itunes.apple.com/lookup?bundleId=\(bundleId)&country=kr")
+              let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
         else { return }
+
+        if let config = await BackendGamesRepository.shared.fetchAppConfig(platform: "ios", version: currentVersion),
+           requiresServerUpdate(currentVersion: currentVersion, config: config) {
+            await MainActor.run {
+                requiredUpdateTitle = config.updateTitle.isEmpty ? "업데이트가 필요합니다" : config.updateTitle
+                requiredUpdateMessage = config.updateMessage.isEmpty ? "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요." : config.updateMessage
+                requiredUpdateStoreUrl = config.storeUrl.isEmpty ? "itms-apps://itunes.apple.com/app/id6761336752" : config.storeUrl
+                showAppUpdateAlert = true
+            }
+            return
+        }
+
+        guard let url = URL(string: "https://itunes.apple.com/lookup?bundleId=\(bundleId)&country=kr") else { return }
 
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
@@ -46,7 +106,9 @@ struct BaseHapticApp: App {
 
             if storeVersion.compare(currentVersion, options: .numeric) == .orderedDescending {
                 await MainActor.run {
-                    appStoreVersion = storeVersion
+                    requiredUpdateTitle = "업데이트가 필요합니다"
+                    requiredUpdateMessage = "새 버전 \(storeVersion)이 출시되었습니다.\n계속 이용하려면 업데이트해 주세요."
+                    requiredUpdateStoreUrl = "itms-apps://itunes.apple.com/app/id6761336752"
                     showAppUpdateAlert = true
                 }
             }
@@ -68,6 +130,10 @@ struct BaseHapticApp: App {
                 showOnboarding: showOnboarding,
                 onOnboardingComplete: { team in
                     selectedTeamRaw = team.rawValue
+                    let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+                    if !currentVersion.isEmpty {
+                        UserDefaults.standard.set(currentVersion, forKey: "last_seen_onboarding_version")
+                    }
                     showOnboarding = false
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
                     Task { try? await ThemeRepository.shared.saveSelectedTeam(team.rawValue) }
@@ -86,6 +152,9 @@ struct BaseHapticApp: App {
                 WatchThemeSyncManager.syncLiveHapticEnabledToWatch(
                     enabled: UserDefaults.standard.bool(forKey: "live_haptic_enabled")
                 )
+                WatchThemeSyncManager.syncEventFiltersToWatch(
+                    filters: EventFilterOption.currentValues(channel: .watch)
+                )
                 Task { await TeamSubscriptionManager.syncIfNeeded() }
                 LiveActivityManager.shared.cleanupStaleActivities()
             }
@@ -95,15 +164,17 @@ struct BaseHapticApp: App {
             .task {
                 await checkForAppStoreUpdate()
             }
-            .alert("업데이트 안내", isPresented: $showAppUpdateAlert) {
-                Button("업데이트") {
-                    if let url = URL(string: "itms-apps://itunes.apple.com/app/id6761336752") {
-                        UIApplication.shared.open(url)
+            .overlay {
+                if showAppUpdateAlert {
+                    RequiredUpdateOverlay(
+                        title: requiredUpdateTitle,
+                        message: requiredUpdateMessage
+                    ) {
+                        if let url = URL(string: requiredUpdateStoreUrl) {
+                            UIApplication.shared.open(url)
+                        }
                     }
                 }
-                Button("나중에", role: .cancel) {}
-            } message: {
-                Text("새 버전(\(appStoreVersion))이 출시되었습니다. 업데이트하시겠습니까?")
             }
             .onOpenURL { url in
                 authManager.handleOpenURL(url)
@@ -115,9 +186,53 @@ struct BaseHapticApp: App {
                 BackgroundStreamManager.shared.beginBackgroundStreaming()
             case .active:
                 BackgroundStreamManager.shared.endBackgroundStreaming()
+                Task { await checkForAppStoreUpdate() }
             default:
                 break
             }
+        }
+    }
+}
+
+private struct RequiredUpdateOverlay: View {
+    let title: String
+    let message: String
+    let onUpdate: () -> Void
+
+    var body: some View {
+        ZStack {
+            AppColors.gray950
+                .ignoresSafeArea()
+
+            VStack(spacing: AppSpacing.xxl) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 56, weight: .semibold))
+                    .foregroundColor(AppColors.blue600)
+
+                VStack(spacing: AppSpacing.sm) {
+                    Text(title)
+                        .font(AppFont.h3Bold)
+                        .foregroundColor(.white)
+
+                    Text(message)
+                        .font(AppFont.body)
+                        .foregroundColor(AppColors.gray400)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+
+                Button(action: onUpdate) {
+                    Text("업데이트")
+                        .font(AppFont.bodyLgMedium)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(AppColors.blue600)
+                        .cornerRadius(AppRadius.md)
+                }
+            }
+            .padding(AppSpacing.xxl)
+            .frame(maxWidth: 360)
         }
     }
 }
@@ -172,29 +287,8 @@ struct ContentView: View {
     @State private var gameStreamTask: Task<Void, Never>?
     @StateObject private var rewardedAdManager = RewardedAdManager.shared
 
-    private let debugDummyLiveGameId = "debug-watch-sync-test"
-    #if DEBUG
-    private var debugDummyLiveGame: Game {
-        Game(
-            id: debugDummyLiveGameId,
-            homeTeam: "두산",
-            awayTeam: "LG",
-            homeTeamId: .doosan,
-            awayTeamId: .lg,
-            homeScore: 3,
-            awayScore: 5,
-            inning: "7회초",
-            status: .live,
-            time: "19:30"
-        )
-    }
-    #endif
     private var gamesForHome: [Game] {
-        #if DEBUG
-        return [debugDummyLiveGame] + todayGames
-        #else
         return todayGames
-        #endif
     }
 
     @ObservedObject private var connectivity = PhoneConnectivityManager.shared
@@ -205,6 +299,7 @@ struct ContentView: View {
             if showOnboarding {
                 OnboardingScreen(
                     onComplete: onOnboardingComplete,
+                    initialSelectedTeam: selectedTeam,
                     authState: authManager.authState,
                     onSignInWithKakao: {
                         Task {
@@ -238,24 +333,19 @@ struct ContentView: View {
             guard let gameId = notification.userInfo?["game_id"] as? String, !gameId.isEmpty else { return }
             // 온보딩 중이거나 응원팀 미설정 상태면 무시
             guard !showOnboarding else { return }
-            let homeTeam = notification.userInfo?["home_team"] as? String ?? ""
-            let awayTeam = notification.userInfo?["away_team"] as? String ?? ""
-            // 푸시 탭은 항상 홈으로 착지 → 그 위에 광고 게이트가 있는 워치 관람 팝업.
-            // 취소 시 홈 유지, 워치 미설치는 팝업 없이 홈에 머문다.
+            // 알림 탭은 워치 동기화 팝업을 열지 않고 홈으로만 착지한다.
             selectedGameId = gameId
             if currentView != .home {
                 navigateTo(.home)
-            }
-            if connectivity.watchCompanionStatus == .installed {
-                pendingWatchSyncHomeTeam = homeTeam
-                pendingWatchSyncAwayTeam = awayTeam
-                requestWatchSyncPrompt(gameId: gameId, navigateToLive: false)
             }
         }
         .onAppear {
             evaluateWhatsNewTrigger()
         }
         .overlay {
+            #if DEBUG
+            EmptyView()
+            #else
             if let note = pendingReleaseNote {
                 WhatsNewSheet(
                     note: note,
@@ -264,6 +354,7 @@ struct ContentView: View {
                 .transition(.opacity)
                 .zIndex(1)
             }
+            #endif
         }
         .animation(.easeInOut(duration: 0.2), value: pendingReleaseNote?.id)
         .task(id: selectedTeam) {
@@ -340,6 +431,16 @@ struct ContentView: View {
                         activeLiveActivityGameId: activeLiveActivityGameId,
                         isWatchAppInstalled: connectivity.watchCompanionStatus == .installed,
                         checkinStadium: nil,
+                        showUpdateHighlights: {
+                            #if DEBUG
+                            pendingReleaseNote != nil
+                            #else
+                            false
+                            #endif
+                        }(),
+                        onDismissUpdateHighlights: {
+                            pendingReleaseNote = nil
+                        },
                         onConfirmCheckin: {
                             confirmPendingCheckin()
                         },
@@ -509,11 +610,15 @@ struct ContentView: View {
                 closeWatchSyncDialog()
             }
         } message: {
-            let suffix = "광고 관람 후 동기화됩니다."
+            let hasViewedAd = pendingWatchSyncGameId.map { WatchSyncAdLedger.hasViewed(gameId: $0) } ?? false
+            let suffix = hasViewedAd ? "" : "광고 관람 후 동기화됩니다."
             if !pendingWatchSyncHomeTeam.isEmpty && !pendingWatchSyncAwayTeam.isEmpty {
-                Text("\(pendingWatchSyncAwayTeam) vs \(pendingWatchSyncHomeTeam)\n\(suffix)")
+                let lines = ["\(pendingWatchSyncAwayTeam) vs \(pendingWatchSyncHomeTeam)", suffix]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n")
+                Text(lines)
             } else {
-                Text(suffix)
+                Text(suffix.isEmpty ? "워치 동기화를 시작할까요?" : suffix)
             }
         }
         .alert("잠금화면에서 보시겠습니까?", isPresented: $showLiveActivityDialog) {
@@ -577,6 +682,11 @@ struct ContentView: View {
         let defaults = UserDefaults.standard
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         guard !currentVersion.isEmpty else { return }
+
+        #if DEBUG
+        pendingReleaseNote = ReleaseNotes.notes(for: currentVersion) ?? ReleaseNotes.latest
+        return
+        #endif
 
         let lastSeen = defaults.string(forKey: "last_seen_update_version") ?? ""
         if lastSeen.isEmpty {
@@ -693,6 +803,12 @@ struct ContentView: View {
     }
 
     private var liveActivityPromptMessage: String {
+        if let game = pendingLiveActivityGame, LiveActivityAdLedger.hasViewed(gameId: game.id) {
+            if DeviceCapability.supportsDynamicIsland {
+                return "잠금화면과 다이내믹 아일랜드 라이브 스코어를 시작할까요?"
+            }
+            return "잠금화면 라이브 스코어를 시작할까요?"
+        }
         if DeviceCapability.supportsDynamicIsland {
             return "광고 관람 후 잠금화면과 다이내믹 아일랜드에서 볼 수 있습니다."
         }
@@ -1057,8 +1173,7 @@ struct ContentView: View {
                             let isMyTeamAway = selectedTeam != .none && state.awayTeamId == selectedTeam
                             let myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
                                             (isMyTeamAway && state.awayScore > state.homeScore)
-                            let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
-                            if myTeamWon && liveHapticEnabled {
+                            if myTeamWon {
                                 WatchGameSyncManager.shared.sendHapticEvent(eventType: "VICTORY")
                             }
                         }
@@ -1073,14 +1188,6 @@ struct ContentView: View {
                         break
                     }
 
-                    let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
-                    guard liveHapticEnabled else {
-                        if let maxCursor = sortedItems.last?.cursor {
-                            lastSentEventCursor = max(lastSentEventCursor, maxCursor)
-                        }
-                        break
-                    }
-                    let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
                     let newItems = sortedItems.filter { $0.cursor > lastSentEventCursor }
                     let batchTypes = Set(newItems.compactMap { mapToWatchEventType($0.type) })
                     let hasScore = batchTypes.contains("SCORE") || batchTypes.contains("HOMERUN")
@@ -1089,8 +1196,7 @@ struct ContentView: View {
                             if let mapped = mapToWatchEventType(event.type) {
                                 if mapped == "HIT" && hasScore { /* skip HIT when SCORE present */ }
                                 else {
-                                    let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
-                                    if !isBallOrStrike || ballStrikeEnabled {
+                                    if EventFilterGate.isAllowed(eventType: mapped, channel: .watch) {
                                         WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
                                     }
                                 }
@@ -1100,19 +1206,16 @@ struct ContentView: View {
                     }
                 case .update(let state, let events):
                     // events 처리 (햅틱 먼저)
-                    let liveHapticEnabled = UserDefaults.standard.bool(forKey: "live_haptic_enabled")
-                    let ballStrikeEnabled = UserDefaults.standard.bool(forKey: "ball_strike_haptic_enabled")
                     let sortedEvents = events.sorted(by: { $0.cursor < $1.cursor })
                     let newEvents = sortedEvents.filter { $0.cursor > lastSentEventCursor }
                     let batchTypes = Set(newEvents.compactMap { mapToWatchEventType($0.type) })
                     let hasScore = batchTypes.contains("SCORE") || batchTypes.contains("HOMERUN")
                     for event in sortedEvents {
                         if event.cursor > lastSentEventCursor {
-                            if liveHapticEnabled, let mapped = mapToWatchEventType(event.type) {
+                            if let mapped = mapToWatchEventType(event.type) {
                                 if mapped == "HIT" && hasScore { /* skip HIT when SCORE present */ }
                                 else {
-                                    let isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
-                                    if !isBallOrStrike || ballStrikeEnabled {
+                                    if EventFilterGate.isAllowed(eventType: mapped, channel: .watch) {
                                         WatchGameSyncManager.shared.sendHapticEvent(eventType: mapped, cursor: event.cursor)
                                     }
                                 }
@@ -1162,7 +1265,7 @@ struct ContentView: View {
                                 let isMyTeamAway = selectedTeam != .none && state.awayTeamId == selectedTeam
                                 let myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
                                                 (isMyTeamAway && state.awayScore > state.homeScore)
-                                if myTeamWon && liveHapticEnabled {
+                                if myTeamWon {
                                     WatchGameSyncManager.shared.sendHapticEvent(eventType: "VICTORY")
                                 }
                             }

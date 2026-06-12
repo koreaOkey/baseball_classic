@@ -15,6 +15,8 @@ import androidx.core.app.NotificationCompat
 import com.basehaptic.mobile.MainActivity
 import com.basehaptic.mobile.R
 import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.model.EventFilterGate
+import com.basehaptic.mobile.data.model.EventNotificationChannel
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.wear.WearGameSyncManager
@@ -140,21 +142,54 @@ class GameSyncForegroundService : Service() {
             var localEvents: List<BackendGamesRepository.LiveEvent> = emptyList()
             var lastWatchSignature = ""
             var lastSentEventCursor = 0L
+            var highlightedLiveScoreEventCursor: Long? = null
+            var latestLiveScoreState: BackendGamesRepository.LiveGameState? = null
+            var highlightRevertJob: Job? = null
             val reconnectDelaysMs = listOf(1000L, 2000L, 5000L, 10000L)
             var reconnectAttempt = 0
 
             fun pushStateToWatch(state: BackendGamesRepository.LiveGameState) {
                 // 폰 라이브 스코어 ongoing notification (잠금화면·드로어 표시)
                 if (liveScoreEnabled && state.status == GameStatus.LIVE) {
+                    latestLiveScoreState = state
                     val latestEventForNoti = localEvents.firstOrNull()
                     val latestForNoti = latestEventForNoti?.type ?: state.lastEventType
+                    val shouldHighlight =
+                        latestEventForNoti != null &&
+                            highlightedLiveScoreEventCursor == latestEventForNoti.cursor
                     com.basehaptic.mobile.push.LiveScoreNotificationManager.post(
                         applicationContext,
                         state,
                         latestForNoti,
-                        latestEventForNoti?.description
+                        latestEventForNoti?.description,
+                        highlightEvent = shouldHighlight
                     )
+                    if (shouldHighlight) {
+                        val cursorToRevert = latestEventForNoti.cursor
+                        highlightRevertJob?.cancel()
+                        highlightRevertJob = launch {
+                            delay(3_000)
+                            if (
+                                liveScoreEnabled &&
+                                highlightedLiveScoreEventCursor == cursorToRevert
+                            ) {
+                                highlightedLiveScoreEventCursor = null
+                                latestLiveScoreState?.takeIf { it.status == GameStatus.LIVE }?.let { currentState ->
+                                    val currentEvent = localEvents.firstOrNull()
+                                    com.basehaptic.mobile.push.LiveScoreNotificationManager.post(
+                                        applicationContext,
+                                        currentState,
+                                        currentEvent?.type ?: currentState.lastEventType,
+                                        currentEvent?.description,
+                                        highlightEvent = false
+                                    )
+                                }
+                            }
+                        }
+                    }
                 } else if (!liveScoreEnabled || state.status == GameStatus.FINISHED) {
+                    highlightedLiveScoreEventCursor = null
+                    highlightRevertJob?.cancel()
                     com.basehaptic.mobile.push.LiveScoreNotificationManager.remove(applicationContext)
                 }
 
@@ -229,9 +264,7 @@ class GameSyncForegroundService : Service() {
                         val isMyTeamAway = selectedTeam != Team.NONE && state.awayTeamId == selectedTeam
                         val myTeamWon = (isMyTeamHome && state.homeScore > state.awayScore) ||
                             (isMyTeamAway && state.awayScore > state.homeScore)
-                        val liveHapticEnabled = getSharedPreferences("basehaptic_user_prefs", MODE_PRIVATE)
-                            .getBoolean("live_haptic_enabled", true)
-                        if (myTeamWon && liveHapticEnabled) {
+                        if (myTeamWon) {
                             WearGameSyncManager.sendHapticEvent(applicationContext, "VICTORY")
                         }
 
@@ -270,30 +303,31 @@ class GameSyncForegroundService : Service() {
 
             fun applyIncomingEvents(
                 incoming: List<BackendGamesRepository.LiveEvent>,
-                sendHaptics: Boolean
+                sendHaptics: Boolean,
+                allowLiveScoreHighlight: Boolean
             ) {
                 if (incoming.isEmpty()) return
 
                 val sorted = incoming.sortedBy { it.cursor }
+                val freshEvents = sorted.filter { it.cursor > cursor }
                 if (sendHaptics) {
-                    val prefs = getSharedPreferences("basehaptic_user_prefs", MODE_PRIVATE)
-                    val liveHapticEnabled = prefs.getBoolean("live_haptic_enabled", true)
-                    val ballStrikeEnabled = prefs.getBoolean("ball_strike_haptic_enabled", true)
                     val newEvents = sorted.filter { it.cursor > lastSentEventCursor }
                     val batchEventTypes = newEvents.mapNotNull { mapToWatchEventType(it.type) }.toSet()
                     val hasScore = "SCORE" in batchEventTypes || "HOMERUN" in batchEventTypes
                     newEvents.forEach { event ->
-                            if (liveHapticEnabled) {
-                                mapToWatchEventType(event.type)?.let { mapped ->
-                                    if (mapped == "HIT" && hasScore) return@let
-                                    val isBallOrStrike = mapped == "BALL" || mapped == "STRIKE"
-                                    if (!isBallOrStrike || ballStrikeEnabled) {
-                                        WearGameSyncManager.sendHapticEvent(
-                                            applicationContext,
-                                            mapped,
-                                            event.cursor
-                                        )
-                                    }
+                            mapToWatchEventType(event.type)?.let { mapped ->
+                                if (mapped == "HIT" && hasScore) return@let
+                                if (EventFilterGate.isAllowed(
+                                        applicationContext,
+                                        mapped,
+                                        EventNotificationChannel.WATCH
+                                    )
+                                ) {
+                                    WearGameSyncManager.sendHapticEvent(
+                                        applicationContext,
+                                        mapped,
+                                        event.cursor
+                                    )
                                 }
                             }
                             lastSentEventCursor = max(lastSentEventCursor, event.cursor)
@@ -308,6 +342,21 @@ class GameSyncForegroundService : Service() {
                     .distinctBy { it.cursor }
                     .sortedByDescending { it.cursor }
                     .take(80)
+
+                if (allowLiveScoreHighlight && liveScoreEnabled) {
+                    freshEvents.lastOrNull {
+                        EventFilterGate.isAllowed(
+                            applicationContext,
+                            it.type,
+                            EventNotificationChannel.LOCK_SCREEN
+                        )
+                    }?.let { latestFreshEvent ->
+                        highlightedLiveScoreEventCursor = latestFreshEvent.cursor
+                        latestLiveScoreState?.takeIf { it.status == GameStatus.LIVE }?.let { currentState ->
+                            pushStateToWatch(currentState)
+                        }
+                    }
+                }
             }
 
             while (currentCoroutineContext().isActive) {
@@ -330,7 +379,8 @@ class GameSyncForegroundService : Service() {
                             is BackendGamesRepository.LiveStreamMessage.Events -> {
                                 applyIncomingEvents(
                                     incoming = message.items,
-                                    sendHaptics = watchSyncEnabled && hasConsumedInitialEventsSnapshot
+                                    sendHaptics = watchSyncEnabled && hasConsumedInitialEventsSnapshot,
+                                    allowLiveScoreHighlight = hasConsumedInitialEventsSnapshot
                                 )
                                 hasConsumedInitialEventsSnapshot = true
                             }
@@ -340,7 +390,11 @@ class GameSyncForegroundService : Service() {
                             }
 
                             is BackendGamesRepository.LiveStreamMessage.Update -> {
-                                applyIncomingEvents(message.events, sendHaptics = watchSyncEnabled)
+                                applyIncomingEvents(
+                                    incoming = message.events,
+                                    sendHaptics = watchSyncEnabled,
+                                    allowLiveScoreHighlight = true
+                                )
                                 message.state?.let { pushStateToWatch(it) }
                             }
 
@@ -402,7 +456,7 @@ class GameSyncForegroundService : Service() {
         val normalized = type?.uppercase() ?: return null
         return when (normalized) {
             "BALL", "STRIKE", "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY",
-            "HIT", "HOMERUN", "SCORE", "WALK", "STEAL",
+            "HIT", "HOMERUN", "SCORE", "WALK", "HIT_BY_PITCH", "STEAL",
             "PITCHER_CHANGE", "MOUND_VISIT" -> normalized
             "SAC_FLY_SCORE" -> "SCORE"
             "TAG_UP_ADVANCE" -> "STEAL"
