@@ -140,12 +140,32 @@ def _ensure_game_columns(bind: SchemaBind = engine) -> None:
 
     columns = {column["name"] for column in inspector.get_columns("games")}
     ddl_statements: list[str] = []
-    if "start_time" not in columns:
-        ddl_statements.append("ALTER TABLE games ADD COLUMN start_time VARCHAR(5)")
-    if "game_date" not in columns:
-        ddl_statements.append("ALTER TABLE games ADD COLUMN game_date VARCHAR(10)")
-    if "live_started_at" not in columns:
-        ddl_statements.append("ALTER TABLE games ADD COLUMN live_started_at TIMESTAMPTZ")
+    nullable_columns = {
+        "start_time": "VARCHAR(5)",
+        "game_date": "VARCHAR(10)",
+        "live_started_at": "TIMESTAMPTZ",
+        "base_first_runner": "VARCHAR(128)",
+        "base_second_runner": "VARCHAR(128)",
+        "base_third_runner": "VARCHAR(128)",
+        "last_event_type": "VARCHAR(32)",
+        "last_event_desc": "TEXT",
+        "last_event_at": "TIMESTAMPTZ",
+    }
+    for column_name, column_type in nullable_columns.items():
+        if column_name not in columns:
+            ddl_statements.append(f"ALTER TABLE games ADD COLUMN {column_name} {column_type}")
+
+    summary_columns = {
+        "home_hits": "INTEGER NOT NULL DEFAULT 0",
+        "away_hits": "INTEGER NOT NULL DEFAULT 0",
+        "home_home_runs": "INTEGER NOT NULL DEFAULT 0",
+        "away_home_runs": "INTEGER NOT NULL DEFAULT 0",
+        "home_outs_total": "INTEGER NOT NULL DEFAULT 0",
+        "away_outs_total": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for column_name, column_type in summary_columns.items():
+        if column_name not in columns:
+            ddl_statements.append(f"ALTER TABLE games ADD COLUMN {column_name} {column_type}")
 
     _execute_ddl_statements(bind, ddl_statements)
 

@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError
 
 API_ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,7 @@ os.environ["BASEHAPTIC_CORS_ALLOW_ORIGINS"] = "*"
 
 from app.main import app  # noqa: E402
 from app import main as main_module  # noqa: E402
+from app import db as db_module  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import AppConfig, Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord  # noqa: E402
 from app.services import _event_out_count, normalize_event_type, normalize_status  # noqa: E402
@@ -158,6 +160,60 @@ def sample_snapshot() -> dict:
             }
         ],
     }
+
+
+def test_schema_init_backfills_legacy_game_summary_columns(tmp_path: Path) -> None:
+    db_url = f"sqlite+pysqlite:///{(tmp_path / 'legacy.db').as_posix()}"
+    engine = create_engine(db_url, future=True)
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE games (
+                    id VARCHAR(64) PRIMARY KEY,
+                    home_team VARCHAR(64) NOT NULL,
+                    away_team VARCHAR(64) NOT NULL,
+                    status VARCHAR(24) NOT NULL DEFAULT 'SCHEDULED',
+                    inning VARCHAR(32) NOT NULL DEFAULT '-',
+                    home_score INTEGER NOT NULL DEFAULT 0,
+                    away_score INTEGER NOT NULL DEFAULT 0,
+                    ball_count INTEGER NOT NULL DEFAULT 0,
+                    strike_count INTEGER NOT NULL DEFAULT 0,
+                    out_count INTEGER NOT NULL DEFAULT 0,
+                    base_first BOOLEAN NOT NULL DEFAULT 0,
+                    base_second BOOLEAN NOT NULL DEFAULT 0,
+                    base_third BOOLEAN NOT NULL DEFAULT 0,
+                    pitcher VARCHAR(128),
+                    batter VARCHAR(128),
+                    observed_at DATETIME,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+
+    db_module._ensure_game_columns(engine)
+
+    columns = {column["name"] for column in inspect(engine).get_columns("games")}
+    assert {
+        "game_date",
+        "start_time",
+        "live_started_at",
+        "base_first_runner",
+        "base_second_runner",
+        "base_third_runner",
+        "home_hits",
+        "away_hits",
+        "home_home_runs",
+        "away_home_runs",
+        "home_outs_total",
+        "away_outs_total",
+        "last_event_type",
+        "last_event_desc",
+        "last_event_at",
+    }.issubset(columns)
 
 
 def test_app_config_returns_default_store_url_when_unconfigured() -> None:

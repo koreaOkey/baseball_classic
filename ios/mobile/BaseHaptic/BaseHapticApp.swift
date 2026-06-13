@@ -285,6 +285,7 @@ struct ContentView: View {
     @State private var dismissedCheckinStadiumCodes: Set<String> = []
     @State private var scheduledCheerSignalIds: Set<String> = []
     @State private var gameStreamTask: Task<Void, Never>?
+    @State private var liveActivityStreamTask: Task<Void, Never>?
     @StateObject private var rewardedAdManager = RewardedAdManager.shared
 
     private var gamesForHome: [Game] {
@@ -408,11 +409,13 @@ struct ContentView: View {
 
             guard let gameId = newId, !gameId.isEmpty else {
                 gameStreamTask = nil
+                refreshLiveActivityStream()
                 return
             }
             gameStreamTask = Task {
                 await streamSyncedGame()
             }
+            refreshLiveActivityStream()
         }
     }
 
@@ -708,6 +711,7 @@ struct ContentView: View {
 
         if activeLiveActivityGameId == game.id {
             activeLiveActivityGameId = nil
+            refreshLiveActivityStream()
             LiveActivityManager.shared.endActivity(gameId: game.id)
             Task {
                 await PushTokenManager.unregisterLiveActivityToken(gameId: game.id)
@@ -800,6 +804,21 @@ struct ContentView: View {
             status: game.status.rawValue,
             myTeam: selectedTeam.rawValue
         )
+        refreshLiveActivityStream()
+    }
+
+    private func refreshLiveActivityStream() {
+        liveActivityStreamTask?.cancel()
+        liveActivityStreamTask = nil
+
+        guard let gameId = activeLiveActivityGameId, !gameId.isEmpty else { return }
+
+        // Watch 동기화 스트림이 같은 경기를 이미 받고 있으면 그 스트림이 Live Activity도 갱신한다.
+        guard syncedGameId != gameId else { return }
+
+        liveActivityStreamTask = Task {
+            await streamLiveActivityGame(gameId: gameId)
+        }
     }
 
     private var liveActivityPromptMessage: String {
@@ -1118,12 +1137,14 @@ struct ContentView: View {
                 pitcherPitchCount: initialState.pitcherPitchCount,
                 myTeam: selectedTeam.rawValue
             )
-            LiveActivityManager.shared.startOrUpdateActivity(
-                state: initialState,
-                myTeam: selectedTeam.rawValue,
-                latestEvent: nil,
-                alert: false
-            )
+            if activeLiveActivityGameId == initialState.gameId {
+                LiveActivityManager.shared.startOrUpdateActivity(
+                    state: initialState,
+                    myTeam: selectedTeam.rawValue,
+                    latestEvent: nil,
+                    alert: false
+                )
+            }
             lastWatchSignature = "\(initialState.gameId)|\(initialState.status)|\(initialState.inning)|\(initialState.homeScore)|\(initialState.awayScore)|\(initialState.ball)|\(initialState.strike)|\(initialState.out)|\(initialState.pitcherPitchCount ?? -1)"
         }
 
@@ -1160,12 +1181,14 @@ struct ContentView: View {
                             pitcherPitchCount: state.pitcherPitchCount,
                             myTeam: selectedTeam.rawValue
                         )
-                        LiveActivityManager.shared.startOrUpdateActivity(
-                            state: state,
-                            myTeam: selectedTeam.rawValue,
-                            latestEvent: nil,
-                            alert: false
-                        )
+                        if activeLiveActivityGameId == state.gameId {
+                            LiveActivityManager.shared.startOrUpdateActivity(
+                                state: state,
+                                myTeam: selectedTeam.rawValue,
+                                latestEvent: nil,
+                                alert: false
+                            )
+                        }
                         lastWatchSignature = signature
 
                         if wasLive && state.status == .finished {
@@ -1252,12 +1275,14 @@ struct ContentView: View {
                                 pitcherPitchCount: state.pitcherPitchCount,
                                 myTeam: selectedTeam.rawValue
                             )
-                            LiveActivityManager.shared.startOrUpdateActivity(
-                                state: state,
-                                myTeam: selectedTeam.rawValue,
-                                latestEvent: latestEvent,
-                                alert: latestEvent != nil
-                            )
+                            if activeLiveActivityGameId == state.gameId {
+                                LiveActivityManager.shared.startOrUpdateActivity(
+                                    state: state,
+                                    myTeam: selectedTeam.rawValue,
+                                    latestEvent: latestEvent,
+                                    alert: latestEvent != nil
+                                )
+                            }
                             lastWatchSignature = signature
 
                             if wasLive && state.status == .finished {
@@ -1270,12 +1295,14 @@ struct ContentView: View {
                                 }
                             }
                         } else if latestEvent != nil {
-                            LiveActivityManager.shared.startOrUpdateActivity(
-                                state: state,
-                                myTeam: selectedTeam.rawValue,
-                                latestEvent: latestEvent,
-                                alert: true
-                            )
+                            if activeLiveActivityGameId == state.gameId {
+                                LiveActivityManager.shared.startOrUpdateActivity(
+                                    state: state,
+                                    myTeam: selectedTeam.rawValue,
+                                    latestEvent: latestEvent,
+                                    alert: true
+                                )
+                            }
                         }
                     }
                 case .pong:
@@ -1288,6 +1315,144 @@ struct ContentView: View {
             reconnectAttempt = min(reconnectAttempt + 1, reconnectDelays.count - 1)
             try? await Task.sleep(nanoseconds: delay)
         }
+    }
+
+    private func streamLiveActivityGame(gameId: String) async {
+        var lastSignature = ""
+        var lastEventCursor: Int64 = 0
+        let reconnectDelays: [UInt64] = [1_000_000_000, 2_000_000_000, 5_000_000_000, 10_000_000_000]
+        var reconnectAttempt = 0
+
+        if let initialState = await BackendGamesRepository.shared.fetchGameState(gameId: gameId) {
+            guard activeLiveActivityGameId == gameId else { return }
+            LiveActivityManager.shared.startOrUpdateActivity(
+                state: initialState,
+                myTeam: selectedTeam.rawValue,
+                latestEvent: nil,
+                alert: false
+            )
+            lastSignature = liveActivitySignature(initialState)
+            if initialState.status != .live {
+                await deactivateLiveActivity(gameId: gameId)
+                return
+            }
+        }
+
+        while !Task.isCancelled {
+            var hasConsumedInitialEventsSnapshot = false
+
+            for await message in BackendGamesRepository.shared.streamGame(gameId: gameId) {
+                guard activeLiveActivityGameId == gameId else { return }
+
+                switch message {
+                case .connected:
+                    reconnectAttempt = 0
+                case .closed:
+                    break
+                case .error:
+                    break
+                case .state(let state):
+                    lastSignature = await updateLiveActivityFromStream(
+                        state: state,
+                        latestEvent: nil,
+                        alert: false,
+                        lastSignature: lastSignature
+                    )
+                case .events(let events):
+                    let sortedEvents = events.sorted(by: { $0.cursor < $1.cursor })
+                    if !hasConsumedInitialEventsSnapshot {
+                        if let maxCursor = sortedEvents.last?.cursor {
+                            lastEventCursor = max(lastEventCursor, maxCursor)
+                        }
+                        hasConsumedInitialEventsSnapshot = true
+                        break
+                    }
+                    if let latestEvent = sortedEvents.filter({ $0.cursor > lastEventCursor }).last {
+                        lastEventCursor = max(lastEventCursor, latestEvent.cursor)
+                        if let state = await BackendGamesRepository.shared.fetchGameState(gameId: gameId) {
+                            lastSignature = await updateLiveActivityFromStream(
+                                state: state,
+                                latestEvent: latestEvent,
+                                alert: true,
+                                lastSignature: lastSignature
+                            )
+                        }
+                    }
+                case .update(let state, let events):
+                    let sortedEvents = events.sorted(by: { $0.cursor < $1.cursor })
+                    let newEvents = sortedEvents.filter { $0.cursor > lastEventCursor }
+                    if let maxCursor = newEvents.last?.cursor {
+                        lastEventCursor = max(lastEventCursor, maxCursor)
+                    }
+                    if let state {
+                        lastSignature = await updateLiveActivityFromStream(
+                            state: state,
+                            latestEvent: newEvents.last ?? sortedEvents.last,
+                            alert: !(newEvents.isEmpty && sortedEvents.isEmpty),
+                            lastSignature: lastSignature
+                        )
+                    }
+                case .pong:
+                    break
+                }
+            }
+
+            if Task.isCancelled { break }
+            let delay = reconnectDelays[min(reconnectAttempt, reconnectDelays.count - 1)]
+            reconnectAttempt = min(reconnectAttempt + 1, reconnectDelays.count - 1)
+            try? await Task.sleep(nanoseconds: delay)
+        }
+    }
+
+    private func updateLiveActivityFromStream(
+        state: LiveGameState,
+        latestEvent: LiveEvent?,
+        alert: Bool,
+        lastSignature: String
+    ) async -> String {
+        guard activeLiveActivityGameId == state.gameId else { return lastSignature }
+
+        if state.status != .live {
+            LiveActivityManager.shared.startOrUpdateActivity(
+                state: state,
+                myTeam: selectedTeam.rawValue,
+                latestEvent: latestEvent,
+                alert: false
+            )
+            await deactivateLiveActivity(gameId: state.gameId)
+            return liveActivitySignature(state)
+        }
+
+        let signature = liveActivitySignature(state)
+        if signature != lastSignature || latestEvent != nil {
+            LiveActivityManager.shared.startOrUpdateActivity(
+                state: state,
+                myTeam: selectedTeam.rawValue,
+                latestEvent: latestEvent,
+                alert: alert && latestEvent != nil
+            )
+            return signature
+        }
+        return lastSignature
+    }
+
+    private func liveActivitySignature(_ state: LiveGameState) -> String {
+        "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)|\(state.pitcherPitchCount ?? -1)"
+    }
+
+    @MainActor
+    private func deactivateLiveActivity(gameId: String) async {
+        guard activeLiveActivityGameId == gameId else { return }
+        activeLiveActivityGameId = nil
+        refreshLiveActivityStream()
+        await PushTokenManager.unregisterLiveActivityToken(gameId: gameId)
+        await LiveViewSessionManager.setActive(
+            gameId: gameId,
+            surface: .ios,
+            active: false,
+            myTeam: selectedTeam.rawValue,
+            tokenKey: UserDefaults.standard.string(forKey: "apns_device_token")
+        )
     }
 }
 

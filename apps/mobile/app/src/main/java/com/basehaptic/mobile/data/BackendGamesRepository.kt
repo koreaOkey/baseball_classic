@@ -346,10 +346,8 @@ object BackendGamesRepository {
                 cachedMaxItems == normalizedMaxItems &&
                 cachedDaysAhead == normalizedDaysAhead
 
-        if (!forceRefresh && cacheMatches && !cachedPayload.isNullOrBlank()) {
-            parseUpcomingGamesPayload(cachedPayload)?.let { return it }
-        }
-
+        // Network first. A backend outage can otherwise cache an empty upcoming
+        // list for the whole local day and hide schedules after the backend recovers.
         val fresh = fetchUpcomingMyTeamGames(
             selectedTeam = selectedTeam,
             maxItems = normalizedMaxItems,
@@ -382,29 +380,16 @@ object BackendGamesRepository {
         val normalizedMaxItems = maxItems.coerceAtLeast(1)
         val normalizedDaysAhead = daysAhead.coerceAtLeast(1)
         val now = LocalDate.now()
-        val items = mutableListOf<UpcomingGameSchedule>()
+        val fromDate = now.plusDays(1)
+        val toDate = now.plusDays(normalizedDaysAhead.toLong())
+        val payload = fetchGamesByDateRangePayload(fromDate = fromDate, toDate = toDate) ?: return null
+        val schedules = parseScheduleRangePayload(payload, selectedTeam) ?: return null
 
-        for (offset in 1..normalizedDaysAhead) {
-            val targetDate = now.plusDays(offset.toLong())
-            val dayGames = fetchGamesByDate(selectedTeam = selectedTeam, targetDate = targetDate).orEmpty()
-            if (dayGames.isEmpty()) continue
-
-            val upcomingMyTeamGames = dayGames
-                .asSequence()
-                .filter { it.isMyTeam && it.status == GameStatus.SCHEDULED }
-                .sortedBy { parseGameTimeToSortKey(it.time) }
-                .map { game -> UpcomingGameSchedule(gameDate = targetDate, game = game) }
-                .toList()
-
-            for (entry in upcomingMyTeamGames) {
-                items.add(entry)
-                if (items.size >= normalizedMaxItems) {
-                    return items
-                }
-            }
-        }
-
-        return items
+        return schedules
+            .asSequence()
+            .filter { it.gameDate.isAfter(now) && it.game.status == GameStatus.SCHEDULED }
+            .take(normalizedMaxItems)
+            .toList()
     }
 
     fun fetchMyTeamScheduleGames(
