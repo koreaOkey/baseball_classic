@@ -182,6 +182,7 @@ def test_snapshot_payload_preserves_naver_pitch_detail_metadata() -> None:
 
     assert event["sourceEventId"] == "05-040-0210"
     assert event["type"] == "STRIKE"
+    assert event["inning"] == "5회초"
     assert metadata["batter"] == "오윤석"
     assert metadata["pitcher"] == "베니지아노"
     assert metadata["pitchNum"] == 5

@@ -45,24 +45,25 @@ data class AtBatGroup(
          * - `atBatId != null` 이벤트는 atBatId 별로 묶고, 그룹 내부는 `seqno asc` 로 정렬.
          * - `atBatId == null` 이벤트는 각자 단일 그룹(현재 평면 UI 와 동등한 폴백).
          * - 그룹 사이 정렬은 그룹 대표 cursor 의 desc — 최신 타석이 위.
-         * - 그룹의 batter/pitcher/inning/time 은 가장 마지막 이벤트 기준.
+         * - 그룹의 batter/pitcher/time 은 가장 마지막 유효 이벤트 기준.
+         * - 그룹의 inning 은 지연 삽입된 결과 이벤트 오표시를 피하기 위해 그룹 안의 대표값 기준.
          */
         fun group(events: List<LiveEvent>): List<AtBatGroup> {
             if (events.isEmpty()) return emptyList()
 
-            // atBatId 기준 묶기. 백엔드 atBatId 는 회차 숫자만 담을 수 있으므로 초/말 텍스트까지
-            // 포함해 공수교대 직후 같은 relayNo 가 다음 공격 카드와 섞이지 않게 한다.
+            // atBatId 기준 묶기. 이벤트 저장 시점의 현재 이닝이 이미 다음 공격으로 넘어간
+            // 경우에도 같은 타석의 마지막 이벤트가 이전 카드에 붙어야 한다.
             val buckets = LinkedHashMap<String, MutableList<LiveEvent>>()
             for (event in events) {
-                val key = if (event.atBatId != null && !event.inning.isNullOrEmpty()) {
-                    "${event.inning}:${event.atBatId}"
+                val key = if (!event.atBatId.isNullOrEmpty()) {
+                    event.atBatId
                 } else {
                     "__solo_${event.cursor}"
                 }
                 buckets.getOrPut(key) { mutableListOf() }.add(event)
             }
 
-            val groups = buckets.map { (key, bucket) ->
+            val groups = buckets.mapNotNull { (key, bucket) ->
                 val sorted = bucket.sortedWith(
                     compareBy(
                         // seqno 가 둘 다 있으면 seqno asc, 아니면 cursor asc 폴백
@@ -72,11 +73,15 @@ data class AtBatGroup(
                 )
                 val last = sorted.last()
                 val outcome = sorted.lastOrNull { outcomeTypes.contains(it.type.uppercase()) }
+                if (isPlaceholderIntroGroup(sorted, outcome)) {
+                    return@mapNotNull null
+                }
                 val leadCursor = sorted.maxOf { it.cursor }
-                // 마지막 이벤트가 batter/pitcher/inning 의 가장 정확한 스냅샷
+                // 선수명은 마지막 유효값을 쓰되, 이닝은 지연 저장된 결과 이벤트가 다음 이닝으로
+                // 넘어갈 수 있어 그룹 안에서 가장 많이 나온 값을 대표로 쓴다.
                 val resolvedBatter = sorted.reversed().firstNotNullOfOrNull { it.batter }
                 val resolvedPitcher = sorted.reversed().firstNotNullOfOrNull { it.pitcher }
-                val resolvedInning = sorted.reversed().firstNotNullOfOrNull { it.inning }
+                val resolvedInning = representativeInning(sorted)
                 AtBatGroup(
                     id = key,
                     inning = resolvedInning,
@@ -91,6 +96,28 @@ data class AtBatGroup(
 
             // 최신 타석이 위로
             return groups.sortedByDescending { it.leadCursor }
+        }
+
+        private fun representativeInning(events: List<LiveEvent>): String? {
+            val counts = LinkedHashMap<String, Int>()
+            for (event in events) {
+                val inning = event.inning?.takeIf { it.isNotBlank() } ?: continue
+                counts[inning] = (counts[inning] ?: 0) + 1
+            }
+            return counts.maxByOrNull { it.value }?.key
+        }
+
+        private fun isPlaceholderIntroGroup(events: List<LiveEvent>, outcome: LiveEvent?): Boolean {
+            if (outcome != null) return false
+            val hasPitchDetail = events.any { event ->
+                event.pitchNum != null ||
+                    event.pitchSpeed != null ||
+                    !event.pitchStuff.isNullOrBlank()
+            }
+            if (hasPitchDetail) return false
+            val hasOnlyOther = events.all { it.type.equals("OTHER", ignoreCase = true) }
+            val hasBatterRecord = events.any { it.batterRecord != null }
+            return hasOnlyOther && hasBatterRecord
         }
     }
 }

@@ -30,11 +30,13 @@ struct AtBatGroup: Identifiable {
     /// - `atBatId != nil` 이벤트는 atBatId 별로 묶고, 그룹 내부는 `seqno asc` 로 정렬.
     /// - `atBatId == nil` 이벤트는 각자 단일 그룹(현재 평면 UI 와 동등한 폴백).
     /// - 그룹 사이 정렬은 그룹 대표 cursor 의 desc — 최신 타석이 위.
-    /// - 그룹의 `batter`/`pitcher`/`inning`/`time` 은 가장 마지막 이벤트(또는 outcome) 기준.
+    /// - 그룹의 `batter`/`pitcher`/`time` 은 가장 마지막 유효 이벤트 기준.
+    /// - 그룹의 `inning` 은 지연 삽입된 결과 이벤트 오표시를 피하기 위해 그룹 안의 대표값 기준.
     static func group(_ events: [LiveEvent]) -> [AtBatGroup] {
         guard !events.isEmpty else { return [] }
 
-        // atBatId 기준 묶기. nil 인 이벤트는 cursor 를 폴백 키로 써서 각자 단일 그룹.
+        // atBatId 기준 묶기. 이벤트 저장 시점의 현재 이닝이 이미 다음 공격으로 넘어간
+        // 경우에도 같은 타석의 마지막 이벤트가 이전 카드에 붙어야 한다.
         var buckets: [String: [LiveEvent]] = [:]
         var order: [String] = []  // 첫 등장 순서 보존 (안정 정렬용)
         for event in events {
@@ -57,11 +59,15 @@ struct AtBatGroup: Identifiable {
             }
             let last = sorted.last!
             let outcome = sorted.last(where: { outcomeTypes.contains($0.type.uppercased()) })
+            if isPlaceholderIntroGroup(sorted, outcome: outcome) {
+                return nil
+            }
             let leadCursor = sorted.map(\.cursor).max() ?? last.cursor
-            // 마지막 이벤트가 batter/pitcher/inning 의 가장 정확한 스냅샷 (없으면 그 위 이벤트로 폴백)
+            // 선수명은 마지막 유효값을 쓰되, 이닝은 지연 저장된 결과 이벤트가 다음 이닝으로
+            // 넘어갈 수 있어 그룹 안에서 가장 많이 나온 값을 대표로 쓴다.
             let resolvedBatter = sorted.reversed().compactMap { $0.batter }.first
             let resolvedPitcher = sorted.reversed().compactMap { $0.pitcher }.first
-            let resolvedInning = sorted.reversed().compactMap { $0.inning }.first
+            let resolvedInning = representativeInning(sorted)
             return AtBatGroup(
                 id: key,
                 inning: resolvedInning,
@@ -76,5 +82,43 @@ struct AtBatGroup: Identifiable {
 
         // 최신 타석이 위로
         return groups.sorted { $0.leadCursor > $1.leadCursor }
+    }
+
+    private static func representativeInning(_ events: [LiveEvent]) -> String? {
+        var counts: [String: Int] = [:]
+        var order: [String] = []
+        for event in events {
+            guard let inning = event.inning?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !inning.isEmpty else { continue }
+            if counts[inning] == nil {
+                order.append(inning)
+                counts[inning] = 0
+            }
+            counts[inning, default: 0] += 1
+        }
+        var selected: String?
+        var selectedCount = 0
+        for inning in order {
+            let count = counts[inning] ?? 0
+            if count > selectedCount {
+                selected = inning
+                selectedCount = count
+            }
+        }
+        return selected
+    }
+
+    private static func isPlaceholderIntroGroup(_ events: [LiveEvent], outcome: LiveEvent?) -> Bool {
+        if outcome != nil { return false }
+        let hasPitchDetail = events.contains { event in
+            let pitchStuff = event.pitchStuff?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            event.pitchNum != nil ||
+                event.pitchSpeed != nil ||
+                !pitchStuff.isEmpty
+        }
+        if hasPitchDetail { return false }
+        let hasOnlyOther = events.allSatisfy { $0.type.uppercased() == "OTHER" }
+        let hasBatterRecord = events.contains { $0.batterRecord != nil }
+        return hasOnlyOther && hasBatterRecord
     }
 }

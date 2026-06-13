@@ -255,6 +255,11 @@ def _collect_options(relays_by_inning: Dict[int, Dict[str, Any]]) -> List[Tuple[
     return options
 
 
+def _event_inning_label(inning: int, half: str) -> str:
+    suffix = "말" if half == "bottom" else "초"
+    return f"{inning}회{suffix}"
+
+
 def _classify_event_type(option: Dict[str, Any]) -> str:
     option_type = _safe_int(option.get("type"), default=-1)
     pitch_result = str(option.get("pitchResult") or "").strip().upper()
@@ -825,6 +830,7 @@ def build_snapshot_payload(
                 "type": event_type,
                 "description": (option.get("text") or "").strip(),
                 "occurredAt": event_time_iso,
+                "inning": _event_inning_label(inning, half),
                 "metadata": metadata,
             }
         )
