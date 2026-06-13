@@ -1213,6 +1213,92 @@ def run_dispatcher(args: argparse.Namespace) -> None:
             preview_ids,
         )
 
+    def check_relay_windows(now: datetime) -> None:
+        max_check_window = timedelta(minutes=args.relay_check_minutes) if args.relay_check_minutes > 0 else None
+        precheck_window = timedelta(minutes=max(0, args.precheck_minutes))
+        for game_id, window in list(windows.items()):
+            if window.launched or window.exhausted:
+                continue
+            if game_id in running:
+                window.launched = True
+                continue
+            check_start_at = window.start_at - precheck_window
+            if window.checks_done == 0 and (
+                window.next_check_at is None or window.next_check_at > check_start_at
+            ):
+                window.next_check_at = check_start_at
+            if now < check_start_at:
+                continue
+            if window.next_check_at is None:
+                window.next_check_at = now
+            if now < window.next_check_at:
+                continue
+
+            window.checks_done += 1
+            available, is_final = _relay_is_available(
+                source_base_url=args.source_base_url,
+                game_id=game_id,
+                timeout=args.http_timeout_sec,
+                enable_preview_lineup_precheck=args.enable_preview_lineup_precheck,
+            )
+            LOGGER.info(
+                "[relay] gameId=%s check=%s maxMinutes=%s available=%s final=%s",
+                game_id,
+                window.checks_done,
+                args.relay_check_minutes if args.relay_check_minutes > 0 else "until-final",
+                available,
+                is_final,
+            )
+            if available:
+                running_crawler = _start_crawler(
+                    repo_root=repo_root,
+                    python_executable=python_executable,
+                    game_id=game_id,
+                    source_base_url=args.source_base_url,
+                    crawler_interval_sec=args.crawler_interval_sec,
+                    backend_base_url=args.backend_base_url,
+                    backend_api_key=args.backend_api_key,
+                    crawler_backend_timeout_sec=args.crawler_backend_timeout_sec,
+                    crawler_backend_retries=args.crawler_backend_retries,
+                    log_dir=log_dir,
+                )
+                running[game_id] = running_crawler
+                window.launched = True
+                LOGGER.info(
+                    "[crawler] started gameId=%s pid=%s log=%s",
+                    game_id,
+                    running_crawler.process.pid,
+                    running_crawler.log_path,
+                )
+            else:
+                if is_final:
+                    window.exhausted = True
+                    forced_synced = _force_sync_schedule_snapshot_for_game_id(
+                        source_base_url=args.source_base_url,
+                        backend_base_url=args.backend_base_url,
+                        backend_api_key=args.backend_api_key,
+                        game_id=game_id,
+                        fallback_date=now.date(),
+                        fetch_timeout=args.http_timeout_sec,
+                        backend_timeout=backend_sync_timeout,
+                        backend_retries=backend_sync_retries,
+                        reason="relay-finalized",
+                    )
+                    LOGGER.info(
+                        "[relay] finalized gameId=%s checks=%s forced_sync=%s",
+                        game_id,
+                        window.checks_done,
+                        forced_synced,
+                    )
+                    continue
+
+                if max_check_window is not None and now >= window.start_at + max_check_window:
+                    window.exhausted = True
+                    LOGGER.info("[relay] expired gameId=%s checks=%s", game_id, window.checks_done)
+                    continue
+
+                window.next_check_at = now + timedelta(minutes=1)
+
     try:
         now = datetime.now(KST)
         refresh_windows(now.date())
@@ -1238,6 +1324,8 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                     exit_code,
                     forced_synced,
                 )
+
+            check_relay_windows(now)
 
             import_trigger = datetime.combine(
                 now.date(),
@@ -1315,91 +1403,6 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                     refresh_windows(now.date())
                     if not all_success:
                         LOGGER.warning("[import] partial_failure date=%s", now.date().isoformat())
-
-            max_check_window = timedelta(minutes=args.relay_check_minutes) if args.relay_check_minutes > 0 else None
-            precheck_window = timedelta(minutes=max(0, args.precheck_minutes))
-            for game_id, window in list(windows.items()):
-                if window.launched or window.exhausted:
-                    continue
-                if game_id in running:
-                    window.launched = True
-                    continue
-                check_start_at = window.start_at - precheck_window
-                if window.checks_done == 0 and (
-                    window.next_check_at is None or window.next_check_at > check_start_at
-                ):
-                    window.next_check_at = check_start_at
-                if now < check_start_at:
-                    continue
-                if window.next_check_at is None:
-                    window.next_check_at = now
-                if now < window.next_check_at:
-                    continue
-
-                window.checks_done += 1
-                available, is_final = _relay_is_available(
-                    source_base_url=args.source_base_url,
-                    game_id=game_id,
-                    timeout=args.http_timeout_sec,
-                    enable_preview_lineup_precheck=args.enable_preview_lineup_precheck,
-                )
-                LOGGER.info(
-                    "[relay] gameId=%s check=%s maxMinutes=%s available=%s final=%s",
-                    game_id,
-                    window.checks_done,
-                    args.relay_check_minutes if args.relay_check_minutes > 0 else "until-final",
-                    available,
-                    is_final,
-                )
-                if available:
-                    running_crawler = _start_crawler(
-                        repo_root=repo_root,
-                        python_executable=python_executable,
-                        game_id=game_id,
-                        source_base_url=args.source_base_url,
-                        crawler_interval_sec=args.crawler_interval_sec,
-                        backend_base_url=args.backend_base_url,
-                        backend_api_key=args.backend_api_key,
-                        crawler_backend_timeout_sec=args.crawler_backend_timeout_sec,
-                        crawler_backend_retries=args.crawler_backend_retries,
-                        log_dir=log_dir,
-                    )
-                    running[game_id] = running_crawler
-                    window.launched = True
-                    LOGGER.info(
-                        "[crawler] started gameId=%s pid=%s log=%s",
-                        game_id,
-                        running_crawler.process.pid,
-                        running_crawler.log_path,
-                    )
-                else:
-                    if is_final:
-                        window.exhausted = True
-                        forced_synced = _force_sync_schedule_snapshot_for_game_id(
-                            source_base_url=args.source_base_url,
-                            backend_base_url=args.backend_base_url,
-                            backend_api_key=args.backend_api_key,
-                            game_id=game_id,
-                            fallback_date=now.date(),
-                            fetch_timeout=args.http_timeout_sec,
-                            backend_timeout=backend_sync_timeout,
-                            backend_retries=backend_sync_retries,
-                            reason="relay-finalized",
-                        )
-                        LOGGER.info(
-                            "[relay] finalized gameId=%s checks=%s forced_sync=%s",
-                            game_id,
-                            window.checks_done,
-                            forced_synced,
-                        )
-                        continue
-
-                    if max_check_window is not None and now >= window.start_at + max_check_window:
-                        window.exhausted = True
-                        LOGGER.info("[relay] expired gameId=%s checks=%s", game_id, window.checks_done)
-                        continue
-
-                    window.next_check_at = now + timedelta(minutes=1)
 
             time.sleep(args.dispatch_interval_sec)
     finally:
