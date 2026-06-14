@@ -225,6 +225,7 @@ fun WatchTestScreen(
     var gameState by remember { mutableStateOf(SimGameState()) }
     var logMessages by remember { mutableStateOf(listOf<String>()) }
     var isSimulating by remember { mutableStateOf(false) }
+    var isLiveScorePreviewActive by remember { mutableStateOf(false) }
     var simIndex by remember { mutableIntStateOf(0) }
 
     fun addLog(msg: String) {
@@ -278,9 +279,51 @@ fun WatchTestScreen(
         addLog("[CHEER] ${team.teamName} 응원 화면 테스트 전송")
     }
 
+    fun postLiveScorePreviewState(
+        state: SimGameState,
+        eventType: String?,
+        eventText: String?,
+        highlight: Boolean
+    ): Boolean {
+        val homeTeam = Team.fromString(state.homeTeam).takeIf { it != Team.NONE } ?: Team.KIA
+        val awayTeam = Team.fromString(state.awayTeam).takeIf { it != Team.NONE } ?: Team.SSG
+        val previewState = BackendGamesRepository.LiveGameState(
+            gameId = "live_score_preview",
+            homeTeam = homeTeam.name,
+            awayTeam = awayTeam.name,
+            homeTeamId = homeTeam,
+            awayTeamId = awayTeam,
+            homeScore = state.homeScore,
+            awayScore = state.awayScore,
+            inning = state.inning,
+            status = GameStatus.LIVE,
+            ball = state.ball.coerceIn(0, 3),
+            strike = state.strike.coerceIn(0, 2),
+            out = state.out.coerceIn(0, 2),
+            baseFirst = state.baseFirst,
+            baseSecond = state.baseSecond,
+            baseThird = state.baseThird,
+            pitcher = state.pitcher,
+            batter = state.batter,
+            pitcherPitchCount = state.pitchCount,
+            lastEventType = eventType
+        )
+        return LiveScoreNotificationManager.post(
+            context = context,
+            state = previewState,
+            latestEventType = eventType,
+            latestEventDescription = eventText,
+            highlightEvent = highlight
+        )
+    }
+
     fun postLiveScorePreview(alert: Boolean = false) {
-        val homeTeam = Team.fromString(gameState.homeTeam).takeIf { it != Team.NONE } ?: Team.KIA
-        val awayTeam = Team.fromString(gameState.awayTeam).takeIf { it != Team.NONE } ?: Team.SSG
+        context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, true)
+            .apply()
+        isLiveScorePreviewActive = true
+
         val eventType = if (alert) "SCORE" else null
         val eventText = if (alert) "${gameState.batter} 적시타 · 1점 추가" else null
         val nextState = if (alert) {
@@ -295,40 +338,16 @@ fun WatchTestScreen(
         if (alert) {
             gameState = nextState
         }
-        val previewState = BackendGamesRepository.LiveGameState(
-            gameId = "live_score_preview",
-            homeTeam = homeTeam.name,
-            awayTeam = awayTeam.name,
-            homeTeamId = homeTeam,
-            awayTeamId = awayTeam,
-            homeScore = nextState.homeScore,
-            awayScore = nextState.awayScore,
-            inning = nextState.inning,
-            status = GameStatus.LIVE,
-            ball = nextState.ball.coerceIn(0, 3),
-            strike = nextState.strike.coerceIn(0, 2),
-            out = nextState.out.coerceIn(0, 2),
-            baseFirst = nextState.baseFirst,
-            baseSecond = nextState.baseSecond,
-            baseThird = nextState.baseThird,
-            pitcher = nextState.pitcher,
-            batter = nextState.batter,
-            pitcherPitchCount = nextState.pitchCount,
-            lastEventType = eventType
-        )
-        val posted = LiveScoreNotificationManager.post(
-            context = context,
-            state = previewState,
-            latestEventType = eventType,
-            latestEventDescription = eventText,
-            highlightEvent = alert
+        val posted = postLiveScorePreviewState(
+            state = nextState,
+            eventType = eventType,
+            eventText = eventText,
+            highlight = alert
         )
         addLog(
             when {
-                !LiveScoreNotificationManager.isLockScreenCardEnabled(context) ->
-                    "[LIVE_SCORE] 잠금화면 경기 카드 설정이 꺼져 있어 게시하지 않음"
                 posted && alert -> "[LIVE_SCORE] 득점 강조 알림 갱신"
-                posted -> "[LIVE_SCORE] 알림 미리보기 시작"
+                posted -> "[LIVE_SCORE] 알림 미리보기 시작 · 자동 시뮬레이션과 함께 갱신"
                 else -> "[LIVE_SCORE] 알림 권한이 없어 게시하지 못함"
             }
         )
@@ -451,9 +470,21 @@ fun WatchTestScreen(
                                                     event.eventType in PITCH_EVENT_TYPES -> gameState.pitchCount + 1
                                                     else -> gameState.pitchCount
                                                 }
-                                                gameState = updated.copy(pitchCount = nextPitchCount)
+                                                val nextState = updated.copy(pitchCount = nextPitchCount)
+                                                gameState = nextState
                                                 addLog("[${event.eventType}] ${event.description}")
                                                 sendCurrentState(event.eventType.name)
+                                                if (isLiveScorePreviewActive) {
+                                                    val posted = postLiveScorePreviewState(
+                                                        state = nextState,
+                                                        eventType = event.eventType.name,
+                                                        eventText = event.description,
+                                                        highlight = false
+                                                    )
+                                                    if (posted) {
+                                                        addLog("[LIVE_SCORE] 알림 갱신: ${event.description}")
+                                                    }
+                                                }
                                                 delay(event.delayMs)
                                             }
                                             isSimulating = false
@@ -533,6 +564,7 @@ fun WatchTestScreen(
                         Spacer(Modifier.height(AppSpacing.sm))
                         OutlinedButton(
                             onClick = {
+                                isLiveScorePreviewActive = false
                                 LiveScoreNotificationManager.remove(context)
                                 addLog("[LIVE_SCORE] 미리보기 알림 제거")
                             },
