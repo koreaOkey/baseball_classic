@@ -30,7 +30,7 @@ targets:
       base:
         INFOPLIST_FILE: mobile/BaseHaptic/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app
-        MARKETING_VERSION: "1.1.3"
+        MARKETING_VERSION: "1.1.4"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_ENTITLEMENTS: BaseHaptic.entitlements
@@ -42,10 +42,10 @@ targets:
           SUPABASE_URL: $(BASEHAPTIC_STAGING_SUPABASE_URL)
           SUPABASE_ANON_KEY: $(BASEHAPTIC_STAGING_SUPABASE_ANON_KEY)
         Release:
-          BACKEND_BASE_URL: https://baseballclassic-production.up.railway.app
-          BACKEND_WS_URL: wss://baseballclassic-production.up.railway.app
-          SUPABASE_URL: https://snrafqoqpmtoannnnwdq.supabase.co
-          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNucmFmcW9xcG10b2Fubm5ud2RxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMjQ5MjQsImV4cCI6MjA4NjkwMDkyNH0.ufw8jQw9K8vhn9lS_9JA7Yetdi_D_9_ZNpJeukx53bY
+          BACKEND_BASE_URL: https://baseballclassic-production-4796.up.railway.app
+          BACKEND_WS_URL: wss://baseballclassic-production-4796.up.railway.app
+          SUPABASE_URL: https://egcsxoxqfcwjjcvjycry.supabase.co
+          SUPABASE_ANON_KEY: sb_publishable_VTKZ4I3FS3COPXSe0dryjg_VDhg0D-a
     dependencies:
       - target: BaseHapticWatch Watch App
       - target: BaseHapticLiveActivity
@@ -65,7 +65,7 @@ targets:
       base:
         INFOPLIST_FILE: liveactivity/BaseHapticLiveActivity/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app.liveactivity
-        MARKETING_VERSION: "1.1.3"
+        MARKETING_VERSION: "1.1.4"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         APPLICATION_EXTENSION_API_ONLY: "YES"
@@ -80,7 +80,7 @@ targets:
       base:
         INFOPLIST_FILE: watch/BaseHapticWatch/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app.watchkitapp
-        MARKETING_VERSION: "1.1.3"
+        MARKETING_VERSION: "1.1.4"
         CURRENT_PROJECT_VERSION: "1"
         SUPPORTS_WATCH_COMPANION: "YES"
         CODE_SIGN_ENTITLEMENTS: "BaseHapticWatch Watch App.entitlements"
@@ -89,6 +89,6 @@ targets:
         Debug:
           BACKEND_BASE_URL: $(BASEHAPTIC_STAGING_BACKEND_BASE_URL)
         Release:
-          BACKEND_BASE_URL: https://baseballclassic-production.up.railway.app
+          BACKEND_BASE_URL: https://baseballclassic-production-4796.up.railway.app
 
 # BaseHapticLiveActivity는 ActivityKit/WidgetKit 기반 iOS Live Activity extension이다.

@@ -73,7 +73,7 @@ struct LiveGameScreen: View {
                 ScrollView {
                     LazyVStack(spacing: AppSpacing.md) {
                         ScoreboardCard(state: state, latestEvent: events.first)
-                        BaseballFieldCard(state: state, latestEvent: events.first, lineup: currentLineup)
+                        BaseballFieldCard(state: state, latestEvent: events.first, recentEvents: events, lineup: currentLineup)
                         InningTabs(
                             state: state,
                             selectedInningNumber: selectedInningNumber,
@@ -674,6 +674,7 @@ private struct FavoriteTeamBadge: View {
 private struct BaseballFieldCard: View {
     let state: LiveGameState
     let latestEvent: LiveEvent?
+    let recentEvents: [LiveEvent]
     let lineup: FieldLineup?
 
     var body: some View {
@@ -706,16 +707,17 @@ private struct BaseballFieldCard: View {
                         .atFieldPosition(FieldPositions.batter, in: geometry.size)
                 }
 
+                let inferredRunners = FieldRunners.from(state: state, events: recentEvents, lineup: lineup)
                 if state.baseFirst {
-                    BaseRunnerMarker(name: cleanPlayerName(state.baseFirstRunner) ?? lineup?.firstRunner ?? "1루")
+                    BaseRunnerMarker(name: runnerDisplayName(cleanPlayerName(state.baseFirstRunner) ?? inferredRunners.first))
                         .atFieldPosition(FieldPositions.firstBase, in: geometry.size)
                 }
                 if state.baseSecond {
-                    BaseRunnerMarker(name: cleanPlayerName(state.baseSecondRunner) ?? lineup?.secondRunner ?? "2루")
+                    BaseRunnerMarker(name: runnerDisplayName(cleanPlayerName(state.baseSecondRunner) ?? inferredRunners.second))
                         .atFieldPosition(FieldPositions.secondBase, in: geometry.size)
                 }
                 if state.baseThird {
-                    BaseRunnerMarker(name: cleanPlayerName(state.baseThirdRunner) ?? lineup?.thirdRunner ?? "3루")
+                    BaseRunnerMarker(name: runnerDisplayName(cleanPlayerName(state.baseThirdRunner) ?? inferredRunners.third))
                         .atFieldPosition(FieldPositions.thirdBase, in: geometry.size)
                 }
             }
@@ -757,6 +759,98 @@ private enum FieldPositions {
 private extension View {
     func atFieldPosition(_ normalized: CGPoint, in size: CGSize) -> some View {
         position(x: normalized.x * size.width, y: normalized.y * size.height)
+    }
+}
+
+private struct FieldRunners {
+    let first: String?
+    let second: String?
+    let third: String?
+
+    static func from(state: LiveGameState, events: [LiveEvent], lineup: FieldLineup?) -> FieldRunners {
+        var bases: [Int: String] = [:]
+        let scopedEvents = events
+            .filter { $0.inning == nil || $0.inning == state.inning }
+            .sorted { lhs, rhs in
+                if lhs.cursor != rhs.cursor { return lhs.cursor < rhs.cursor }
+                return (lhs.seqno ?? 0) < (rhs.seqno ?? 0)
+            }
+        let groups = Dictionary(grouping: scopedEvents, by: { $0.atBatId ?? $0.id })
+            .values
+            .sorted { ($0.first?.cursor ?? 0) < ($1.first?.cursor ?? 0) }
+
+        for group in groups {
+            var batterPlacement: (base: Int, name: String)?
+
+            for event in group.sorted(by: { ($0.seqno ?? 0) < ($1.seqno ?? 0) }) {
+                if event.type.uppercased() == "HALF_INNING_CHANGE" {
+                    bases.removeAll()
+                    continue
+                }
+                if let movement = runnerMovement(from: event.description) {
+                    bases = bases.filter { $0.value != movement.name }
+                    if let targetBase = movement.targetBase {
+                        bases[targetBase] = movement.name
+                    }
+                }
+                if let placement = batterRunnerPlacement(from: event) {
+                    batterPlacement = placement
+                }
+            }
+
+            if let batterPlacement {
+                bases = bases.filter { $0.value != batterPlacement.name }
+                bases[batterPlacement.base] = batterPlacement.name
+            }
+        }
+
+        return FieldRunners(
+            first: lineup?.firstRunner ?? (state.baseFirst ? bases[1] : nil),
+            second: lineup?.secondRunner ?? (state.baseSecond ? bases[2] : nil),
+            third: lineup?.thirdRunner ?? (state.baseThird ? bases[3] : nil)
+        )
+    }
+}
+
+private func runnerDisplayName(_ name: String?) -> String {
+    cleanPlayerName(name) ?? "주자"
+}
+
+private func runnerMovement(from description: String) -> (name: String, targetBase: Int?)? {
+    guard let match = firstMatch(#"([123])루주자\s+([^:]+)\s*:\s*(.+)"#, in: description),
+          let name = cleanPlayerName(match[1]) else {
+        return nil
+    }
+    let action = match[2]
+    if action.contains("홈인") || action.contains("아웃") {
+        return (name, nil)
+    }
+    if action.contains("3루") { return (name, 3) }
+    if action.contains("2루") { return (name, 2) }
+    if action.contains("1루") { return (name, 1) }
+    return nil
+}
+
+private func batterRunnerPlacement(from event: LiveEvent) -> (base: Int, name: String)? {
+    guard let name = cleanPlayerName(event.batter) else { return nil }
+    let type = event.type.uppercased()
+    let desc = event.description
+    if desc.contains("홈런") { return nil }
+    if desc.contains("3루타") { return (3, name) }
+    if desc.contains("2루타") { return (2, name) }
+    if type == "WALK" || type == "HIT_BY_PITCH" || type == "HIT" || desc.contains("출루") {
+        return (1, name)
+    }
+    return nil
+}
+
+private func firstMatch(_ pattern: String, in text: String) -> [String]? {
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+    return (1..<match.numberOfRanges).compactMap { index in
+        guard let swiftRange = Range(match.range(at: index), in: text) else { return nil }
+        return String(text[swiftRange]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -1602,7 +1696,8 @@ private func displayBatter(state: LiveGameState, event: LiveEvent?, placeholder:
 
 private func cleanPlayerName(_ name: String?) -> String? {
     let value = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    guard !value.isEmpty, value.lowercased() != "null" else { return nil }
+    let lowercased = value.lowercased()
+    guard !value.isEmpty, lowercased != "null", lowercased != "<null>" else { return nil }
     return value
 }
 

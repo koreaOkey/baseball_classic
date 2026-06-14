@@ -3,7 +3,7 @@ import Foundation
 /// 워치에서 직접 백엔드에 APNs 토큰을 등록/해제하는 유틸리티
 /// 폰 앱을 거치지 않고 워치가 독립적으로 push 수신을 시작할 수 있도록 합니다.
 enum WatchTokenRegistrar {
-    private static let defaultBaseURL = "https://baseballclassic-production.up.railway.app"
+    private static let defaultBaseURL = "https://baseballclassic-production-4796.up.railway.app"
 
     private static var baseURL: String {
         guard let value = Bundle.main.object(forInfoDictionaryKey: "BACKEND_BASE_URL") as? String else {

@@ -25,13 +25,11 @@ fun buildConfigString(value: String): String {
     return "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 }
 
-val productionBackendBaseUrlValue =
-    configValue("backendBaseUrl", "BACKEND_BASE_URL")
-        ?: "https://baseballclassic-production.up.railway.app"
-
 val stagingBackendBaseUrlValue =
     configValue("stagingBackendBaseUrl", "BASEHAPTIC_STAGING_BACKEND_BASE_URL")
         ?: "https://baseballclassic-production-4796.up.railway.app"
+
+val releaseBackendBaseUrlValue = stagingBackendBaseUrlValue
 
 fun isLocalBackendUrl(url: String): Boolean {
     val normalizedUrl = url.trim().lowercase()
@@ -43,21 +41,13 @@ fun isLocalBackendUrl(url: String): Boolean {
 
 gradle.taskGraph.whenReady {
     val buildsRelease = allTasks.any { task -> task.name.contains("Release") }
-    if (buildsRelease && isLocalBackendUrl(productionBackendBaseUrlValue)) {
+    if (buildsRelease && isLocalBackendUrl(releaseBackendBaseUrlValue)) {
         throw GradleException(
-            "Release builds must use a public backend URL, but backendBaseUrl is '$productionBackendBaseUrlValue'. " +
-                "Pass -PbackendBaseUrl=https://baseballclassic-production.up.railway.app or set BACKEND_BASE_URL."
+            "Release builds must use a public backend URL, but releaseBackendBaseUrl is '$releaseBackendBaseUrlValue'. " +
+                "Set BASEHAPTIC_STAGING_BACKEND_BASE_URL to the promoted staging backend URL."
         )
     }
 }
-
-val productionSupabaseUrlValue =
-    configValue("supabaseUrl", "SUPABASE_URL")
-        ?: "https://snrafqoqpmtoannnnwdq.supabase.co"
-
-val productionSupabaseAnonKeyValue =
-    configValue("supabaseAnonKey", "SUPABASE_ANON_KEY")
-        ?: ""
 
 val stagingSupabaseUrlValue =
     configValue("stagingSupabaseUrl", "BASEHAPTIC_STAGING_SUPABASE_URL")
@@ -67,6 +57,9 @@ val stagingSupabaseAnonKeyValue =
     configValue("stagingSupabaseAnonKey", "BASEHAPTIC_STAGING_SUPABASE_ANON_KEY")
         ?: configValue("stagingSupabasePublishableKey", "BASEHAPTIC_STAGING_SUPABASE_PUBLISHABLE_KEY")
         ?: "sb_publishable_VTKZ4I3FS3COPXSe0dryjg_VDhg0D-a"
+
+val releaseSupabaseUrlValue = stagingSupabaseUrlValue
+val releaseSupabaseAnonKeyValue = stagingSupabaseAnonKeyValue
 
 val keystoreProperties = mutableMapOf<String, String>()
 rootProject.file("keystore.properties").let { file ->
@@ -95,8 +88,8 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
-        versionName = "1.0.3"
+        versionCode = 22
+        versionName = "1.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -115,9 +108,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
-            buildConfigField("String", "BACKEND_BASE_URL", buildConfigString(productionBackendBaseUrlValue))
-            buildConfigField("String", "SUPABASE_URL", buildConfigString(productionSupabaseUrlValue))
-            buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(productionSupabaseAnonKeyValue))
+            buildConfigField("String", "BACKEND_BASE_URL", buildConfigString(releaseBackendBaseUrlValue))
+            buildConfigField("String", "SUPABASE_URL", buildConfigString(releaseSupabaseUrlValue))
+            buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(releaseSupabaseAnonKeyValue))
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

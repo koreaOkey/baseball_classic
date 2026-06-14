@@ -16,18 +16,13 @@ struct BaseHapticApp: App {
     @State private var requiredUpdateMessage = "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요."
     @State private var requiredUpdateStoreUrl = "itms-apps://itunes.apple.com/app/id6761336752"
     @Environment(\.scenePhase) private var scenePhase
+    private let isExistingUserAtLaunch: Bool
 
     init() {
         let savedTeam = UserDefaults.standard.string(forKey: "selected_team") ?? Team.none.rawValue
-        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        let lastSeenOnboardingVersion = UserDefaults.standard.string(forKey: "last_seen_onboarding_version") ?? ""
-        let shouldShowUpdateOnboarding = Team.fromString(savedTeam) != .none &&
-            !currentVersion.isEmpty &&
-            lastSeenOnboardingVersion != currentVersion
-        if shouldShowUpdateOnboarding {
-            UserDefaults.standard.set(currentVersion, forKey: "last_seen_update_version")
-        }
-        _showOnboarding = State(initialValue: Team.fromString(savedTeam) == .none || shouldShowUpdateOnboarding)
+        let savedTeamValue = Team.fromString(savedTeam)
+        isExistingUserAtLaunch = savedTeamValue != .none
+        _showOnboarding = State(initialValue: savedTeamValue == .none)
         UserDefaults.standard.register(defaults: [
             "live_haptic_enabled": true,
             "lock_screen_live_score_enabled": true,
@@ -130,15 +125,12 @@ struct BaseHapticApp: App {
                 showOnboarding: showOnboarding,
                 onOnboardingComplete: { team in
                     selectedTeamRaw = team.rawValue
-                    let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-                    if !currentVersion.isEmpty {
-                        UserDefaults.standard.set(currentVersion, forKey: "last_seen_onboarding_version")
-                    }
                     showOnboarding = false
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
                     Task { try? await ThemeRepository.shared.saveSelectedTeam(team.rawValue) }
                     Task { await TeamSubscriptionManager.syncIfNeeded() }
                 },
+                isExistingUserAtLaunch: isExistingUserAtLaunch,
                 authManager: authManager
             )
             .environment(\.teamTheme, TeamThemes.theme(for: selectedTeam))
@@ -256,6 +248,7 @@ struct ContentView: View {
     let onTeamChanged: (Team) -> Void
     let showOnboarding: Bool
     let onOnboardingComplete: (Team) -> Void
+    let isExistingUserAtLaunch: Bool
     @ObservedObject var authManager: AuthManager
 
     @State private var currentView: Screen = .home
@@ -270,6 +263,7 @@ struct ContentView: View {
     @State private var showLiveActivityDialog = false
     @State private var showGameNotStartedAlert = false
     @State private var pendingReleaseNote: ReleaseNote?
+    @State private var showFeatureGuide = false
     @State private var pendingWatchSyncGameId: String?
     @State private var pendingWatchSyncNavigateToLive = false
     @State private var pendingWatchSyncHomeTeam: String = ""
@@ -343,19 +337,23 @@ struct ContentView: View {
         .onAppear {
             evaluateWhatsNewTrigger()
         }
+        .onChange(of: showOnboarding) { _, showing in
+            if !showing {
+                evaluateWhatsNewTrigger()
+            }
+        }
         .overlay {
-            #if DEBUG
-            EmptyView()
-            #else
             if let note = pendingReleaseNote {
                 WhatsNewSheet(
                     note: note,
-                    onConfirm: { pendingReleaseNote = nil }
+                    onConfirm: {
+                        pendingReleaseNote = nil
+                        queueFeatureGuideIfNeeded()
+                    }
                 )
                 .transition(.opacity)
                 .zIndex(1)
             }
-            #endif
         }
         .animation(.easeInOut(duration: 0.2), value: pendingReleaseNote?.id)
         .task(id: selectedTeam) {
@@ -434,15 +432,9 @@ struct ContentView: View {
                         activeLiveActivityGameId: activeLiveActivityGameId,
                         isWatchAppInstalled: connectivity.watchCompanionStatus == .installed,
                         checkinStadium: nil,
-                        showUpdateHighlights: {
-                            #if DEBUG
-                            pendingReleaseNote != nil
-                            #else
-                            false
-                            #endif
-                        }(),
+                        showUpdateHighlights: showFeatureGuide,
                         onDismissUpdateHighlights: {
-                            pendingReleaseNote = nil
+                            markFeatureGuideSeen()
                         },
                         onConfirmCheckin: {
                             confirmPendingCheckin()
@@ -686,23 +678,44 @@ struct ContentView: View {
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         guard !currentVersion.isEmpty else { return }
 
-        #if DEBUG
-        pendingReleaseNote = ReleaseNotes.notes(for: currentVersion) ?? ReleaseNotes.latest
-        return
-        #endif
-
         let lastSeen = defaults.string(forKey: "last_seen_update_version") ?? ""
         if lastSeen.isEmpty {
             defaults.set(currentVersion, forKey: "last_seen_update_version")
+            if isExistingUserAtLaunch, let note = ReleaseNotes.notes(for: currentVersion) {
+                pendingReleaseNote = note
+            } else {
+                queueFeatureGuideIfNeeded(currentVersion: currentVersion)
+            }
             return
         }
-        guard lastSeen != currentVersion else { return }
+        guard lastSeen != currentVersion else {
+            queueFeatureGuideIfNeeded(currentVersion: currentVersion)
+            return
+        }
 
-        defer { defaults.set(currentVersion, forKey: "last_seen_update_version") }
+        defaults.set(currentVersion, forKey: "last_seen_update_version")
 
-        guard let note = ReleaseNotes.notes(for: currentVersion) else { return }
+        if let note = ReleaseNotes.notes(for: currentVersion) {
+            pendingReleaseNote = note
+        } else {
+            queueFeatureGuideIfNeeded(currentVersion: currentVersion)
+        }
+    }
 
-        pendingReleaseNote = note
+    private func queueFeatureGuideIfNeeded(currentVersion: String? = nil) {
+        let version = currentVersion ?? Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        guard !version.isEmpty else { return }
+        let lastSeen = UserDefaults.standard.string(forKey: "last_seen_feature_guide_version") ?? ""
+        guard lastSeen != version else { return }
+        showFeatureGuide = true
+    }
+
+    private func markFeatureGuideSeen() {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        if !currentVersion.isEmpty {
+            UserDefaults.standard.set(currentVersion, forKey: "last_seen_feature_guide_version")
+        }
+        showFeatureGuide = false
     }
 
     // MARK: - Watch Sync
@@ -964,7 +977,7 @@ struct ContentView: View {
         let signalId = "\(pair.entry.gameId):\(pair.signal.teamCode):\(pair.entry.fireAtIso)"
         guard !scheduledCheerSignalIds.contains(signalId) else { return }
         await MainActor.run {
-            scheduledCheerSignalIds.insert(signalId)
+            _ = scheduledCheerSignalIds.insert(signalId)
         }
 
         let fireAtMs = Self.fireAtUnixMs(pair.entry.fireAtIso)
@@ -1145,7 +1158,7 @@ struct ContentView: View {
                     alert: false
                 )
             }
-            lastWatchSignature = "\(initialState.gameId)|\(initialState.status)|\(initialState.inning)|\(initialState.homeScore)|\(initialState.awayScore)|\(initialState.ball)|\(initialState.strike)|\(initialState.out)|\(initialState.pitcherPitchCount ?? -1)"
+            lastWatchSignature = gameProgressSignature(initialState)
         }
 
         while !Task.isCancelled {
@@ -1159,7 +1172,7 @@ struct ContentView: View {
                 case .error:
                     break
                 case .state(let state):
-                    let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)|\(state.pitcherPitchCount ?? -1)"
+                    let signature = gameProgressSignature(state)
                     if signature != lastWatchSignature {
                         let wasLive = lastWatchSignature.contains("|live|") || lastWatchSignature.contains("|LIVE|")
                         WatchGameSyncManager.shared.sendGameData(
@@ -1252,7 +1265,7 @@ struct ContentView: View {
                         if isInningChange && events.isEmpty {
                             try? await Task.sleep(nanoseconds: 1_500_000_000)
                         }
-                        let signature = "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)|\(state.pitcherPitchCount ?? -1)"
+                        let signature = gameProgressSignature(state)
                         let latestEvent = newEvents.last ?? sortedEvents.last
                         if signature != lastWatchSignature {
                             let wasLive = lastWatchSignature.contains("|live|") || lastWatchSignature.contains("|LIVE|")
@@ -1437,7 +1450,26 @@ struct ContentView: View {
     }
 
     private func liveActivitySignature(_ state: LiveGameState) -> String {
-        "\(state.gameId)|\(state.status)|\(state.inning)|\(state.homeScore)|\(state.awayScore)|\(state.ball)|\(state.strike)|\(state.out)|\(state.pitcherPitchCount ?? -1)"
+        gameProgressSignature(state)
+    }
+
+    private func gameProgressSignature(_ state: LiveGameState) -> String {
+        [
+            state.gameId,
+            state.status.rawValue,
+            state.inning,
+            "\(state.homeScore)",
+            "\(state.awayScore)",
+            "\(state.ball)",
+            "\(state.strike)",
+            "\(state.out)",
+            "\(state.baseFirst)",
+            "\(state.baseSecond)",
+            "\(state.baseThird)",
+            state.pitcher,
+            state.batter,
+            "\(state.pitcherPitchCount ?? -1)"
+        ].joined(separator: "|")
     }
 
     @MainActor

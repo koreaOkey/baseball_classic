@@ -112,7 +112,7 @@ struct AtBatGroup: Identifiable {
         if outcome != nil { return false }
         let hasPitchDetail = events.contains { event in
             let pitchStuff = event.pitchStuff?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            event.pitchNum != nil ||
+            return event.pitchNum != nil ||
                 event.pitchSpeed != nil ||
                 !pitchStuff.isEmpty
         }

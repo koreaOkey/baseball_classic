@@ -5,7 +5,7 @@ enum BackendConfig {
     #if DEBUG
     private static let defaultBaseURL = "https://baseballclassic-production-4796.up.railway.app"
     #else
-    private static let defaultBaseURL = "https://baseballclassic-production.up.railway.app"
+    private static let defaultBaseURL = "https://baseballclassic-production-4796.up.railway.app"
     #endif
 
     private static func infoString(_ key: String) -> String? {
@@ -930,8 +930,10 @@ final class BackendGamesRepository {
 
     private func cleanOptionalString(_ raw: Any?) -> String? {
         guard let raw else { return nil }
+        if raw is NSNull { return nil }
         let value = "\(raw)".trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty, value.lowercased() != "null" else { return nil }
+        let lowercased = value.lowercased()
+        guard !value.isEmpty, lowercased != "null", lowercased != "<null>" else { return nil }
         return value
     }
 

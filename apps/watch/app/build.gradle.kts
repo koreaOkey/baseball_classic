@@ -31,12 +31,12 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
         targetSdk = 35
-        versionCode = 22
-        versionName = "1.0.3"
+        versionCode = 23
+        versionName = "1.1.4"
 
         val backendBaseUrl = (
-            System.getenv("BACKEND_BASE_URL")
-                ?: "https://baseballclassic-production.up.railway.app"
+            System.getenv("BASEHAPTIC_STAGING_BACKEND_BASE_URL")
+                ?: "https://baseballclassic-production-4796.up.railway.app"
             ).replace("\"", "\\\"")
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
     }

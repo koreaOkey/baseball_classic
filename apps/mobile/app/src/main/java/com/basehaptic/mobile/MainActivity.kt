@@ -88,7 +88,7 @@ private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
 // 워치 페이스 테마와 무관하게 응원 시 풀스크린에 적용될 테마. ThemeStore와 별도로 StadiumCheerThemeStore에서 매칭.
 private const val KEY_ACTIVE_CHEER_THEME_ID = "active_cheer_theme_id"
 private const val KEY_LAST_SEEN_UPDATE_VERSION = "last_seen_update_version"
-private const val KEY_LAST_SEEN_ONBOARDING_VERSION = "last_seen_onboarding_version"
+private const val KEY_LAST_SEEN_FEATURE_GUIDE_VERSION = "last_seen_feature_guide_version"
 private const val ANDROID_STORE_URL = "market://details?id=com.basehaptic.mobile"
 
 private fun compareVersionNames(left: String, right: String): Int {
@@ -207,17 +207,17 @@ class MainActivity : ComponentActivity() {
             .apply()
     }
 
-    private fun loadLastSeenOnboardingVersion(): String {
+    private fun loadLastSeenFeatureGuideVersion(): String {
         return getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
-            .getString(KEY_LAST_SEEN_ONBOARDING_VERSION, null)
+            .getString(KEY_LAST_SEEN_FEATURE_GUIDE_VERSION, null)
             .orEmpty()
     }
 
-    private fun persistLastSeenOnboardingVersion(version: String) {
+    private fun persistLastSeenFeatureGuideVersion(version: String) {
         if (version.isBlank()) return
         getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
             .edit()
-            .putString(KEY_LAST_SEEN_ONBOARDING_VERSION, version)
+            .putString(KEY_LAST_SEEN_FEATURE_GUIDE_VERSION, version)
             .apply()
     }
 
@@ -342,13 +342,7 @@ class MainActivity : ComponentActivity() {
         val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
         val savedTeam = loadSavedTeamOrNull()
         val initialTeam = savedTeam ?: Team.NONE
-        val shouldShowUpdateOnboarding = savedTeam != null &&
-            currentVersion.isNotBlank() &&
-            loadLastSeenOnboardingVersion() != currentVersion
-        if (shouldShowUpdateOnboarding) {
-            persistLastSeenUpdateVersion(currentVersion)
-        }
-        val initialShowOnboarding = savedTeam == null || shouldShowUpdateOnboarding
+        val initialShowOnboarding = savedTeam == null
         val initialUnlockedIds = loadUnlockedThemeIds()
         val initialActiveThemeId = loadActiveThemeId()
         val initialActiveTheme = initialActiveThemeId?.let { id ->
@@ -375,9 +369,9 @@ class MainActivity : ComponentActivity() {
                     onOnboardingComplete = { team ->
                         selectedTeam = team
                         persistSelectedTeam(team)
-                        persistLastSeenOnboardingVersion(currentVersion)
                         showOnboarding = false
                     },
+                    isExistingUserAtLaunch = savedTeam != null,
                     initialUnlockedThemeIds = initialUnlockedIds,
                     initialActiveTheme = initialActiveTheme,
                     initialActiveCheerTheme = initialActiveCheerTheme,
@@ -386,6 +380,8 @@ class MainActivity : ComponentActivity() {
                     onPersistActiveCheerThemeId = ::persistActiveCheerThemeId,
                     loadLastSeenUpdateVersion = ::loadLastSeenUpdateVersion,
                     onPersistLastSeenUpdateVersion = ::persistLastSeenUpdateVersion,
+                    loadLastSeenFeatureGuideVersion = ::loadLastSeenFeatureGuideVersion,
+                    onPersistLastSeenFeatureGuideVersion = ::persistLastSeenFeatureGuideVersion,
                 )
             }
         }
@@ -398,6 +394,7 @@ fun BaseHapticApp(
     onTeamChanged: (Team) -> Unit,
     showOnboarding: Boolean,
     onOnboardingComplete: (Team) -> Unit,
+    isExistingUserAtLaunch: Boolean = false,
     initialUnlockedThemeIds: Set<String> = setOf("default"),
     initialActiveTheme: ThemeData? = null,
     initialActiveCheerTheme: ThemeData? = null,
@@ -406,6 +403,8 @@ fun BaseHapticApp(
     onPersistActiveCheerThemeId: (String?) -> Unit = {},
     loadLastSeenUpdateVersion: () -> String = { "" },
     onPersistLastSeenUpdateVersion: (String) -> Unit = {},
+    loadLastSeenFeatureGuideVersion: () -> String = { "" },
+    onPersistLastSeenFeatureGuideVersion: (String) -> Unit = {},
 ) {
     val authState by AuthManager.authState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -431,6 +430,7 @@ fun BaseHapticApp(
     val autoPromptedLiveGames = remember { mutableStateMapOf<String, Boolean>() }
     var unlockedThemeIds by remember { mutableStateOf(initialUnlockedThemeIds) }
     var pendingReleaseNote by remember { mutableStateOf<com.basehaptic.mobile.data.model.ReleaseNote?>(null) }
+    var showFeatureGuide by remember { mutableStateOf(false) }
     var todayGamesSnapshot by remember(selectedTeam) { mutableStateOf<List<Game>>(emptyList()) }
     var todayGamesLoadedDate by remember(selectedTeam) { mutableStateOf<LocalDate?>(null) }
     var todayGamesReloadToken by remember(selectedTeam) { mutableStateOf(0) }
@@ -453,6 +453,18 @@ fun BaseHapticApp(
         pendingWatchSyncHomeTeam = homeTeam
         pendingWatchSyncAwayTeam = awayTeam
         showWatchSyncDialog = true
+    }
+
+    fun showFeatureGuideIfNeeded(currentVersion: String) {
+        if (currentVersion.isBlank()) return
+        if (loadLastSeenFeatureGuideVersion() == currentVersion) return
+        showFeatureGuide = true
+    }
+
+    fun dismissFeatureGuide() {
+        val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
+        onPersistLastSeenFeatureGuideVersion(currentVersion)
+        showFeatureGuide = false
     }
 
     fun navigateTo(targetView: Screen) {
@@ -868,8 +880,8 @@ fun BaseHapticApp(
                         },
                         syncedGameId = syncedGameId,
                         activeLiveScoreGameId = activeLiveScoreGameId,
-                        showUpdateHighlights = BuildConfig.DEBUG && pendingReleaseNote != null,
-                        onDismissUpdateHighlights = { pendingReleaseNote = null },
+                        showUpdateHighlights = showFeatureGuide,
+                        onDismissUpdateHighlights = { dismissFeatureGuide() },
                         onToggleWatchSync = { game ->
                             if (syncedGameId == game.id) {
                                 syncedGameId = null
@@ -1098,13 +1110,14 @@ fun BaseHapticApp(
             )
         }
 
-        if (!com.basehaptic.mobile.BuildConfig.DEBUG) {
-            pendingReleaseNote?.let { note ->
+        pendingReleaseNote?.let { note ->
             com.basehaptic.mobile.ui.components.WhatsNewDialog(
                 note = note,
-                onConfirm = { pendingReleaseNote = null }
+                onConfirm = {
+                    pendingReleaseNote = null
+                    showFeatureGuideIfNeeded(com.basehaptic.mobile.BuildConfig.VERSION_NAME)
+                }
             )
-            }
         }
     }
 
@@ -1113,23 +1126,34 @@ fun BaseHapticApp(
         val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
         if (currentVersion.isEmpty()) return@LaunchedEffect
 
-        if (com.basehaptic.mobile.BuildConfig.DEBUG) {
-            pendingReleaseNote = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
-                ?: com.basehaptic.mobile.data.model.ReleaseNotes.latest()
-            return@LaunchedEffect
-        }
-
         val lastSeen = loadLastSeenUpdateVersion()
         if (lastSeen.isEmpty()) {
             onPersistLastSeenUpdateVersion(currentVersion)
+            if (isExistingUserAtLaunch) {
+                val note = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
+                if (note != null) {
+                    pendingReleaseNote = note
+                } else {
+                    showFeatureGuideIfNeeded(currentVersion)
+                }
+            } else {
+                showFeatureGuideIfNeeded(currentVersion)
+            }
             return@LaunchedEffect
         }
-        if (lastSeen == currentVersion) return@LaunchedEffect
+        if (lastSeen == currentVersion) {
+            showFeatureGuideIfNeeded(currentVersion)
+            return@LaunchedEffect
+        }
 
         onPersistLastSeenUpdateVersion(currentVersion)
 
-        val note = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion) ?: return@LaunchedEffect
-        pendingReleaseNote = note
+        val note = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
+        if (note != null) {
+            pendingReleaseNote = note
+        } else {
+            showFeatureGuideIfNeeded(currentVersion)
+        }
     }
 }
 

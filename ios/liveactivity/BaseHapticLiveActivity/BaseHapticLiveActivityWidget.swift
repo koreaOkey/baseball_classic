@@ -4,13 +4,10 @@ import WidgetKit
 
 struct BaseHapticLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: BaseballGameAttributes.self) { context in
-            LockScreenLiveActivityView(
-                attributes: context.attributes,
-                state: context.state
-            )
-            .activityBackgroundTint(.black.opacity(0.88))
-            .activitySystemActionForegroundColor(.white)
+        let configuration = ActivityConfiguration(for: BaseballGameAttributes.self) { context in
+            ActivityContentView(attributes: context.attributes, state: context.state)
+                .activityBackgroundTint(.black.opacity(0.88))
+                .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -30,57 +27,161 @@ struct BaseHapticLiveActivityWidget: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.center) {
-                    Text(context.state.inning.isEmpty ? "LIVE" : context.state.inning)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    VStack(spacing: 2) {
+                        Text(context.state.inning.isEmpty ? "LIVE" : context.state.inning)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        if let type = context.state.lastEventType, !type.isEmpty {
+                            Text(eventLabel(type))
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(eventColor(type))
+                        }
+                    }
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
                     if let highlight = context.state.highlightEventText, !highlight.isEmpty {
                         HighlightEventView(text: highlight, type: context.state.highlightEventType)
                     } else {
-                        HStack(spacing: 14) {
-                            BSOCountView(
-                                balls: context.state.ball,
-                                strikes: context.state.strike,
-                                outs: context.state.out
-                            )
-                            BaseDiamondView(
-                                first: context.state.baseFirst,
-                                second: context.state.baseSecond,
-                                third: context.state.baseThird
-                            )
-                            .frame(width: 50, height: 44)
-                            Spacer(minLength: 0)
-                            if let event = context.state.lastEventDescription, !event.isEmpty {
-                                Text(event)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
-                            }
-                        }
+                        GameProgressView(
+                            state: context.state,
+                            diamondSize: CGSize(width: 50, height: 44),
+                            compact: true
+                        )
                         .padding(.top, 2)
                     }
                 }
             } compactLeading: {
                 CompactScoreView(
                     code: context.attributes.awayTeam,
-                    score: context.state.awayScore,
-                    isMyTeam: context.attributes.awayTeam == context.attributes.myTeam
+                    score: context.state.awayScore
                 )
             } compactTrailing: {
                 CompactScoreView(
                     code: context.attributes.homeTeam,
-                    score: context.state.homeScore,
-                    isMyTeam: context.attributes.homeTeam == context.attributes.myTeam
+                    score: context.state.homeScore
                 )
             } minimal: {
                 Text("\(context.state.awayScore)-\(context.state.homeScore)")
                     .font(.caption2.weight(.heavy))
                     .monospacedDigit()
+                    .foregroundStyle(.white)
             }
         }
+
+        if #available(iOS 18.0, *) {
+            return configuration.supplementalActivityFamilies([.small, .medium])
+        } else {
+            return configuration
+        }
+    }
+}
+
+private struct ActivityContentView: View {
+    let attributes: BaseballGameAttributes
+    let state: BaseballGameAttributes.ContentState
+
+    var body: some View {
+        if #available(iOS 18.0, *) {
+            SupplementalAwareLiveActivityView(attributes: attributes, state: state)
+        } else {
+            LockScreenLiveActivityView(attributes: attributes, state: state)
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct SupplementalAwareLiveActivityView: View {
+    @Environment(\.activityFamily) private var activityFamily
+
+    let attributes: BaseballGameAttributes
+    let state: BaseballGameAttributes.ContentState
+
+    var body: some View {
+        switch activityFamily {
+        case .small:
+            WatchSmallLiveActivityView(attributes: attributes, state: state)
+        case .medium:
+            LockScreenLiveActivityView(attributes: attributes, state: state)
+        @unknown default:
+            LockScreenLiveActivityView(attributes: attributes, state: state)
+        }
+    }
+}
+
+private struct WatchSmallLiveActivityView: View {
+    let attributes: BaseballGameAttributes
+    let state: BaseballGameAttributes.ContentState
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(state.inning.isEmpty ? "LIVE" : state.inning)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .padding(.top, 6)
+
+            HStack(alignment: .center, spacing: 8) {
+                WatchTeamScoreView(
+                    code: attributes.awayTeam,
+                    score: state.awayScore,
+                    alignment: .leading,
+                    reversed: false
+                )
+
+                Text("-")
+                    .font(.title2.weight(.heavy))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 10)
+
+                WatchTeamScoreView(
+                    code: attributes.homeTeam,
+                    score: state.homeScore,
+                    alignment: .trailing,
+                    reversed: true
+                )
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 6)
+    }
+}
+
+private struct WatchTeamScoreView: View {
+    let code: String
+    let score: Int
+    let alignment: HorizontalAlignment
+    let reversed: Bool
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if reversed {
+                scoreText
+            }
+
+            TeamLogoImage(code: code, size: 32, showsFallback: true)
+
+            if !reversed {
+                scoreText
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: frameAlignment)
+    }
+
+    private var scoreText: some View {
+        Text("\(score)")
+            .font(.system(size: 34, weight: .heavy, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .allowsTightening(true)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: 38, alignment: .center)
+    }
+
+    private var frameAlignment: Alignment {
+        alignment == .trailing ? .trailing : .leading
     }
 }
 
@@ -122,30 +223,45 @@ private struct LockScreenLiveActivityView: View {
             if let highlight = state.highlightEventText, !highlight.isEmpty {
                 HighlightEventView(text: highlight, type: state.highlightEventType)
             } else {
-                HStack(spacing: 14) {
-                    BSOCountView(balls: state.ball, strikes: state.strike, outs: state.out)
-                    BaseDiamondView(first: state.baseFirst, second: state.baseSecond, third: state.baseThird)
-                        .frame(width: 60, height: 54)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        if !state.pitcher.isEmpty || !state.batter.isEmpty {
-                            Text(matchupText)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        Text(state.lastEventDescription?.isEmpty == false ? state.lastEventDescription! : "경기 진행 상황을 업데이트 중입니다")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    Spacer(minLength: 0)
-                }
+                GameProgressView(
+                    state: state,
+                    diamondSize: CGSize(width: 60, height: 54),
+                    compact: false
+                )
             }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+    }
+}
+
+private struct GameProgressView: View {
+    let state: BaseballGameAttributes.ContentState
+    let diamondSize: CGSize
+    let compact: Bool
+
+    var body: some View {
+        HStack(spacing: 14) {
+            BSOCountView(balls: state.ball, strikes: state.strike, outs: state.out)
+            BaseDiamondView(first: state.baseFirst, second: state.baseSecond, third: state.baseThird)
+                .frame(width: diamondSize.width, height: diamondSize.height)
+
+            VStack(alignment: .leading, spacing: 3) {
+                if !state.pitcher.isEmpty || !state.batter.isEmpty {
+                    Text(matchupText)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                }
+                Text(state.lastEventDescription?.isEmpty == false ? state.lastEventDescription! : "경기 진행 상황을 업데이트 중입니다")
+                    .font(compact ? .caption2.weight(.semibold) : .caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(compact ? 0.72 : 0.8)
+            }
+            Spacer(minLength: 0)
+        }
     }
 
     private var matchupText: String {
@@ -200,7 +316,6 @@ private struct TeamScoreColumn: View {
 private struct CompactScoreView: View {
     let code: String
     let score: Int
-    let isMyTeam: Bool
 
     var body: some View {
         HStack(spacing: 3) {
@@ -208,8 +323,8 @@ private struct CompactScoreView: View {
             Text("\(score)")
                 .font(.caption.weight(.heavy))
                 .monospacedDigit()
+                .foregroundStyle(.white)
         }
-        .foregroundStyle(isMyTeam ? teamColor(code) : .white)
     }
 }
 

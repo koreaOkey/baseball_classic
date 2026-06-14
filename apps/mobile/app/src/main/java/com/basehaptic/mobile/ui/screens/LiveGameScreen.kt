@@ -347,7 +347,12 @@ fun LiveGameScreen(
                 }
 
                 item {
-                    BaseballFieldCard(state = state, latestEvent = allEvents.firstOrNull(), lineup = currentLineup)
+                    BaseballFieldCard(
+                        state = state,
+                        latestEvent = allEvents.firstOrNull(),
+                        recentEvents = allEvents,
+                        lineup = currentLineup
+                    )
                 }
 
                 item {
@@ -660,6 +665,7 @@ private fun FavoriteTeamBadge() {
 private fun BaseballFieldCard(
     state: BackendGamesRepository.LiveGameState,
     latestEvent: BackendGamesRepository.LiveEvent?,
+    recentEvents: List<BackendGamesRepository.LiveEvent>,
     lineup: FieldLineup?
 ) {
     Card(
@@ -724,11 +730,11 @@ private fun BaseballFieldCard(
                     }
                 }
 
-                val inferredRunners = FieldRunners.from(state, latestEvent, lineup)
+                val inferredRunners = FieldRunners.from(state, recentEvents, lineup)
                 if (state.baseFirst) {
                     AtFieldPosition(FieldPositions.firstBase, w, h) {
                         PositionPill(
-                            text = cleanPlayerName(state.baseFirstRunner) ?: inferredRunners.first ?: "1루",
+                            text = runnerDisplayName(cleanPlayerName(state.baseFirstRunner) ?: inferredRunners.first),
                             modifier = Modifier,
                             highlighted = true
                         )
@@ -737,7 +743,7 @@ private fun BaseballFieldCard(
                 if (state.baseSecond) {
                     AtFieldPosition(FieldPositions.secondBase, w, h) {
                         PositionPill(
-                            text = cleanPlayerName(state.baseSecondRunner) ?: inferredRunners.second ?: "2루",
+                            text = runnerDisplayName(cleanPlayerName(state.baseSecondRunner) ?: inferredRunners.second),
                             modifier = Modifier,
                             highlighted = true
                         )
@@ -746,7 +752,7 @@ private fun BaseballFieldCard(
                 if (state.baseThird) {
                     AtFieldPosition(FieldPositions.thirdBase, w, h) {
                         PositionPill(
-                            text = cleanPlayerName(state.baseThirdRunner) ?: inferredRunners.third ?: "3루",
+                            text = runnerDisplayName(cleanPlayerName(state.baseThirdRunner) ?: inferredRunners.third),
                             modifier = Modifier,
                             highlighted = true
                         )
@@ -822,55 +828,75 @@ private data class FieldRunners(
     companion object {
         fun from(
             state: BackendGamesRepository.LiveGameState,
-            latestEvent: BackendGamesRepository.LiveEvent?,
+            events: List<BackendGamesRepository.LiveEvent>,
             lineup: FieldLineup?,
         ): FieldRunners {
-            val targetBase = latestEvent?.let(::runnerTargetBase)
-            val eventRunner = latestEvent
-                ?.takeIf(::isBatterRunnerEvent)
-                ?.batter
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() && !it.equals("null", ignoreCase = true) }
+            val bases = mutableMapOf<Int, String>()
+            events
+                .filter { it.inning == null || it.inning == state.inning }
+                .sortedWith(compareBy<BackendGamesRepository.LiveEvent> { it.cursor }.thenBy { it.seqno ?: 0 })
+                .groupBy { it.atBatId ?: it.id }
+                .values
+                .sortedBy { group -> group.minOfOrNull { it.cursor } ?: 0L }
+                .forEach { group ->
+                    var batterPlacement: Pair<Int, String>? = null
+                    group.sortedBy { it.seqno ?: 0 }.forEach { event ->
+                        if (event.type.equals("HALF_INNING_CHANGE", ignoreCase = true)) {
+                            bases.clear()
+                            return@forEach
+                        }
+                        runnerMovement(event.description)?.let { movement ->
+                            bases.entries.removeAll { it.value == movement.name }
+                            movement.targetBase?.let { bases[it] = movement.name }
+                        }
+                        batterRunnerPlacement(event)?.let { batterPlacement = it }
+                    }
+                    batterPlacement?.let { (base, name) ->
+                        bases.entries.removeAll { it.value == name }
+                        bases[base] = name
+                    }
+                }
 
             return FieldRunners(
-                first = lineup?.firstRunner
-                    ?: eventRunner.takeIf {
-                        state.baseFirst &&
-                            (targetBase == 1 || targetBase == null && latestEvent?.let(::isBatterToFirstEvent) == true)
-                    },
-                second = lineup?.secondRunner
-                    ?: eventRunner.takeIf { state.baseSecond && targetBase == 2 },
-                third = lineup?.thirdRunner
-                    ?: eventRunner.takeIf { state.baseThird && targetBase == 3 },
+                first = lineup?.firstRunner ?: bases[1].takeIf { state.baseFirst },
+                second = lineup?.secondRunner ?: bases[2].takeIf { state.baseSecond },
+                third = lineup?.thirdRunner ?: bases[3].takeIf { state.baseThird },
             )
         }
 
-        private fun isBatterRunnerEvent(event: BackendGamesRepository.LiveEvent): Boolean =
-            when (event.type.uppercase()) {
-                "HIT", "WALK", "HIT_BY_PITCH" -> true
-                else -> false
-            }
+        private data class RunnerMovement(val name: String, val targetBase: Int?)
 
-        private fun isBatterToFirstEvent(event: BackendGamesRepository.LiveEvent): Boolean {
-            val type = event.type.uppercase()
-            if (type == "WALK" || type == "HIT_BY_PITCH") return true
-            if (type != "HIT") return false
-            val desc = event.description
-            return !desc.contains("2루타") && !desc.contains("3루타")
+        private fun runnerMovement(description: String): RunnerMovement? {
+            val match = Regex("""([123])루주자\s+([^:]+)\s*:\s*(.+)""").find(description) ?: return null
+            val name = cleanPlayerName(match.groupValues[2]) ?: return null
+            val action = match.groupValues[3]
+            if (action.contains("홈인") || action.contains("아웃")) {
+                return RunnerMovement(name, null)
+            }
+            return when {
+                action.contains("3루") -> RunnerMovement(name, 3)
+                action.contains("2루") -> RunnerMovement(name, 2)
+                action.contains("1루") -> RunnerMovement(name, 1)
+                else -> null
+            }
         }
 
-        private fun runnerTargetBase(event: BackendGamesRepository.LiveEvent): Int? {
+        private fun batterRunnerPlacement(event: BackendGamesRepository.LiveEvent): Pair<Int, String>? {
+            val name = cleanPlayerName(event.batter) ?: return null
+            val type = event.type.uppercase()
             val desc = event.description
+            if (desc.contains("홈런")) return null
             return when {
-                desc.contains("3루") || desc.contains("3루타") -> 3
-                desc.contains("2루") || desc.contains("2루타") -> 2
-                desc.contains("1루") || event.type.uppercase() in setOf("WALK", "HIT_BY_PITCH") -> 1
-                event.type.uppercase() == "HIT" -> 1
+                desc.contains("3루타") -> 3 to name
+                desc.contains("2루타") -> 2 to name
+                type == "WALK" || type == "HIT_BY_PITCH" || type == "HIT" || desc.contains("출루") -> 1 to name
                 else -> null
             }
         }
     }
 }
+
+private fun runnerDisplayName(name: String?): String = cleanPlayerName(name) ?: "주자"
 
 /// 야구장 배경 이미지 위의 정규화 좌표(0.0~1.0). iOS 와 동일 값.
 private object FieldPositions {

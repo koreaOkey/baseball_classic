@@ -40,6 +40,13 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - WHEN 동일 코드 변경을 운영에 반영하면
 - THEN 운영 Railway와 운영 Supabase에는 검증된 코드와 필요한 마이그레이션만 별도로 배포한다
 
+#### Scenario: 스테이징 승격 운영 예외
+- GIVEN 기존 운영 서버를 단계적으로 내리고 스테이징 서버를 실제 운영 서버로 승격할 때
+- WHEN 모바일 또는 워치 앱을 사용자에게 배포하면
+- THEN 해당 릴리스 빌드는 승격된 스테이징 Backend와 Supabase 프로젝트를 운영 대상처럼 사용할 수 있다
+- AND 기존 운영 서버를 완전히 내리기 전까지 사용자 업데이트 전환 상태를 모니터링한다
+- AND 전환 완료 후 문서와 빌드 설정의 운영 명칭을 실제 운영 리소스 기준으로 정리한다
+
 ### Requirement: Cloudflare 터널 (외부 디바이스 테스트)
 로컬 백엔드를 외부 디바이스(폰/워치)에서 접근할 수 있도록 HTTPS 터널을 제공해야 한다(MUST).
 
@@ -112,6 +119,7 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - THEN `BASEHAPTIC_DB_POOL_SIZE`(기본 1), `BASEHAPTIC_DB_MAX_OVERFLOW`(기본 0), `BASEHAPTIC_DB_POOL_TIMEOUT_SEC`(기본 30)를 조정할 수 있다
 
 ### Requirement: 로컬 개발 실행 방법
+로컬 개발 실행 절차는 아래 명령과 폴백 규칙을 따라야 한다(MUST).
 
 #### Scenario: 백엔드 실행
 - GIVEN 로컬 개발 환경에서

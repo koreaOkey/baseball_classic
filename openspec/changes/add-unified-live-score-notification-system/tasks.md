@@ -18,6 +18,7 @@
 - [ ] 2.4 폰 foreground 상태에서 헤드업 노티 suppress 확인 (`willPresent`에서 빈 옵션 반환)
 - [ ] 2.5 Live Activity가 활성인 동안 같은 정보의 push 헤드업 노출 여부 실기기 테스트 → 시각적 노이즈 발생 시 suppress 가드 추가
 - [x] 2.6 경기 카드에 "잠금화면" 토글 추가: OFF 시 기존 Live Activity 즉시 종료 및 이후 갱신 차단, ON 시 다음 동기화/푸시부터 재개
+- [ ] 2.7 Smart Stack/Live Activity의 "iPhone으로 보기" 진입 시 해당 `game_id` 경기 상세 화면으로 이동하도록 딥링크 URL과 앱 라우팅 처리 추가
 
 ## 3. Android 폰 (mobile-android)
 

@@ -23,6 +23,8 @@ import { IpadHomeScreen } from "./iphone/IpadHomeScreen";
 import { IpadWatchSyncScreen } from "./iphone/IpadWatchSyncScreen";
 import { YagubomFeatureCard } from "./promo/YagubomFeatureCard";
 import { YagubomPromoCard } from "./promo/YagubomPromoCard";
+import { LiveScoreUpdateAppStorePromo } from "./promo/LiveScoreUpdateAppStorePromo";
+import { LiveScoreUpdatePromo } from "./promo/LiveScoreUpdatePromo";
 
 // Apple Watch Series 9 (App Store)
 const W = 396;
@@ -57,6 +59,16 @@ const FH = 500;
 // Social promo card
 const PROMOW = 1080;
 const PROMOH = 1350;
+
+// iOS App Store accepted screenshot sizes
+const APPSTORE_PORTRAIT_W = 1242;
+const APPSTORE_PORTRAIT_H = 2688;
+const APPSTORE_LANDSCAPE_W = 2688;
+const APPSTORE_LANDSCAPE_H = 1242;
+const APPSTORE_PORTRAIT_67_W = 1284;
+const APPSTORE_PORTRAIT_67_H = 2778;
+const APPSTORE_LANDSCAPE_67_W = 2778;
+const APPSTORE_LANDSCAPE_67_H = 1284;
 
 export const RemotionRoot: React.FC = () => (
   <>
@@ -147,6 +159,46 @@ export const RemotionRoot: React.FC = () => (
       fps={1}
       width={PROMOW}
       height={PROMOH}
+    />
+    <Composition
+      id="promo-live-score-update"
+      component={LiveScoreUpdatePromo}
+      durationInFrames={1}
+      fps={1}
+      width={PROMOW}
+      height={PROMOH}
+    />
+    <Composition
+      id="promo-live-score-update-1242x2688"
+      component={() => <LiveScoreUpdateAppStorePromo orientation="portrait" />}
+      durationInFrames={1}
+      fps={1}
+      width={APPSTORE_PORTRAIT_W}
+      height={APPSTORE_PORTRAIT_H}
+    />
+    <Composition
+      id="promo-live-score-update-2688x1242"
+      component={() => <LiveScoreUpdateAppStorePromo orientation="landscape" />}
+      durationInFrames={1}
+      fps={1}
+      width={APPSTORE_LANDSCAPE_W}
+      height={APPSTORE_LANDSCAPE_H}
+    />
+    <Composition
+      id="promo-live-score-update-1284x2778"
+      component={() => <LiveScoreUpdateAppStorePromo orientation="portrait" />}
+      durationInFrames={1}
+      fps={1}
+      width={APPSTORE_PORTRAIT_67_W}
+      height={APPSTORE_PORTRAIT_67_H}
+    />
+    <Composition
+      id="promo-live-score-update-2778x1284"
+      component={() => <LiveScoreUpdateAppStorePromo orientation="landscape" />}
+      durationInFrames={1}
+      fps={1}
+      width={APPSTORE_LANDSCAPE_67_W}
+      height={APPSTORE_LANDSCAPE_67_H}
     />
   </>
 );
