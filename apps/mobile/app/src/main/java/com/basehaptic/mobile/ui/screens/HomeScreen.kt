@@ -93,6 +93,7 @@ fun HomeScreen(
     val standingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showScheduleSheet by remember { mutableStateOf(false) }
     var scheduleLoadRequest by remember { mutableIntStateOf(0) }
+    var scheduleForceRefresh by remember { mutableStateOf(false) }
     var scheduleLoading by remember { mutableStateOf(false) }
     var scheduleError by remember { mutableStateOf<String?>(null) }
     var scheduleItems by remember {
@@ -186,7 +187,7 @@ fun HomeScreen(
                     selectedTeam = selectedTeam,
                     fromDate = rangeFrom,
                     toDate = rangeTo,
-                    forceRefresh = scheduleLoadRequest > 1
+                    forceRefresh = scheduleForceRefresh
                 )
             }
         }.getOrNull()
@@ -196,6 +197,7 @@ fun HomeScreen(
         } else {
             scheduleItems = loaded
         }
+        scheduleForceRefresh = false
         scheduleLoading = false
     }
 
@@ -391,6 +393,7 @@ fun HomeScreen(
                                 showScheduleSheet = true
                                 scheduleMonth = YearMonth.now()
                                 selectedScheduleDate = LocalDate.now()
+                                scheduleForceRefresh = false
                                 scheduleLoadRequest += 1
                             },
                         shape = AppShapes.lg,
@@ -615,7 +618,10 @@ fun HomeScreen(
                 selectedDate = selectedScheduleDate,
                 loading = scheduleLoading,
                 error = scheduleError,
-                onRetry = { scheduleLoadRequest += 1 },
+                onRetry = {
+                    scheduleForceRefresh = true
+                    scheduleLoadRequest += 1
+                },
                 onPreviousMonth = { scheduleMonth = scheduleMonth.minusMonths(1) },
                 onNextMonth = { scheduleMonth = scheduleMonth.plusMonths(1) },
                 onSelectDate = { selectedScheduleDate = it },

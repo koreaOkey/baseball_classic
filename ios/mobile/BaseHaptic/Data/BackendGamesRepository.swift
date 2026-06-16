@@ -233,6 +233,7 @@ final class BackendGamesRepository {
     static let shared = BackendGamesRepository()
     private let session: URLSession
     private let timeoutInterval: TimeInterval = 5.0
+    private let scheduleCacheTTL: TimeInterval = 6 * 60 * 60
     private let cache = NSCache<NSString, CacheEntry>()
 
     private init() {
@@ -398,25 +399,21 @@ final class BackendGamesRepository {
     // MARK: - Upcoming Games
     func fetchUpcomingMyTeamGames(selectedTeam: Team, maxItems: Int = 3, daysAhead: Int = 30) async -> [UpcomingGameSchedule]? {
         guard selectedTeam != .none else { return [] }
-        var items: [UpcomingGameSchedule] = []
         let calendar = Calendar.current
-
-        for offset in 1...daysAhead {
-            guard let targetDate = calendar.date(byAdding: .day, value: offset, to: Date()) else { continue }
-            let dayGames = await fetchGamesByDate(selectedTeam: selectedTeam, targetDate: targetDate) ?? []
-            if dayGames.isEmpty { continue }
-
-            let upcoming = dayGames
-                .filter { $0.isMyTeam && $0.status == .scheduled }
-                .sorted { parseGameTimeToSortKey($0.time) < parseGameTimeToSortKey($1.time) }
-                .map { UpcomingGameSchedule(gameDate: targetDate, game: $0) }
-
-            for entry in upcoming {
-                items.append(entry)
-                if items.count >= maxItems { return items }
-            }
+        let today = calendar.startOfDay(for: Date())
+        guard let fromDate = calendar.date(byAdding: .day, value: 1, to: today),
+              let toDate = calendar.date(byAdding: .day, value: max(daysAhead, 1), to: today) else {
+            return nil
         }
-        return items
+        let schedules = await fetchMyTeamScheduleRangeCached(
+            selectedTeam: selectedTeam,
+            fromDate: fromDate,
+            toDate: toDate
+        ) ?? []
+        return schedules
+            .filter { $0.gameDate > today && $0.game.status == .scheduled }
+            .prefix(max(maxItems, 1))
+            .map { $0 }
     }
 
     func fetchMyTeamScheduleGames(selectedTeam: Team, daysAhead: Int = 30) async -> [UpcomingGameSchedule]? {
@@ -468,11 +465,13 @@ final class BackendGamesRepository {
         let cachedFrom = defaults.string(forKey: "\(keyPrefix)_from")
         let cachedTo = defaults.string(forKey: "\(keyPrefix)_to")
         let cachedPayload = defaults.string(forKey: "\(keyPrefix)_payload")
+        let cachedAt = defaults.double(forKey: "\(keyPrefix)_cached_at")
 
         if !forceRefresh,
            cachedTeam == selectedTeam.rawValue,
            cachedFrom == fromString,
            cachedTo == toString,
+           isFreshScheduleCache(cachedAt),
            let cachedPayload,
            !cachedPayload.isEmpty,
            let cached = parseScheduleRangePayload(cachedPayload, selectedTeam: selectedTeam) {
@@ -485,6 +484,7 @@ final class BackendGamesRepository {
             defaults.set(fromString, forKey: "\(keyPrefix)_from")
             defaults.set(toString, forKey: "\(keyPrefix)_to")
             defaults.set(freshPayload, forKey: "\(keyPrefix)_payload")
+            defaults.set(Date().timeIntervalSince1970, forKey: "\(keyPrefix)_cached_at")
             return fresh
         }
 
@@ -497,6 +497,10 @@ final class BackendGamesRepository {
         }
 
         return nil
+    }
+
+    private func isFreshScheduleCache(_ cachedAt: TimeInterval) -> Bool {
+        cachedAt > 0 && Date().timeIntervalSince1970 - cachedAt <= scheduleCacheTTL
     }
 
     // MARK: - WebSocket Stream

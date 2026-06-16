@@ -152,7 +152,7 @@ struct HomeScreen: View {
                 loading: scheduleLoading,
                 error: scheduleError,
                 onRetry: {
-                    Task { await loadMyTeamSchedule() }
+                    Task { await loadMyTeamSchedule(forceRefresh: true) }
                 },
                 onPreviousMonth: {
                     scheduleMonth = Calendar.current.date(byAdding: .month, value: -1, to: scheduleMonth) ?? scheduleMonth
@@ -214,7 +214,7 @@ struct HomeScreen: View {
                 showingSchedule = true
                 selectedScheduleDate = Calendar.current.startOfDay(for: Date())
                 scheduleMonth = monthStart(for: Date())
-                Task { await loadMyTeamSchedule() }
+                Task { await loadMyTeamSchedule(forceRefresh: false) }
             } label: {
                 VStack(alignment: .leading, spacing: AppSpacing.xs) {
                     HStack(spacing: AppSpacing.sm) {
@@ -363,7 +363,7 @@ struct HomeScreen: View {
     }
 
     @MainActor
-    private func loadMyTeamSchedule() async {
+    private func loadMyTeamSchedule(forceRefresh: Bool = false) async {
         guard selectedTeam != .none else {
             scheduleItems = []
             scheduleError = nil
@@ -378,7 +378,7 @@ struct HomeScreen: View {
             selectedTeam: selectedTeam,
             fromDate: scheduleSeasonStartDate(today),
             toDate: scheduleSeasonEndDate(today),
-            forceRefresh: !scheduleItems.isEmpty
+            forceRefresh: forceRefresh
         )
         if let loaded {
             scheduleItems = loaded

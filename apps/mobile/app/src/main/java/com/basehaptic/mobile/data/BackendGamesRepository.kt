@@ -43,10 +43,13 @@ object BackendGamesRepository {
     private const val KEY_UPCOMING_GAMES_MAX_ITEMS = "upcoming_games_max_items"
     private const val KEY_UPCOMING_GAMES_DAYS_AHEAD = "upcoming_games_days_ahead"
     private const val KEY_UPCOMING_GAMES_PAYLOAD = "upcoming_games_payload"
+    private const val KEY_UPCOMING_GAMES_CACHED_AT = "upcoming_games_cached_at"
     private const val KEY_SCHEDULE_RANGE_TEAM = "schedule_range_team"
     private const val KEY_SCHEDULE_RANGE_FROM = "schedule_range_from"
     private const val KEY_SCHEDULE_RANGE_TO = "schedule_range_to"
     private const val KEY_SCHEDULE_RANGE_PAYLOAD = "schedule_range_payload"
+    private const val KEY_SCHEDULE_RANGE_CACHED_AT = "schedule_range_cached_at"
+    private const val SCHEDULE_CACHE_TTL_MS = 6L * 60L * 60L * 1000L
     private val hhmmFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
     private val webSocketClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -339,6 +342,7 @@ object BackendGamesRepository {
         val cachedMaxItems = prefs.getInt(KEY_UPCOMING_GAMES_MAX_ITEMS, -1)
         val cachedDaysAhead = prefs.getInt(KEY_UPCOMING_GAMES_DAYS_AHEAD, -1)
         val cachedPayload = prefs.getString(KEY_UPCOMING_GAMES_PAYLOAD, null)
+        val cachedAt = prefs.getLong(KEY_UPCOMING_GAMES_CACHED_AT, 0L)
 
         val cacheMatches =
             cachedDate == today &&
@@ -346,8 +350,10 @@ object BackendGamesRepository {
                 cachedMaxItems == normalizedMaxItems &&
                 cachedDaysAhead == normalizedDaysAhead
 
-        // Network first. A backend outage can otherwise cache an empty upcoming
-        // list for the whole local day and hide schedules after the backend recovers.
+        if (!forceRefresh && cacheMatches && isFreshScheduleCache(cachedAt) && !cachedPayload.isNullOrBlank()) {
+            parseUpcomingGamesPayload(cachedPayload)?.let { return it }
+        }
+
         val fresh = fetchUpcomingMyTeamGames(
             selectedTeam = selectedTeam,
             maxItems = normalizedMaxItems,
@@ -360,6 +366,7 @@ object BackendGamesRepository {
                 .putInt(KEY_UPCOMING_GAMES_MAX_ITEMS, normalizedMaxItems)
                 .putInt(KEY_UPCOMING_GAMES_DAYS_AHEAD, normalizedDaysAhead)
                 .putString(KEY_UPCOMING_GAMES_PAYLOAD, toUpcomingGamesPayload(fresh))
+                .putLong(KEY_UPCOMING_GAMES_CACHED_AT, System.currentTimeMillis())
                 .apply()
             return fresh
         }
@@ -433,12 +440,13 @@ object BackendGamesRepository {
         val cachedFrom = prefs.getString(KEY_SCHEDULE_RANGE_FROM, null)
         val cachedTo = prefs.getString(KEY_SCHEDULE_RANGE_TO, null)
         val cachedPayload = prefs.getString(KEY_SCHEDULE_RANGE_PAYLOAD, null)
+        val cachedAt = prefs.getLong(KEY_SCHEDULE_RANGE_CACHED_AT, 0L)
         val cacheMatches =
             cachedTeam == selectedTeam.name &&
                 cachedFrom == fromDate.toString() &&
                 cachedTo == normalizedToDate.toString()
 
-        if (!forceRefresh && cacheMatches && !cachedPayload.isNullOrBlank()) {
+        if (!forceRefresh && cacheMatches && isFreshScheduleCache(cachedAt) && !cachedPayload.isNullOrBlank()) {
             parseUpcomingGamesPayload(cachedPayload)?.let { return it }
         }
 
@@ -451,6 +459,7 @@ object BackendGamesRepository {
                     .putString(KEY_SCHEDULE_RANGE_FROM, fromDate.toString())
                     .putString(KEY_SCHEDULE_RANGE_TO, normalizedToDate.toString())
                     .putString(KEY_SCHEDULE_RANGE_PAYLOAD, toUpcomingGamesPayload(fresh))
+                    .putLong(KEY_SCHEDULE_RANGE_CACHED_AT, System.currentTimeMillis())
                     .apply()
                 return fresh
             }
@@ -461,6 +470,11 @@ object BackendGamesRepository {
         }
 
         return null
+    }
+
+    private fun isFreshScheduleCache(cachedAt: Long): Boolean {
+        val ageMs = System.currentTimeMillis() - cachedAt
+        return cachedAt > 0L && ageMs in 0L..SCHEDULE_CACHE_TTL_MS
     }
 
     private fun fetchGamesByDate(selectedTeam: Team, targetDate: LocalDate): List<Game>? {
