@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # FCM (Firebase Cloud Messaging)
     fcm_service_account_json: str | None = None  # Service Account JSON 전체를 문자열로
 
+    # Public Data Portal / KMA short-term forecast
+    weather_service_key: str = ""
+    weather_api_base_url: str = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst"
+
     @property
     def cors_origins(self) -> list[str]:
         raw = self.cors_allow_origins.strip()

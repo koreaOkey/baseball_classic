@@ -250,6 +250,43 @@ class TeamRecordOut(BaseModel):
     updatedAt: IsoDatetime
 
 
+class GameWeatherSummaryOut(BaseModel):
+    stadiumCode: str
+    stadiumName: str
+    stadiumShortName: str
+    forecastDate: str | None = None
+    forecastTime: str | None = None
+    forecastTimeLabel: str | None = None
+    condition: str
+    temperatureC: int | None = None
+    precipitationProbability: int | None = None
+    precipitationType: str | None = None
+    windSpeedMps: float | None = None
+    isIndoor: bool = False
+    displayText: str
+
+
+class GameWeatherHourlyItemOut(BaseModel):
+    forecastDate: str
+    forecastTime: str
+    timeLabel: str
+    condition: str
+    temperatureC: int | None = None
+    precipitationProbability: int | None = None
+    precipitationType: str | None = None
+    windSpeedMps: float | None = None
+    isGameStartForecast: bool = False
+
+
+class GameWeatherHourlyOut(BaseModel):
+    gameId: str
+    stadiumCode: str
+    stadiumName: str
+    stadiumShortName: str
+    gameStartTime: str | None = None
+    items: list[GameWeatherHourlyItemOut] = Field(default_factory=list)
+
+
 class GameSummaryOut(BaseModel):
     id: str
     homeTeam: str
@@ -259,6 +296,7 @@ class GameSummaryOut(BaseModel):
     inning: str
     status: GameStatus
     startTime: str | None = None
+    weather: GameWeatherSummaryOut | None = None
     observedAt: IsoDatetime | None = None
     updatedAt: IsoDatetime
 

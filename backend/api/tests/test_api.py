@@ -26,6 +26,7 @@ from app import db as db_module  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import AppConfig, Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord  # noqa: E402
 from app.services import _event_out_count, normalize_event_type, normalize_status  # noqa: E402
+from app.weather import build_weather_summary  # noqa: E402
 
 
 def sample_snapshot() -> dict:
@@ -1182,6 +1183,120 @@ def test_list_games_filters_by_new_status_values() -> None:
         postponed_ids = [item["id"] for item in postponed_games.json()]
         assert "20260220STAT0002" in postponed_ids
         assert "20260220STAT0001" not in postponed_ids
+
+
+def test_list_games_includes_optional_weather_summary() -> None:
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["gameDate"] = "2026-06-16"
+        payload["status"] = "SCHEDULED"
+        payload["inning"] = "18:30"
+        payload["startTime"] = "18:30"
+
+        ingest = client.post(
+            "/internal/crawler/games/WEATHERGAME001/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        weather = {
+            "stadiumCode": "JAMSIL",
+            "stadiumName": "잠실야구장",
+            "stadiumShortName": "잠실",
+            "forecastDate": "2026-06-16",
+            "forecastTime": "1800",
+            "forecastTimeLabel": "18시 기준",
+            "condition": "흐림",
+            "temperatureC": 23,
+            "precipitationProbability": 30,
+            "precipitationType": None,
+            "windSpeedMps": 2.0,
+            "isIndoor": False,
+            "displayText": "경기 시작 예보 · 잠실 · 18시 기준 · 흐림 23° · 강수 30%",
+        }
+        with patch.object(main_module, "build_weather_summary", return_value=weather):
+            games = client.get("/games?date=2026-06-16&limit=100")
+
+        assert games.status_code == 200
+        item = next(game for game in games.json() if game["id"] == "WEATHERGAME001")
+        assert item["weather"]["displayText"] == "경기 시작 예보 · 잠실 · 18시 기준 · 흐림 23° · 강수 30%"
+
+
+def test_weather_summary_dome_fallback_without_external_api_key() -> None:
+    game = Game(
+        id="20260616DOME001",
+        game_date="2026-06-16",
+        home_team="키움",
+        away_team="LG",
+        status="SCHEDULED",
+        inning="18:30",
+        start_time="18:30",
+    )
+
+    weather = build_weather_summary(game, service_key="", api_base_url="")
+
+    assert weather is not None
+    assert weather["isIndoor"] is True
+    assert weather["displayText"] == "경기 시작 예보 · 고척돔 · 날씨 영향 적음"
+
+
+def test_weather_summary_missing_key_returns_none_for_outdoor_game() -> None:
+    game = Game(
+        id="20260616OPEN001",
+        game_date="2026-06-16",
+        home_team="두산",
+        away_team="LG",
+        status="SCHEDULED",
+        inning="18:30",
+        start_time="18:30",
+    )
+
+    assert build_weather_summary(game, service_key="", api_base_url="") is None
+
+
+def test_game_weather_hourly_endpoint() -> None:
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["gameDate"] = "2026-06-16"
+        payload["status"] = "SCHEDULED"
+        payload["inning"] = "18:30"
+        payload["startTime"] = "18:30"
+
+        ingest = client.post(
+            "/internal/crawler/games/WEATHERHOURLY001/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        hourly = {
+            "gameId": "WEATHERHOURLY001",
+            "stadiumCode": "JAMSIL",
+            "stadiumName": "잠실야구장",
+            "stadiumShortName": "잠실",
+            "gameStartTime": "18:30",
+            "items": [
+                {
+                    "forecastDate": "2026-06-16",
+                    "forecastTime": "1800",
+                    "timeLabel": "18시",
+                    "condition": "흐림",
+                    "temperatureC": 23,
+                    "precipitationProbability": 30,
+                    "precipitationType": None,
+                    "windSpeedMps": 2.0,
+                    "isGameStartForecast": True,
+                }
+            ],
+        }
+        with patch.object(main_module, "build_hourly_weather", return_value=hourly):
+            response = client.get("/games/WEATHERHOURLY001/weather?date=2026-06-16")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["stadiumShortName"] == "잠실"
+        assert body["items"][0]["isGameStartForecast"] is True
 
 
 def test_ingest_snapshot_does_not_regress_status_to_scheduled() -> None:

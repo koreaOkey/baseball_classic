@@ -12,8 +12,25 @@ data class Game(
     val status: GameStatus,
     val time: String? = null,
     val isMyTeam: Boolean = false,
+    val weather: GameWeatherSummary? = null,
     val homePitcher: Pitcher? = null,
     val awayPitcher: Pitcher? = null
+)
+
+data class GameWeatherSummary(
+    val stadiumCode: String,
+    val stadiumName: String,
+    val stadiumShortName: String,
+    val forecastDate: String? = null,
+    val forecastTime: String? = null,
+    val forecastTimeLabel: String? = null,
+    val condition: String,
+    val temperatureC: Int? = null,
+    val precipitationProbability: Int? = null,
+    val precipitationType: String? = null,
+    val windSpeedMps: Double? = null,
+    val isIndoor: Boolean = false,
+    val displayText: String
 )
 
 data class Pitcher(

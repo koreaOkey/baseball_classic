@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -102,6 +103,12 @@ fun HomeScreen(
     var scheduleMonth by remember { mutableStateOf(YearMonth.now()) }
     var selectedScheduleDate by remember { mutableStateOf(LocalDate.now()) }
     val scheduleSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var weatherSheetGame by remember { mutableStateOf<Game?>(null) }
+    var weatherLoadRequest by remember { mutableIntStateOf(0) }
+    var weatherLoading by remember { mutableStateOf(false) }
+    var weatherError by remember { mutableStateOf<String?>(null) }
+    var weatherHourly by remember { mutableStateOf<BackendGamesRepository.GameWeatherHourly?>(null) }
+    val weatherSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val listState = rememberLazyListState()
     var updateHighlightStepIndex by remember { mutableIntStateOf(0) }
     var updateHighlightBounds by remember { mutableStateOf<Map<UpdateHighlightStep, Rect>>(emptyMap()) }
@@ -199,6 +206,27 @@ fun HomeScreen(
         }
         scheduleForceRefresh = false
         scheduleLoading = false
+    }
+
+    LaunchedEffect(weatherSheetGame?.id, weatherLoadRequest) {
+        val game = weatherSheetGame ?: return@LaunchedEffect
+        weatherLoading = true
+        weatherError = null
+        val loaded = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.fetchGameHourlyWeather(
+                    gameId = game.id,
+                    targetDate = LocalDate.now()
+                )
+            }
+        }.getOrNull()
+        if (loaded == null) {
+            weatherHourly = null
+            weatherError = "시간별 예보를 불러오지 못했습니다."
+        } else {
+            weatherHourly = loaded
+        }
+        weatherLoading = false
     }
 
     LaunchedEffect(selectedTeam) {
@@ -528,6 +556,10 @@ fun HomeScreen(
                         updateHighlightBounds = updateHighlightBounds + (step to bounds)
                     },
                     onClick = { onSelectGame(game) },
+                    onWeatherClick = {
+                        weatherSheetGame = game
+                        weatherLoadRequest += 1
+                    },
                     onWatchSyncClick = { onToggleWatchSync(game) },
                     onLiveScoreClick = { onToggleLiveScore(game) }
                 )
@@ -632,6 +664,28 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.92f)
+                    .padding(horizontal = AppSpacing.xxl)
+                    .padding(bottom = AppSpacing.xxxl)
+            )
+        }
+    }
+
+    if (weatherSheetGame != null) {
+        ModalBottomSheet(
+            onDismissRequest = { weatherSheetGame = null },
+            sheetState = weatherSheetState,
+            containerColor = Gray950,
+            contentColor = Color.White
+        ) {
+            WeatherHourlySheetContent(
+                game = weatherSheetGame,
+                forecast = weatherHourly,
+                loading = weatherLoading,
+                error = weatherError,
+                onRetry = { weatherLoadRequest += 1 },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.82f)
                     .padding(horizontal = AppSpacing.xxl)
                     .padding(bottom = AppSpacing.xxxl)
             )
@@ -1351,8 +1405,9 @@ private fun UpcomingGameCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = myTeamName,
+                    TeamNameWithHomeLabel(
+                        teamName = myTeamName,
+                        isHomeTeam = isMyTeamHome,
                         style = AppFont.bodyLgMedium,
                         color = Color.White
                     )
@@ -1362,8 +1417,9 @@ private fun UpcomingGameCard(
                         color = Gray500,
                         modifier = Modifier.padding(horizontal = AppSpacing.sm)
                     )
-                    Text(
-                        text = opponentTeamName,
+                    TeamNameWithHomeLabel(
+                        teamName = opponentTeamName,
+                        isHomeTeam = !isMyTeamHome,
                         style = AppFont.bodyLgMedium,
                         color = Color.White
                     )
@@ -1375,6 +1431,253 @@ private fun UpcomingGameCard(
                 style = AppFont.micro,
                 color = Gray500,
                 modifier = Modifier.padding(top = AppSpacing.sm)
+            )
+
+            if (game.status == GameStatus.SCHEDULED && game.weather != null) {
+                Spacer(modifier = Modifier.height(AppSpacing.md))
+                WeatherSummaryRow(
+                    weather = game.weather,
+                    onClick = null
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeamNameWithHomeLabel(
+    teamName: String,
+    isHomeTeam: Boolean,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = teamName,
+            style = style,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (isHomeTeam) {
+            Spacer(modifier = Modifier.width(AppSpacing.xxs))
+            Text(
+                text = "(홈)",
+                style = AppFont.microBold,
+                color = Gray400,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeatherSummaryRow(
+    weather: GameWeatherSummary,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val clickableModifier = if (onClick != null) {
+        Modifier.clickable(onClick = onClick)
+    } else {
+        Modifier
+    }
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = AppShapes.md,
+        color = Blue500.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, Blue500.copy(alpha = 0.22f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(clickableModifier)
+                .padding(horizontal = AppSpacing.md, vertical = AppSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(Blue500.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = null,
+                    tint = Blue400,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(AppSpacing.sm))
+            Text(
+                text = weather.displayText,
+                style = AppFont.microBold,
+                color = Blue200,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            if (onClick != null) {
+                Spacer(modifier = Modifier.width(AppSpacing.sm))
+                Text(
+                    text = "시간별",
+                    style = AppFont.tinyBold,
+                    color = Blue400,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeatherHourlySheetContent(
+    game: Game?,
+    forecast: BackendGamesRepository.GameWeatherHourly?,
+    loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = "${forecast?.stadiumName ?: stadiumNameForHomeTeam(game?.homeTeamId ?: Team.NONE)} 오늘 날씨",
+            style = AppFont.h4Bold,
+            color = Color.White
+        )
+        Text(
+            text = "경기 시작 시간과 가장 가까운 예보를 강조했어요.",
+            style = AppFont.body,
+            color = Gray400,
+            modifier = Modifier.padding(top = AppSpacing.xs)
+        )
+
+        Spacer(modifier = Modifier.height(AppSpacing.lg))
+
+        when {
+            loading -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = AppSpacing.xxxl),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(color = Yellow500)
+                    Text(
+                        text = "시간별 예보를 불러오는 중입니다",
+                        style = AppFont.body,
+                        color = Gray400,
+                        modifier = Modifier.padding(top = AppSpacing.md)
+                    )
+                }
+            }
+
+            error != null -> {
+                WeatherSheetMessage(
+                    title = error,
+                    actionLabel = "다시 시도",
+                    onAction = onRetry
+                )
+            }
+
+            forecast == null || forecast.items.isEmpty() -> {
+                WeatherSheetMessage(
+                    title = "표시할 시간별 예보가 없습니다",
+                    actionLabel = "새로고침",
+                    onAction = onRetry
+                )
+            }
+
+            else -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+                ) {
+                    items(
+                        items = forecast.items,
+                        key = { "${it.forecastDate}:${it.forecastTime}" }
+                    ) { item ->
+                        WeatherHourlyRow(item = item)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeatherSheetMessage(
+    title: String,
+    actionLabel: String,
+    onAction: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = AppSpacing.xxxl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.md)
+    ) {
+        Text(
+            text = title,
+            style = AppFont.body,
+            color = Gray400,
+            textAlign = TextAlign.Center
+        )
+        TextButton(onClick = onAction) {
+            Text(
+                text = actionLabel,
+                style = AppFont.captionBold,
+                color = Yellow400
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeatherHourlyRow(item: BackendGamesRepository.GameWeatherHourlyItem) {
+    val background = if (item.isGameStartForecast) Yellow500.copy(alpha = 0.12f) else Gray900
+    val borderColor = if (item.isGameStartForecast) Yellow500.copy(alpha = 0.42f) else Gray800
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.md,
+        color = background,
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(AppSpacing.md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.width(58.dp)) {
+                Text(
+                    text = item.timeLabel,
+                    style = AppFont.bodyLgMedium,
+                    color = Color.White
+                )
+                if (item.isGameStartForecast) {
+                    Text(
+                        text = "경기 시작",
+                        style = AppFont.tinyBold,
+                        color = Yellow400,
+                        modifier = Modifier.padding(top = AppSpacing.xxs)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(AppSpacing.md))
+            Text(
+                text = weatherHourlyDetailText(item),
+                style = AppFont.body,
+                color = if (item.isGameStartForecast) Gray100 else Gray300,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -1546,6 +1849,7 @@ private fun GameCard(
     captureUpdateHighlights: Boolean,
     onUpdateHighlightBoundsChanged: (UpdateHighlightStep, Rect) -> Unit,
     onClick: () -> Unit,
+    onWeatherClick: () -> Unit,
     onWatchSyncClick: () -> Unit,
     onLiveScoreClick: () -> Unit
 ) {
@@ -1756,7 +2060,8 @@ private fun GameCard(
                             pitcher = game.awayPitcher,
                             isScheduled = isNotStartedStatus(game.status),
                             isWinner = game.status == GameStatus.FINISHED && game.awayScore > game.homeScore,
-                            isMyTeam = game.isMyTeam
+                            isMyTeam = game.isMyTeam,
+                            isHomeTeam = false
                         )
 
                         TeamScoreRow(
@@ -1766,7 +2071,16 @@ private fun GameCard(
                             pitcher = game.homePitcher,
                             isScheduled = isNotStartedStatus(game.status),
                             isWinner = game.status == GameStatus.FINISHED && game.homeScore > game.awayScore,
-                            isMyTeam = game.isMyTeam
+                            isMyTeam = game.isMyTeam,
+                            isHomeTeam = true
+                        )
+                    }
+
+                    if (game.status == GameStatus.SCHEDULED && game.weather != null) {
+                        Spacer(modifier = Modifier.height(AppSpacing.md))
+                        WeatherSummaryRow(
+                            weather = game.weather,
+                            onClick = onWeatherClick
                         )
                     }
                 }
@@ -1921,7 +2235,8 @@ private fun TeamScoreRow(
     pitcher: Pitcher?,
     isScheduled: Boolean,
     isWinner: Boolean,
-    isMyTeam: Boolean
+    isMyTeam: Boolean,
+    isHomeTeam: Boolean
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1935,8 +2250,9 @@ private fun TeamScoreRow(
             TeamLogo(team = team, size = 56.dp)
             Spacer(modifier = Modifier.width(AppSpacing.md))
             Column {
-                Text(
-                    text = teamName,
+                TeamNameWithHomeLabel(
+                    teamName = teamName,
+                    isHomeTeam = isHomeTeam,
                     style = if (isMyTeam) AppFont.h5Bold else AppFont.bodyLgMedium,
                     color = if (isWinner) Color.White else if (isScheduled) Color.White else Gray500
                 )
@@ -1963,6 +2279,14 @@ private fun formatUpcomingDateTime(gameDate: LocalDate, rawTime: String?): Strin
     val dateText = gameDate.format(DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN))
     val timeText = if (rawTime.isNullOrBlank()) "--:--" else rawTime
     return "$dateText $timeText"
+}
+
+private fun weatherHourlyDetailText(item: BackendGamesRepository.GameWeatherHourlyItem): String {
+    val parts = mutableListOf(item.condition.ifBlank { "예보" })
+    item.temperatureC?.let { parts.add("${it}°") }
+    item.precipitationProbability?.let { parts.add("강수 ${it}%") }
+    item.windSpeedMps?.let { parts.add("풍속 ${String.format(Locale.US, "%.1f", it)}m/s") }
+    return parts.joinToString(" · ")
 }
 
 private fun teamRecordLine(item: BackendGamesRepository.TeamRecordStanding): String {

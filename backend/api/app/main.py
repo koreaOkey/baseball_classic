@@ -55,6 +55,7 @@ from .schemas import (
     GameStateOut,
     GameStatus,
     GameSummaryOut,
+    GameWeatherHourlyOut,
     IngestResult,
     TeamRecordIngestResult,
     TeamRecordOut,
@@ -73,6 +74,7 @@ from .services import (
     upsert_team_records,
     upsert_game_from_snapshot,
 )
+from .weather import build_hourly_weather, build_weather_summary
 from .workers.cheer_validator import validate_pending_cheer_events
 
 
@@ -449,7 +451,7 @@ def _list_games_payload(
 
     with SessionLocal() as db:
         games = db.execute(query).scalars().all()
-        return [to_game_summary(game).model_dump(mode="json") for game in games]
+        return [_game_summary_payload(game) for game in games]
 
 
 @app.get("/games/{game_id}", response_model=GameSummaryOut)
@@ -470,7 +472,50 @@ def _get_game_payload(game_id: str) -> dict[str, Any]:
         game = db.get(Game, game_id)
         if game is None:
             raise HTTPException(status_code=404, detail="game not found")
-        return to_game_summary(game).model_dump(mode="json")
+        return _game_summary_payload(game)
+
+
+def _game_summary_payload(game: Game) -> dict[str, Any]:
+    payload = to_game_summary(game).model_dump(mode="json")
+    try:
+        weather = build_weather_summary(
+            game,
+            service_key=settings.weather_service_key,
+            api_base_url=settings.weather_api_base_url,
+        )
+    except Exception:
+        logger.warning("weather summary unavailable: game_id=%s", game.id, exc_info=True)
+        weather = None
+    payload["weather"] = weather
+    return payload
+
+
+@app.get("/games/{game_id}/weather", response_model=GameWeatherHourlyOut)
+async def get_game_weather(
+    game_id: str,
+    weather_date: date | None = Query(default=None, alias="date"),
+) -> dict[str, Any]:
+    with SessionLocal() as db:
+        game = db.get(Game, game_id)
+        if game is None:
+            raise HTTPException(status_code=404, detail="game not found")
+        target_date = weather_date or date.today()
+
+        try:
+            payload = await asyncio.to_thread(
+                build_hourly_weather,
+                game,
+                service_key=settings.weather_service_key,
+                api_base_url=settings.weather_api_base_url,
+                target_date=target_date,
+            )
+        except Exception:
+            logger.warning("hourly weather unavailable: game_id=%s", game_id, exc_info=True)
+            payload = None
+
+    if payload is None:
+        raise HTTPException(status_code=503, detail="weather unavailable")
+    return payload
 
 
 @app.get("/games/{game_id}/state", response_model=GameStateOut)

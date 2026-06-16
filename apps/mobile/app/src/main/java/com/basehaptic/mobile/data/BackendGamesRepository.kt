@@ -4,6 +4,7 @@ import android.content.Context
 import com.basehaptic.mobile.BuildConfig
 import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
+import com.basehaptic.mobile.data.model.GameWeatherSummary
 import com.basehaptic.mobile.data.model.Team
 import java.net.HttpURLConnection
 import java.net.URL
@@ -156,6 +157,27 @@ object BackendGamesRepository {
     data class UpcomingGameSchedule(
         val gameDate: LocalDate,
         val game: Game
+    )
+
+    data class GameWeatherHourly(
+        val gameId: String,
+        val stadiumCode: String,
+        val stadiumName: String,
+        val stadiumShortName: String,
+        val gameStartTime: String?,
+        val items: List<GameWeatherHourlyItem>
+    )
+
+    data class GameWeatherHourlyItem(
+        val forecastDate: String,
+        val forecastTime: String,
+        val timeLabel: String,
+        val condition: String,
+        val temperatureC: Int?,
+        val precipitationProbability: Int?,
+        val precipitationType: String?,
+        val windSpeedMps: Double?,
+        val isGameStartForecast: Boolean
     )
 
     data class AppNotice(
@@ -397,6 +419,13 @@ object BackendGamesRepository {
             .filter { it.gameDate.isAfter(now) && it.game.status == GameStatus.SCHEDULED }
             .take(normalizedMaxItems)
             .toList()
+    }
+
+    fun fetchGameHourlyWeather(gameId: String, targetDate: LocalDate = LocalDate.now()): GameWeatherHourly? {
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games/$gameId/weather?date=$targetDate"
+        return getJson(endpoint) { body ->
+            JSONObject(body).toGameWeatherHourly()
+        }
     }
 
     fun fetchMyTeamScheduleGames(
@@ -854,7 +883,8 @@ object BackendGamesRepository {
             time = startTime,
             isMyTeam = selectedTeam != Team.NONE && (homeTeamId == selectedTeam || awayTeamId == selectedTeam),
             homePitcher = null,
-            awayPitcher = null
+            awayPitcher = null,
+            weather = optJSONObject("weather")?.toGameWeatherSummary()
         )
     }
 
@@ -1006,6 +1036,7 @@ object BackendGamesRepository {
                         put("status", game.status.name)
                         put("time", game.time ?: JSONObject.NULL)
                         put("isMyTeam", game.isMyTeam)
+                        put("weather", game.weather?.toJson() ?: JSONObject.NULL)
                     }
                 )
             }
@@ -1033,7 +1064,8 @@ object BackendGamesRepository {
                     time = row.optString("time").ifBlank { null },
                     isMyTeam = row.optBoolean("isMyTeam", false),
                     homePitcher = null,
-                    awayPitcher = null
+                    awayPitcher = null,
+                    weather = row.optJSONObject("weather")?.toGameWeatherSummary()
                 )
                 items.add(UpcomingGameSchedule(gameDate = gameDate, game = game))
             }
@@ -1045,6 +1077,71 @@ object BackendGamesRepository {
 
     private fun parseTeamEnum(raw: String): Team {
         return runCatching { Team.valueOf(raw) }.getOrDefault(Team.NONE)
+    }
+
+    private fun JSONObject.toGameWeatherSummary(): GameWeatherSummary {
+        return GameWeatherSummary(
+            stadiumCode = optString("stadiumCode"),
+            stadiumName = optString("stadiumName"),
+            stadiumShortName = optString("stadiumShortName").ifBlank { optString("stadiumName") },
+            forecastDate = optString("forecastDate").ifBlank { null },
+            forecastTime = optString("forecastTime").ifBlank { null },
+            forecastTimeLabel = optString("forecastTimeLabel").ifBlank { null },
+            condition = optString("condition"),
+            temperatureC = optNullableInt("temperatureC"),
+            precipitationProbability = optNullableInt("precipitationProbability"),
+            precipitationType = optString("precipitationType").ifBlank { null },
+            windSpeedMps = optNullableDouble("windSpeedMps"),
+            isIndoor = optBoolean("isIndoor", false),
+            displayText = optString("displayText")
+        )
+    }
+
+    private fun GameWeatherSummary.toJson(): JSONObject {
+        return JSONObject().apply {
+            put("stadiumCode", stadiumCode)
+            put("stadiumName", stadiumName)
+            put("stadiumShortName", stadiumShortName)
+            put("forecastDate", forecastDate ?: JSONObject.NULL)
+            put("forecastTime", forecastTime ?: JSONObject.NULL)
+            put("forecastTimeLabel", forecastTimeLabel ?: JSONObject.NULL)
+            put("condition", condition)
+            put("temperatureC", temperatureC ?: JSONObject.NULL)
+            put("precipitationProbability", precipitationProbability ?: JSONObject.NULL)
+            put("precipitationType", precipitationType ?: JSONObject.NULL)
+            put("windSpeedMps", windSpeedMps ?: JSONObject.NULL)
+            put("isIndoor", isIndoor)
+            put("displayText", displayText)
+        }
+    }
+
+    private fun JSONObject.toGameWeatherHourly(): GameWeatherHourly {
+        val rawItems = optJSONArray("items") ?: JSONArray()
+        val parsedItems = ArrayList<GameWeatherHourlyItem>(rawItems.length())
+        for (index in 0 until rawItems.length()) {
+            val item = rawItems.optJSONObject(index) ?: continue
+            parsedItems.add(
+                GameWeatherHourlyItem(
+                    forecastDate = item.optString("forecastDate"),
+                    forecastTime = item.optString("forecastTime"),
+                    timeLabel = item.optString("timeLabel"),
+                    condition = item.optString("condition"),
+                    temperatureC = item.optNullableInt("temperatureC"),
+                    precipitationProbability = item.optNullableInt("precipitationProbability"),
+                    precipitationType = item.optString("precipitationType").ifBlank { null },
+                    windSpeedMps = item.optNullableDouble("windSpeedMps"),
+                    isGameStartForecast = item.optBoolean("isGameStartForecast", false)
+                )
+            )
+        }
+        return GameWeatherHourly(
+            gameId = optString("gameId"),
+            stadiumCode = optString("stadiumCode"),
+            stadiumName = optString("stadiumName"),
+            stadiumShortName = optString("stadiumShortName").ifBlank { optString("stadiumName") },
+            gameStartTime = optString("gameStartTime").ifBlank { null },
+            items = parsedItems
+        )
     }
 
     private fun gameDateFromId(gameId: String): LocalDate? {
