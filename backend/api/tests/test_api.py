@@ -1,5 +1,6 @@
 import os
 import sys
+import asyncio
 from pathlib import Path
 from unittest.mock import patch
 
@@ -1739,6 +1740,74 @@ def test_team_display_name_style_resolves_team_mascot_and_default() -> None:
     assert main_module._team_display_name("DOOSAN", "MASCOT") == "베어스"
     assert main_module._team_display_name("두산 베어스", None) == "두산"
     assert main_module._team_display_name("UNKNOWN", "MASCOT") == "UNKNOWN"
+
+
+def test_game_start_team_match_codes_include_korean_aliases() -> None:
+    assert {"DOOSAN", "베어스"}.issubset(main_module._team_codes_for_match("두산"))
+    assert {"LOTTE", "자이언츠"}.issubset(main_module._team_codes_for_match("롯데"))
+    assert {"SAMSUNG", "라이온즈"}.issubset(main_module._team_codes_for_match("삼성 라이온즈"))
+
+
+def test_game_start_push_groups_korean_home_away_against_code_subscriptions() -> None:
+    captured: list[dict[str, object]] = []
+
+    def fake_load_team_subscriptions(my_teams: set[str]) -> list[tuple[str, str, str, bool, str]]:
+        assert {"DOOSAN", "LOTTE"}.issubset(my_teams)
+        return [
+            ("android-doosan-token", "DOOSAN", "android", False, "MASCOT"),
+            ("android-lotte-token", "LOTTE", "android", False, "MASCOT"),
+        ]
+
+    async def fake_fcm(tokens: list[str], *, title: str, body: str, data: dict[str, str] | None = None) -> list[str]:
+        captured.append({"tokens": tokens, "title": title, "body": body, "data": data})
+        return []
+
+    with patch.object(main_module, "_load_team_subscriptions", side_effect=fake_load_team_subscriptions), \
+        patch.object(main_module, "send_fcm_visible_push_to_tokens", side_effect=fake_fcm):
+        asyncio.run(main_module._send_game_start_notification("20260616LTOB02026", "두산", "롯데"))
+
+    assert len(captured) == 2
+    assert {tuple(item["tokens"]) for item in captured} == {
+        ("android-doosan-token",),
+        ("android-lotte-token",),
+    }
+    assert {item["title"] for item in captured} == {"[자이언츠] vs [베어스]"}
+    assert {item["body"] for item in captured} == {
+        "베어스 경기가 시작되었습니다!",
+        "자이언츠 경기가 시작되었습니다!",
+    }
+
+
+def test_first_live_snapshot_schedules_game_start_push() -> None:
+    from app.db import init_db
+
+    init_db()
+    calls: list[tuple[str, str, str]] = []
+
+    async def fake_game_start_push(game_id: str, home_team: str, away_team: str) -> None:
+        calls.append((game_id, home_team, away_team))
+
+    payload = sample_snapshot()
+    payload["homeTeam"] = "두산"
+    payload["awayTeam"] = "롯데"
+    payload["status"] = "LIVE"
+    payload["events"] = []
+
+    with patch.object(main_module, "_send_game_start_notification", side_effect=fake_game_start_push):
+        with TestClient(app) as client:
+            response = client.post(
+                "/internal/crawler/games/20260616START01/snapshot",
+                headers={"X-API-Key": "test-key"},
+                json=payload,
+            )
+
+    assert response.status_code == 200
+    assert calls == [("20260616START01", "두산", "롯데")]
+
+    with SessionLocal() as db:
+        game = db.query(Game).filter_by(id="20260616START01").one()
+        assert game.status == "LIVE"
+        assert game.live_started_at is not None
 
 
 def test_push_token_registration_stores_display_name_style_with_default() -> None:

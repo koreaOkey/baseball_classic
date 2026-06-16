@@ -13,6 +13,12 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - WHEN 인프라를 구성하면
 - THEN Backend는 Railway, DB는 Supabase(Session Pooler), Redis는 Railway Redis 서비스를 사용한다
 
+#### Scenario: 운영 백엔드 URL
+- GIVEN 모바일 또는 워치 Release 빌드가 백엔드 URL을 구성할 때
+- WHEN 현재 운영 백엔드 주소를 선택하면
+- THEN 승격된 스테이징 서버 `https://baseballclassic-production-4796.up.railway.app`를 사용한다
+- AND 기존 `https://baseballclassic-production.up.railway.app`는 새 릴리스의 운영 백엔드로 사용하지 않는다
+
 #### Scenario: DB 접근 제한
 - GIVEN DB에 접근이 필요할 때
 - WHEN 클라이언트 앱에서 직접 접근을 시도하면
@@ -45,6 +51,7 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - WHEN 모바일 또는 워치 앱을 사용자에게 배포하면
 - THEN 해당 릴리스 빌드는 승격된 스테이징 Backend와 Supabase 프로젝트를 운영 대상처럼 사용할 수 있다
 - AND 기존 운영 서버를 완전히 내리기 전까지 사용자 업데이트 전환 상태를 모니터링한다
+- AND 승격 이후 새 릴리스의 운영 백엔드 URL은 `https://baseballclassic-production-4796.up.railway.app`로 기록한다
 - AND 전환 완료 후 문서와 빌드 설정의 운영 명칭을 실제 운영 리소스 기준으로 정리한다
 
 ### Requirement: Cloudflare 터널 (외부 디바이스 테스트)
@@ -146,7 +153,7 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - WHEN 앱 번들이 백엔드 URL 설정을 읽으면
 - THEN 스테이징 백엔드 URL이 제공된 경우 해당 URL을 사용한다
 - AND 스테이징 URL이 제공되지 않으면 로컬 백엔드 URL로 폴백한다
-- AND Release 빌드는 운영 백엔드 URL을 사용한다
+- AND Release 빌드는 승격된 스테이징 서버를 운영 백엔드 URL로 사용한다
 
 #### Scenario: iOS Debug 스테이징 Supabase 분리
 - GIVEN iOS Debug 빌드를 실행할 때
@@ -158,4 +165,5 @@ BaseHaptic 서비스의 인프라 구성, 배포, 로컬 개발 환경, 운영 �
 - GIVEN Android Debug 빌드를 실행할 때
 - WHEN 앱이 백엔드와 Supabase 설정을 읽으면
 - THEN 스테이징 백엔드 URL과 스테이징 Supabase 프로젝트를 사용한다
-- AND Release 빌드는 운영 백엔드 URL과 운영 Supabase 프로젝트를 사용한다
+- AND Release 빌드는 승격된 스테이징 서버를 운영 백엔드 URL로 사용한다
+- AND Release 빌드는 운영 Supabase 프로젝트를 사용한다

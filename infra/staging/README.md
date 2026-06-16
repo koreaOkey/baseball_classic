@@ -1,6 +1,7 @@
 # Staging Infrastructure
 
-Staging mirrors production with separate Railway and Supabase resources. Do not copy
+Staging now serves as the promoted production backend for released apps. It still
+mirrors production with separate Railway and Supabase resources. Do not copy
 `backend/api` or `crawler` into staging-specific source folders. Deploy the same code
 with staging-only variables.
 
@@ -9,11 +10,15 @@ Naver relay
   -> Railway staging crawler
   -> Railway staging backend
   -> staging Supabase + staging Railway Redis
-  -> iOS/watchOS Debug build
+  -> iOS/watchOS/Android Debug and Release builds
 ```
 
-Production keeps its own Railway services, Supabase project, Redis service, and
-Release app build settings.
+Promoted production backend URL for new releases:
+
+- `https://baseballclassic-production-4796.up.railway.app`
+
+The old Railway URL `https://baseballclassic-production.up.railway.app` is not the
+backend target for new Android/iOS/watch releases.
 
 ## 1. Supabase
 
@@ -48,13 +53,14 @@ Recommended services:
 - `crawler_staging`: deploys `crawler`
 - `Redis-GGli`: Railway Redis for staging fanout
 
-Current active staging backend public URL:
+Current active promoted backend public URL:
 
 - Railway project: `baseball-classic-staging`
 - Railway project id: `7eafbc63-5b94-4943-a323-f6228033e555`
 - Railway environment: `production` (Railway default environment inside the
   staging project; isolated from the real production project)
 - backend URL: `https://baseballclassic-production-4796.up.railway.app`
+- release status: promoted production backend for Android/iOS/watch releases
 
 The production Railway project `overflowing-solace` must not contain staging
 services or staging variables.
@@ -93,7 +99,7 @@ Sensitive variables such as DB password, service role key, and crawler API key
 must be entered in the Railway dashboard or another approved secret manager. Do
 not commit them to this repository.
 
-## 3. iOS/watchOS/Android Debug
+## 3. iOS/watchOS/Android Build Targets
 
 iOS/watchOS Debug builds read staging backend settings through Xcode build settings:
 
@@ -107,9 +113,9 @@ xcodebuild -project ios/BaseHaptic.xcodeproj \
   BASEHAPTIC_STAGING_SUPABASE_ANON_KEY=<staging-anon-key>
 ```
 
-If these values are not provided, the iOS/watchOS app falls back to
-`http://localhost:8080`. Release builds keep the production Railway URL and
-production Supabase project.
+If these values are not provided, the iOS/watchOS Debug app falls back to
+`http://localhost:8080`. Release builds use the promoted staging backend URL
+`https://baseballclassic-production-4796.up.railway.app`.
 
 Android Debug builds use the staging Railway backend and staging Supabase project
 through Gradle `debug` build type defaults. Override them through environment

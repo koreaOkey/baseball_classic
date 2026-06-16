@@ -12,9 +12,7 @@ val stagingBackendBaseUrl =
     System.getenv("BASEHAPTIC_STAGING_BACKEND_BASE_URL")
         ?: "https://baseballclassic-production-4796.up.railway.app"
 
-val productionBackendBaseUrl =
-    System.getenv("BASEHAPTIC_PRODUCTION_BACKEND_BASE_URL")
-        ?: "https://baseballclassic-production.up.railway.app"
+val releaseBackendBaseUrl = stagingBackendBaseUrl
 
 val keystoreProperties = mutableMapOf<String, String>()
 rootProject.file("keystore.properties").let { file ->
@@ -43,8 +41,8 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
         targetSdk = 35
-        versionCode = 23
-        versionName = "1.1.4"
+        versionCode = 28
+        versionName = "1.1.6"
     }
 
     buildFeatures {
@@ -60,7 +58,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
-            buildConfigField("String", "BACKEND_BASE_URL", buildConfigString(productionBackendBaseUrl))
+            buildConfigField("String", "BACKEND_BASE_URL", buildConfigString(releaseBackendBaseUrl))
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -45,7 +45,8 @@ iOS(SwiftUI) 아이폰에서 실시간 야구 경기를 확인하고 Apple Watch
 - WHEN 앱이 경기 목록, 경기 상태, 이벤트, WebSocket URL을 구성하면
 - THEN 스테이징 백엔드 주소가 제공된 경우 해당 주소를 사용한다
 - AND 스테이징 백엔드 주소가 제공되지 않으면 로컬 테스트 백엔드 주소로 폴백한다
-- AND Release 빌드는 운영 백엔드 주소를 사용한다
+- AND Release 빌드는 승격된 스테이징 서버 `https://baseballclassic-production-4796.up.railway.app`를 운영 백엔드 주소로 사용한다
+- AND 스테이징 승격 운영 예외가 적용된 릴리스는 승격된 스테이징 백엔드 주소를 운영 대상처럼 사용할 수 있다
 
 #### Scenario: Debug 빌드 스테이징 Supabase 연동
 - GIVEN 개발자가 iOS Debug 빌드를 실행했을 때

@@ -22,10 +22,12 @@ uvicorn app.main:app --reload --port 8080
 - API 문서: `http://localhost:8080/docs`
 - 상세 구조/연동 가이드는 `../README.md` 참고
 
-## Staging iOS/watchOS Test Backend
+## Promoted Staging Backend
 
-Debug 빌드의 iOS 앱과 watchOS 앱은 Xcode build setting으로 staging Railway 백엔드를 바라보게 할 수 있습니다.
-Release 빌드는 운영 Railway URL을 사용합니다.
+현재 운영으로 승격된 백엔드 URL은 `https://baseballclassic-production-4796.up.railway.app`입니다.
+새 Android/iOS/watch Release 빌드는 기존 `https://baseballclassic-production.up.railway.app`가 아니라 이 승격된 staging 서버를 운영 백엔드로 사용합니다.
+
+Debug 빌드의 iOS 앱과 watchOS 앱은 Xcode build setting으로 같은 staging Railway 백엔드를 바라보게 할 수 있습니다.
 
 staging 인프라는 운영과 같은 형태로 구성하되, Railway/Supabase/Redis/API key는 모두 별도 리소스를 사용합니다.
 설정과 검증 절차는 `infra/staging/README.md`를 기준으로 합니다.
@@ -38,7 +40,7 @@ xcodebuild -project ios/BaseHaptic.xcodeproj -scheme BaseHaptic -configuration D
   BASEHAPTIC_STAGING_SUPABASE_ANON_KEY=<staging-anon-key>
 ```
 
-staging URL을 주입하지 않으면 앱은 로컬 백엔드(`http://localhost:8080`)로 폴백합니다. Supabase 설정은 Debug 빌드에서 staging 값을 주입하고, Release 빌드는 운영 Supabase 설정을 사용합니다.
+staging URL을 주입하지 않으면 Debug 앱은 로컬 백엔드(`http://localhost:8080`)로 폴백합니다. Supabase 설정은 Debug 빌드에서 staging 값을 주입하고, Release 빌드는 운영 Supabase 설정을 사용합니다.
 
 로컬 백엔드에 네이버 릴레이 형태의 테스트 경기를 한 번 주입하려면:
 

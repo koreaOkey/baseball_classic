@@ -6,7 +6,7 @@ enum WatchTokenRegistrar {
     #if DEBUG
     private static let defaultBaseURL = "https://baseballclassic-production-4796.up.railway.app"
     #else
-    private static let defaultBaseURL = "https://baseballclassic-production.up.railway.app"
+    private static let defaultBaseURL = "https://baseballclassic-production-4796.up.railway.app"
     #endif
 
     private static var baseURL: String {

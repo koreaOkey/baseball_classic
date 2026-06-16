@@ -30,8 +30,7 @@ val stagingBackendBaseUrlValue =
         ?: "https://baseballclassic-production-4796.up.railway.app"
 
 val releaseBackendBaseUrlValue =
-    configValue("productionBackendBaseUrl", "BASEHAPTIC_PRODUCTION_BACKEND_BASE_URL")
-        ?: "https://baseballclassic-production.up.railway.app"
+    stagingBackendBaseUrlValue
 
 fun isLocalBackendUrl(url: String): Boolean {
     val normalizedUrl = url.trim().lowercase()
@@ -46,7 +45,7 @@ gradle.taskGraph.whenReady {
     if (buildsRelease && isLocalBackendUrl(releaseBackendBaseUrlValue)) {
         throw GradleException(
             "Release builds must use a public backend URL, but releaseBackendBaseUrl is '$releaseBackendBaseUrlValue'. " +
-                "Set BASEHAPTIC_PRODUCTION_BACKEND_BASE_URL to the production backend URL."
+                "Set BASEHAPTIC_STAGING_BACKEND_BASE_URL to the promoted staging backend URL."
         )
     }
 }
@@ -90,8 +89,8 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.1.4"
+        versionCode = 27
+        versionName = "1.1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
