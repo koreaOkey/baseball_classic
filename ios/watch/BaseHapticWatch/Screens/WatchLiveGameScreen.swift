@@ -3,8 +3,12 @@ import SwiftUI
 struct WatchLiveGameScreen: View {
     let gameData: GameData
     @Environment(\.watchTeamTheme) private var watchTheme
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
 
     private var uiProfile: WatchUiProfile { WatchUiProfile.current }
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
 
     private var isGameFinished: Bool {
         gameData.inning.contains("경기 종료") || gameData.inning.lowercased().contains("finished")
@@ -27,7 +31,12 @@ struct WatchLiveGameScreen: View {
             // Score Card
             HStack(alignment: .center) {
                 // Away team
-                ScoreSide(team: gameData.awayTeam, score: gameData.awayScore, uiProfile: uiProfile)
+                ScoreSide(
+                    team: gameData.awayTeam,
+                    score: gameData.awayScore,
+                    teamDisplayNameStyle: teamDisplayNameStyle,
+                    uiProfile: uiProfile
+                )
 
                 // Inning
                 VStack(spacing: 2) {
@@ -51,7 +60,12 @@ struct WatchLiveGameScreen: View {
                 .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
 
                 // Home team
-                ScoreSide(team: gameData.homeTeam, score: gameData.homeScore, uiProfile: uiProfile)
+                ScoreSide(
+                    team: gameData.homeTeam,
+                    score: gameData.homeScore,
+                    teamDisplayNameStyle: teamDisplayNameStyle,
+                    uiProfile: uiProfile
+                )
             }
             .padding(.horizontal, uiProfile.horizontalPadding)
             .padding(.top, uiProfile.topPadding)
@@ -121,6 +135,7 @@ struct WatchLiveGameScreen: View {
 private struct ScoreSide: View {
     let team: String
     let score: Int
+    let teamDisplayNameStyle: TeamDisplayNameStyle
     let uiProfile: WatchUiProfile
 
     var body: some View {
@@ -131,7 +146,7 @@ private struct ScoreSide: View {
                 .minimumScaleFactor(0.7)
                 .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
 
-            Text(team.uppercased())
+            Text(WatchConnectivityManager.displayTeamName(team, style: teamDisplayNameStyle))
                 .font(.system(size: uiProfile.teamNameSize, weight: .bold))
                 .foregroundColor(.white.opacity(0.76))
                 .lineLimit(1)

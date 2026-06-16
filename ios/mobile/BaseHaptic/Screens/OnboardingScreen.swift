@@ -2,15 +2,18 @@ import SwiftUI
 import AuthenticationServices
 
 struct OnboardingScreen: View {
-    let onComplete: (Team) -> Void
+    let onComplete: (Team, TeamDisplayNameStyle) -> Void
     var initialSelectedTeam: Team = .none
+    var initialDisplayNameStyle: TeamDisplayNameStyle = .team
     var authState: AuthState = .loggedOut
     var onSignInWithKakao: () -> Void = {}
     var onSignInWithApple: (ASAuthorization) -> Void = { _ in }
 
     @State private var selectedTeam: Team = .none
+    @State private var displayNameStyle: TeamDisplayNameStyle = .team
     @State private var step = 1
     @State private var didAutoComplete = false
+    @State private var showDisplayNameDialog = false
 
     var body: some View {
         ZStack {
@@ -41,11 +44,29 @@ struct OnboardingScreen: View {
             if selectedTeam == .none, initialSelectedTeam != .none {
                 selectedTeam = initialSelectedTeam
             }
+            displayNameStyle = initialDisplayNameStyle
         }
         .onChange(of: authState) { _, newState in
             if case .loggedIn = newState, step == 3, !didAutoComplete {
                 didAutoComplete = true
-                onComplete(selectedTeam)
+                onComplete(selectedTeam, displayNameStyle)
+            }
+        }
+        .overlay {
+            if showDisplayNameDialog && selectedTeam != .none {
+                TeamDisplayNameStyleDialog(
+                    team: selectedTeam,
+                    selectedStyle: $displayNameStyle,
+                    onConfirm: {
+                        showDisplayNameDialog = false
+                        step = 2
+                    },
+                    onDismiss: {
+                        displayNameStyle = .team
+                        showDisplayNameDialog = false
+                        step = 2
+                    }
+                )
             }
         }
     }
@@ -87,7 +108,7 @@ struct OnboardingScreen: View {
                 }
                 .frame(maxHeight: 400)
 
-                Button(action: { step = 2 }) {
+                Button(action: { showDisplayNameDialog = true }) {
                     Text("계속하기")
                         .font(AppFont.bodyLgMedium)
                         .foregroundColor(.white)
@@ -160,7 +181,7 @@ struct OnboardingScreen: View {
                     .foregroundColor(Color(red: 76/255, green: 175/255, blue: 80/255))
                     .padding(.bottom, AppSpacing.lg)
 
-                Button(action: { onComplete(selectedTeam) }) {
+                Button(action: { onComplete(selectedTeam, displayNameStyle) }) {
                     Text("시작하기")
                         .font(AppFont.bodyLgMedium)
                         .foregroundColor(.white)
@@ -203,7 +224,7 @@ struct OnboardingScreen: View {
                 .padding(.top, AppSpacing.sm)
 
                 // 건너뛰기
-                Button(action: { onComplete(selectedTeam) }) {
+                Button(action: { onComplete(selectedTeam, displayNameStyle) }) {
                     Text("건너뛰기")
                         .font(AppFont.body)
                         .foregroundColor(AppColors.gray400)
@@ -220,6 +241,111 @@ struct OnboardingScreen: View {
 }
 
 // MARK: - Subviews
+struct TeamDisplayNameStyleDialog: View {
+    let team: Team
+    @Binding var selectedStyle: TeamDisplayNameStyle
+    let onConfirm: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.62)
+                .ignoresSafeArea()
+
+            VStack(spacing: AppSpacing.lg) {
+                TeamLogo(team: team, size: 72)
+
+                VStack(spacing: AppSpacing.xs) {
+                    Text("팀 이름을 어떻게 표시할까요?")
+                        .font(AppFont.h4Bold)
+                        .foregroundColor(.white)
+                    Text("앱과 워치에서 같은 방식으로 보여드릴게요.")
+                        .font(AppFont.body)
+                        .foregroundColor(AppColors.gray400)
+                        .multilineTextAlignment(.center)
+                }
+
+                VStack(spacing: AppSpacing.sm) {
+                    TeamDisplayNameOption(
+                        team: team,
+                        title: team.clubName,
+                        subtitle: "팀명으로 보기",
+                        isSelected: selectedStyle == .team
+                    ) {
+                        selectedStyle = .team
+                    }
+
+                    TeamDisplayNameOption(
+                        team: team,
+                        title: team.teamName,
+                        subtitle: "마스코트명으로 보기",
+                        isSelected: selectedStyle == .mascot
+                    ) {
+                        selectedStyle = .mascot
+                    }
+                }
+
+                HStack(spacing: AppSpacing.sm) {
+                    Button(action: onDismiss) {
+                        Text("팀명으로 시작")
+                            .font(AppFont.bodyMedium)
+                            .foregroundColor(AppColors.gray300)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(AppColors.gray800)
+                            .cornerRadius(AppRadius.md)
+                    }
+
+                    Button(action: onConfirm) {
+                        Text("선택 완료")
+                            .font(AppFont.bodyLgMedium)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(team.color)
+                            .cornerRadius(AppRadius.md)
+                    }
+                }
+            }
+            .padding(AppSpacing.xxl)
+            .background(AppColors.gray900)
+            .cornerRadius(AppRadius.lg)
+            .padding(.horizontal, AppSpacing.xxl)
+        }
+    }
+}
+
+private struct TeamDisplayNameOption: View {
+    let team: Team
+    let title: String
+    let subtitle: String
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: AppSpacing.md) {
+                TeamLogo(team: team, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(AppFont.bodyLgBold)
+                        .foregroundColor(.white)
+                    Text(subtitle)
+                        .font(AppFont.body)
+                        .foregroundColor(AppColors.gray400)
+                }
+                Spacer()
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(AppFont.h4)
+                    .foregroundColor(isSelected ? team.color : AppColors.gray500)
+            }
+            .padding(AppSpacing.lg)
+            .background(isSelected ? team.color.opacity(0.22) : AppColors.gray800.opacity(0.8))
+            .cornerRadius(AppRadius.md)
+        }
+    }
+}
+
 private struct TeamSelectionItem: View {
     let team: Team
     let isSelected: Bool

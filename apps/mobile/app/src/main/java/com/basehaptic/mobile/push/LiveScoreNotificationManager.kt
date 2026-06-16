@@ -13,12 +13,14 @@ import com.basehaptic.mobile.data.model.EventFilterGate
 import com.basehaptic.mobile.data.model.EventNotificationChannel
 import com.basehaptic.mobile.data.BackendGamesRepository.LiveGameState
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 
 object LiveScoreNotificationManager {
     const val KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED = "lock_screen_live_score_enabled"
 
     private const val NOTIFICATION_ID = 1002
     private const val PREFS_NAME = "basehaptic_user_prefs"
+    private const val KEY_TEAM_DISPLAY_NAME_STYLE = "team_display_name_style"
 
     fun isLockScreenCardEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -39,8 +41,9 @@ object LiveScoreNotificationManager {
 
         NotificationChannels.ensureCreated(context)
 
-        val awayName = displayTeamName(state.awayTeamId, state.awayTeam)
-        val homeName = displayTeamName(state.homeTeamId, state.homeTeam)
+        val displayNameStyle = loadDisplayNameStyle(context)
+        val awayName = displayTeamName(state.awayTeamId, state.awayTeam, displayNameStyle)
+        val homeName = displayTeamName(state.homeTeamId, state.homeTeam, displayNameStyle)
         val title = "$awayName ${state.awayScore} : ${state.homeScore} $homeName"
         val statusText = currentAttackLabel(state, awayName, homeName)
         val basesText = baseText(state)
@@ -224,8 +227,15 @@ object LiveScoreNotificationManager {
         )
     }
 
-    private fun displayTeamName(team: Team, fallback: String): String {
-        return team.takeIf { it != Team.NONE }?.teamName?.takeIf { it.isNotBlank() }
+    private fun loadDisplayNameStyle(context: Context): TeamDisplayNameStyle {
+        return TeamDisplayNameStyle.fromString(
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_TEAM_DISPLAY_NAME_STYLE, null)
+        )
+    }
+
+    private fun displayTeamName(team: Team, fallback: String, style: TeamDisplayNameStyle): String {
+        return team.takeIf { it != Team.NONE }?.displayName(style)?.takeIf { it.isNotBlank() }
             ?: fallback.takeIf { it.isNotBlank() }
             ?: "-"
     }

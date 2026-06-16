@@ -50,6 +50,7 @@ import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.EventFilterOption
 import com.basehaptic.mobile.data.model.EventNotificationChannel
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.components.WatchInstallCard
 import com.basehaptic.mobile.wear.WatchCompanionStatus
@@ -72,7 +73,9 @@ private const val SHOW_STADIUM_CHEER_TOGGLE = false
 @Composable
 fun SettingsScreen(
     selectedTeam: Team,
+    teamDisplayNameStyle: TeamDisplayNameStyle = TeamDisplayNameStyle.TEAM,
     onChangeTeam: (Team) -> Unit,
+    onChangeTeamDisplayNameStyle: (TeamDisplayNameStyle) -> Unit = {},
     onOpenWatchTest: () -> Unit,
     authState: AuthState = AuthState.LoggedOut,
     onSignInWithKakao: () -> Unit = {},
@@ -81,6 +84,7 @@ fun SettingsScreen(
 ) {
     val teamTheme = LocalTeamTheme.current
     var showTeamPicker by remember { mutableStateOf(false) }
+    var showTeamDisplayNameDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var isDeletingAccount by remember { mutableStateOf(false) }
     var manuallyOpenedReleaseNote by remember { mutableStateOf<com.basehaptic.mobile.data.model.ReleaseNote?>(null) }
@@ -142,8 +146,23 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Default.Group,
                 title = "응원 팀",
-                subtitle = selectedTeam.teamName,
+                subtitle = selectedTeam.displayName(teamDisplayNameStyle),
                 onClick = { showTeamPicker = !showTeamPicker }
+            )
+        }
+
+        item {
+            SettingsItem(
+                icon = Icons.Default.Info,
+                title = "팀 이름 표시",
+                subtitle = if (teamDisplayNameStyle == TeamDisplayNameStyle.TEAM) {
+                    "팀명으로 보기 · ${selectedTeam.displayName(TeamDisplayNameStyle.TEAM)}"
+                } else {
+                    "마스코트명으로 보기 · ${selectedTeam.displayName(TeamDisplayNameStyle.MASCOT)}"
+                },
+                onClick = {
+                    if (selectedTeam != Team.NONE) showTeamDisplayNameDialog = true
+                }
             )
         }
 
@@ -194,7 +213,7 @@ fun SettingsScreen(
                                     TeamLogo(team = team, size = 56.dp)
                                     Spacer(modifier = Modifier.width(AppSpacing.md))
                                     Text(
-                                        text = team.teamName,
+                                        text = team.displayName(teamDisplayNameStyle),
                                         style = if (team == selectedTeam) AppFont.labelBold else AppFont.label,
                                         color = if (team == selectedTeam) Color.White else Gray300
                                     )
@@ -439,6 +458,20 @@ fun SettingsScreen(
         com.basehaptic.mobile.ui.components.WhatsNewDialog(
             note = note,
             onConfirm = { manuallyOpenedReleaseNote = null }
+        )
+    }
+
+    if (showTeamDisplayNameDialog && selectedTeam != Team.NONE) {
+        var pendingStyle by remember(teamDisplayNameStyle) { mutableStateOf(teamDisplayNameStyle) }
+        TeamDisplayNameStyleDialog(
+            team = selectedTeam,
+            selectedStyle = pendingStyle,
+            onStyleSelected = { pendingStyle = it },
+            onConfirm = {
+                onChangeTeamDisplayNameStyle(pendingStyle)
+                showTeamDisplayNameDialog = false
+            },
+            onDismiss = { showTeamDisplayNameDialog = false }
         )
     }
 

@@ -3,7 +3,9 @@ import AuthenticationServices
 
 struct SettingsScreen: View {
     let selectedTeam: Team
+    let teamDisplayNameStyle: TeamDisplayNameStyle
     let onChangeTeam: (Team) -> Void
+    let onChangeTeamDisplayNameStyle: (TeamDisplayNameStyle) -> Void
     let activeTheme: ThemeData?
     let onSelectTheme: (ThemeData?) -> Void
     let onOpenWatchTest: () -> Void
@@ -17,6 +19,8 @@ struct SettingsScreen: View {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var connectivity = PhoneConnectivityManager.shared
     @State private var showTeamPicker = false
+    @State private var showTeamDisplayNameDialog = false
+    @State private var pendingTeamDisplayNameStyle: TeamDisplayNameStyle = .team
     @State private var highFiveEnabled = true
     @AppStorage("event_video_enabled") private var eventVideoEnabled = true
     @State private var showDeleteConfirm = false
@@ -42,8 +46,25 @@ struct SettingsScreen: View {
                 Spacer().frame(height: AppSpacing.lg)
                 SettingsSection(title: "팀 설정")
 
-                SettingsItem(icon: "person.2.fill", title: "응원 팀", subtitle: selectedTeam.teamName) {
+                SettingsItem(
+                    icon: "person.2.fill",
+                    title: "응원 팀",
+                    subtitle: selectedTeam.displayName(style: teamDisplayNameStyle)
+                ) {
                     showTeamPicker.toggle()
+                }
+
+                SettingsItem(
+                    icon: "textformat.size",
+                    title: "팀 이름 표시",
+                    subtitle: teamDisplayNameStyle == .team
+                        ? "팀명으로 보기 · \(selectedTeam.displayName(style: .team))"
+                        : "마스코트명으로 보기 · \(selectedTeam.displayName(style: .mascot))"
+                ) {
+                    if selectedTeam != .none {
+                        pendingTeamDisplayNameStyle = teamDisplayNameStyle
+                        showTeamDisplayNameDialog = true
+                    }
                 }
 
                 if showTeamPicker {
@@ -55,7 +76,7 @@ struct SettingsScreen: View {
                             } label: {
                                 HStack(spacing: AppSpacing.md) {
                                     TeamLogo(team: team, size: 56)
-                                    Text(team.teamName)
+                                    Text(team.displayName(style: teamDisplayNameStyle))
                                         .font(team == selectedTeam ? AppFont.labelBold : AppFont.label)
                                         .foregroundColor(team == selectedTeam ? .white : AppColors.gray300)
                                     Spacer()
@@ -219,6 +240,21 @@ struct SettingsScreen: View {
                 )
                 .transition(.opacity)
                 .zIndex(1)
+            }
+            if showTeamDisplayNameDialog && selectedTeam != .none {
+                TeamDisplayNameStyleDialog(
+                    team: selectedTeam,
+                    selectedStyle: $pendingTeamDisplayNameStyle,
+                    onConfirm: {
+                        onChangeTeamDisplayNameStyle(pendingTeamDisplayNameStyle)
+                        showTeamDisplayNameDialog = false
+                    },
+                    onDismiss: {
+                        showTeamDisplayNameDialog = false
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(2)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: manuallyOpenedReleaseNote?.id)

@@ -271,6 +271,13 @@ fun WatchApp(isAmbient: Boolean = false) {
     var eventVideoEnabled by remember {
         mutableStateOf(settingsPrefs.getBoolean(DataLayerListenerService.PREF_KEY_EVENT_VIDEO_ENABLED, true))
     }
+    var teamDisplayNameStyle by remember {
+        mutableStateOf(
+            TeamDisplayNameStyle.fromString(
+                settingsPrefs.getString(DataLayerListenerService.PREF_KEY_TEAM_DISPLAY_NAME_STYLE, null)
+            )
+        )
+    }
 
     var gameData by remember { mutableStateOf(readGameDataFromPrefs(context)) }
     var latestEvent by remember { mutableStateOf(readLatestEventFromPrefs(context)) }
@@ -388,6 +395,9 @@ fun WatchApp(isAmbient: Boolean = false) {
                         eventVideoEnabled = settingsPrefs.getBoolean(
                             DataLayerListenerService.PREF_KEY_EVENT_VIDEO_ENABLED,
                             true
+                        )
+                        teamDisplayNameStyle = TeamDisplayNameStyle.fromString(
+                            settingsPrefs.getString(DataLayerListenerService.PREF_KEY_TEAM_DISPLAY_NAME_STYLE, null)
                         )
                     }
                 }
@@ -605,7 +615,10 @@ fun WatchApp(isAmbient: Boolean = false) {
                             else -> {
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     if (gameData != null) {
-                                        LiveGameScreen(gameData = gameData!!)
+                                        LiveGameScreen(
+                                            gameData = gameData!!,
+                                            teamDisplayNameStyle = teamDisplayNameStyle
+                                        )
                                     } else {
                                         NoGameScreen()
                                     }

@@ -10,6 +10,8 @@ struct BaseHapticApp: App {
     @StateObject private var connectivityManager = PhoneConnectivityManager.shared
     @StateObject private var authManager = AuthManager.shared
     @AppStorage("selected_team") private var selectedTeamRaw: String = Team.none.rawValue
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw: String = TeamDisplayNameStyle.team.rawValue
+    @AppStorage("team_display_name_prompt_seen") private var teamDisplayNamePromptSeen: Bool = false
     @State private var showOnboarding: Bool
     @State private var showAppUpdateAlert = false
     @State private var requiredUpdateTitle = "업데이트가 필요합니다"
@@ -46,6 +48,8 @@ struct BaseHapticApp: App {
             "lock_screen_event_filter_out_enabled": false,
             "lock_screen_event_filter_pitch_count_enabled": false,
             "lock_screen_event_filter_pitcher_change_enabled": false,
+            "team_display_name_style": TeamDisplayNameStyle.team.rawValue,
+            "team_display_name_prompt_seen": false,
         ])
         UserDefaults.standard.set(true, forKey: "lock_screen_live_score_enabled")
         UserDefaults.standard.set(true, forKey: "live_haptic_enabled")
@@ -53,6 +57,10 @@ struct BaseHapticApp: App {
 
     private var selectedTeam: Team {
         Team.fromString(selectedTeamRaw)
+    }
+
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
     }
 
     private func compareVersions(_ left: String, _ right: String) -> ComparisonResult {
@@ -127,18 +135,35 @@ struct BaseHapticApp: App {
         WindowGroup {
             ContentView(
                 selectedTeam: selectedTeam,
+                teamDisplayNameStyle: teamDisplayNameStyle,
                 onTeamChanged: { team in
                     selectedTeamRaw = team.rawValue
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
+                    WatchThemeSyncManager.syncTeamDisplayNameStyleToWatch(style: teamDisplayNameStyle)
                     Task { try? await ThemeRepository.shared.saveSelectedTeam(team.rawValue) }
                     Task { await TeamSubscriptionManager.syncIfNeeded() }
                 },
+                onTeamDisplayNameStyleChanged: { style in
+                    teamDisplayNameStyleRaw = style.rawValue
+                    teamDisplayNamePromptSeen = true
+                    WatchThemeSyncManager.syncTeamDisplayNameStyleToWatch(style: style)
+                    Task { try? await ThemeRepository.shared.saveTeamDisplayNameStyle(style) }
+                    Task { await TeamSubscriptionManager.syncIfNeeded() }
+                },
+                teamDisplayNamePromptSeen: teamDisplayNamePromptSeen,
+                onTeamDisplayNamePromptSeen: {
+                    teamDisplayNamePromptSeen = true
+                },
                 showOnboarding: showOnboarding,
-                onOnboardingComplete: { team in
+                onOnboardingComplete: { team, style in
                     selectedTeamRaw = team.rawValue
+                    teamDisplayNameStyleRaw = style.rawValue
+                    teamDisplayNamePromptSeen = true
                     showOnboarding = false
                     WatchThemeSyncManager.syncThemeToWatch(team: team)
+                    WatchThemeSyncManager.syncTeamDisplayNameStyleToWatch(style: style)
                     Task { try? await ThemeRepository.shared.saveSelectedTeam(team.rawValue) }
+                    Task { try? await ThemeRepository.shared.saveTeamDisplayNameStyle(style) }
                     Task { await TeamSubscriptionManager.syncIfNeeded() }
                 },
                 isExistingUserAtLaunch: isExistingUserAtLaunch,
@@ -155,6 +180,7 @@ struct BaseHapticApp: App {
                 WatchThemeSyncManager.syncLiveHapticEnabledToWatch(
                     enabled: UserDefaults.standard.bool(forKey: "live_haptic_enabled")
                 )
+                WatchThemeSyncManager.syncTeamDisplayNameStyleToWatch(style: teamDisplayNameStyle)
                 WatchThemeSyncManager.syncEventFiltersToWatch(
                     filters: EventFilterOption.currentValues(channel: .watch)
                 )
@@ -272,9 +298,13 @@ private let SHOW_MY_TEAM_TAB = false
 // MARK: - ContentView
 struct ContentView: View {
     let selectedTeam: Team
+    let teamDisplayNameStyle: TeamDisplayNameStyle
     let onTeamChanged: (Team) -> Void
+    let onTeamDisplayNameStyleChanged: (TeamDisplayNameStyle) -> Void
+    let teamDisplayNamePromptSeen: Bool
+    let onTeamDisplayNamePromptSeen: () -> Void
     let showOnboarding: Bool
-    let onOnboardingComplete: (Team) -> Void
+    let onOnboardingComplete: (Team, TeamDisplayNameStyle) -> Void
     let isExistingUserAtLaunch: Bool
     @ObservedObject var authManager: AuthManager
 
@@ -291,6 +321,8 @@ struct ContentView: View {
     @State private var showGameNotStartedAlert = false
     @State private var pendingReleaseNote: ReleaseNote?
     @State private var showFeatureGuide = false
+    @State private var showTeamDisplayNamePrompt = false
+    @State private var pendingTeamDisplayNameStyle: TeamDisplayNameStyle = .team
     @State private var pendingWatchSyncGameId: String?
     @State private var pendingWatchSyncNavigateToLive = false
     @State private var pendingWatchSyncHomeTeam: String = ""
@@ -322,6 +354,7 @@ struct ContentView: View {
                 OnboardingScreen(
                     onComplete: onOnboardingComplete,
                     initialSelectedTeam: selectedTeam,
+                    initialDisplayNameStyle: teamDisplayNameStyle,
                     authState: authManager.authState,
                     onSignInWithKakao: {
                         Task {
@@ -363,10 +396,18 @@ struct ContentView: View {
         }
         .onAppear {
             evaluateWhatsNewTrigger()
+            if !showOnboarding && selectedTeam != .none && !teamDisplayNamePromptSeen {
+                pendingTeamDisplayNameStyle = teamDisplayNameStyle
+                showTeamDisplayNamePrompt = true
+            }
         }
         .onChange(of: showOnboarding) { _, showing in
             if !showing {
                 evaluateWhatsNewTrigger()
+                if selectedTeam != .none && !teamDisplayNamePromptSeen {
+                    pendingTeamDisplayNameStyle = teamDisplayNameStyle
+                    showTeamDisplayNamePrompt = true
+                }
             }
         }
         .overlay {
@@ -381,6 +422,23 @@ struct ContentView: View {
                 .transition(.opacity)
                 .zIndex(1)
             }
+            if showTeamDisplayNamePrompt && selectedTeam != .none {
+                TeamDisplayNameStyleDialog(
+                    team: selectedTeam,
+                    selectedStyle: $pendingTeamDisplayNameStyle,
+                    onConfirm: {
+                        onTeamDisplayNameStyleChanged(pendingTeamDisplayNameStyle)
+                        onTeamDisplayNamePromptSeen()
+                        showTeamDisplayNamePrompt = false
+                    },
+                    onDismiss: {
+                        onTeamDisplayNamePromptSeen()
+                        showTeamDisplayNamePrompt = false
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(2)
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: pendingReleaseNote?.id)
         .task(id: selectedTeam) {
@@ -392,6 +450,16 @@ struct ContentView: View {
         .onChange(of: authManager.authState) { _, newState in
             if case .loggedIn = newState {
                 Task { await restoreThemesFromServer() }
+            }
+        }
+        .onChange(of: teamDisplayNameStyle) { _, _ in
+            WatchThemeSyncManager.syncTeamDisplayNameStyleToWatch(style: teamDisplayNameStyle)
+            Task { await TeamSubscriptionManager.syncIfNeeded() }
+            if let gameId = syncedGameId, !gameId.isEmpty {
+                Task {
+                    await PushTokenManager.register(gameId: gameId, myTeam: selectedTeam.rawValue)
+                    await PushTokenManager.registerWatchToken(gameId: gameId, myTeam: selectedTeam.rawValue)
+                }
             }
         }
         .onChange(of: syncedGameId) { oldId, newId in
@@ -560,7 +628,9 @@ struct ContentView: View {
                 case .settings:
                     SettingsScreen(
                         selectedTeam: selectedTeam,
+                        teamDisplayNameStyle: teamDisplayNameStyle,
                         onChangeTeam: onTeamChanged,
+                        onChangeTeamDisplayNameStyle: onTeamDisplayNameStyleChanged,
                         activeTheme: activeTheme,
                         onSelectTheme: { activeTheme = $0 },
                         onOpenWatchTest: { navigateTo(.watchTest) },
@@ -1061,7 +1131,7 @@ struct ContentView: View {
 
             let settings = try await ThemeRepository.shared.fetchUserSettings()
 
-            if settings.activeThemeId != nil || settings.selectedTeam != nil {
+            if settings.activeThemeId != nil || settings.selectedTeam != nil || settings.teamDisplayNameStyle != nil {
                 // 서버에 데이터 있음 → 서버 기준으로 복원
                 if let activeId = settings.activeThemeId {
                     activeTheme = ThemeData.allThemes.first { $0.id == activeId }
@@ -1073,11 +1143,16 @@ struct ContentView: View {
                         onTeamChanged(team)
                     }
                 }
+                if let styleRaw = settings.teamDisplayNameStyle {
+                    let style = TeamDisplayNameStyle.fromString(styleRaw)
+                    onTeamDisplayNameStyleChanged(style)
+                }
             } else {
                 // 서버에 데이터 없음 → 로컬 데이터를 서버에 업로드
                 if selectedTeam != .none {
                     try? await ThemeRepository.shared.saveSelectedTeam(selectedTeam.rawValue)
                 }
+                try? await ThemeRepository.shared.saveTeamDisplayNameStyle(teamDisplayNameStyle)
                 if let themeId = activeTheme?.id {
                     try? await ThemeRepository.shared.saveActiveTheme(themeId: themeId)
                 }

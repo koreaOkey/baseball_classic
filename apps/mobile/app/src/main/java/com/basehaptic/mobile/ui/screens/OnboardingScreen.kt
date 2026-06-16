@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -40,11 +42,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.auth.AuthState
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.AppFont
 import com.basehaptic.mobile.ui.theme.AppShapes
 import com.basehaptic.mobile.ui.theme.AppSpacing
 import com.basehaptic.mobile.ui.theme.Blue600
+import com.basehaptic.mobile.ui.theme.Gray300
 import com.basehaptic.mobile.ui.theme.Gray400
 import com.basehaptic.mobile.ui.theme.Gray800
 import com.basehaptic.mobile.ui.theme.Gray900
@@ -52,12 +56,15 @@ import com.basehaptic.mobile.ui.theme.Gray950
 
 @Composable
 fun OnboardingScreen(
-    onComplete: (Team) -> Unit,
+    onComplete: (Team, TeamDisplayNameStyle) -> Unit,
     initialSelectedTeam: Team = Team.NONE,
+    initialDisplayNameStyle: TeamDisplayNameStyle = TeamDisplayNameStyle.TEAM,
     authState: AuthState = AuthState.LoggedOut,
     onSignInWithKakao: () -> Unit = {},
 ) {
     var selectedTeam by remember(initialSelectedTeam) { mutableStateOf(initialSelectedTeam) }
+    var displayNameStyle by remember(initialDisplayNameStyle) { mutableStateOf(initialDisplayNameStyle) }
+    var showDisplayNameDialog by remember { mutableStateOf(false) }
     var step by remember { mutableIntStateOf(1) }
 
     val teams = listOf(
@@ -148,7 +155,7 @@ fun OnboardingScreen(
                             }
 
                             Button(
-                                onClick = { step = 2 },
+                                onClick = { showDisplayNameDialog = true },
                                 enabled = selectedTeam != Team.NONE,
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -248,7 +255,7 @@ fun OnboardingScreen(
                                     )
 
                                     Button(
-                                        onClick = { onComplete(selectedTeam) },
+                                        onClick = { onComplete(selectedTeam, displayNameStyle) },
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Blue600),
                                         shape = AppShapes.md
@@ -295,7 +302,7 @@ fun OnboardingScreen(
 
                                     // 건너뛰기 버튼
                                     TextButton(
-                                        onClick = { onComplete(selectedTeam) },
+                                        onClick = { onComplete(selectedTeam, displayNameStyle) },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
@@ -310,6 +317,128 @@ fun OnboardingScreen(
                     }
                 }
             }
+        }
+
+        if (showDisplayNameDialog && selectedTeam != Team.NONE) {
+            TeamDisplayNameStyleDialog(
+                team = selectedTeam,
+                selectedStyle = displayNameStyle,
+                onStyleSelected = { displayNameStyle = it },
+                onConfirm = {
+                    showDisplayNameDialog = false
+                    step = 2
+                },
+                onDismiss = {
+                    displayNameStyle = TeamDisplayNameStyle.TEAM
+                    showDisplayNameDialog = false
+                    step = 2
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun TeamDisplayNameStyleDialog(
+    team: Team,
+    selectedStyle: TeamDisplayNameStyle,
+    onStyleSelected: (TeamDisplayNameStyle) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Gray900,
+        title = {
+            Text(
+                text = "팀 이름 표시 방식",
+                style = AppFont.h4Bold,
+                color = Color.White
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                Text(
+                    text = "선택한 응원팀을 앱과 워치에서 어떻게 표시할까요?",
+                    style = AppFont.body,
+                    color = Gray400,
+                    modifier = Modifier.padding(bottom = AppSpacing.sm)
+                )
+                TeamDisplayNameOption(
+                    team = team,
+                    title = team.clubName,
+                    subtitle = "팀명으로 보기",
+                    selected = selectedStyle == TeamDisplayNameStyle.TEAM,
+                    onClick = { onStyleSelected(TeamDisplayNameStyle.TEAM) }
+                )
+                TeamDisplayNameOption(
+                    team = team,
+                    title = team.teamName,
+                    subtitle = "마스코트명으로 보기",
+                    selected = selectedStyle == TeamDisplayNameStyle.MASCOT,
+                    onClick = { onStyleSelected(TeamDisplayNameStyle.MASCOT) }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = Blue600),
+                shape = AppShapes.md
+            ) {
+                Text("적용하기")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("나중에 설정에서 변경", color = Gray400)
+            }
+        }
+    )
+}
+
+@Composable
+private fun TeamDisplayNameOption(
+    team: Team,
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(AppShapes.md)
+            .border(
+                width = 1.dp,
+                color = if (selected) Blue600 else Gray800,
+                shape = AppShapes.md
+            )
+            .background(if (selected) Blue600.copy(alpha = 0.16f) else Gray800.copy(alpha = 0.42f))
+            .clickable(onClick = onClick)
+            .padding(AppSpacing.md),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TeamLogo(team = team, size = 44.dp)
+        Spacer(modifier = Modifier.width(AppSpacing.md))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = AppFont.bodyLgMedium,
+                color = Color.White
+            )
+            Text(
+                text = subtitle,
+                style = AppFont.body,
+                color = Gray300
+            )
+        }
+        if (selected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = Color.White
+            )
         }
     }
 }

@@ -39,6 +39,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.basehaptic.mobile.R
@@ -50,6 +51,7 @@ import com.basehaptic.mobile.ui.theme.*
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.currentCoroutineContext
@@ -72,6 +74,7 @@ fun HomeScreen(
     onToggleLiveScore: (Game) -> Unit,
     onSelectGame: (Game) -> Unit
 ) {
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
     val games = remember(todayGames, selectedTeam, showUpdateHighlights) {
         val sortedGames = sortHomeGames(todayGames)
         if (showUpdateHighlights && sortedGames.isEmpty()) {
@@ -384,7 +387,7 @@ fun HomeScreen(
                                     color = Color.White.copy(alpha = 0.7f)
                                 )
                                 Text(
-                                    text = selectedTeam.teamName,
+                                    text = selectedTeam.displayName(teamDisplayNameStyle),
                                     style = AppFont.h3Bold,
                                     color = Color.White
                                 )
@@ -775,6 +778,7 @@ private fun MyTeamScheduleSheetContent(
     onSelectSchedule: (Game) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
     val schedulesByDate = remember(schedules) { schedules.groupBy { it.gameDate } }
     val selectedSchedules = schedulesByDate[selectedDate].orEmpty()
 
@@ -785,7 +789,11 @@ private fun MyTeamScheduleSheetContent(
             color = Color.White
         )
         Text(
-            text = if (selectedTeam == Team.NONE) "응원팀을 선택하면 일정을 볼 수 있습니다." else "${selectedTeam.teamName} 시즌 일정",
+            text = if (selectedTeam == Team.NONE) {
+                "응원팀을 선택하면 일정을 볼 수 있습니다."
+            } else {
+                "${selectedTeam.displayName(teamDisplayNameStyle)} 시즌 일정"
+            },
             style = AppFont.body,
             color = Gray400,
             modifier = Modifier.padding(top = AppSpacing.xs)
@@ -1114,10 +1122,11 @@ private fun MyTeamScheduleRow(
     schedule: BackendGamesRepository.UpcomingGameSchedule,
     onClick: () -> Unit
 ) {
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
     val game = schedule.game
     val isMyTeamHome = game.homeTeamId == selectedTeam
     val opponentTeam = if (isMyTeamHome) game.awayTeamId else game.homeTeamId
-    val opponent = if (isMyTeamHome) game.awayTeamId.teamName else game.homeTeamId.teamName
+    val opponent = opponentTeam.displayName(teamDisplayNameStyle)
     val venueText = if (isMyTeamHome) "홈" else "원정"
     val stadiumName = stadiumNameForHomeTeam(game.homeTeamId)
     val venueWithStadium = "$venueText 경기 ($stadiumName)"
@@ -1152,7 +1161,7 @@ private fun MyTeamScheduleRow(
                 ) {
                     TeamLogo(team = selectedTeam, size = 22.dp)
                     Text(
-                        text = selectedTeam.teamName,
+                        text = selectedTeam.displayName(teamDisplayNameStyle),
                         style = AppFont.bodyLgMedium,
                         color = Color.White,
                         maxLines = 1,
@@ -1363,15 +1372,16 @@ private fun UpcomingGameCard(
     selectedTeam: Team,
     upcoming: BackendGamesRepository.UpcomingGameSchedule
 ) {
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
     val game = upcoming.game
     val isMyTeamHome = game.homeTeamId == selectedTeam
-    val myTeamName = if (isMyTeamHome) game.homeTeamId.teamName else game.awayTeamId.teamName
-    val opponentTeamName = if (isMyTeamHome) game.awayTeamId.teamName else game.homeTeamId.teamName
+    val myTeamName = (if (isMyTeamHome) game.homeTeamId else game.awayTeamId).displayName(teamDisplayNameStyle)
+    val opponentTeamName = (if (isMyTeamHome) game.awayTeamId else game.homeTeamId).displayName(teamDisplayNameStyle)
     val dateTimeText = formatUpcomingDateTime(upcoming.gameDate, game.time)
     val venueText = if (isMyTeamHome) {
-        "${game.homeTeamId.teamName} 홈경기"
+        "${game.homeTeamId.displayName(teamDisplayNameStyle)} 홈경기"
     } else {
-        "${game.homeTeamId.teamName} 원정경기"
+        "${game.homeTeamId.displayName(teamDisplayNameStyle)} 원정경기"
     }
 
     Surface(
@@ -1394,6 +1404,14 @@ private fun UpcomingGameCard(
                     text = dateTimeText,
                     style = AppFont.body,
                     color = Gray400
+                )
+            }
+
+            if (game.status == GameStatus.SCHEDULED && game.weather != null) {
+                Spacer(modifier = Modifier.height(AppSpacing.md))
+                WeatherSummaryRow(
+                    weather = game.weather,
+                    onClick = null
                 )
             }
 
@@ -1432,14 +1450,6 @@ private fun UpcomingGameCard(
                 color = Gray500,
                 modifier = Modifier.padding(top = AppSpacing.sm)
             )
-
-            if (game.status == GameStatus.SCHEDULED && game.weather != null) {
-                Spacer(modifier = Modifier.height(AppSpacing.md))
-                WeatherSummaryRow(
-                    weather = game.weather,
-                    onClick = null
-                )
-            }
         }
     }
 }
@@ -1503,19 +1513,18 @@ private fun WeatherSummaryRow(
                 modifier = Modifier
                     .size(24.dp)
                     .clip(CircleShape)
-                    .background(Blue500.copy(alpha = 0.18f)),
+                    .background(weatherIconBackground(weather.condition, weather.isIndoor)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Schedule,
-                    contentDescription = null,
-                    tint = Blue400,
-                    modifier = Modifier.size(14.dp)
+                WeatherConditionIcon(
+                    condition = weather.condition,
+                    isIndoor = weather.isIndoor,
+                    size = 18.dp
                 )
             }
             Spacer(modifier = Modifier.width(AppSpacing.sm))
             Text(
-                text = weather.displayText,
+                text = weatherSummaryCardText(weather),
                 style = AppFont.microBold,
                 color = Blue200,
                 maxLines = 2,
@@ -1525,7 +1534,7 @@ private fun WeatherSummaryRow(
             if (onClick != null) {
                 Spacer(modifier = Modifier.width(AppSpacing.sm))
                 Text(
-                    text = "시간별",
+                    text = "더보기",
                     style = AppFont.tinyBold,
                     color = Blue400,
                     maxLines = 1
@@ -1544,6 +1553,10 @@ private fun WeatherHourlySheetContent(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val visibleItems = remember(forecast?.items) {
+        forecast?.items.orEmpty().filter { item -> isCurrentOrFutureWeatherItem(item) }
+    }
+
     Column(modifier = modifier) {
         Text(
             text = "${forecast?.stadiumName ?: stadiumNameForHomeTeam(game?.homeTeamId ?: Team.NONE)} 오늘 날씨",
@@ -1585,7 +1598,7 @@ private fun WeatherHourlySheetContent(
                 )
             }
 
-            forecast == null || forecast.items.isEmpty() -> {
+            forecast == null || visibleItems.isEmpty() -> {
                 WeatherSheetMessage(
                     title = "표시할 시간별 예보가 없습니다",
                     actionLabel = "새로고침",
@@ -1599,7 +1612,7 @@ private fun WeatherHourlySheetContent(
                     verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
                 ) {
                     items(
-                        items = forecast.items,
+                        items = visibleItems,
                         key = { "${it.forecastDate}:${it.forecastTime}" }
                     ) { item ->
                         WeatherHourlyRow(item = item)
@@ -1671,6 +1684,20 @@ private fun WeatherHourlyRow(item: BackendGamesRepository.GameWeatherHourlyItem)
                 }
             }
             Spacer(modifier = Modifier.width(AppSpacing.md))
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(weatherIconBackground(item.condition, isIndoor = false)),
+                contentAlignment = Alignment.Center
+            ) {
+                WeatherConditionIcon(
+                    condition = item.condition,
+                    isIndoor = false,
+                    size = 22.dp
+                )
+            }
+            Spacer(modifier = Modifier.width(AppSpacing.md))
             Text(
                 text = weatherHourlyDetailText(item),
                 style = AppFont.body,
@@ -1680,6 +1707,80 @@ private fun WeatherHourlyRow(item: BackendGamesRepository.GameWeatherHourlyItem)
                 modifier = Modifier.weight(1f)
             )
         }
+    }
+}
+
+@Composable
+private fun WeatherConditionIcon(
+    condition: String,
+    isIndoor: Boolean,
+    size: Dp,
+    modifier: Modifier = Modifier
+) {
+    val normalized = condition.trim()
+    if (!isIndoor && normalized.contains("구름많음")) {
+        Box(modifier = modifier.size(size)) {
+            Icon(
+                imageVector = Icons.Default.WbSunny,
+                contentDescription = null,
+                tint = Yellow400,
+                modifier = Modifier
+                    .size(size * 0.72f)
+                    .align(Alignment.TopStart)
+            )
+            Icon(
+                imageVector = Icons.Default.Cloud,
+                contentDescription = null,
+                tint = Gray200,
+                modifier = Modifier
+                    .size(size * 0.78f)
+                    .align(Alignment.BottomEnd)
+            )
+        }
+        return
+    }
+
+    Icon(
+        imageVector = weatherIconVector(normalized, isIndoor),
+        contentDescription = null,
+        tint = weatherIconTint(normalized, isIndoor),
+        modifier = modifier.size(size)
+    )
+}
+
+private fun weatherIconVector(condition: String, isIndoor: Boolean): ImageVector {
+    if (isIndoor) return Icons.Default.Stadium
+    return when {
+        condition.contains("천둥") || condition.contains("번개") -> Icons.Default.Thunderstorm
+        condition.contains("눈") || condition.contains("진눈") -> Icons.Default.AcUnit
+        condition.contains("비") || condition.contains("소나기") || condition.contains("강수") -> Icons.Default.WaterDrop
+        condition.contains("흐림") || condition.contains("구름") -> Icons.Default.Cloud
+        condition.contains("맑음") -> Icons.Default.WbSunny
+        else -> Icons.Default.WbSunny
+    }
+}
+
+private fun weatherIconTint(condition: String, isIndoor: Boolean): Color {
+    if (isIndoor) return Blue400
+    return when {
+        condition.contains("천둥") || condition.contains("번개") -> Yellow400
+        condition.contains("눈") || condition.contains("진눈") -> Blue200
+        condition.contains("비") || condition.contains("소나기") || condition.contains("강수") -> Blue400
+        condition.contains("흐림") || condition.contains("구름") -> Gray200
+        condition.contains("맑음") -> Yellow400
+        else -> Yellow400
+    }
+}
+
+private fun weatherIconBackground(condition: String, isIndoor: Boolean): Color {
+    if (isIndoor) return Blue500.copy(alpha = 0.18f)
+    return when {
+        condition.contains("천둥") || condition.contains("번개") -> Yellow500.copy(alpha = 0.16f)
+        condition.contains("눈") || condition.contains("진눈") -> Blue500.copy(alpha = 0.16f)
+        condition.contains("비") || condition.contains("소나기") || condition.contains("강수") -> Blue500.copy(alpha = 0.18f)
+        condition.contains("흐림") || condition.contains("구름") -> Gray600.copy(alpha = 0.36f)
+        condition.contains("맑음") -> Yellow500.copy(alpha = 0.16f)
+        else -> Blue500.copy(alpha = 0.18f)
     }
 }
 
@@ -1853,6 +1954,7 @@ private fun GameCard(
     onWatchSyncClick: () -> Unit,
     onLiveScoreClick: () -> Unit
 ) {
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
     val backgroundColor = if (game.isMyTeam) {
         primaryColor.copy(alpha = 0.15f)
     } else {
@@ -2034,6 +2136,14 @@ private fun GameCard(
                         }
                     }
 
+                    if (game.status == GameStatus.SCHEDULED && game.weather != null) {
+                        Spacer(modifier = Modifier.height(AppSpacing.md))
+                        WeatherSummaryRow(
+                            weather = game.weather,
+                            onClick = onWeatherClick
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(AppSpacing.lg))
 
                     Column(
@@ -2055,7 +2165,7 @@ private fun GameCard(
                     ) {
                         TeamScoreRow(
                             team = game.awayTeamId,
-                            teamName = game.awayTeamId.teamName,
+                            teamName = game.awayTeamId.displayName(teamDisplayNameStyle),
                             score = game.awayScore,
                             pitcher = game.awayPitcher,
                             isScheduled = isNotStartedStatus(game.status),
@@ -2066,21 +2176,13 @@ private fun GameCard(
 
                         TeamScoreRow(
                             team = game.homeTeamId,
-                            teamName = game.homeTeamId.teamName,
+                            teamName = game.homeTeamId.displayName(teamDisplayNameStyle),
                             score = game.homeScore,
                             pitcher = game.homePitcher,
                             isScheduled = isNotStartedStatus(game.status),
                             isWinner = game.status == GameStatus.FINISHED && game.homeScore > game.awayScore,
                             isMyTeam = game.isMyTeam,
                             isHomeTeam = true
-                        )
-                    }
-
-                    if (game.status == GameStatus.SCHEDULED && game.weather != null) {
-                        Spacer(modifier = Modifier.height(AppSpacing.md))
-                        WeatherSummaryRow(
-                            weather = game.weather,
-                            onClick = onWeatherClick
                         )
                     }
                 }
@@ -2287,6 +2389,52 @@ private fun weatherHourlyDetailText(item: BackendGamesRepository.GameWeatherHour
     item.precipitationProbability?.let { parts.add("강수 ${it}%") }
     item.windSpeedMps?.let { parts.add("풍속 ${String.format(Locale.US, "%.1f", it)}m/s") }
     return parts.joinToString(" · ")
+}
+
+private fun weatherSummaryCardText(weather: GameWeatherSummary): String {
+    val parts = mutableListOf<String>()
+    parts.add(weather.stadiumShortName.ifBlank { weather.stadiumName })
+
+    val timeLabel = weather.forecastTimeLabel
+        ?.replace(" 기준", "")
+        ?.takeIf { it.isNotBlank() }
+    if (timeLabel != null) {
+        parts.add("${timeLabel} 날씨")
+    }
+
+    val conditionText = buildString {
+        append(weather.condition.ifBlank { "예보" })
+        weather.temperatureC?.let { append(" ${it}°") }
+    }
+    parts.add(conditionText)
+
+    weather.precipitationProbability?.let { parts.add("강수 ${it}%") }
+    return parts.joinToString(" · ")
+}
+
+private val weatherForecastZoneId: ZoneId = ZoneId.of("Asia/Seoul")
+
+private fun isCurrentOrFutureWeatherItem(item: BackendGamesRepository.GameWeatherHourlyItem): Boolean {
+    val itemDate = runCatching { LocalDate.parse(item.forecastDate) }.getOrNull() ?: return true
+    val today = LocalDate.now(weatherForecastZoneId)
+    if (itemDate.isBefore(today)) return false
+    if (itemDate.isAfter(today)) return true
+
+    val itemTime = parseForecastClockTime(item.forecastTime) ?: return true
+    val currentHour = LocalTime.now(weatherForecastZoneId)
+        .withMinute(0)
+        .withSecond(0)
+        .withNano(0)
+    return !itemTime.isBefore(currentHour)
+}
+
+private fun parseForecastClockTime(raw: String): LocalTime? {
+    val digits = raw.filter { it.isDigit() }
+    if (digits.length < 2) return null
+    val hour = digits.take(2).toIntOrNull() ?: return null
+    val minute = digits.drop(2).take(2).ifBlank { "00" }.toIntOrNull() ?: return null
+    if (hour !in 0..23 || minute !in 0..59) return null
+    return LocalTime.of(hour, minute)
 }
 
 private fun teamRecordLine(item: BackendGamesRepository.TeamRecordStanding): String {

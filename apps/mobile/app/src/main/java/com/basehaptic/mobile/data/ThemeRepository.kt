@@ -30,7 +30,8 @@ object ThemeRepository {
         val row = rows.firstOrNull()
         return UserSettingsResult(
             activeThemeId = row?.active_theme_id,
-            selectedTeam = row?.selected_team
+            selectedTeam = row?.selected_team,
+            teamDisplayNameStyle = row?.team_display_name_style
         )
     }
 
@@ -71,6 +72,17 @@ object ThemeRepository {
         client.from("user_settings").upsert(row)
     }
 
+    suspend fun saveTeamDisplayNameStyle(style: String) {
+        val userId = currentUserId()
+
+        val row = UpsertTeamDisplayNameStyleRow(
+            user_id = userId,
+            team_display_name_style = style
+        )
+
+        client.from("user_settings").upsert(row)
+    }
+
     // MARK: - Helper
 
     private suspend fun currentUserId(): String {
@@ -87,7 +99,8 @@ object ThemeRepository {
     @Serializable
     private data class SettingsRow(
         val active_theme_id: String? = null,
-        val selected_team: String? = null
+        val selected_team: String? = null,
+        val team_display_name_style: String? = null
     )
 
     @Serializable
@@ -110,8 +123,15 @@ object ThemeRepository {
         val selected_team: String
     )
 
+    @Serializable
+    private data class UpsertTeamDisplayNameStyleRow(
+        val user_id: String,
+        val team_display_name_style: String
+    )
+
     data class UserSettingsResult(
         val activeThemeId: String?,
-        val selectedTeam: String?
+        val selectedTeam: String?,
+        val teamDisplayNameStyle: String?
     )
 }

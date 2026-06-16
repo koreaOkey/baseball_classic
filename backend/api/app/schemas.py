@@ -381,6 +381,7 @@ class DeviceTokenRequest(BaseModel):
     my_team: str | None = Field(default=None, max_length=64)
     platform: str = Field(default="ios", max_length=16)
     is_sandbox: bool = Field(default=False)
+    display_name_style: Literal["TEAM", "MASCOT"] = "TEAM"
 
 
 class LiveViewSessionRequest(BaseModel):
@@ -403,3 +404,4 @@ class TeamSubscriptionRequest(BaseModel):
     my_team: str = Field(min_length=1, max_length=64)
     platform: str = Field(default="ios", max_length=16)
     is_sandbox: bool = Field(default=False)
+    display_name_style: Literal["TEAM", "MASCOT"] = "TEAM"

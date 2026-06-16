@@ -3,6 +3,15 @@ import UserNotifications
 import WatchConnectivity
 import WatchKit
 
+enum TeamDisplayNameStyle: String {
+    case team = "TEAM"
+    case mascot = "MASCOT"
+
+    static func fromString(_ value: String?) -> TeamDisplayNameStyle {
+        value == TeamDisplayNameStyle.mascot.rawValue ? .mascot : .team
+    }
+}
+
 /// 워치 측 WatchConnectivity 관리자
 /// Android의 DataLayerListenerService에 대응
 final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
@@ -78,6 +87,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         }
         if let enabled = ctx["live_haptic_enabled"] as? Bool {
             UserDefaults.standard.set(enabled, forKey: "live_haptic_enabled")
+        }
+        if let style = ctx["team_display_name_style"] as? String {
+            UserDefaults.standard.set(TeamDisplayNameStyle.fromString(style).rawValue, forKey: "team_display_name_style")
         }
         for filterKey in WatchConnectivityManager.eventFilterPrefKeys {
             if let enabled = ctx[filterKey] as? Bool {
@@ -249,6 +261,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     }
 
     private func handleGameData(_ message: [String: Any]) {
+        if let style = message["display_name_style"] as? String {
+            UserDefaults.standard.set(TeamDisplayNameStyle.fromString(style).rawValue, forKey: "team_display_name_style")
+        }
+
         let rawStatus = message["status"] as? String ?? ""
         let inning = message["inning"] as? String ?? ""
         let isFinished = rawStatus.uppercased() == "FINISHED" || inning.contains("경기 종료")
@@ -267,8 +283,8 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
         gameData = GameData(
             gameId: message["game_id"] as? String ?? "",
-            homeTeam: Self.displayTeamName(message["home_team"] as? String ?? ""),
-            awayTeam: Self.displayTeamName(message["away_team"] as? String ?? ""),
+            homeTeam: message["home_team"] as? String ?? "",
+            awayTeam: message["away_team"] as? String ?? "",
             homeScore: message["home_score"] as? Int ?? 0,
             awayScore: message["away_score"] as? Int ?? 0,
             inning: normalizedInning,
@@ -365,6 +381,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             UserDefaults.standard.set(enabled, forKey: "live_haptic_enabled")
             print("[WatchConnectivity] live_haptic_enabled = \(enabled)")
         }
+        if let style = message["team_display_name_style"] as? String {
+            let normalizedStyle = TeamDisplayNameStyle.fromString(style).rawValue
+            UserDefaults.standard.set(normalizedStyle, forKey: "team_display_name_style")
+            print("[WatchConnectivity] team_display_name_style = \(normalizedStyle)")
+        }
         for filterKey in Self.eventFilterPrefKeys {
             if let enabled = message[filterKey] as? Bool {
                 UserDefaults.standard.set(enabled, forKey: filterKey)
@@ -410,10 +431,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         // 이미 같은 경기 팝업이 떠있으면 무시
         if watchSyncPrompt?.gameId == gameId { return }
 
+        let displayStyle = TeamDisplayNameStyle.fromString(UserDefaults.standard.string(forKey: "team_display_name_style"))
         watchSyncPrompt = WatchSyncPrompt(
             gameId: gameId,
-            homeTeam: Self.displayTeamName(message["home_team"] as? String ?? ""),
-            awayTeam: Self.displayTeamName(message["away_team"] as? String ?? "")
+            homeTeam: Self.displayTeamName(message["home_team"] as? String ?? "", style: displayStyle),
+            awayTeam: Self.displayTeamName(message["away_team"] as? String ?? "", style: displayStyle)
         )
 
         if let myTeam = message["my_team"] as? String, !myTeam.isEmpty {
@@ -631,9 +653,25 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         return inning
     }
 
-    static func displayTeamName(_ name: String) -> String {
+    static func displayTeamName(
+        _ name: String,
+        style: TeamDisplayNameStyle = .mascot
+    ) -> String {
         let n = name.trimmingCharacters(in: .whitespaces).lowercased()
         if n.isEmpty { return name }
+        if style == .team {
+            if n.contains("doosan") || n.contains("두산") || n.contains("베어스") { return "두산" }
+            if n.contains("lg") || n.contains("엘지") || n.contains("트윈스") { return "LG" }
+            if n.contains("kiwoom") || n.contains("키움") || n.contains("히어로즈") || n.contains("넥센") { return "키움" }
+            if n.contains("samsung") || n.contains("삼성") || n.contains("라이온즈") { return "삼성" }
+            if n.contains("lotte") || n.contains("롯데") || n.contains("자이언츠") { return "롯데" }
+            if n.contains("ssg") || n.contains("lander") || n.contains("에스에스지") || n.contains("랜더스") { return "SSG" }
+            if n.contains("kt") || n.contains("wiz") || n.contains("케이티") || n.contains("위즈") { return "KT" }
+            if n.contains("hanwha") || n.contains("한화") || n.contains("이글스") { return "한화" }
+            if n.contains("kia") || n.contains("기아") || n.contains("타이거즈") { return "KIA" }
+            if n.contains("nc") || n.contains("dinos") || n.contains("엔씨") || n.contains("다이노스") { return "NC" }
+            return name
+        }
         if n.contains("doosan") || n.contains("두산") || n.contains("베어스") { return "베어스" }
         if n.contains("lg") || n.contains("엘지") || n.contains("트윈스") { return "트윈스" }
         if n.contains("kiwoom") || n.contains("키움") || n.contains("히어로즈") || n.contains("넥센") { return "히어로즈" }

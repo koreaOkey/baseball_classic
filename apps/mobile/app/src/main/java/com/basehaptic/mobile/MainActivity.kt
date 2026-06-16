@@ -52,6 +52,7 @@ import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.StadiumCheerThemeStore
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 import com.basehaptic.mobile.data.model.ThemeCategory
 import com.basehaptic.mobile.data.model.ThemeData
 import com.basehaptic.mobile.data.model.ThemeStore
@@ -91,6 +92,8 @@ private const val ACTION_DEBUG_POST_LIVE_SCORE =
     "com.basehaptic.mobile.DEBUG_POST_LIVE_SCORE"
 private const val USER_PREFS_NAME = "basehaptic_user_prefs"
 private const val KEY_SELECTED_TEAM = "selected_team"
+private const val KEY_TEAM_DISPLAY_NAME_STYLE = "team_display_name_style"
+private const val KEY_TEAM_DISPLAY_NAME_PROMPT_SEEN = "team_display_name_prompt_seen"
 private const val KEY_UNLOCKED_THEME_IDS = "unlocked_theme_ids"
 private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
 // 워치 페이스 테마와 무관하게 응원 시 풀스크린에 적용될 테마. ThemeStore와 별도로 StadiumCheerThemeStore에서 매칭.
@@ -217,6 +220,33 @@ class MainActivity : ComponentActivity() {
             .putString(KEY_SELECTED_TEAM, team.name)
             .apply()
         TeamSubscriptionRegistrar.syncIfNeeded(this)
+    }
+
+    private fun loadTeamDisplayNameStyle(): TeamDisplayNameStyle {
+        return TeamDisplayNameStyle.fromString(
+            getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+                .getString(KEY_TEAM_DISPLAY_NAME_STYLE, null)
+        )
+    }
+
+    private fun persistTeamDisplayNameStyle(style: TeamDisplayNameStyle) {
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(KEY_TEAM_DISPLAY_NAME_STYLE, style.name)
+            .apply()
+        TeamSubscriptionRegistrar.syncIfNeeded(this)
+    }
+
+    private fun loadTeamDisplayNamePromptSeen(): Boolean {
+        return getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .getBoolean(KEY_TEAM_DISPLAY_NAME_PROMPT_SEEN, false)
+    }
+
+    private fun persistTeamDisplayNamePromptSeen() {
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_TEAM_DISPLAY_NAME_PROMPT_SEEN, true)
+            .apply()
     }
 
     private fun loadUnlockedThemeIds(): Set<String> {
@@ -418,6 +448,8 @@ class MainActivity : ComponentActivity() {
         val savedTeam = loadSavedTeamOrNull()
         val initialTeam = savedTeam ?: Team.NONE
         val initialShowOnboarding = savedTeam == null
+        val initialTeamDisplayNameStyle = loadTeamDisplayNameStyle()
+        val initialTeamDisplayNamePromptSeen = loadTeamDisplayNamePromptSeen()
         val initialUnlockedIds = loadUnlockedThemeIds()
         val initialActiveThemeId = loadActiveThemeId()
         val initialActiveTheme = initialActiveThemeId?.let { id ->
@@ -431,19 +463,38 @@ class MainActivity : ComponentActivity() {
         setContent {
             // ??猷⑦듃?먯꽌 ?좏깮 ? ?곹깭瑜?愿由ы븯怨??섏쐞 ?붾㈃?쇰줈 ?꾨떖
             var selectedTeam by remember { mutableStateOf(initialTeam) }
+            var teamDisplayNameStyle by remember { mutableStateOf(initialTeamDisplayNameStyle) }
+            var teamDisplayNamePromptSeen by remember { mutableStateOf(initialTeamDisplayNamePromptSeen) }
             var showOnboarding by remember { mutableStateOf(initialShowOnboarding) }
             
-            BaseHapticTheme(selectedTeam = selectedTeam) {
+            BaseHapticTheme(
+                selectedTeam = selectedTeam,
+                teamDisplayNameStyle = teamDisplayNameStyle
+            ) {
                 BaseHapticApp(
                     selectedTeam = selectedTeam,
                     onTeamChanged = { team ->
                         selectedTeam = team
                         persistSelectedTeam(team)
                     },
+                    teamDisplayNameStyle = teamDisplayNameStyle,
+                    onTeamDisplayNameStyleChanged = { style ->
+                        teamDisplayNameStyle = style
+                        persistTeamDisplayNameStyle(style)
+                    },
+                    teamDisplayNamePromptSeen = teamDisplayNamePromptSeen,
+                    onTeamDisplayNamePromptSeen = {
+                        teamDisplayNamePromptSeen = true
+                        persistTeamDisplayNamePromptSeen()
+                    },
                     showOnboarding = showOnboarding,
-                    onOnboardingComplete = { team ->
+                    onOnboardingComplete = { team, style ->
                         selectedTeam = team
+                        teamDisplayNameStyle = style
                         persistSelectedTeam(team)
+                        persistTeamDisplayNameStyle(style)
+                        teamDisplayNamePromptSeen = true
+                        persistTeamDisplayNamePromptSeen()
                         showOnboarding = false
                     },
                     isExistingUserAtLaunch = savedTeam != null,
@@ -470,8 +521,12 @@ class MainActivity : ComponentActivity() {
 fun BaseHapticApp(
     selectedTeam: Team,
     onTeamChanged: (Team) -> Unit,
+    teamDisplayNameStyle: TeamDisplayNameStyle,
+    onTeamDisplayNameStyleChanged: (TeamDisplayNameStyle) -> Unit,
+    teamDisplayNamePromptSeen: Boolean,
+    onTeamDisplayNamePromptSeen: () -> Unit,
     showOnboarding: Boolean,
-    onOnboardingComplete: (Team) -> Unit,
+    onOnboardingComplete: (Team, TeamDisplayNameStyle) -> Unit,
     isExistingUserAtLaunch: Boolean = false,
     initialUnlockedThemeIds: Set<String> = setOf("default"),
     initialActiveTheme: ThemeData? = null,
@@ -512,6 +567,8 @@ fun BaseHapticApp(
     var unlockedThemeIds by remember { mutableStateOf(initialUnlockedThemeIds) }
     var pendingReleaseNote by remember { mutableStateOf<com.basehaptic.mobile.data.model.ReleaseNote?>(null) }
     var showFeatureGuide by remember { mutableStateOf(false) }
+    var showExistingTeamDisplayNamePrompt by remember { mutableStateOf(false) }
+    var pendingTeamDisplayNameStyle by remember(teamDisplayNameStyle) { mutableStateOf(teamDisplayNameStyle) }
     var pendingNotificationSettingsIssue by remember { mutableStateOf<String?>(null) }
     var todayGamesSnapshot by remember(selectedTeam) { mutableStateOf<List<Game>>(emptyList()) }
     var todayGamesLoadedDate by remember(selectedTeam) { mutableStateOf<LocalDate?>(null) }
@@ -556,6 +613,22 @@ fun BaseHapticApp(
         onPersistLastSeenFeatureGuideVersion(currentVersion)
         showFeatureGuide = false
         showNotificationSettingsPromptIfNeeded(currentVersion)
+    }
+
+    fun applyTeamDisplayNameStyle(style: TeamDisplayNameStyle) {
+        onTeamDisplayNameStyleChanged(style)
+        onTeamDisplayNamePromptSeen()
+        com.basehaptic.mobile.wear.WearSettingsSyncManager.syncTeamDisplayNameStyleToWatch(context, style)
+        TeamSubscriptionRegistrar.syncIfNeeded(context)
+        if (authState is AuthState.LoggedIn) {
+            coroutineScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        ThemeRepository.saveTeamDisplayNameStyle(style.name)
+                    }
+                } catch (e: Exception) { e.printStackTrace() }
+            }
+        }
     }
 
     fun navigateTo(targetView: Screen) {
@@ -758,6 +831,13 @@ fun BaseHapticApp(
                         onTeamChanged(serverTeam)
                     }
                 }
+                if (settings.teamDisplayNameStyle != null) {
+                    val serverStyle = TeamDisplayNameStyle.fromString(settings.teamDisplayNameStyle)
+                    if (serverStyle != teamDisplayNameStyle) {
+                        onTeamDisplayNameStyleChanged(serverStyle)
+                    }
+                    onTeamDisplayNamePromptSeen()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -776,19 +856,28 @@ fun BaseHapticApp(
         }
     }
 
-    LaunchedEffect(selectedTeam) {
+    LaunchedEffect(selectedTeam, teamDisplayNameStyle) {
         if (selectedTeam != Team.NONE) {
             WearThemeSyncManager.syncThemeToWatch(context, selectedTeam, activeTheme?.id)
+            com.basehaptic.mobile.wear.WearSettingsSyncManager.syncTeamDisplayNameStyleToWatch(context, teamDisplayNameStyle)
         }
     }
 
     // 워치에 사용자 설정 초기 동기화 (영상 알림 토글, 라이브 알림 마스터 스위치)
-    LaunchedEffect(Unit) {
+    LaunchedEffect(teamDisplayNameStyle) {
         val prefs = context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
         val videoEnabled = prefs.getBoolean("event_video_enabled", true)
         val liveHapticEnabled = prefs.getBoolean("live_haptic_enabled", true)
         com.basehaptic.mobile.wear.WearSettingsSyncManager.syncEventVideoEnabledToWatch(context, videoEnabled)
         com.basehaptic.mobile.wear.WearSettingsSyncManager.syncLiveHapticEnabledToWatch(context, liveHapticEnabled)
+        com.basehaptic.mobile.wear.WearSettingsSyncManager.syncTeamDisplayNameStyleToWatch(context, teamDisplayNameStyle)
+    }
+
+    LaunchedEffect(showOnboarding, teamDisplayNamePromptSeen, selectedTeam) {
+        if (!showOnboarding && selectedTeam != Team.NONE && !teamDisplayNamePromptSeen) {
+            pendingTeamDisplayNameStyle = teamDisplayNameStyle
+            showExistingTeamDisplayNamePrompt = true
+        }
     }
 
     DisposableEffect(lifecycleOwner, selectedTeam) {
@@ -936,10 +1025,11 @@ fun BaseHapticApp(
 
     if (showOnboarding) {
         OnboardingScreen(
-            onComplete = { team ->
-                onOnboardingComplete(team)
+            onComplete = { team, style ->
+                onOnboardingComplete(team, style)
             },
             initialSelectedTeam = selectedTeam,
+            initialDisplayNameStyle = teamDisplayNameStyle,
             authState = authState,
             onSignInWithKakao = {
                 coroutineScope.launch { AuthManager.signInWithKakao() }
@@ -982,8 +1072,8 @@ fun BaseHapticApp(
                                 requestWatchSyncPrompt(
                                     gameId = game.id,
                                     navigateToLive = false,
-                                    homeTeam = game.homeTeamId.teamName,
-                                    awayTeam = game.awayTeamId.teamName,
+                                    homeTeam = game.homeTeamId.displayName(teamDisplayNameStyle),
+                                    awayTeam = game.awayTeamId.displayName(teamDisplayNameStyle),
                                 )
                             }
                         },
@@ -1061,6 +1151,7 @@ fun BaseHapticApp(
                     )
                     Screen.Settings -> SettingsScreen(
                         selectedTeam = selectedTeam,
+                        teamDisplayNameStyle = teamDisplayNameStyle,
                         onChangeTeam = { team ->
                             onTeamChanged(team)
                             if (authState is AuthState.LoggedIn) {
@@ -1072,6 +1163,9 @@ fun BaseHapticApp(
                                     } catch (e: Exception) { e.printStackTrace() }
                                 }
                             }
+                        },
+                        onChangeTeamDisplayNameStyle = { style ->
+                            applyTeamDisplayNameStyle(style)
                         },
                         onOpenWatchTest = { navigateTo(Screen.WatchTest) },
                         authState = authState,
@@ -1096,6 +1190,22 @@ fun BaseHapticApp(
                     )
                 }
             }
+        }
+
+        if (showExistingTeamDisplayNamePrompt && selectedTeam != Team.NONE) {
+            TeamDisplayNameStyleDialog(
+                team = selectedTeam,
+                selectedStyle = pendingTeamDisplayNameStyle,
+                onStyleSelected = { pendingTeamDisplayNameStyle = it },
+                onConfirm = {
+                    applyTeamDisplayNameStyle(pendingTeamDisplayNameStyle)
+                    showExistingTeamDisplayNamePrompt = false
+                },
+                onDismiss = {
+                    applyTeamDisplayNameStyle(teamDisplayNameStyle)
+                    showExistingTeamDisplayNamePrompt = false
+                }
+            )
         }
 
         if (showWatchSyncDialog && pendingWatchSyncGameId != null) {

@@ -11,11 +11,13 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 
 /**
  * 현재 팀 테마를 어디서든 접근 가능하게 하는 CompositionLocal
  */
 val LocalTeamTheme = compositionLocalOf { TeamThemes.NONE }
+val LocalTeamDisplayNameStyle = compositionLocalOf { TeamDisplayNameStyle.TEAM }
 
 /**
  * 동적 테마 적용 Composable
@@ -24,6 +26,7 @@ val LocalTeamTheme = compositionLocalOf { TeamThemes.NONE }
 @Composable
 fun BaseHapticTheme(
     selectedTeam: Team = Team.NONE,
+    teamDisplayNameStyle: TeamDisplayNameStyle = TeamDisplayNameStyle.TEAM,
     content: @Composable () -> Unit
 ) {
     val teamTheme = TeamThemes.getThemeForTeam(selectedTeam)
@@ -45,7 +48,10 @@ fun BaseHapticTheme(
         }
     }
 
-    CompositionLocalProvider(LocalTeamTheme provides teamTheme) {
+    CompositionLocalProvider(
+        LocalTeamTheme provides teamTheme,
+        LocalTeamDisplayNameStyle provides teamDisplayNameStyle,
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

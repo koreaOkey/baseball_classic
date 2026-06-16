@@ -26,6 +26,7 @@ object TeamSubscriptionRegistrar {
     private const val PREFS_NAME = "team_subscription_prefs"
     private const val KEY_LAST_REGISTERED_TOKEN = "last_token"
     private const val KEY_LAST_REGISTERED_TEAM = "last_team"
+    private const val KEY_LAST_REGISTERED_DISPLAY_STYLE = "last_display_style"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client = OkHttpClient.Builder()
@@ -43,6 +44,7 @@ object TeamSubscriptionRegistrar {
             .getString(BaseHapticMessagingService.KEY_FCM_TOKEN, null)
             .orEmpty()
         val team = readSelectedTeam(appCtx)
+        val displayStyle = readDisplayNameStyle(appCtx)
 
         if (token.isBlank()) {
             Log.i(TAG, "skip sync: no FCM token yet")
@@ -52,6 +54,7 @@ object TeamSubscriptionRegistrar {
         val prefs = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val lastToken = prefs.getString(KEY_LAST_REGISTERED_TOKEN, null)
         val lastTeam = prefs.getString(KEY_LAST_REGISTERED_TEAM, null)
+        val lastDisplayStyle = prefs.getString(KEY_LAST_REGISTERED_DISPLAY_STYLE, null)
 
         if (team.isBlank()) {
             Log.i(TAG, "skip sync: no team selected (clearing registration if any)")
@@ -61,22 +64,23 @@ object TeamSubscriptionRegistrar {
             return
         }
 
-        if (token == lastToken && team == lastTeam) {
+        if (token == lastToken && team == lastTeam && displayStyle == lastDisplayStyle) {
             Log.i(TAG, "skip sync: already registered team=$team token=${token.take(8)}...")
             return
         }
 
-        Log.i(TAG, "syncing team=$team token=${token.take(8)}...")
-        registerAsync(appCtx, token, team)
+        Log.i(TAG, "syncing team=$team displayStyle=$displayStyle token=${token.take(8)}...")
+        registerAsync(appCtx, token, team, displayStyle)
     }
 
-    private fun registerAsync(context: Context, token: String, team: String) {
+    private fun registerAsync(context: Context, token: String, team: String, displayStyle: String) {
         scope.launch {
             val body = JSONObject()
                 .put("token", token)
                 .put("my_team", team)
                 .put("platform", "android")
                 .put("is_sandbox", false)
+                .put("display_name_style", displayStyle)
                 .toString()
                 .toRequestBody(jsonMedia)
             val request = Request.Builder()
@@ -90,8 +94,9 @@ object TeamSubscriptionRegistrar {
                             .edit()
                             .putString(KEY_LAST_REGISTERED_TOKEN, token)
                             .putString(KEY_LAST_REGISTERED_TEAM, team)
+                            .putString(KEY_LAST_REGISTERED_DISPLAY_STYLE, displayStyle)
                             .apply()
-                        Log.i(TAG, "registered team=$team token=${token.take(8)}...")
+                        Log.i(TAG, "registered team=$team displayStyle=$displayStyle token=${token.take(8)}...")
                     } else {
                         Log.w(TAG, "register failed: code=${response.code}")
                     }
@@ -115,6 +120,7 @@ object TeamSubscriptionRegistrar {
                             .edit()
                             .remove(KEY_LAST_REGISTERED_TOKEN)
                             .remove(KEY_LAST_REGISTERED_TEAM)
+                            .remove(KEY_LAST_REGISTERED_DISPLAY_STYLE)
                             .apply()
                         Log.i(TAG, "unregistered token=${token.take(8)}...")
                     } else {
@@ -132,5 +138,11 @@ object TeamSubscriptionRegistrar {
             .getString("selected_team", null)
             .orEmpty()
             .let { if (it == "NONE") "" else it }
+    }
+
+    private fun readDisplayNameStyle(context: Context): String {
+        return context.getSharedPreferences("basehaptic_user_prefs", Context.MODE_PRIVATE)
+            .getString("team_display_name_style", "TEAM")
+            .let { if (it == "MASCOT") "MASCOT" else "TEAM" }
     }
 }

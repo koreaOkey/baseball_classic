@@ -36,6 +36,14 @@ final class WatchThemeSyncManager {
         ])
     }
 
+    static func syncTeamDisplayNameStyleToWatch(style: TeamDisplayNameStyle) {
+        syncToWatch(context: [
+            "type": "settings_update",
+            "team_display_name_style": style.rawValue,
+            "updated_at": Date().timeIntervalSince1970
+        ])
+    }
+
     static func syncEventFiltersToWatch(filters: [String: Bool]) {
         var context: [String: Any] = [
             "type": "settings_update",

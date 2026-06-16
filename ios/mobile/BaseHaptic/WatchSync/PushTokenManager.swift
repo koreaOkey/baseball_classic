@@ -2,6 +2,11 @@ import Foundation
 
 /// APNs 디바이스 토큰을 백엔드에 등록/해제하는 매니저
 enum PushTokenManager {
+    private static var displayNameStyle: String {
+        TeamDisplayNameStyle
+            .fromString(UserDefaults.standard.string(forKey: "team_display_name_style"))
+            .rawValue
+    }
 
     /// embedded.mobileprovision에서 aps-environment를 읽어 sandbox 여부 판단
     static func isApnsSandbox() -> Bool {
@@ -55,7 +60,8 @@ enum PushTokenManager {
             "game_id": gameId,
             "my_team": myTeam,
             "platform": "ios",
-            "is_sandbox": isSandbox
+            "is_sandbox": isSandbox,
+            "display_name_style": displayNameStyle
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
@@ -90,7 +96,8 @@ enum PushTokenManager {
             "game_id": gameId,
             "my_team": myTeam,
             "platform": "watchos",
-            "is_sandbox": isSandbox
+            "is_sandbox": isSandbox,
+            "display_name_style": displayNameStyle
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
@@ -185,6 +192,7 @@ enum PushTokenManager {
 enum TeamSubscriptionManager {
     private static let lastTokenKey = "team_subscription_last_token"
     private static let lastTeamKey = "team_subscription_last_team"
+    private static let lastDisplayNameStyleKey = "team_subscription_last_display_name_style"
 
     /// 현재 token + selected_team 을 백엔드에 동기화. 직전과 동일하면 생략.
     static func syncIfNeeded() async {
@@ -193,9 +201,13 @@ enum TeamSubscriptionManager {
 
         let raw = UserDefaults.standard.string(forKey: "selected_team") ?? ""
         let myTeam = (raw.lowercased() == "none" || raw.isEmpty) ? "" : raw
+        let displayNameStyle = TeamDisplayNameStyle
+            .fromString(UserDefaults.standard.string(forKey: "team_display_name_style"))
+            .rawValue
 
         let lastToken = UserDefaults.standard.string(forKey: lastTokenKey)
         let lastTeam = UserDefaults.standard.string(forKey: lastTeamKey)
+        let lastDisplayNameStyle = UserDefaults.standard.string(forKey: lastDisplayNameStyleKey)
 
         if myTeam.isEmpty {
             if let prev = lastToken, !prev.isEmpty {
@@ -204,12 +216,12 @@ enum TeamSubscriptionManager {
             return
         }
 
-        if token == lastToken && myTeam == lastTeam { return }
+        if token == lastToken && myTeam == lastTeam && displayNameStyle == lastDisplayNameStyle { return }
 
-        await register(token: token, myTeam: myTeam)
+        await register(token: token, myTeam: myTeam, displayNameStyle: displayNameStyle)
     }
 
-    private static func register(token: String, myTeam: String) async {
+    private static func register(token: String, myTeam: String, displayNameStyle: String) async {
         let url = URL(string: "\(BackendConfig.baseURL)/team-subscriptions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -218,7 +230,8 @@ enum TeamSubscriptionManager {
             "token": token,
             "my_team": myTeam,
             "platform": "ios",
-            "is_sandbox": PushTokenManager.isApnsSandbox()
+            "is_sandbox": PushTokenManager.isApnsSandbox(),
+            "display_name_style": displayNameStyle
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         do {
@@ -227,7 +240,8 @@ enum TeamSubscriptionManager {
             if (200..<300).contains(statusCode) {
                 UserDefaults.standard.set(token, forKey: lastTokenKey)
                 UserDefaults.standard.set(myTeam, forKey: lastTeamKey)
-                print("[TeamSubscription] Registered team=\(myTeam) status=\(statusCode)")
+                UserDefaults.standard.set(displayNameStyle, forKey: lastDisplayNameStyleKey)
+                print("[TeamSubscription] Registered team=\(myTeam) displayStyle=\(displayNameStyle) status=\(statusCode)")
             } else {
                 print("[TeamSubscription] Register failed status=\(statusCode)")
             }
@@ -246,6 +260,7 @@ enum TeamSubscriptionManager {
             if (200..<300).contains(statusCode) {
                 UserDefaults.standard.removeObject(forKey: lastTokenKey)
                 UserDefaults.standard.removeObject(forKey: lastTeamKey)
+                UserDefaults.standard.removeObject(forKey: lastDisplayNameStyleKey)
                 print("[TeamSubscription] Unregistered status=\(statusCode)")
             }
         } catch {

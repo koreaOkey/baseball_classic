@@ -251,6 +251,7 @@ class DeviceToken(Base):
     my_team: Mapped[str | None] = mapped_column(String(64), nullable=True)
     platform: Mapped[str] = mapped_column(String(16), nullable=False, default="ios")
     is_sandbox: Mapped[bool] = mapped_column(nullable=False, server_default="false")
+    display_name_style: Mapped[str] = mapped_column(String(16), nullable=False, default="TEAM", server_default="TEAM")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
@@ -299,6 +300,7 @@ class TeamSubscriptionToken(Base):
     my_team: Mapped[str] = mapped_column(String(64), nullable=False)
     platform: Mapped[str] = mapped_column(String(16), nullable=False, default="ios")
     is_sandbox: Mapped[bool] = mapped_column(nullable=False, server_default="false")
+    display_name_style: Mapped[str] = mapped_column(String(16), nullable=False, default="TEAM", server_default="TEAM")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 

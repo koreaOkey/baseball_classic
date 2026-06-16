@@ -24,7 +24,7 @@ from app.main import app  # noqa: E402
 from app import main as main_module  # noqa: E402
 from app import db as db_module  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
-from app.models import AppConfig, Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord  # noqa: E402
+from app.models import AppConfig, DeviceToken, Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord, TeamSubscriptionToken  # noqa: E402
 from app.services import _event_out_count, normalize_event_type, normalize_status  # noqa: E402
 from app.weather import build_weather_summary  # noqa: E402
 
@@ -1732,6 +1732,47 @@ def test_live_view_session_upsert_tracks_active_surface() -> None:
         assert rows[0].active is False
         assert rows[0].token_key == "fcm-token-2"
         assert rows[0].my_team == "LG"
+
+
+def test_team_display_name_style_resolves_team_mascot_and_default() -> None:
+    assert main_module._team_display_name("DOOSAN", "TEAM") == "두산"
+    assert main_module._team_display_name("DOOSAN", "MASCOT") == "베어스"
+    assert main_module._team_display_name("두산 베어스", None) == "두산"
+    assert main_module._team_display_name("UNKNOWN", "MASCOT") == "UNKNOWN"
+
+
+def test_push_token_registration_stores_display_name_style_with_default() -> None:
+    from app.db import init_db
+
+    init_db()
+    with TestClient(app) as client:
+        device_created = client.post(
+            "/device-tokens",
+            json={
+                "token": "apns-display-style-1",
+                "game_id": "20260616STYLE01",
+                "my_team": "DOOSAN",
+                "platform": "ios",
+                "display_name_style": "MASCOT",
+            },
+        )
+        assert device_created.status_code == 200
+
+        subscription_created = client.post(
+            "/team-subscriptions",
+            json={
+                "token": "team-display-style-default-1",
+                "my_team": "DOOSAN",
+                "platform": "android",
+            },
+        )
+        assert subscription_created.status_code == 200
+
+    with SessionLocal() as db:
+        device = db.query(DeviceToken).filter_by(token="apns-display-style-1").one()
+        subscription = db.query(TeamSubscriptionToken).filter_by(token="team-display-style-default-1").one()
+        assert device.display_name_style == "MASCOT"
+        assert subscription.display_name_style == "TEAM"
 
 
 def test_event_at_bat_id_and_seqno_populated_from_source_event_id() -> None:

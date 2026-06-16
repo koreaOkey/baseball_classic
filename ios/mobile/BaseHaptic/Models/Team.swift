@@ -31,6 +31,26 @@ enum Team: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    var clubName: String {
+        switch self {
+        case .none: return "없음"
+        case .doosan: return "두산"
+        case .lg: return "LG"
+        case .kiwoom: return "키움"
+        case .samsung: return "삼성"
+        case .lotte: return "롯데"
+        case .ssg: return "SSG"
+        case .kt: return "KT"
+        case .hanwha: return "한화"
+        case .kia: return "KIA"
+        case .nc: return "NC"
+        }
+    }
+
+    func displayName(style: TeamDisplayNameStyle) -> String {
+        style == .team ? clubName : teamName
+    }
+
     var color: Color {
         switch self {
         case .none: return Color(hex: 0x3B82F6)
@@ -88,5 +108,14 @@ enum Team: String, CaseIterable, Codable, Identifiable {
         if normalized.contains("kia") || normalized.contains("기아") || normalized.contains("타이거즈") { return .kia }
         if normalized.contains("nc") || normalized.contains("dinos") || normalized.contains("엔씨") || normalized.contains("다이노스") { return .nc }
         return .none
+    }
+}
+
+enum TeamDisplayNameStyle: String, Codable {
+    case team = "TEAM"
+    case mascot = "MASCOT"
+
+    static func fromString(_ value: String?) -> TeamDisplayNameStyle {
+        value == TeamDisplayNameStyle.mascot.rawValue ? .mascot : .team
     }
 }

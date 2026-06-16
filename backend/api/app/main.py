@@ -659,12 +659,14 @@ def register_device_token(
             my_team=payload.my_team,
             platform=payload.platform,
             is_sandbox=payload.is_sandbox,
+            display_name_style=payload.display_name_style,
         ).on_conflict_do_update(
             constraint="uq_device_token_game",
             set_={
                 "my_team": payload.my_team,
                 "platform": payload.platform,
                 "is_sandbox": payload.is_sandbox,
+                "display_name_style": payload.display_name_style,
             },
         )
         db.execute(stmt)
@@ -678,7 +680,9 @@ def register_device_token(
 
         if existing:
             existing.my_team = payload.my_team
+            existing.platform = payload.platform
             existing.is_sandbox = payload.is_sandbox
+            existing.display_name_style = payload.display_name_style
         else:
             db.add(DeviceToken(
                 token=payload.token,
@@ -686,6 +690,7 @@ def register_device_token(
                 my_team=payload.my_team,
                 platform=payload.platform,
                 is_sandbox=payload.is_sandbox,
+                display_name_style=payload.display_name_style,
             ))
     db.commit()
     background_tasks.add_task(_invalidate_push_token_cache, payload.game_id)
@@ -831,12 +836,14 @@ def register_team_subscription(
             my_team=payload.my_team,
             platform=payload.platform,
             is_sandbox=payload.is_sandbox,
+            display_name_style=payload.display_name_style,
         ).on_conflict_do_update(
             constraint="uq_team_subscription_token",
             set_={
                 "my_team": payload.my_team,
                 "platform": payload.platform,
                 "is_sandbox": payload.is_sandbox,
+                "display_name_style": payload.display_name_style,
             },
         )
         db.execute(stmt)
@@ -848,12 +855,14 @@ def register_team_subscription(
             existing.my_team = payload.my_team
             existing.platform = payload.platform
             existing.is_sandbox = payload.is_sandbox
+            existing.display_name_style = payload.display_name_style
         else:
             db.add(TeamSubscriptionToken(
                 token=payload.token,
                 my_team=payload.my_team,
                 platform=payload.platform,
                 is_sandbox=payload.is_sandbox,
+                display_name_style=payload.display_name_style,
             ))
     db.commit()
     return {"status": "ok"}
@@ -871,14 +880,29 @@ def unregister_team_subscription(
     return {"status": "ok"}
 
 
-def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str]]:
+def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str, str]]:
     """게임에 구독된 디바이스 토큰 목록 조회 (sync DB work)"""
     with SessionLocal() as db:
         rows = db.execute(
-            select(DeviceToken.token, DeviceToken.my_team, DeviceToken.is_sandbox, DeviceToken.platform)
+            select(
+                DeviceToken.token,
+                DeviceToken.my_team,
+                DeviceToken.is_sandbox,
+                DeviceToken.platform,
+                DeviceToken.display_name_style,
+            )
             .where(DeviceToken.game_id == game_id)
         ).all()
-        return [(row.token, row.my_team, row.is_sandbox, row.platform) for row in rows]
+        return [
+            (
+                row.token,
+                row.my_team,
+                row.is_sandbox,
+                row.platform,
+                _normalize_display_style(row.display_name_style),
+            )
+            for row in rows
+        ]
 
 
 # 푸시 토큰은 경기당 수십~수백 건이고 거의 변하지 않으므로 짧은 TTL 로 Redis 캐시.
@@ -888,16 +912,22 @@ _PUSH_TOKEN_CACHE_KEY = "push_tokens:{game_id}"
 _LIVE_ACTIVITY_TOKEN_CACHE_KEY = "live_activity_tokens:{game_id}"
 
 
-async def _cached_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str]]:
+async def _cached_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str, str]]:
     cache_key = _PUSH_TOKEN_CACHE_KEY.format(game_id=game_id)
     cached = await redis_relay.get_cache(cache_key)
     if cached is not None:
         items = cached.get("items") if isinstance(cached, dict) else None
         if isinstance(items, list):
             return [
-                (str(row[0]), row[1], bool(row[2]), str(row[3]))
+                (
+                    str(row[0]),
+                    row[1],
+                    bool(row[2]),
+                    str(row[3]),
+                    _normalize_display_style(str(row[4]) if len(row) > 4 else None),
+                )
                 for row in items
-                if isinstance(row, (list, tuple)) and len(row) == 4
+                if isinstance(row, (list, tuple)) and len(row) >= 4
             ]
 
     rows = await asyncio.to_thread(_load_push_tokens, game_id)
@@ -951,6 +981,19 @@ _TEAM_CODE_TO_MASCOT: dict[str, str] = {
     "NC": "다이노스",
 }
 
+_TEAM_CODE_TO_CLUB: dict[str, str] = {
+    "DOOSAN": "두산",
+    "LG": "LG",
+    "KIWOOM": "키움",
+    "SAMSUNG": "삼성",
+    "LOTTE": "롯데",
+    "SSG": "SSG",
+    "KT": "KT",
+    "HANWHA": "한화",
+    "KIA": "KIA",
+    "NC": "NC",
+}
+
 # 네이버 KBO 라벨이 영문 코드 / 한글 모기업 / 마스코트 어느 형태로 들어와도
 # 사용자 노출용 마스코트로 정규화하기 위한 양방향 별칭 테이블.
 _TEAM_ALIAS_TO_MASCOT: dict[str, str] = {
@@ -978,6 +1021,39 @@ _TEAM_ALIAS_TO_MASCOT: dict[str, str] = {
     "다이노스": "다이노스",
 }
 
+_TEAM_ALIAS_TO_CLUB: dict[str, str] = {
+    "두산": "두산",
+    "베어스": "두산",
+    "엘지": "LG",
+    "LG": "LG",
+    "트윈스": "LG",
+    "키움": "키움",
+    "히어로즈": "키움",
+    "넥센": "키움",
+    "삼성": "삼성",
+    "라이온즈": "삼성",
+    "롯데": "롯데",
+    "자이언츠": "롯데",
+    "에스에스지": "SSG",
+    "SSG": "SSG",
+    "랜더스": "SSG",
+    "케이티": "KT",
+    "KT": "KT",
+    "위즈": "KT",
+    "한화": "한화",
+    "이글스": "한화",
+    "기아": "KIA",
+    "KIA": "KIA",
+    "타이거즈": "KIA",
+    "엔씨": "NC",
+    "NC": "NC",
+    "다이노스": "NC",
+}
+
+
+def _normalize_display_style(style: str | None) -> str:
+    return "MASCOT" if style == "MASCOT" else "TEAM"
+
 
 def _resolve_mascot(raw: str | None) -> str | None:
     """모든 라벨 형태(영문 코드 / 한글 모기업 / 마스코트)를 마스코트로 변환.
@@ -992,6 +1068,64 @@ def _resolve_mascot(raw: str | None) -> str | None:
         return mapped
     if mapped := _TEAM_ALIAS_TO_MASCOT.get(key):
         return mapped
+    lowered = key.lower()
+    if "doosan" in lowered or "두산" in key or "베어스" in key:
+        return "베어스"
+    if "lg" in lowered or "엘지" in key or "트윈스" in key:
+        return "트윈스"
+    if "kiwoom" in lowered or "키움" in key or "히어로즈" in key or "넥센" in key:
+        return "히어로즈"
+    if "samsung" in lowered or "삼성" in key or "라이온즈" in key:
+        return "라이온즈"
+    if "lotte" in lowered or "롯데" in key or "자이언츠" in key:
+        return "자이언츠"
+    if "ssg" in lowered or "lander" in lowered or "에스에스지" in key or "랜더스" in key:
+        return "랜더스"
+    if "kt" in lowered or "wiz" in lowered or "케이티" in key or "위즈" in key:
+        return "위즈"
+    if "hanwha" in lowered or "한화" in key or "이글스" in key:
+        return "이글스"
+    if "kia" in lowered or "기아" in key or "타이거즈" in key:
+        return "타이거즈"
+    if "nc" in lowered or "dinos" in lowered or "엔씨" in key or "다이노스" in key:
+        return "다이노스"
+    return None
+
+
+def _resolve_club(raw: str | None) -> str | None:
+    """모든 라벨 형태(영문 코드 / 한글 모기업 / 마스코트)를 팀명으로 변환.
+    매칭 실패 시 None.
+    """
+    if not raw:
+        return None
+    key = raw.strip()
+    if not key:
+        return None
+    if mapped := _TEAM_CODE_TO_CLUB.get(key.upper()):
+        return mapped
+    if mapped := _TEAM_ALIAS_TO_CLUB.get(key):
+        return mapped
+    lowered = key.lower()
+    if "doosan" in lowered or "두산" in key or "베어스" in key:
+        return "두산"
+    if "lg" in lowered or "엘지" in key or "트윈스" in key:
+        return "LG"
+    if "kiwoom" in lowered or "키움" in key or "히어로즈" in key or "넥센" in key:
+        return "키움"
+    if "samsung" in lowered or "삼성" in key or "라이온즈" in key:
+        return "삼성"
+    if "lotte" in lowered or "롯데" in key or "자이언츠" in key:
+        return "롯데"
+    if "ssg" in lowered or "lander" in lowered or "에스에스지" in key or "랜더스" in key:
+        return "SSG"
+    if "kt" in lowered or "wiz" in lowered or "케이티" in key or "위즈" in key:
+        return "KT"
+    if "hanwha" in lowered or "한화" in key or "이글스" in key:
+        return "한화"
+    if "kia" in lowered or "기아" in key or "타이거즈" in key:
+        return "KIA"
+    if "nc" in lowered or "dinos" in lowered or "엔씨" in key or "다이노스" in key:
+        return "NC"
     return None
 
 
@@ -1001,13 +1135,15 @@ def _normalize_my_team_for_watch(raw: str | None) -> str:
     return _resolve_mascot(raw) or raw
 
 
-def _team_display_name(raw: str | None) -> str:
+def _team_display_name(raw: str | None, style: str | None = "TEAM") -> str:
     """home_team / away_team 의 백엔드 코드("DOOSAN") 또는 한글 라벨("두산")을
-    사용자 노출용 마스코트("베어스")로 변환. 알 수 없는 값은 원본 그대로.
+    사용자 선호 표시명으로 변환. 알 수 없는 값은 원본 그대로.
     """
     if not raw:
         return ""
-    return _resolve_mascot(raw) or raw
+    if _normalize_display_style(style) == "MASCOT":
+        return _resolve_mascot(raw) or raw
+    return _resolve_club(raw) or raw
 
 
 def _team_codes_for_match(raw: str | None) -> set[str]:
@@ -1028,8 +1164,8 @@ def _team_codes_for_match(raw: str | None) -> set[str]:
     return candidates
 
 
-def _load_team_subscriptions(my_teams: set[str]) -> list[tuple[str, str, str, bool]]:
-    """응원팀이 my_teams 에 포함된 구독 토큰 조회. (token, my_team, platform, is_sandbox)"""
+def _load_team_subscriptions(my_teams: set[str]) -> list[tuple[str, str, str, bool, str]]:
+    """응원팀이 my_teams 에 포함된 구독 토큰 조회. (token, my_team, platform, is_sandbox, display_style)"""
     if not my_teams:
         return []
     with SessionLocal() as db:
@@ -1039,9 +1175,13 @@ def _load_team_subscriptions(my_teams: set[str]) -> list[tuple[str, str, str, bo
                 TeamSubscriptionToken.my_team,
                 TeamSubscriptionToken.platform,
                 TeamSubscriptionToken.is_sandbox,
+                TeamSubscriptionToken.display_name_style,
             ).where(TeamSubscriptionToken.my_team.in_(list(my_teams)))
         ).all()
-        return [(r.token, r.my_team, r.platform, bool(r.is_sandbox)) for r in rows]
+        return [
+            (r.token, r.my_team, r.platform, bool(r.is_sandbox), _normalize_display_style(r.display_name_style))
+            for r in rows
+        ]
 
 
 async def _send_game_start_notification(
@@ -1062,25 +1202,25 @@ async def _send_game_start_notification(
     if not subscriptions:
         return
 
-    home_display = _team_display_name(home_team)
-    away_display = _team_display_name(away_team)
-    title = f"[{away_display}] vs [{home_display}]"
-    data = {
-        "game_id": game_id,
-        "kind": "game_start",
-        "home_team": home_display,
-        "away_team": away_display,
-    }
-
-    grouped: dict[str, list[tuple[str, str, bool]]] = defaultdict(list)
-    for token, my_team, platform, is_sandbox in subscriptions:
-        grouped[my_team].append((token, (platform or "ios").lower(), bool(is_sandbox)))
+    grouped: dict[tuple[str, str], list[tuple[str, str, bool]]] = defaultdict(list)
+    for token, my_team, platform, is_sandbox, display_style in subscriptions:
+        grouped[(my_team, display_style)].append((token, (platform or "ios").lower(), bool(is_sandbox)))
 
     tasks: list[Any] = []
     total_ios = 0
     total_android = 0
-    for my_team, group in grouped.items():
-        team_display = _team_display_name(my_team)
+    for (my_team, display_style), group in grouped.items():
+        home_display = _team_display_name(home_team, display_style)
+        away_display = _team_display_name(away_team, display_style)
+        title = f"[{away_display}] vs [{home_display}]"
+        data = {
+            "game_id": game_id,
+            "kind": "game_start",
+            "home_team": home_display,
+            "away_team": away_display,
+            "display_name_style": display_style,
+        }
+        team_display = _team_display_name(my_team, display_style)
         body = f"{team_display} 경기가 시작되었습니다!"
 
         ios_targets: list[tuple[str, bool]] = []
@@ -1112,7 +1252,7 @@ async def _send_game_start_notification(
         await asyncio.gather(*tasks, return_exceptions=True)
     logger.info(
         "[game-start-push] gameId=%s ios=%d android=%d teams=%s",
-        game_id, total_ios, total_android, sorted(grouped.keys()),
+        game_id, total_ios, total_android, sorted(f"{team}:{style}" for team, style in grouped.keys()),
     )
 
 
@@ -1126,7 +1266,15 @@ async def _send_push_for_game_events(
     if not token_rows:
         return
 
-    token_info = {t[0]: {"my_team": t[1], "is_sandbox": t[2], "platform": t[3]} for t in token_rows}
+    token_info = {
+        t[0]: {
+            "my_team": t[1],
+            "is_sandbox": t[2],
+            "platform": t[3],
+            "display_name_style": t[4],
+        }
+        for t in token_rows
+    }
     tokens = list(token_info.keys())
 
     # 이벤트가 있으면 각 이벤트에 대해 push, 없으면 상태 업데이트만
@@ -1156,7 +1304,11 @@ async def _send_push_for_game_events(
         coros = []
         for token in tokens:
             info = token_info[token]
-            payload_with_team = {**push_payload, "my_team": _normalize_my_team_for_watch(info["my_team"])}
+            payload_with_team = {
+                **push_payload,
+                "my_team": _normalize_my_team_for_watch(info["my_team"]),
+                "display_name_style": info["display_name_style"],
+            }
             coros.append(send_push(
                 token,
                 payload_with_team,

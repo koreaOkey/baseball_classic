@@ -1,5 +1,10 @@
 package com.basehaptic.mobile.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -40,6 +45,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.basehaptic.mobile.ui.components.BannerAd
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.EventFilterOption
@@ -228,6 +234,7 @@ fun WatchTestScreen(
     var logMessages by remember { mutableStateOf(listOf<String>()) }
     var isSimulating by remember { mutableStateOf(false) }
     var isLiveScorePreviewActive by remember { mutableStateOf(false) }
+    var pendingLiveScorePreviewAlert by remember { mutableStateOf<Boolean?>(null) }
     var simIndex by remember { mutableIntStateOf(0) }
 
     fun addLog(msg: String) {
@@ -366,6 +373,36 @@ fun WatchTestScreen(
                 else -> "[LIVE_SCORE] 알림 권한이 없어 게시하지 못함"
             }
         )
+    }
+
+    fun hasNotificationPostPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val alert = pendingLiveScorePreviewAlert ?: false
+        pendingLiveScorePreviewAlert = null
+        if (granted) {
+            postLiveScorePreview(alert = alert)
+        } else {
+            addLog("[LIVE_SCORE] 알림 권한이 거부되어 미리보기를 표시하지 못함")
+        }
+    }
+
+    fun requestOrPostLiveScorePreview(alert: Boolean) {
+        if (hasNotificationPostPermission()) {
+            postLiveScorePreview(alert = alert)
+            return
+        }
+        pendingLiveScorePreviewAlert = alert
+        addLog("[LIVE_SCORE] 알림 권한 요청")
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     Scaffold(
@@ -558,7 +595,7 @@ fun WatchTestScreen(
                         Spacer(Modifier.height(AppSpacing.sm))
                         Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
                             Button(
-                                onClick = { postLiveScorePreview(alert = false) },
+                                onClick = { requestOrPostLiveScorePreview(alert = false) },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(AppSpacing.buttonHeight),
@@ -568,7 +605,7 @@ fun WatchTestScreen(
                                 Text("Live Score 시작", style = AppFont.bodyBold)
                             }
                             Button(
-                                onClick = { postLiveScorePreview(alert = true) },
+                                onClick = { requestOrPostLiveScorePreview(alert = true) },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(AppSpacing.buttonHeight),

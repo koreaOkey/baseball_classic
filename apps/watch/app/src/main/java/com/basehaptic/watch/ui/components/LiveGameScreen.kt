@@ -60,6 +60,7 @@ import com.basehaptic.watch.ui.theme.Red500
 import com.basehaptic.watch.ui.theme.WatchAppShapes
 import com.basehaptic.watch.ui.theme.WatchAppSpacing
 import com.basehaptic.watch.ui.theme.WatchUiProfile
+import com.basehaptic.watch.TeamDisplayNameStyle
 import com.basehaptic.watch.displayTeamName
 import com.basehaptic.watch.ui.theme.Yellow400
 import com.basehaptic.watch.ui.theme.rememberWatchUiProfile
@@ -75,6 +76,7 @@ private val TextShadowStyle = TextStyle(
 @Composable
 fun LiveGameScreen(
     gameData: GameData,
+    teamDisplayNameStyle: TeamDisplayNameStyle = TeamDisplayNameStyle.MASCOT,
     modifier: Modifier = Modifier
 ) {
     val uiProfile = rememberWatchUiProfile()
@@ -175,6 +177,7 @@ fun LiveGameScreen(
                 modifier = Modifier.weight(1f),
                 team = gameData.awayTeam,
                 score = gameData.awayScore,
+                teamDisplayNameStyle = teamDisplayNameStyle,
                 uiProfile = uiProfile
             )
 
@@ -222,6 +225,7 @@ fun LiveGameScreen(
                 modifier = Modifier.weight(1f),
                 team = gameData.homeTeam,
                 score = gameData.homeScore,
+                teamDisplayNameStyle = teamDisplayNameStyle,
                 uiProfile = uiProfile
             )
         }
@@ -357,6 +361,7 @@ private fun ScoreSide(
     modifier: Modifier = Modifier,
     team: String,
     score: Int,
+    teamDisplayNameStyle: TeamDisplayNameStyle,
     uiProfile: WatchUiProfile
 ) {
     Column(
@@ -374,7 +379,7 @@ private fun ScoreSide(
             style = TextShadowStyle
         )
         Text(
-            text = displayTeamName(team),
+            text = displayTeamName(team, teamDisplayNameStyle),
             modifier = Modifier.fillMaxWidth(),
             color = Color.White.copy(alpha = 0.76f),
             fontSize = uiProfile.teamNameSp.sp,

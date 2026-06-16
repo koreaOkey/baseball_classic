@@ -36,6 +36,7 @@ class DataLayerListenerService : WearableListenerService() {
         const val SETTINGS_PREFS_NAME = "watch_user_prefs"
         const val PREF_KEY_EVENT_VIDEO_ENABLED = "event_video_enabled"
         const val PREF_KEY_LIVE_HAPTIC_ENABLED = "live_haptic_enabled"
+        const val PREF_KEY_TEAM_DISPLAY_NAME_STYLE = "team_display_name_style"
 
         val EVENT_FILTER_PREF_KEYS = listOf(
             "event_filter_homerun_enabled",
@@ -320,6 +321,17 @@ class DataLayerListenerService : WearableListenerService() {
             val enabled = dataMap.getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)
             prefs.edit().putBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, enabled).apply()
             Log.d(TAG, "live_haptic_enabled = $enabled")
+            changed = true
+        }
+        if (dataMap.containsKey(PREF_KEY_TEAM_DISPLAY_NAME_STYLE)) {
+            val style = dataMap.getString(PREF_KEY_TEAM_DISPLAY_NAME_STYLE, "TEAM") ?: "TEAM"
+            val normalizedStyle = if (style == TeamDisplayNameStyle.MASCOT.name) {
+                TeamDisplayNameStyle.MASCOT.name
+            } else {
+                TeamDisplayNameStyle.TEAM.name
+            }
+            prefs.edit().putString(PREF_KEY_TEAM_DISPLAY_NAME_STYLE, normalizedStyle).apply()
+            Log.d(TAG, "team_display_name_style = $normalizedStyle")
             changed = true
         }
         for (filterKey in EVENT_FILTER_PREF_KEYS) {

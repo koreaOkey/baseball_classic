@@ -90,6 +90,7 @@ import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.ui.theme.Gray950
 import com.basehaptic.mobile.ui.theme.Green400
 import com.basehaptic.mobile.ui.theme.Green500
+import com.basehaptic.mobile.ui.theme.LocalTeamDisplayNameStyle
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Red500
 import com.basehaptic.mobile.ui.theme.Yellow400
@@ -110,6 +111,7 @@ fun LiveGameScreen(
     onSetSyncedGame: (String?) -> Unit,
     onBack: () -> Unit
 ) {
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
     var gameState by remember(gameId) { mutableStateOf<BackendGamesRepository.LiveGameState?>(null) }
     var events by remember(gameId) { mutableStateOf<List<BackendGamesRepository.LiveEvent>>(emptyList()) }
     var loadError by remember(gameId) { mutableStateOf<String?>(null) }
@@ -395,12 +397,12 @@ fun LiveGameScreen(
                         val prevKey = filteredAtBats.getOrNull(index - 1)?.let(::sectionKey)
                         val currKey = sectionKey(group)
                         if (index == 0 || prevKey != currKey) {
-                            AtBatSectionHeader(title = sectionTitle(group, state))
+                            AtBatSectionHeader(title = sectionTitle(group, state, teamDisplayNameStyle))
                         }
                         AtBatCard(
                             group = group,
-                            awayTeamName = state.awayTeamId.teamName,
-                            homeTeamName = state.homeTeamId.teamName,
+                            awayTeamName = state.awayTeamId.displayName(teamDisplayNameStyle),
+                            homeTeamName = state.homeTeamId.displayName(teamDisplayNameStyle),
                             highlightScoreOutcome = isScoreFilterActive,
                         )
                     }
@@ -493,6 +495,7 @@ private fun ScoreboardCard(
     latestEvent: BackendGamesRepository.LiveEvent?
 ) {
     val favoriteTeam = LocalTeamTheme.current.team
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
 
     Card(
         colors = CardDefaults.cardColors(containerColor = Gray950),
@@ -514,7 +517,7 @@ private fun ScoreboardCard(
                 .padding(AppSpacing.md)
         ) {
             Text(
-                text = currentAttackLabel(state),
+                text = currentAttackLabel(state, teamDisplayNameStyle),
                 color = Yellow400,
                 style = AppFont.captionBold,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -528,7 +531,7 @@ private fun ScoreboardCard(
             ) {
                 ScoreTeamBlock(
                     team = state.awayTeamId,
-                    teamName = state.awayTeamId.teamName,
+                    teamName = state.awayTeamId.displayName(teamDisplayNameStyle),
                     score = state.awayScore,
                     showFavorite = favoriteTeam == state.awayTeamId && favoriteTeam != Team.NONE
                 )
@@ -543,7 +546,7 @@ private fun ScoreboardCard(
 
                 ScoreTeamBlock(
                     team = state.homeTeamId,
-                    teamName = state.homeTeamId.teamName,
+                    teamName = state.homeTeamId.displayName(teamDisplayNameStyle),
                     score = state.homeScore,
                     showFavorite = favoriteTeam == state.homeTeamId && favoriteTeam != Team.NONE
                 )
@@ -1417,11 +1420,15 @@ private fun AtBatSectionHeader(title: String) {
 
 private fun sectionKey(group: AtBatGroup): String = group.inning ?: "?"
 
-private fun sectionTitle(group: AtBatGroup, state: BackendGamesRepository.LiveGameState): String {
+private fun sectionTitle(
+    group: AtBatGroup,
+    state: BackendGamesRepository.LiveGameState,
+    teamDisplayNameStyle: com.basehaptic.mobile.data.model.TeamDisplayNameStyle
+): String {
     val inning = group.inning?.takeIf { it.isNotEmpty() } ?: return "타석"
     val teamName = when {
-        inning.contains("초") -> state.awayTeamId.teamName
-        inning.contains("말") -> state.homeTeamId.teamName
+        inning.contains("초") -> state.awayTeamId.displayName(teamDisplayNameStyle)
+        inning.contains("말") -> state.homeTeamId.displayName(teamDisplayNameStyle)
         else -> ""
     }
     return if (teamName.isEmpty()) inning else "$inning $teamName 공격"
@@ -1951,10 +1958,13 @@ private fun baseText(state: BackendGamesRepository.LiveGameState): String {
     return if (bases.isEmpty()) "없음" else bases.joinToString(",")
 }
 
-private fun currentAttackLabel(state: BackendGamesRepository.LiveGameState): String {
+private fun currentAttackLabel(
+    state: BackendGamesRepository.LiveGameState,
+    teamDisplayNameStyle: com.basehaptic.mobile.data.model.TeamDisplayNameStyle
+): String {
     val battingTeam = when {
-        state.inning.contains("초") -> state.awayTeamId.teamName
-        state.inning.contains("말") -> state.homeTeamId.teamName
+        state.inning.contains("초") -> state.awayTeamId.displayName(teamDisplayNameStyle)
+        state.inning.contains("말") -> state.homeTeamId.displayName(teamDisplayNameStyle)
         else -> "공격"
     }
     return "${state.inning.ifBlank { "경기 중" }} · $battingTeam 공격"

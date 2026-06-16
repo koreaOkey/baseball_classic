@@ -16,6 +16,11 @@ struct LiveGameScreen: View {
     @State private var loadingInningNumbers: Set<Int> = []
     @State private var isScoreEventsLoaded: Bool = false
     @State private var isScoreEventsLoading: Bool = false
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
 
     private var filteredEvents: [LiveEvent] {
         if isScoreFilterActive {
@@ -105,12 +110,12 @@ struct LiveGameScreen: View {
                             let groups = filteredAtBats
                             ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                                 if index == 0 || sectionKey(for: groups[index - 1]) != sectionKey(for: group) {
-                                    AtBatSectionHeader(title: sectionTitle(for: group, state: state))
+                                    AtBatSectionHeader(title: sectionTitle(for: group, state: state, style: teamDisplayNameStyle))
                                 }
                                 AtBatCard(
                                     group: group,
-                                    awayTeamName: state.awayTeamId.teamName,
-                                    homeTeamName: state.homeTeamId.teamName,
+                                    awayTeamName: state.awayTeamId.displayName(style: teamDisplayNameStyle),
+                                    homeTeamName: state.homeTeamId.displayName(style: teamDisplayNameStyle),
                                     highlightScoreOutcome: isScoreFilterActive
                                 )
                             }
@@ -528,10 +533,14 @@ private struct ScoreboardCard: View {
     let state: LiveGameState
     let latestEvent: LiveEvent?
     @Environment(\.teamTheme) private var teamTheme
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(currentAttackLabel(state))
+            Text(currentAttackLabel(state, style: teamDisplayNameStyle))
                 .font(AppFont.captionBold)
                 .foregroundColor(AppColors.yellow400)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -541,7 +550,7 @@ private struct ScoreboardCard: View {
             HStack(alignment: .top, spacing: AppSpacing.sm) {
                 ScoreTeamBlock(
                     team: state.awayTeamId,
-                    teamName: state.awayTeamId.teamName,
+                    teamName: state.awayTeamId.displayName(style: teamDisplayNameStyle),
                     score: state.awayScore,
                     showFavorite: teamTheme.team == state.awayTeamId && teamTheme.team != .none
                 )
@@ -551,7 +560,7 @@ private struct ScoreboardCard: View {
 
                 ScoreTeamBlock(
                     team: state.homeTeamId,
-                    teamName: state.homeTeamId.teamName,
+                    teamName: state.homeTeamId.displayName(style: teamDisplayNameStyle),
                     score: state.homeScore,
                     showFavorite: teamTheme.team == state.homeTeamId && teamTheme.team != .none
                 )
@@ -1554,13 +1563,13 @@ private func sectionKey(for group: AtBatGroup) -> String {
 
 /// "9회초 트윈스 공격" 형태의 섹션 헤더 문자열.
 /// 이닝 표기가 비어있으면 폴백으로 "타석"을 쓰고, 공격팀 판별이 안 되면 이닝만 보여준다.
-private func sectionTitle(for group: AtBatGroup, state: LiveGameState) -> String {
+private func sectionTitle(for group: AtBatGroup, state: LiveGameState, style: TeamDisplayNameStyle) -> String {
     guard let inning = group.inning, !inning.isEmpty else { return "타석" }
     let teamName: String
     if inning.contains("초") {
-        teamName = state.awayTeamId.teamName
+        teamName = state.awayTeamId.displayName(style: style)
     } else if inning.contains("말") {
-        teamName = state.homeTeamId.teamName
+        teamName = state.homeTeamId.displayName(style: style)
     } else {
         teamName = ""
     }
@@ -1709,12 +1718,12 @@ private func baseText(_ state: LiveGameState) -> String {
     return bases.isEmpty ? "없음" : bases.joined(separator: ",")
 }
 
-private func currentAttackLabel(_ state: LiveGameState) -> String {
+private func currentAttackLabel(_ state: LiveGameState, style: TeamDisplayNameStyle) -> String {
     let battingTeam: String
     if state.inning.contains("초") {
-        battingTeam = state.awayTeamId.teamName
+        battingTeam = state.awayTeamId.displayName(style: style)
     } else if state.inning.contains("말") {
-        battingTeam = state.homeTeamId.teamName
+        battingTeam = state.homeTeamId.displayName(style: style)
     } else {
         battingTeam = "공격"
     }

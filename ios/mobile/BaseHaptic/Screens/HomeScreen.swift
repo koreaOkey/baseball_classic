@@ -31,6 +31,11 @@ struct HomeScreen: View {
     @State private var selectedScheduleDate = Calendar.current.startOfDay(for: Date())
     @State private var updateHighlightStepIndex = 0
     @State private var updateHighlightFrames: [UpdateHighlightStep: CGRect] = [:]
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
 
     private var primaryColor: Color {
         activeTheme?.colors.primary ?? teamTheme.primary
@@ -76,7 +81,7 @@ struct HomeScreen: View {
                             CheerCheckinCard(
                                 stadiumName: checkinStadium.name,
                                 stadiumRegion: StadiumDirectory.region(forCode: checkinStadium.code),
-                                teamLabel: selectedTeam.teamName,
+                                teamLabel: selectedTeam.displayName(style: teamDisplayNameStyle),
                                 onConfirm: onConfirmCheckin,
                                 onDismiss: onDismissCheckin
                             )
@@ -183,7 +188,7 @@ struct HomeScreen: View {
                         Text("BaseHaptic Live")
                             .font(AppFont.micro)
                             .foregroundColor(.white.opacity(0.7))
-                        Text(selectedTeam.teamName)
+                        Text(selectedTeam.displayName(style: teamDisplayNameStyle))
                             .font(AppFont.h3Bold)
                             .foregroundColor(.white)
                     }
@@ -493,6 +498,10 @@ private struct MyTeamScheduleSheet: View {
     private var selectedSchedules: [UpcomingGameSchedule] {
         schedulesByDay[Calendar.current.startOfDay(for: selectedDate)] ?? []
     }
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.lg) {
@@ -500,7 +509,7 @@ private struct MyTeamScheduleSheet: View {
                 Text("응원팀 경기 일정")
                     .font(AppFont.h4Bold)
                     .foregroundColor(.white)
-                Text(selectedTeam == .none ? "응원팀을 선택하면 일정을 볼 수 있습니다." : "\(selectedTeam.teamName) 시즌 일정")
+                Text(selectedTeam == .none ? "응원팀을 선택하면 일정을 볼 수 있습니다." : "\(selectedTeam.displayName(style: teamDisplayNameStyle)) 시즌 일정")
                     .font(AppFont.body)
                     .foregroundColor(AppColors.gray400)
             }
@@ -758,8 +767,12 @@ private struct MyTeamScheduleRow: View {
 
     private var game: Game { schedule.game }
     private var isMyTeamHome: Bool { game.homeTeamId == selectedTeam }
-    private var opponent: String { isMyTeamHome ? game.awayTeamId.teamName : game.homeTeamId.teamName }
     private var opponentTeam: Team { isMyTeamHome ? game.awayTeamId : game.homeTeamId }
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
+    private var opponent: String { opponentTeam.displayName(style: teamDisplayNameStyle) }
     private var venueText: String { isMyTeamHome ? "홈 경기" : "원정 경기" }
     private var venueWithStadium: String { "\(venueText) (\(stadiumName(forHomeTeam: game.homeTeamId)))" }
     private var resultLabel: ScheduleCalendarDayLabel? { myTeamResultLabel(selectedTeam: selectedTeam, game: game) }
@@ -774,7 +787,7 @@ private struct MyTeamScheduleRow: View {
                         .foregroundColor(AppColors.gray400)
                     HStack(spacing: AppSpacing.xs) {
                         TeamLogo(team: selectedTeam, size: 22)
-                        Text(selectedTeam.teamName)
+                        Text(selectedTeam.displayName(style: teamDisplayNameStyle))
                             .font(AppFont.bodyLgMedium)
                             .foregroundColor(.white)
                             .lineLimit(1)
@@ -1118,6 +1131,10 @@ private struct GameCard: View {
     let onTap: () -> Void
     let onLiveActivityTap: () -> Void
     let onWatchSyncTap: () -> Void
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1136,11 +1153,11 @@ private struct GameCard: View {
 
                     // Score rows
                     VStack(spacing: AppSpacing.md) {
-                        TeamScoreRow(team: game.awayTeamId, teamName: game.awayTeamId.teamName, score: game.awayScore,
+                        TeamScoreRow(team: game.awayTeamId, teamName: game.awayTeamId.displayName(style: teamDisplayNameStyle), score: game.awayScore,
                                      isScheduled: isNotStartedStatus(game.status),
                                      isWinner: game.status == .finished && game.awayScore > game.homeScore,
                                      isMyTeam: game.isMyTeam)
-                        TeamScoreRow(team: game.homeTeamId, teamName: game.homeTeamId.teamName, score: game.homeScore,
+                        TeamScoreRow(team: game.homeTeamId, teamName: game.homeTeamId.displayName(style: teamDisplayNameStyle), score: game.homeScore,
                                      isScheduled: isNotStartedStatus(game.status),
                                      isWinner: game.status == .finished && game.homeScore > game.awayScore,
                                      isMyTeam: game.isMyTeam)
@@ -1343,6 +1360,10 @@ private struct UpcomingGameCard: View {
 
     private var game: Game { upcoming.game }
     private var isMyTeamHome: Bool { game.homeTeamId == selectedTeam }
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
@@ -1351,18 +1372,18 @@ private struct UpcomingGameCard: View {
                 .foregroundColor(AppColors.gray400)
 
             HStack {
-                Text(isMyTeamHome ? game.homeTeamId.teamName : game.awayTeamId.teamName)
+                Text((isMyTeamHome ? game.homeTeamId : game.awayTeamId).displayName(style: teamDisplayNameStyle))
                     .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
                 Text(" vs ")
                     .font(AppFont.body)
                     .foregroundColor(AppColors.gray500)
-                Text(isMyTeamHome ? game.awayTeamId.teamName : game.homeTeamId.teamName)
+                Text((isMyTeamHome ? game.awayTeamId : game.homeTeamId).displayName(style: teamDisplayNameStyle))
                     .font(AppFont.bodyLgMedium)
                     .foregroundColor(.white)
             }
 
-            Text(isMyTeamHome ? "\(game.homeTeamId.teamName) 홈경기" : "\(game.homeTeamId.teamName) 원정경기")
+            Text(isMyTeamHome ? "\(game.homeTeamId.displayName(style: teamDisplayNameStyle)) 홈경기" : "\(game.homeTeamId.displayName(style: teamDisplayNameStyle)) 원정경기")
                 .font(AppFont.micro)
                 .foregroundColor(AppColors.gray500)
         }

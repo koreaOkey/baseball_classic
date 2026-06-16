@@ -256,17 +256,23 @@ def _ensure_game_event_type_check_constraint(bind: SchemaBind = engine) -> None:
 def _ensure_device_token_columns(bind: SchemaBind = engine) -> None:
     inspector = inspect(bind)
     table_names = set(inspector.get_table_names())
-    if "device_tokens" not in table_names:
-        return
+    statements: list[str] = []
+    if "device_tokens" in table_names:
+        columns = {column["name"] for column in inspector.get_columns("device_tokens")}
+        if "is_sandbox" not in columns:
+            statements.append("ALTER TABLE device_tokens ADD COLUMN is_sandbox BOOLEAN NOT NULL DEFAULT FALSE")
+        if "display_name_style" not in columns:
+            statements.append("ALTER TABLE device_tokens ADD COLUMN display_name_style VARCHAR(16) NOT NULL DEFAULT 'TEAM'")
 
-    columns = {column["name"] for column in inspector.get_columns("device_tokens")}
-    if "is_sandbox" in columns:
-        return
+    if "team_subscription_tokens" in table_names:
+        columns = {column["name"] for column in inspector.get_columns("team_subscription_tokens")}
+        if "display_name_style" not in columns:
+            statements.append(
+                "ALTER TABLE team_subscription_tokens ADD COLUMN display_name_style VARCHAR(16) NOT NULL DEFAULT 'TEAM'"
+            )
 
-    _execute_ddl_statements(
-        bind,
-        ["ALTER TABLE device_tokens ADD COLUMN is_sandbox BOOLEAN NOT NULL DEFAULT FALSE"],
-    )
+    if statements:
+        _execute_ddl_statements(bind, statements)
 
 
 def _ensure_cheer_events_user_id_index(bind: SchemaBind = engine) -> None:

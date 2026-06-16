@@ -66,7 +66,10 @@ enum WatchTokenRegistrar {
             "game_id": gameId,
             "my_team": myTeam,
             "platform": "watchos",
-            "is_sandbox": isApnsSandbox()
+            "is_sandbox": isApnsSandbox(),
+            "display_name_style": TeamDisplayNameStyle
+                .fromString(UserDefaults.standard.string(forKey: "team_display_name_style"))
+                .rawValue
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
