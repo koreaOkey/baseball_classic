@@ -20,6 +20,7 @@ struct Game: Identifiable, Codable {
     let status: GameStatus
     let time: String?
     let isMyTeam: Bool
+    let weather: GameWeatherSummary?
     let homePitcher: Pitcher?
     let awayPitcher: Pitcher?
 
@@ -35,6 +36,7 @@ struct Game: Identifiable, Codable {
         status: GameStatus,
         time: String? = nil,
         isMyTeam: Bool = false,
+        weather: GameWeatherSummary? = nil,
         homePitcher: Pitcher? = nil,
         awayPitcher: Pitcher? = nil
     ) {
@@ -49,9 +51,26 @@ struct Game: Identifiable, Codable {
         self.status = status
         self.time = time
         self.isMyTeam = isMyTeam
+        self.weather = weather
         self.homePitcher = homePitcher
         self.awayPitcher = awayPitcher
     }
+}
+
+struct GameWeatherSummary: Codable {
+    let stadiumCode: String
+    let stadiumName: String
+    let stadiumShortName: String
+    let forecastDate: String?
+    let forecastTime: String?
+    let forecastTimeLabel: String?
+    let condition: String
+    let temperatureC: Int?
+    let precipitationProbability: Int?
+    let precipitationType: String?
+    let windSpeedMps: Double?
+    let isIndoor: Bool
+    let displayText: String
 }
 
 struct Pitcher: Codable {

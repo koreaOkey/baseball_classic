@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TeamCheckinRankingView: View {
     let selectedTeam: Team
+    var teamDisplayNameStyle: TeamDisplayNameStyle = .team
     var localWeeklyBoost: Int = 0
 
     @State private var period: RankingPeriod = .weekly
@@ -72,7 +73,7 @@ struct TeamCheckinRankingView: View {
                 .font(AppFont.label)
                 .foregroundColor(AppColors.gray300)
                 .frame(width: 36, alignment: .leading)
-            Text(row.team.teamName)
+            Text(row.team.displayName(style: teamDisplayNameStyle))
                 .font(isMine ? AppFont.labelBold : AppFont.label)
                 .foregroundColor(.white)
             Spacer()

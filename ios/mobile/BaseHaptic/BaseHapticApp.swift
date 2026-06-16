@@ -555,8 +555,8 @@ struct ContentView: View {
                                 return
                             }
                             guard connectivity.watchCompanionStatus == .installed else { return }
-                            pendingWatchSyncHomeTeam = game.homeTeamId.teamName
-                            pendingWatchSyncAwayTeam = game.awayTeamId.teamName
+                            pendingWatchSyncHomeTeam = game.homeTeamId.displayName(style: teamDisplayNameStyle)
+                            pendingWatchSyncAwayTeam = game.awayTeamId.displayName(style: teamDisplayNameStyle)
                             requestWatchSyncPrompt(gameId: game.id, navigateToLive: false)
                         }
                     )
@@ -671,6 +671,7 @@ struct ContentView: View {
                 case .myTeam:
                     MyTeamScreen(
                         selectedTeam: selectedTeam,
+                        teamDisplayNameStyle: teamDisplayNameStyle,
                         todayGames: todayGames,
                         checkinStadium: pendingCheckinStadium,
                         currentLocation: currentStadiumLocation,
@@ -1100,7 +1101,7 @@ struct ContentView: View {
     private func scheduleLocalCheckinNotification(stadium: Stadium) {
         let content = UNMutableNotificationContent()
         content.title = "경기장 응원 체크인"
-        content.body = "\(stadium.name)에서 \(selectedTeam.teamName) 응원을 시작해요."
+        content.body = "\(stadium.name)에서 \(selectedTeam.displayName(style: teamDisplayNameStyle)) 응원을 시작해요."
         content.sound = .default
         content.userInfo = ["stadium_code": stadium.code]
 
@@ -1202,8 +1203,8 @@ struct ContentView: View {
                         selectedGameId = game.id
                         WatchGameSyncManager.shared.sendWatchSyncPrompt(
                             gameId: game.id,
-                            homeTeam: game.homeTeamId.teamName,
-                            awayTeam: game.awayTeamId.teamName,
+                            homeTeam: game.homeTeamId.displayName(style: teamDisplayNameStyle),
+                            awayTeam: game.awayTeamId.displayName(style: teamDisplayNameStyle),
                             myTeam: selectedTeam.rawValue
                         )
                     }

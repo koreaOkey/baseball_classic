@@ -29,6 +29,10 @@ struct HomeScreen: View {
     @State private var scheduleError: String?
     @State private var scheduleMonth = monthStart(for: Date())
     @State private var selectedScheduleDate = Calendar.current.startOfDay(for: Date())
+    @State private var weatherSheetGame: Game?
+    @State private var weatherHourly: GameWeatherHourly?
+    @State private var weatherLoading = false
+    @State private var weatherError: String?
     @State private var updateHighlightStepIndex = 0
     @State private var updateHighlightFrames: [UpdateHighlightStep: CGRect] = [:]
     @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
@@ -176,6 +180,32 @@ struct HomeScreen: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(
+            isPresented: Binding(
+                get: { weatherSheetGame != nil },
+                set: { showing in
+                    if !showing {
+                        weatherSheetGame = nil
+                        weatherHourly = nil
+                        weatherError = nil
+                    }
+                }
+            )
+        ) {
+            WeatherHourlySheet(
+                game: weatherSheetGame,
+                forecast: weatherHourly,
+                loading: weatherLoading,
+                error: weatherError,
+                onRetry: {
+                    if let weatherSheetGame {
+                        Task { await loadGameWeather(game: weatherSheetGame) }
+                    }
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Header
@@ -304,6 +334,10 @@ struct HomeScreen: View {
                     showsWatchToggle: isWatchAppInstalled || showUpdateHighlights,
                     captureUpdateHighlights: showUpdateHighlights && index == 0,
                     onTap: { onSelectGame(game) },
+                    onWeatherTap: {
+                        weatherSheetGame = game
+                        Task { await loadGameWeather(game: game) }
+                    },
                     onLiveActivityTap: { onToggleLiveActivity(game) },
                     onWatchSyncTap: { onToggleWatchSync(game) }
                 )
@@ -406,6 +440,20 @@ struct HomeScreen: View {
             standingsError = "팀 순위를 불러오지 못했습니다."
         }
         standingsLoading = false
+    }
+
+    @MainActor
+    private func loadGameWeather(game: Game) async {
+        weatherLoading = true
+        weatherError = nil
+        weatherHourly = nil
+        let loaded = await BackendGamesRepository.shared.fetchGameHourlyWeather(gameId: game.id, targetDate: Date())
+        if let loaded {
+            weatherHourly = loaded
+        } else {
+            weatherError = "시간별 예보를 불러오지 못했습니다."
+        }
+        weatherLoading = false
     }
 }
 
@@ -867,13 +915,18 @@ private struct ScheduleStatusBadge: View {
 
 private struct TeamStandingRow: View {
     let item: TeamRecordStanding
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+
+    private var teamDisplayNameStyle: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
 
     private var team: Team? {
         teamFromKboTeamId(item.teamId)
     }
 
     private var displayName: String {
-        team?.teamName ?? item.teamName
+        team?.displayName(style: teamDisplayNameStyle) ?? item.teamName
     }
 
     var body: some View {
@@ -1129,6 +1182,7 @@ private struct GameCard: View {
     let showsWatchToggle: Bool
     let captureUpdateHighlights: Bool
     let onTap: () -> Void
+    let onWeatherTap: () -> Void
     let onLiveActivityTap: () -> Void
     let onWatchSyncTap: () -> Void
     @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
@@ -1138,38 +1192,48 @@ private struct GameCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Button(action: onTap) {
-                VStack(spacing: 0) {
-                    // Status row
+            VStack(spacing: 0) {
+                Button(action: onTap) {
                     HStack {
                         statusView
                         Spacer()
-                        if game.isMyTeam {
-                            myTeamBadge
-                        }
+                        if game.isMyTeam { myTeamBadge }
                     }
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
-                    Spacer().frame(height: AppSpacing.lg)
+                if game.status == .scheduled, let weather = game.weather {
+                    WeatherSummaryRow(weather: weather, onTap: onWeatherTap)
+                        .padding(.horizontal, AppSpacing.xl)
+                        .padding(.top, AppSpacing.md)
+                }
 
-                    // Score rows
+                Button(action: onTap) {
                     VStack(spacing: AppSpacing.md) {
                         TeamScoreRow(team: game.awayTeamId, teamName: game.awayTeamId.displayName(style: teamDisplayNameStyle), score: game.awayScore,
                                      isScheduled: isNotStartedStatus(game.status),
                                      isWinner: game.status == .finished && game.awayScore > game.homeScore,
-                                     isMyTeam: game.isMyTeam)
+                                     isMyTeam: game.isMyTeam,
+                                     isHomeTeam: false)
                         TeamScoreRow(team: game.homeTeamId, teamName: game.homeTeamId.displayName(style: teamDisplayNameStyle), score: game.homeScore,
                                      isScheduled: isNotStartedStatus(game.status),
                                      isWinner: game.status == .finished && game.homeScore > game.awayScore,
-                                     isMyTeam: game.isMyTeam)
+                                     isMyTeam: game.isMyTeam,
+                                     isHomeTeam: true)
                     }
                     .trackUpdateHighlight(captureUpdateHighlights ? .score : nil)
+                    .padding(.horizontal, AppSpacing.xl)
+                    .padding(.top, AppSpacing.lg)
+                    .padding(.bottom, AppSpacing.xl)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .padding(AppSpacing.xl)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity)
-            .buttonStyle(.plain)
 
             Divider()
                 .background(AppColors.gray800)
@@ -1328,6 +1392,171 @@ private struct GameCard: View {
     }
 }
 
+// MARK: - Weather
+private struct WeatherSummaryRow: View {
+    let weather: GameWeatherSummary
+    let onTap: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: AppSpacing.sm) {
+            WeatherConditionIcon(condition: weather.condition, isIndoor: weather.isIndoor, size: 18)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(weatherIconBackground(condition: weather.condition, isIndoor: weather.isIndoor)))
+            Text(weatherSummaryCardText(weather))
+                .font(AppFont.microBold)
+                .foregroundColor(AppColors.blue200)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if onTap != nil {
+                Text("더보기")
+                    .font(AppFont.microBold)
+                    .foregroundColor(AppColors.blue400)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, AppSpacing.md)
+        .padding(.vertical, AppSpacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppColors.blue500.opacity(0.10))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                .stroke(AppColors.blue500.opacity(0.22), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap?()
+        }
+    }
+}
+
+private struct WeatherHourlySheet: View {
+    let game: Game?
+    let forecast: GameWeatherHourly?
+    let loading: Bool
+    let error: String?
+    let onRetry: () -> Void
+
+    private var visibleItems: [GameWeatherHourlyItem] {
+        (forecast?.items ?? []).filter(isCurrentOrFutureWeatherItem)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("\(forecast?.stadiumName ?? stadiumName(forHomeTeam: game?.homeTeamId ?? .none)) 오늘 날씨")
+                    .font(AppFont.h4Bold)
+                    .foregroundColor(.white)
+                Text("경기 시작 시간과 가장 가까운 예보를 강조했어요.")
+                    .font(AppFont.body)
+                    .foregroundColor(AppColors.gray400)
+            }
+
+            if loading {
+                VStack(spacing: AppSpacing.md) {
+                    ProgressView()
+                        .tint(AppColors.yellow500)
+                    Text("시간별 예보를 불러오는 중입니다")
+                        .font(AppFont.body)
+                        .foregroundColor(AppColors.gray400)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.xxxl)
+            } else if let error {
+                WeatherSheetMessage(title: error, actionLabel: "다시 시도", onAction: onRetry)
+            } else if forecast == nil || visibleItems.isEmpty {
+                WeatherSheetMessage(title: "표시할 시간별 예보가 없습니다", actionLabel: "새로고침", onAction: onRetry)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: AppSpacing.sm) {
+                        ForEach(visibleItems) { item in
+                            WeatherHourlyRow(item: item)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, AppSpacing.xxl)
+        .padding(.top, AppSpacing.lg)
+        .padding(.bottom, AppSpacing.xxxl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppColors.gray950)
+    }
+}
+
+private struct WeatherSheetMessage: View {
+    let title: String
+    let actionLabel: String
+    let onAction: () -> Void
+
+    var body: some View {
+        VStack(spacing: AppSpacing.md) {
+            Text(title)
+                .font(AppFont.body)
+                .foregroundColor(AppColors.gray400)
+                .multilineTextAlignment(.center)
+            Button(action: onAction) {
+                Text(actionLabel)
+                    .font(AppFont.bodyMedium)
+                    .foregroundColor(AppColors.yellow400)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.xxxl)
+    }
+}
+
+private struct WeatherHourlyRow: View {
+    let item: GameWeatherHourlyItem
+
+    var body: some View {
+        HStack(spacing: AppSpacing.md) {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text(item.timeLabel)
+                    .font(AppFont.bodyLgMedium)
+                    .foregroundColor(.white)
+                if item.isGameStartForecast {
+                    Text("경기 시작")
+                        .font(AppFont.microBold)
+                        .foregroundColor(AppColors.yellow400)
+                }
+            }
+            .frame(width: 58, alignment: .leading)
+
+            WeatherConditionIcon(condition: item.condition, isIndoor: false, size: 22)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(weatherIconBackground(condition: item.condition, isIndoor: false)))
+
+            Text(weatherHourlyDetailText(item))
+                .font(AppFont.body)
+                .foregroundColor(item.isGameStartForecast ? AppColors.gray100 : AppColors.gray300)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(AppSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(item.isGameStartForecast ? AppColors.yellow500.opacity(0.12) : AppColors.gray900)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
+                .stroke(item.isGameStartForecast ? AppColors.yellow500.opacity(0.42) : AppColors.gray800, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+    }
+}
+
+private struct WeatherConditionIcon: View {
+    let condition: String
+    let isIndoor: Bool
+    let size: CGFloat
+
+    var body: some View {
+        Image(systemName: weatherIconName(condition: condition, isIndoor: isIndoor))
+            .font(.system(size: size, weight: .semibold))
+            .foregroundColor(weatherIconTint(condition: condition, isIndoor: isIndoor))
+    }
+}
+
 // MARK: - TeamScoreRow
 private struct TeamScoreRow: View {
     let team: Team
@@ -1336,19 +1565,45 @@ private struct TeamScoreRow: View {
     let isScheduled: Bool
     let isWinner: Bool
     let isMyTeam: Bool
+    let isHomeTeam: Bool
 
     var body: some View {
         HStack {
             HStack(spacing: AppSpacing.md) {
                 TeamLogo(team: team, size: 56)
-                Text(teamName)
-                    .font(isMyTeam ? AppFont.h5Bold : AppFont.bodyLgMedium)
-                    .foregroundColor(isWinner ? .white : (isScheduled ? .white : AppColors.gray500))
+                TeamNameWithHomeLabel(
+                    teamName: teamName,
+                    isHomeTeam: isHomeTeam,
+                    font: isMyTeam ? AppFont.h5Bold : AppFont.bodyLgMedium,
+                    color: isWinner ? .white : (isScheduled ? .white : AppColors.gray500)
+                )
             }
             Spacer()
             Text(isScheduled ? "-" : "\(score)")
                 .font(isMyTeam ? AppFont.h2 : AppFont.h3Bold)
                 .foregroundColor(isWinner ? .white : (isScheduled ? .white : AppColors.gray500))
+        }
+    }
+}
+
+private struct TeamNameWithHomeLabel: View {
+    let teamName: String
+    let isHomeTeam: Bool
+    let font: Font
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: AppSpacing.xxs) {
+            Text(teamName)
+                .font(font)
+                .foregroundColor(color)
+                .lineLimit(1)
+            if isHomeTeam {
+                Text("(홈)")
+                    .font(AppFont.microBold)
+                    .foregroundColor(AppColors.gray400)
+                    .lineLimit(1)
+            }
         }
     }
 }
@@ -1371,16 +1626,26 @@ private struct UpcomingGameCard: View {
                 .font(AppFont.body)
                 .foregroundColor(AppColors.gray400)
 
+            if game.status == .scheduled, let weather = game.weather {
+                WeatherSummaryRow(weather: weather, onTap: nil)
+            }
+
             HStack {
-                Text((isMyTeamHome ? game.homeTeamId : game.awayTeamId).displayName(style: teamDisplayNameStyle))
-                    .font(AppFont.bodyLgMedium)
-                    .foregroundColor(.white)
+                TeamNameWithHomeLabel(
+                    teamName: (isMyTeamHome ? game.homeTeamId : game.awayTeamId).displayName(style: teamDisplayNameStyle),
+                    isHomeTeam: isMyTeamHome,
+                    font: AppFont.bodyLgMedium,
+                    color: .white
+                )
                 Text(" vs ")
                     .font(AppFont.body)
                     .foregroundColor(AppColors.gray500)
-                Text((isMyTeamHome ? game.awayTeamId : game.homeTeamId).displayName(style: teamDisplayNameStyle))
-                    .font(AppFont.bodyLgMedium)
-                    .foregroundColor(.white)
+                TeamNameWithHomeLabel(
+                    teamName: (isMyTeamHome ? game.awayTeamId : game.homeTeamId).displayName(style: teamDisplayNameStyle),
+                    isHomeTeam: !isMyTeamHome,
+                    font: AppFont.bodyLgMedium,
+                    color: .white
+                )
             }
 
             Text(isMyTeamHome ? "\(game.homeTeamId.displayName(style: teamDisplayNameStyle)) 홈경기" : "\(game.homeTeamId.displayName(style: teamDisplayNameStyle)) 원정경기")
@@ -1464,6 +1729,101 @@ private func formatScheduleDateTime(_ date: Date, time: String?) -> String {
     let timeText = (time?.isEmpty ?? true) ? "--:--" : time!
     return "\(dateText) \(timeText)"
 }
+
+private func weatherHourlyDetailText(_ item: GameWeatherHourlyItem) -> String {
+    var parts = [item.condition.isEmpty ? "예보" : item.condition]
+    if let temperatureC = item.temperatureC {
+        parts.append("\(temperatureC)°")
+    }
+    if let precipitationProbability = item.precipitationProbability {
+        parts.append("강수 \(precipitationProbability)%")
+    }
+    if let windSpeedMps = item.windSpeedMps {
+        parts.append(String(format: "풍속 %.1fm/s", windSpeedMps))
+    }
+    return parts.joined(separator: " · ")
+}
+
+private func weatherSummaryCardText(_ weather: GameWeatherSummary) -> String {
+    var parts: [String] = [weather.stadiumShortName.isEmpty ? weather.stadiumName : weather.stadiumShortName]
+    if let forecastTimeLabel = weather.forecastTimeLabel?.replacingOccurrences(of: " 기준", with: ""),
+       !forecastTimeLabel.isEmpty {
+        parts.append("\(forecastTimeLabel) 날씨")
+    }
+    var conditionText = weather.condition.isEmpty ? "예보" : weather.condition
+    if let temperatureC = weather.temperatureC {
+        conditionText += " \(temperatureC)°"
+    }
+    parts.append(conditionText)
+    if let precipitationProbability = weather.precipitationProbability {
+        parts.append("강수 \(precipitationProbability)%")
+    }
+    return parts.joined(separator: " · ")
+}
+
+private func isCurrentOrFutureWeatherItem(_ item: GameWeatherHourlyItem) -> Bool {
+    guard let itemDate = weatherForecastDateFormatter.date(from: item.forecastDate) else { return true }
+    let calendar = weatherForecastCalendar
+    let today = calendar.startOfDay(for: Date())
+    let normalizedItemDate = calendar.startOfDay(for: itemDate)
+    if normalizedItemDate < today { return false }
+    if normalizedItemDate > today { return true }
+    guard let itemMinutes = parseForecastClockMinutes(item.forecastTime) else { return true }
+    let nowComponents = calendar.dateComponents([.hour], from: Date())
+    let currentHourMinutes = (nowComponents.hour ?? 0) * 60
+    return itemMinutes >= currentHourMinutes
+}
+
+private func parseForecastClockMinutes(_ raw: String) -> Int? {
+    let digits = raw.filter(\.isNumber)
+    guard digits.count >= 2,
+          let hour = Int(String(digits.prefix(2))) else { return nil }
+    let minuteDigits = digits.dropFirst(2).prefix(2)
+    let minute = Int(String(minuteDigits)) ?? 0
+    guard (0...23).contains(hour), (0...59).contains(minute) else { return nil }
+    return hour * 60 + minute
+}
+
+private func weatherIconName(condition: String, isIndoor: Bool) -> String {
+    if isIndoor { return "house.fill" }
+    if condition.contains("천둥") || condition.contains("번개") { return "cloud.bolt.rain.fill" }
+    if condition.contains("눈") || condition.contains("진눈") { return "snowflake" }
+    if condition.contains("비") || condition.contains("소나기") || condition.contains("강수") { return "cloud.rain.fill" }
+    if condition.contains("구름많음") { return "cloud.sun.fill" }
+    if condition.contains("흐림") || condition.contains("구름") { return "cloud.fill" }
+    return "sun.max.fill"
+}
+
+private func weatherIconTint(condition: String, isIndoor: Bool) -> Color {
+    if isIndoor { return AppColors.blue400 }
+    if condition.contains("천둥") || condition.contains("번개") { return AppColors.yellow400 }
+    if condition.contains("눈") || condition.contains("진눈") { return AppColors.blue200 }
+    if condition.contains("비") || condition.contains("소나기") || condition.contains("강수") { return AppColors.blue400 }
+    if condition.contains("흐림") || condition.contains("구름") { return AppColors.gray200 }
+    return AppColors.yellow400
+}
+
+private func weatherIconBackground(condition: String, isIndoor: Bool) -> Color {
+    if isIndoor { return AppColors.blue500.opacity(0.18) }
+    if condition.contains("천둥") || condition.contains("번개") { return AppColors.yellow500.opacity(0.16) }
+    if condition.contains("눈") || condition.contains("진눈") { return AppColors.blue500.opacity(0.16) }
+    if condition.contains("비") || condition.contains("소나기") || condition.contains("강수") { return AppColors.blue500.opacity(0.18) }
+    if condition.contains("흐림") || condition.contains("구름") { return AppColors.gray600.opacity(0.36) }
+    return AppColors.yellow500.opacity(0.16)
+}
+
+private let weatherForecastCalendar: Calendar = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+    return calendar
+}()
+
+private let weatherForecastDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
+    return formatter
+}()
 
 private func calendarDayLabel(selectedTeam: Team, schedules: [UpcomingGameSchedule]) -> ScheduleCalendarDayLabel? {
     guard !schedules.isEmpty else { return nil }

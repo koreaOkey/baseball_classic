@@ -105,8 +105,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
               let awayTeam = userInfo["away_team"] as? String else { return }
         guard isWatchSyncActive(for: gameId) else { return }
 
-        let homeDisplay = Team.fromBackendName(homeTeam).teamName
-        let awayDisplay = Team.fromBackendName(awayTeam).teamName
+        let displayStyle = TeamDisplayNameStyle.fromString(
+            UserDefaults.standard.string(forKey: "team_display_name_style")
+        )
+        let homeDisplay = Team.fromBackendName(homeTeam).displayName(style: displayStyle)
+        let awayDisplay = Team.fromBackendName(awayTeam).displayName(style: displayStyle)
 
         // 누적 투구수: 푸시 페이로드 sentinel = -1 → nil. 키 자체가 빠진 (구버전 백엔드)
         // 페이로드는 마지막 전송값으로 폴백해 워치 UI 깜빡임을 방지.

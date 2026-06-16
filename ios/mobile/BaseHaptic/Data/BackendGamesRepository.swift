@@ -209,6 +209,28 @@ struct UpcomingGameSchedule: Identifiable {
     let game: Game
 }
 
+struct GameWeatherHourly {
+    let gameId: String
+    let stadiumCode: String
+    let stadiumName: String
+    let stadiumShortName: String
+    let gameStartTime: String?
+    let items: [GameWeatherHourlyItem]
+}
+
+struct GameWeatherHourlyItem: Identifiable {
+    var id: String { "\(forecastDate):\(forecastTime)" }
+    let forecastDate: String
+    let forecastTime: String
+    let timeLabel: String
+    let condition: String
+    let temperatureC: Int?
+    let precipitationProbability: Int?
+    let precipitationType: String?
+    let windSpeedMps: Double?
+    let isGameStartForecast: Bool
+}
+
 // MARK: - Live Stream Messages
 enum LiveStreamMessage {
     case connected
@@ -234,6 +256,7 @@ final class BackendGamesRepository {
     private let session: URLSession
     private let timeoutInterval: TimeInterval = 5.0
     private let scheduleCacheTTL: TimeInterval = 6 * 60 * 60
+    private let scheduleCacheVersion = 2
     private let cache = NSCache<NSString, CacheEntry>()
 
     private init() {
@@ -416,6 +439,15 @@ final class BackendGamesRepository {
             .map { $0 }
     }
 
+    func fetchGameHourlyWeather(gameId: String, targetDate: Date = Date()) async -> GameWeatherHourly? {
+        let dateString = dateFormatter.string(from: targetDate)
+        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/games/\(gameId)/weather?date=\(dateString)"
+        return await getJSON(endpoint: endpoint) { data in
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            return self.parseGameWeatherHourly(json)
+        }
+    }
+
     func fetchMyTeamScheduleGames(selectedTeam: Team, daysAhead: Int = 30) async -> [UpcomingGameSchedule]? {
         guard selectedTeam != .none else { return [] }
         let normalizedDaysAhead = max(daysAhead, 0)
@@ -464,6 +496,7 @@ final class BackendGamesRepository {
         let cachedTeam = defaults.string(forKey: "\(keyPrefix)_team")
         let cachedFrom = defaults.string(forKey: "\(keyPrefix)_from")
         let cachedTo = defaults.string(forKey: "\(keyPrefix)_to")
+        let cachedVersion = defaults.integer(forKey: "\(keyPrefix)_version")
         let cachedPayload = defaults.string(forKey: "\(keyPrefix)_payload")
         let cachedAt = defaults.double(forKey: "\(keyPrefix)_cached_at")
 
@@ -471,6 +504,7 @@ final class BackendGamesRepository {
            cachedTeam == selectedTeam.rawValue,
            cachedFrom == fromString,
            cachedTo == toString,
+           cachedVersion == scheduleCacheVersion,
            isFreshScheduleCache(cachedAt),
            let cachedPayload,
            !cachedPayload.isEmpty,
@@ -483,6 +517,7 @@ final class BackendGamesRepository {
             defaults.set(selectedTeam.rawValue, forKey: "\(keyPrefix)_team")
             defaults.set(fromString, forKey: "\(keyPrefix)_from")
             defaults.set(toString, forKey: "\(keyPrefix)_to")
+            defaults.set(scheduleCacheVersion, forKey: "\(keyPrefix)_version")
             defaults.set(freshPayload, forKey: "\(keyPrefix)_payload")
             defaults.set(Date().timeIntervalSince1970, forKey: "\(keyPrefix)_cached_at")
             return fresh
@@ -491,6 +526,7 @@ final class BackendGamesRepository {
         if cachedTeam == selectedTeam.rawValue,
            cachedFrom == fromString,
            cachedTo == toString,
+           cachedVersion == scheduleCacheVersion,
            let cachedPayload,
            !cachedPayload.isEmpty {
             return parseScheduleRangePayload(cachedPayload, selectedTeam: selectedTeam)
@@ -648,7 +684,50 @@ final class BackendGamesRepository {
             inning: inning,
             status: status,
             time: startTime,
-            isMyTeam: selectedTeam != .none && (homeTeamId == selectedTeam || awayTeamId == selectedTeam)
+            isMyTeam: selectedTeam != .none && (homeTeamId == selectedTeam || awayTeamId == selectedTeam),
+            weather: (json["weather"] as? [String: Any]).flatMap(parseGameWeatherSummary)
+        )
+    }
+
+    private func parseGameWeatherSummary(_ json: [String: Any]) -> GameWeatherSummary {
+        GameWeatherSummary(
+            stadiumCode: json["stadiumCode"] as? String ?? "",
+            stadiumName: json["stadiumName"] as? String ?? "",
+            stadiumShortName: cleanOptionalString(json["stadiumShortName"]) ?? (json["stadiumName"] as? String ?? ""),
+            forecastDate: cleanOptionalString(json["forecastDate"]),
+            forecastTime: cleanOptionalString(json["forecastTime"]),
+            forecastTimeLabel: cleanOptionalString(json["forecastTimeLabel"]),
+            condition: json["condition"] as? String ?? "",
+            temperatureC: jsonInt(json["temperatureC"]),
+            precipitationProbability: jsonInt(json["precipitationProbability"]),
+            precipitationType: cleanOptionalString(json["precipitationType"]),
+            windSpeedMps: jsonDouble(json["windSpeedMps"]),
+            isIndoor: json["isIndoor"] as? Bool ?? false,
+            displayText: json["displayText"] as? String ?? ""
+        )
+    }
+
+    private func parseGameWeatherHourly(_ json: [String: Any]) -> GameWeatherHourly {
+        let items = (json["items"] as? [[String: Any]] ?? []).map { item in
+            GameWeatherHourlyItem(
+                forecastDate: item["forecastDate"] as? String ?? "",
+                forecastTime: item["forecastTime"] as? String ?? "",
+                timeLabel: item["timeLabel"] as? String ?? "",
+                condition: item["condition"] as? String ?? "",
+                temperatureC: jsonInt(item["temperatureC"]),
+                precipitationProbability: jsonInt(item["precipitationProbability"]),
+                precipitationType: cleanOptionalString(item["precipitationType"]),
+                windSpeedMps: jsonDouble(item["windSpeedMps"]),
+                isGameStartForecast: item["isGameStartForecast"] as? Bool ?? false
+            )
+        }
+        return GameWeatherHourly(
+            gameId: json["gameId"] as? String ?? "",
+            stadiumCode: json["stadiumCode"] as? String ?? "",
+            stadiumName: json["stadiumName"] as? String ?? "",
+            stadiumShortName: cleanOptionalString(json["stadiumShortName"]) ?? (json["stadiumName"] as? String ?? ""),
+            gameStartTime: cleanOptionalString(json["gameStartTime"]),
+            items: items
         )
     }
 

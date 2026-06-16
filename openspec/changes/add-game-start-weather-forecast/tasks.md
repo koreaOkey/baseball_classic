@@ -24,3 +24,12 @@
 
 - [x] 4.1 Add or update backend tests for weather summary, dome fallback, missing API key fallback, and hourly endpoint behavior.
 - [x] 4.2 Run targeted OpenSpec, backend, and Android verification commands.
+
+## 6. iOS Weather UI Parity
+
+- [x] 6.1 Extend iOS game models and repository parsing for optional weather summary and hourly forecast data.
+- [x] 6.2 Show home-team “(홈)” text in today and upcoming game cards.
+- [x] 6.3 Add scheduled-game weather summary to iOS today and upcoming game cards.
+- [x] 6.4 Add iOS today-game weather sheet with loading, error, empty, retry, start-time highlight, and past-hour filtering states.
+- [x] 6.5 Invalidate old iOS upcoming schedule caches that do not contain weather summaries.
+- [x] 6.6 Verify iOS mobile build and confirm watchOS remains unaffected by the new weather UI.

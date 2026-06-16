@@ -3,6 +3,7 @@ import CoreLocation
 
 struct MyTeamScreen: View {
     let selectedTeam: Team
+    let teamDisplayNameStyle: TeamDisplayNameStyle
     let todayGames: [Game]
     let checkinStadium: Stadium?
     let currentLocation: CLLocation?
@@ -48,6 +49,7 @@ struct MyTeamScreen: View {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
                     MyTeamHeader(
                         selectedTeam: selectedTeam,
+                        teamDisplayNameStyle: teamDisplayNameStyle,
                         activeInfoPopup: activeInfoPopup,
                         onInfoTap: { activeInfoPopup = $0 }
                     )
@@ -56,7 +58,7 @@ struct MyTeamScreen: View {
                     CheerCheckinCard(
                         stadiumName: checkinVenue.name,
                         stadiumRegion: checkinVenue.region,
-                        teamLabel: hasTeam ? selectedTeam.teamName : "응원팀",
+                        teamLabel: hasTeam ? selectedTeam.displayName(style: teamDisplayNameStyle) : "응원팀",
                         state: checkinState,
                         onConfirm: {
                             if checkinState == .outsideVenue {
@@ -77,6 +79,7 @@ struct MyTeamScreen: View {
                         )
                         TeamCheckinRankingView(
                             selectedTeam: selectedTeam,
+                            teamDisplayNameStyle: teamDisplayNameStyle,
                             localWeeklyBoost: localCheckinSnapshot.checkedInToday ? 1 : 0
                         )
                     }
@@ -98,7 +101,11 @@ struct MyTeamScreen: View {
             }
         }
         .sheet(item: $activeInfoPopup) { popup in
-            MyTeamInfoPopupView(popup: popup, selectedTeam: selectedTeam)
+            MyTeamInfoPopupView(
+                popup: popup,
+                selectedTeam: selectedTeam,
+                teamDisplayNameStyle: teamDisplayNameStyle
+            )
                 .presentationDetents([.height(220)])
                 .presentationDragIndicator(.visible)
         }
@@ -114,7 +121,7 @@ struct MyTeamScreen: View {
         .alert("체크인할 수 없습니다", isPresented: $showVenueMismatchAlert) {
             Button("확인", role: .cancel) {}
         } message: {
-            Text("\(selectedTeam.teamName) 경기 구장이 아닙니다.")
+            Text("\(selectedTeam.displayName(style: teamDisplayNameStyle)) 경기 구장이 아닙니다.")
         }
     }
 
@@ -195,6 +202,7 @@ private struct LocalCheckinSnapshot {
 
 private struct MyTeamHeader: View {
     let selectedTeam: Team
+    let teamDisplayNameStyle: TeamDisplayNameStyle
     let activeInfoPopup: MyTeamInfoPopup?
     let onInfoTap: (MyTeamInfoPopup) -> Void
 
@@ -210,7 +218,7 @@ private struct MyTeamHeader: View {
                         .foregroundColor(AppColors.gray400)
                 }
                 Spacer()
-                Text(selectedTeam == .none ? "응원팀 미설정" : selectedTeam.teamName)
+                Text(selectedTeam == .none ? "응원팀 미설정" : selectedTeam.displayName(style: teamDisplayNameStyle))
                     .font(AppFont.captionBold)
                     .foregroundColor(.white)
                     .padding(.horizontal, AppSpacing.md)
@@ -312,6 +320,7 @@ private extension Team {
 private struct MyTeamInfoPopupView: View {
     let popup: MyTeamInfoPopup
     let selectedTeam: Team
+    let teamDisplayNameStyle: TeamDisplayNameStyle
 
     var body: some View {
         ZStack {
@@ -319,11 +328,11 @@ private struct MyTeamInfoPopupView: View {
             Group {
                 switch popup {
                 case .checkin:
-                    CheckinInfoCard(selectedTeam: selectedTeam)
+                    CheckinInfoCard(selectedTeam: selectedTeam, teamDisplayNameStyle: teamDisplayNameStyle)
                 case .watchCheer:
-                    WatchCheerPreviewCard(selectedTeam: selectedTeam)
+                    WatchCheerPreviewCard(selectedTeam: selectedTeam, teamDisplayNameStyle: teamDisplayNameStyle)
                 case .ranking:
-                    RankingInfoCard(selectedTeam: selectedTeam)
+                    RankingInfoCard(selectedTeam: selectedTeam, teamDisplayNameStyle: teamDisplayNameStyle)
                 }
             }
             .padding(AppSpacing.xxl)
@@ -333,9 +342,10 @@ private struct MyTeamInfoPopupView: View {
 
 private struct CheckinInfoCard: View {
     let selectedTeam: Team
+    let teamDisplayNameStyle: TeamDisplayNameStyle
 
     private var teamLabel: String {
-        selectedTeam == .none ? "응원팀" : selectedTeam.teamName
+        selectedTeam == .none ? "응원팀" : selectedTeam.displayName(style: teamDisplayNameStyle)
     }
 
     var body: some View {
@@ -350,9 +360,10 @@ private struct CheckinInfoCard: View {
 
 private struct RankingInfoCard: View {
     let selectedTeam: Team
+    let teamDisplayNameStyle: TeamDisplayNameStyle
 
     private var teamLabel: String {
-        selectedTeam == .none ? "내 팀" : selectedTeam.teamName
+        selectedTeam == .none ? "내 팀" : selectedTeam.displayName(style: teamDisplayNameStyle)
     }
 
     var body: some View {
@@ -387,9 +398,10 @@ private struct InfoCard: View {
 
 private struct WatchCheerPreviewCard: View {
     let selectedTeam: Team
+    let teamDisplayNameStyle: TeamDisplayNameStyle
 
     private var teamLabel: String {
-        selectedTeam == .none ? "응원팀" : selectedTeam.teamName
+        selectedTeam == .none ? "응원팀" : selectedTeam.displayName(style: teamDisplayNameStyle)
     }
 
     var body: some View {

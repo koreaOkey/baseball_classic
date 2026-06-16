@@ -28,6 +28,7 @@
 - [x] 4.4 Apply iOS display helper to primary mobile team labels.
 - [x] 4.5 Sync display-name style to watchOS and update watchOS score labels.
 - [x] 4.6 Include display-name style in iOS push subscription/device-token registration.
+- [x] 4.7 Apply iOS display helper to My Team, check-in, standings, local notification, and watch-sync prompt labels.
 
 ## 5. Verification
 
