@@ -1407,7 +1407,7 @@ private fun UpcomingGameCard(
                 )
             }
 
-            if (game.status == GameStatus.SCHEDULED && game.weather != null) {
+            if ((game.status == GameStatus.SCHEDULED || game.status == GameStatus.LIVE) && game.weather != null) {
                 Spacer(modifier = Modifier.height(AppSpacing.md))
                 WeatherSummaryRow(
                     weather = game.weather,
@@ -2136,7 +2136,7 @@ private fun GameCard(
                         }
                     }
 
-                    if (game.status == GameStatus.SCHEDULED && game.weather != null) {
+                    if ((game.status == GameStatus.SCHEDULED || game.status == GameStatus.LIVE) && game.weather != null) {
                         Spacer(modifier = Modifier.height(AppSpacing.md))
                         WeatherSummaryRow(
                             weather = game.weather,

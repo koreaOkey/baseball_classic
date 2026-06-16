@@ -14,8 +14,10 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.appupdate.AppUpdateOptions
 import com.google.android.play.core.install.InstallStateUpdatedListener
@@ -49,6 +51,7 @@ import com.basehaptic.mobile.data.LiveViewSessionRegistrar
 import com.basehaptic.mobile.data.LiveScoreAdLedger
 import com.basehaptic.mobile.data.WatchSyncAdLedger
 import com.basehaptic.mobile.data.model.Game
+import com.basehaptic.mobile.data.model.GameWeatherSummary
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.StadiumCheerThemeStore
 import com.basehaptic.mobile.data.model.Team
@@ -101,6 +104,9 @@ private const val KEY_ACTIVE_CHEER_THEME_ID = "active_cheer_theme_id"
 private const val KEY_LAST_SEEN_UPDATE_VERSION = "last_seen_update_version"
 private const val KEY_LAST_SEEN_FEATURE_GUIDE_VERSION = "last_seen_feature_guide_version"
 private const val KEY_LAST_NOTIFICATION_SETTINGS_CHECK_VERSION = "last_notification_settings_check_version"
+private const val KEY_SYNCED_GAME_ID = "synced_game_id"
+private const val KEY_SYNCED_MY_TEAM = "synced_my_team"
+private const val KEY_ACTIVE_LIVE_SCORE_GAME_ID = "active_live_score_game_id"
 private const val ANDROID_STORE_URL = "market://details?id=com.basehaptic.mobile"
 
 private fun compareVersionNames(left: String, right: String): Int {
@@ -129,11 +135,14 @@ private fun isNotificationRuntimePermissionMissing(context: Context): Boolean {
         PackageManager.PERMISSION_GRANTED
 }
 
+private fun isLiveScoreNotificationPermissionBlocked(context: Context): Boolean {
+    return isNotificationRuntimePermissionMissing(context) ||
+        !NotificationManagerCompat.from(context).areNotificationsEnabled()
+}
+
 private fun liveScoreNotificationSettingsIssue(context: Context): String? {
     NotificationChannels.ensureCreated(context)
-    if (isNotificationRuntimePermissionMissing(context) ||
-        !NotificationManagerCompat.from(context).areNotificationsEnabled()
-    ) {
+    if (isLiveScoreNotificationPermissionBlocked(context)) {
         return "앱 알림이 꺼져 있어 득점·홈런 알림을 잠금화면에서 받을 수 없습니다."
     }
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
@@ -173,6 +182,12 @@ private fun openLiveScoreNotificationSettings(context: Context) {
             }
         )
     }
+}
+
+private fun loadSavedGameId(context: Context, key: String): String? {
+    return context.getSharedPreferences(USER_PREFS_NAME, Context.MODE_PRIVATE)
+        .getString(key, null)
+        ?.takeIf { it.isNotBlank() }
 }
 
 class MainActivity : ComponentActivity() {
@@ -544,17 +559,21 @@ fun BaseHapticApp(
 ) {
     val authState by AuthManager.authState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var currentView by remember { mutableStateOf<Screen>(Screen.Home) }
     val navigationHistory = remember { mutableStateListOf<Screen>() }
     var activeTheme by remember { mutableStateOf(initialActiveTheme) }
     var activeCheerTheme by remember { mutableStateOf(initialActiveCheerTheme) }
     var selectedGameId by remember { mutableStateOf<String?>(null) }
-    var syncedGameId by remember { mutableStateOf<String?>(null) }
-    var activeLiveScoreGameId by remember { mutableStateOf<String?>(null) }
+    var syncedGameId by remember { mutableStateOf(loadSavedGameId(context, KEY_SYNCED_GAME_ID)) }
+    var activeLiveScoreGameId by remember { mutableStateOf(loadSavedGameId(context, KEY_ACTIVE_LIVE_SCORE_GAME_ID)) }
     var registeredLiveScoreSessionGameId by remember { mutableStateOf<String?>(null) }
     var registeredWatchSessionGameId by remember { mutableStateOf<String?>(null) }
     var showWatchSyncDialog by remember { mutableStateOf(false) }
     var showLiveScoreDialog by remember { mutableStateOf(false) }
+    var showLiveScoreNotificationPermissionDialog by remember { mutableStateOf(false) }
+    var resumeLiveScoreAfterNotificationSettings by remember { mutableStateOf(false) }
     var showGameNotStartedDialog by remember { mutableStateOf(false) }
     var pendingWatchSyncGameId by remember { mutableStateOf<String?>(null) }
     var pendingWatchSyncNavigateToLive by remember { mutableStateOf(false) }
@@ -573,9 +592,16 @@ fun BaseHapticApp(
     var todayGamesSnapshot by remember(selectedTeam) { mutableStateOf<List<Game>>(emptyList()) }
     var todayGamesLoadedDate by remember(selectedTeam) { mutableStateOf<LocalDate?>(null) }
     var todayGamesReloadToken by remember(selectedTeam) { mutableStateOf(0) }
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val game = pendingLiveScoreGame
+        if (granted && game != null && game.status == GameStatus.LIVE) {
+            showLiveScoreDialog = true
+        } else if (!granted) {
+            pendingLiveScoreGame = null
+        }
+    }
     fun requestWatchSyncPrompt(
         gameId: String,
         navigateToLive: Boolean,
@@ -759,6 +785,12 @@ fun BaseHapticApp(
             return
         }
 
+        if (isLiveScoreNotificationPermissionBlocked(context)) {
+            pendingLiveScoreGame = game
+            showLiveScoreNotificationPermissionDialog = true
+            return
+        }
+
         pendingLiveScoreGame = game
         showLiveScoreDialog = true
     }
@@ -880,11 +912,28 @@ fun BaseHapticApp(
         }
     }
 
-    DisposableEffect(lifecycleOwner, selectedTeam) {
+    DisposableEffect(
+        lifecycleOwner,
+        selectedTeam,
+        resumeLiveScoreAfterNotificationSettings,
+        pendingLiveScoreGame
+    ) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 // 매 ON_RESUME 마다 새로 fetch — 같은 날 안에서도 SCHEDULED→LIVE 전이를 반영.
                 todayGamesReloadToken += 1
+                if (resumeLiveScoreAfterNotificationSettings) {
+                    resumeLiveScoreAfterNotificationSettings = false
+                    val game = pendingLiveScoreGame
+                    if (!isLiveScoreNotificationPermissionBlocked(context) &&
+                        game != null &&
+                        game.status == GameStatus.LIVE
+                    ) {
+                        showLiveScoreDialog = true
+                    } else if (isLiveScoreNotificationPermissionBlocked(context)) {
+                        pendingLiveScoreGame = null
+                    }
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -919,7 +968,10 @@ fun BaseHapticApp(
             }
         }.getOrNull()
         if (freshGames != null) {
-            todayGamesSnapshot = freshGames
+            todayGamesSnapshot = hydrateMissingLiveWeather(
+                games = freshGames,
+                previousGames = todayGamesSnapshot
+            )
             todayGamesLoadedDate = LocalDate.now()
         }
     }
@@ -929,6 +981,17 @@ fun BaseHapticApp(
 
     // Start/stop streaming via service when watch sync or live_score lockscreen card changes.
     LaunchedEffect(activeLiveScoreGameId, syncedGameId, selectedTeam) {
+        context.getSharedPreferences(USER_PREFS_NAME, android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_SYNCED_GAME_ID, syncedGameId.orEmpty())
+            .putString(KEY_SYNCED_MY_TEAM, selectedTeam.name)
+            .putString(KEY_ACTIVE_LIVE_SCORE_GAME_ID, activeLiveScoreGameId.orEmpty())
+            .putBoolean(
+                LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED,
+                !activeLiveScoreGameId.isNullOrBlank()
+            )
+            .apply()
+
         val previousLiveScore = registeredLiveScoreSessionGameId
         if (!previousLiveScore.isNullOrBlank() && previousLiveScore != activeLiveScoreGameId) {
             LiveViewSessionRegistrar.setActive(
@@ -1292,6 +1355,44 @@ fun BaseHapticApp(
             )
         }
 
+        if (showLiveScoreNotificationPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showLiveScoreNotificationPermissionDialog = false
+                    pendingLiveScoreGame = null
+                },
+                title = { Text(text = "알림 허용이 필요합니다") },
+                text = {
+                    Text(text = "경기 확인을 위해서는 알림 허용이 필요합니다.")
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLiveScoreNotificationPermissionDialog = false
+                            if (isNotificationRuntimePermissionMissing(context)) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                resumeLiveScoreAfterNotificationSettings = true
+                                openLiveScoreNotificationSettings(context)
+                            }
+                        }
+                    ) {
+                        Text("알림 허용")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showLiveScoreNotificationPermissionDialog = false
+                            pendingLiveScoreGame = null
+                        }
+                    ) {
+                        Text("취소")
+                    }
+                }
+            )
+        }
+
         requiredUpdateConfig?.let { config ->
             AlertDialog(
                 onDismissRequest = {},
@@ -1397,6 +1498,58 @@ fun BaseHapticApp(
             pendingReleaseNote = note
         } else if (!showFeatureGuideIfNeeded(currentVersion)) {
             showNotificationSettingsPromptIfNeeded(currentVersion)
+        }
+    }
+}
+
+private fun BackendGamesRepository.GameWeatherHourly.toGameStartWeatherSummary(): GameWeatherSummary? {
+    val item = items.firstOrNull { it.isGameStartForecast } ?: items.firstOrNull() ?: return null
+    val timeLabel = item.timeLabel.ifBlank { gameStartTime.orEmpty() }.ifBlank { null }
+    val condition = item.condition.ifBlank { "예보" }
+    val displayText = buildString {
+        append(stadiumShortName.ifBlank { stadiumName })
+        timeLabel?.let { append(" · ").append(it).append(" 기준") }
+        append(" · ").append(condition)
+        item.temperatureC?.let { append(" ").append(it).append("°") }
+        item.precipitationProbability?.let { append(" · 강수 ").append(it).append("%") }
+    }
+    return GameWeatherSummary(
+        stadiumCode = stadiumCode,
+        stadiumName = stadiumName,
+        stadiumShortName = stadiumShortName,
+        forecastDate = item.forecastDate.ifBlank { null },
+        forecastTime = item.forecastTime.ifBlank { null },
+        forecastTimeLabel = timeLabel,
+        condition = condition,
+        temperatureC = item.temperatureC,
+        precipitationProbability = item.precipitationProbability,
+        precipitationType = item.precipitationType,
+        windSpeedMps = item.windSpeedMps,
+        isIndoor = false,
+        displayText = displayText
+    )
+}
+
+private suspend fun hydrateMissingLiveWeather(
+    games: List<Game>,
+    previousGames: List<Game>
+): List<Game> = withContext(Dispatchers.IO) {
+    val previousWeatherByGameId = previousGames
+        .mapNotNull { game -> game.weather?.let { weather -> game.id to weather } }
+        .toMap()
+
+    games.map { game ->
+        if (game.weather != null || game.status != GameStatus.LIVE) {
+            game
+        } else {
+            val preservedWeather = previousWeatherByGameId[game.id]
+            val fetchedWeather = preservedWeather ?: runCatching {
+                BackendGamesRepository.fetchGameHourlyWeather(
+                    gameId = game.id,
+                    targetDate = LocalDate.now()
+                )?.toGameStartWeatherSummary()
+            }.getOrNull()
+            if (fetchedWeather != null) game.copy(weather = fetchedWeather) else game
         }
     }
 }

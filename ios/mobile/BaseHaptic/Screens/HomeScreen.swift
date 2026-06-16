@@ -1206,7 +1206,7 @@ private struct GameCard: View {
                 }
                 .buttonStyle(.plain)
 
-                if game.status == .scheduled, let weather = game.weather {
+                if (game.status == .scheduled || game.status == .live), let weather = game.weather {
                     WeatherSummaryRow(weather: weather, onTap: onWeatherTap)
                         .padding(.horizontal, AppSpacing.xl)
                         .padding(.top, AppSpacing.md)
@@ -1626,7 +1626,7 @@ private struct UpcomingGameCard: View {
                 .font(AppFont.body)
                 .foregroundColor(AppColors.gray400)
 
-            if game.status == .scheduled, let weather = game.weather {
+            if (game.status == .scheduled || game.status == .live), let weather = game.weather {
                 WeatherSummaryRow(weather: weather, onTap: nil)
             }
 

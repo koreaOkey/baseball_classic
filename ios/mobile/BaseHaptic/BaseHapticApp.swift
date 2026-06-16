@@ -51,8 +51,6 @@ struct BaseHapticApp: App {
             "team_display_name_style": TeamDisplayNameStyle.team.rawValue,
             "team_display_name_prompt_seen": false,
         ])
-        UserDefaults.standard.set(true, forKey: "lock_screen_live_score_enabled")
-        UserDefaults.standard.set(true, forKey: "live_haptic_enabled")
     }
 
     private var selectedTeam: Team {
@@ -297,6 +295,17 @@ private let SHOW_MY_TEAM_TAB = false
 
 // MARK: - ContentView
 struct ContentView: View {
+    private static let syncedGameIdKey = "synced_game_id"
+    private static let syncedMyTeamKey = "synced_my_team"
+    private static let activeLiveActivityGameIdKey = "active_live_activity_game_id"
+
+    private static func savedGameId(forKey key: String) -> String? {
+        guard let value = UserDefaults.standard.string(forKey: key), !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
     let selectedTeam: Team
     let teamDisplayNameStyle: TeamDisplayNameStyle
     let onTeamChanged: (Team) -> Void
@@ -314,8 +323,8 @@ struct ContentView: View {
     // 워치 페이스 테마와 무관하게 응원 발화 풀스크린에 적용될 테마.
     @State private var activeCheerTheme: ThemeData? = StadiumCheerThemes.allThemes.first { $0.id == UserDefaults.standard.string(forKey: "active_cheer_theme_id") }
     @State private var selectedGameId: String?
-    @State private var syncedGameId: String?
-    @State private var activeLiveActivityGameId: String?
+    @State private var syncedGameId: String? = Self.savedGameId(forKey: Self.syncedGameIdKey)
+    @State private var activeLiveActivityGameId: String? = Self.savedGameId(forKey: Self.activeLiveActivityGameIdKey)
     @State private var showWatchSyncDialog = false
     @State private var showLiveActivityDialog = false
     @State private var showGameNotStartedAlert = false
@@ -400,6 +409,7 @@ struct ContentView: View {
                 pendingTeamDisplayNameStyle = teamDisplayNameStyle
                 showTeamDisplayNamePrompt = true
             }
+            resumePersistedLiveChannels()
         }
         .onChange(of: showOnboarding) { _, showing in
             if !showing {
@@ -464,8 +474,8 @@ struct ContentView: View {
         }
         .onChange(of: syncedGameId) { oldId, newId in
             // UserDefaults에 저장 (워치 토큰 등록 시 참조)
-            UserDefaults.standard.set(newId ?? "", forKey: "synced_game_id")
-            UserDefaults.standard.set(selectedTeam.rawValue, forKey: "synced_my_team")
+            UserDefaults.standard.set(newId ?? "", forKey: Self.syncedGameIdKey)
+            UserDefaults.standard.set(selectedTeam.rawValue, forKey: Self.syncedMyTeamKey)
 
             // 기존 스트림 취소 후 새 스트림 시작 (별도 Task로 실행하여 백그라운드에서도 유지)
             gameStreamTask?.cancel()
@@ -509,6 +519,45 @@ struct ContentView: View {
                 await streamSyncedGame()
             }
             refreshLiveActivityStream()
+        }
+        .onChange(of: activeLiveActivityGameId) { _, newId in
+            UserDefaults.standard.set(newId ?? "", forKey: Self.activeLiveActivityGameIdKey)
+            UserDefaults.standard.set(newId?.isEmpty == false, forKey: LiveActivityManager.lockScreenLiveScoreEnabledKey)
+            refreshLiveActivityStream()
+        }
+    }
+
+    private func resumePersistedLiveChannels() {
+        if let gameId = activeLiveActivityGameId, !gameId.isEmpty {
+            UserDefaults.standard.set(true, forKey: LiveActivityManager.lockScreenLiveScoreEnabledKey)
+            Task {
+                await LiveViewSessionManager.setActive(
+                    gameId: gameId,
+                    surface: .ios,
+                    active: true,
+                    myTeam: selectedTeam.rawValue,
+                    tokenKey: UserDefaults.standard.string(forKey: "apns_device_token")
+                )
+            }
+            refreshLiveActivityStream()
+        }
+        if let gameId = syncedGameId, !gameId.isEmpty, gameStreamTask == nil {
+            UserDefaults.standard.set(gameId, forKey: Self.syncedGameIdKey)
+            UserDefaults.standard.set(selectedTeam.rawValue, forKey: Self.syncedMyTeamKey)
+            Task {
+                await PushTokenManager.register(gameId: gameId, myTeam: selectedTeam.rawValue)
+                await PushTokenManager.registerWatchToken(gameId: gameId, myTeam: selectedTeam.rawValue)
+                await LiveViewSessionManager.setActive(
+                    gameId: gameId,
+                    surface: .watchos,
+                    active: true,
+                    myTeam: selectedTeam.rawValue,
+                    tokenKey: UserDefaults.standard.string(forKey: "watch_apns_device_token")
+                )
+            }
+            gameStreamTask = Task {
+                await streamSyncedGame()
+            }
         }
     }
 
@@ -822,6 +871,8 @@ struct ContentView: View {
 
         if activeLiveActivityGameId == game.id {
             activeLiveActivityGameId = nil
+            UserDefaults.standard.set(false, forKey: LiveActivityManager.lockScreenLiveScoreEnabledKey)
+            UserDefaults.standard.set("", forKey: Self.activeLiveActivityGameIdKey)
             refreshLiveActivityStream()
             LiveActivityManager.shared.endActivity(gameId: game.id)
             Task {
@@ -895,7 +946,9 @@ struct ContentView: View {
             }
         }
 
+        UserDefaults.standard.set(true, forKey: LiveActivityManager.lockScreenLiveScoreEnabledKey)
         activeLiveActivityGameId = game.id
+        UserDefaults.standard.set(game.id, forKey: Self.activeLiveActivityGameIdKey)
         Task {
             await LiveViewSessionManager.setActive(
                 gameId: game.id,
@@ -1176,7 +1229,7 @@ struct ContentView: View {
             todayGames = cached
         }
         if let fresh = await BackendGamesRepository.shared.fetchTodayGamesCached(selectedTeam: selectedTeam) {
-            todayGames = fresh
+            todayGames = await hydrateMissingLiveWeather(games: fresh, previousGames: todayGames)
         }
     }
 
@@ -1187,10 +1240,11 @@ struct ContentView: View {
 
         while !Task.isCancelled {
             if let fetched = await BackendGamesRepository.shared.fetchTodayGamesCached(selectedTeam: selectedTeam, forceRefresh: true) {
-                todayGames = fetched
+                let hydrated = await hydrateMissingLiveWeather(games: fetched, previousGames: todayGames)
+                todayGames = hydrated
 
                 // Auto-detect LIVE games for watch sync prompt
-                let myTeamGames = fetched.filter { $0.isMyTeam }
+                let myTeamGames = hydrated.filter { $0.isMyTeam }
                 for game in myTeamGames {
                     let previous = observedMyTeamGameStatus[game.id]
                     observedMyTeamGameStatus[game.id] = game.status
@@ -1211,9 +1265,9 @@ struct ContentView: View {
                 }
 
                 let pollDelay: UInt64
-                if fetched.contains(where: { $0.status == .live }) {
+                if hydrated.contains(where: { $0.status == .live }) {
                     pollDelay = 5_000_000_000
-                } else if fetched.allSatisfy({ isTerminalStatus($0.status) }) {
+                } else if hydrated.allSatisfy({ isTerminalStatus($0.status) }) {
                     pollDelay = 60_000_000_000
                 } else {
                     pollDelay = 30_000_000_000
@@ -1579,6 +1633,8 @@ struct ContentView: View {
     private func deactivateLiveActivity(gameId: String) async {
         guard activeLiveActivityGameId == gameId else { return }
         activeLiveActivityGameId = nil
+        UserDefaults.standard.set(false, forKey: LiveActivityManager.lockScreenLiveScoreEnabledKey)
+        UserDefaults.standard.set("", forKey: Self.activeLiveActivityGameIdKey)
         refreshLiveActivityStream()
         await PushTokenManager.unregisterLiveActivityToken(gameId: gameId)
         await LiveViewSessionManager.setActive(
@@ -1635,6 +1691,90 @@ private func isTerminalStatus(_ status: GameStatus) -> Bool {
     case .finished, .canceled, .postponed: return true
     case .live, .scheduled: return false
     }
+}
+
+private func gameStartWeatherSummary(from forecast: GameWeatherHourly) -> GameWeatherSummary? {
+    guard let item = forecast.items.first(where: { $0.isGameStartForecast }) ?? forecast.items.first else {
+        return nil
+    }
+    let timeLabel = item.timeLabel.isEmpty ? forecast.gameStartTime : item.timeLabel
+    let condition = item.condition.isEmpty ? "예보" : item.condition
+    var displayParts: [String] = [forecast.stadiumShortName.isEmpty ? forecast.stadiumName : forecast.stadiumShortName]
+    if let timeLabel, !timeLabel.isEmpty {
+        displayParts.append("\(timeLabel) 기준")
+    }
+    var conditionText = condition
+    if let temperatureC = item.temperatureC {
+        conditionText += " \(temperatureC)°"
+    }
+    displayParts.append(conditionText)
+    if let precipitationProbability = item.precipitationProbability {
+        displayParts.append("강수 \(precipitationProbability)%")
+    }
+
+    return GameWeatherSummary(
+        stadiumCode: forecast.stadiumCode,
+        stadiumName: forecast.stadiumName,
+        stadiumShortName: forecast.stadiumShortName,
+        forecastDate: item.forecastDate.isEmpty ? nil : item.forecastDate,
+        forecastTime: item.forecastTime.isEmpty ? nil : item.forecastTime,
+        forecastTimeLabel: timeLabel,
+        condition: condition,
+        temperatureC: item.temperatureC,
+        precipitationProbability: item.precipitationProbability,
+        precipitationType: item.precipitationType,
+        windSpeedMps: item.windSpeedMps,
+        isIndoor: false,
+        displayText: displayParts.joined(separator: " · ")
+    )
+}
+
+private func gameWithWeather(_ game: Game, weather: GameWeatherSummary) -> Game {
+    Game(
+        id: game.id,
+        homeTeam: game.homeTeam,
+        awayTeam: game.awayTeam,
+        homeTeamId: game.homeTeamId,
+        awayTeamId: game.awayTeamId,
+        homeScore: game.homeScore,
+        awayScore: game.awayScore,
+        inning: game.inning,
+        status: game.status,
+        time: game.time,
+        isMyTeam: game.isMyTeam,
+        weather: weather,
+        homePitcher: game.homePitcher,
+        awayPitcher: game.awayPitcher
+    )
+}
+
+private func hydrateMissingLiveWeather(games: [Game], previousGames: [Game]) async -> [Game] {
+    var previousWeatherByGameId: [String: GameWeatherSummary] = [:]
+    for game in previousGames {
+        if let weather = game.weather {
+            previousWeatherByGameId[game.id] = weather
+        }
+    }
+
+    var hydrated: [Game] = []
+    hydrated.reserveCapacity(games.count)
+    for game in games {
+        guard game.status == .live, game.weather == nil else {
+            hydrated.append(game)
+            continue
+        }
+        if let preservedWeather = previousWeatherByGameId[game.id] {
+            hydrated.append(gameWithWeather(game, weather: preservedWeather))
+            continue
+        }
+        if let forecast = await BackendGamesRepository.shared.fetchGameHourlyWeather(gameId: game.id, targetDate: Date()),
+           let fetchedWeather = gameStartWeatherSummary(from: forecast) {
+            hydrated.append(gameWithWeather(game, weather: fetchedWeather))
+        } else {
+            hydrated.append(game)
+        }
+    }
+    return hydrated
 }
 
 private enum DeviceCapability {
