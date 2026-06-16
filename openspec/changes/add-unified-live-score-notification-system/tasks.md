@@ -1,6 +1,6 @@
 ## 1. 백엔드 준비
 
-- [ ] 1.1 Supabase migration: 사용자별 Watch/잠금화면 이벤트 선택 컬럼 추가 (jsonb 권장 — 채널별 7개 키 boolean), 기본값 = SCORE/HOMERUN/HIT ON, WALK/STEAL/BALL_STRIKE/PITCHER_CHANGE OFF
+- [ ] 1.1 Supabase migration: 사용자별 Watch/잠금화면 이벤트 선택 컬럼 추가 (jsonb 권장 — 채널별 8개 키 boolean), 기본값 = SCORE/HOMERUN/HIT ON, WALK/STEAL/OUT/BALL_STRIKE/PITCHER_CHANGE OFF
 - [ ] 1.2 사용자 preferences GET/PUT 엔드포인트에 Watch/잠금화면 이벤트 선택 필드 노출 (FastAPI 핸들러 + Pydantic 스키마)
 - [ ] 1.3 push payload 표준 이벤트 타입 식별자 확인. 누락된 경우 payload에 `event_type` 필드 추가
 - [ ] 1.4 미수신 이벤트 큐잉 로직(있다면) 제거. 도달 가능 시 클라이언트가 별도 동기화 경로로 최신 상태만 복원하도록 정리
@@ -12,7 +12,7 @@
 
 ## 2. iOS 폰 (mobile-ios)
 
-- [x] 2.1 설정 화면에 "알림 이벤트" 섹션 추가: 이벤트별 한 행에 Watch/잠금화면 토글을 나란히 배치하고, 채널별 이벤트 선택(SCORE/HOMERUN/HIT/WALK/STEAL/BALL/STRIKE/PITCHER_CHANGE), 위기 탈출 제거, 기본값 반영
+- [x] 2.1 설정 화면에 "알림 이벤트" 섹션 추가: 이벤트별 한 행에 Watch/잠금화면 토글을 나란히 배치하고, 채널별 이벤트 선택(SCORE/HOMERUN/HIT/WALK/STEAL/OUT/BALL/STRIKE/PITCHER_CHANGE), 위기 탈출 제거, 기본값 반영
 - [ ] 2.2 Watch/잠금화면 이벤트 선택을 백엔드와 동기화하고 로컬 저장(UserDefaults) 후 Watch 채널 설정을 워치와 sync
 - [ ] 2.3 푸시 노티 핸들러에 워치 활성 가드 추가: `WCSession.default.isPaired && WCSession.default.isReachable`이면 헤드업/햅틱 suppress, Live Activity·인앱 갱신만 수행
 - [ ] 2.4 폰 foreground 상태에서 헤드업 노티 suppress 확인 (`willPresent`에서 빈 옵션 반환)
@@ -69,5 +69,5 @@
 
 - [ ] 7.1 `openspec/specs/` 본 change archive 후 갱신 (mobile-android/mobile-ios/watch-android/watch-ios/realtime/live-score-notification)
 - [ ] 7.2 메모리 `project_2026-05-13_live_score_noti_design.md`에 구현 완료·열린 항목 해소 결과 반영
-- [ ] 7.3 릴리즈 노트(iOS/Android)에 "라이브 스코어 노티 + 선택 이벤트 알림" 항목 추가
+- [x] 7.3 릴리즈 노트(iOS/Android)에 "라이브 스코어 노티 + 선택 이벤트 알림" 항목 추가
 - [ ] 7.4 타일 제거 결정 archive 기록

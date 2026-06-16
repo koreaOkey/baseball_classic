@@ -24,6 +24,7 @@ import { IpadWatchSyncScreen } from "./iphone/IpadWatchSyncScreen";
 import { YagubomFeatureCard } from "./promo/YagubomFeatureCard";
 import { YagubomPromoCard } from "./promo/YagubomPromoCard";
 import { LiveScoreUpdateAppStorePromo } from "./promo/LiveScoreUpdateAppStorePromo";
+import { LiveScoreUpdateAndroidRatioPromo } from "./promo/LiveScoreUpdateAndroidRatioPromo";
 import { LiveScoreUpdatePromo } from "./promo/LiveScoreUpdatePromo";
 
 // Apple Watch Series 9 (App Store)
@@ -199,6 +200,62 @@ export const RemotionRoot: React.FC = () => (
       fps={1}
       width={APPSTORE_LANDSCAPE_67_W}
       height={APPSTORE_LANDSCAPE_67_H}
+    />
+    <Composition
+      id="promo-live-score-update-android-1242x2688"
+      component={() => (
+        <LiveScoreUpdateAppStorePromo orientation="portrait" platform="android" />
+      )}
+      durationInFrames={1}
+      fps={1}
+      width={APPSTORE_PORTRAIT_W}
+      height={APPSTORE_PORTRAIT_H}
+    />
+    <Composition
+      id="promo-live-score-update-android-2688x1242"
+      component={() => (
+        <LiveScoreUpdateAppStorePromo orientation="landscape" platform="android" />
+      )}
+      durationInFrames={1}
+      fps={1}
+      width={APPSTORE_LANDSCAPE_W}
+      height={APPSTORE_LANDSCAPE_H}
+    />
+    <Composition
+      id="promo-live-score-update-android-1284x2778"
+      component={() => (
+        <LiveScoreUpdateAppStorePromo orientation="portrait" platform="android" />
+      )}
+      durationInFrames={1}
+      fps={1}
+      width={APPSTORE_PORTRAIT_67_W}
+      height={APPSTORE_PORTRAIT_67_H}
+    />
+    <Composition
+      id="promo-live-score-update-android-2778x1284"
+      component={() => (
+        <LiveScoreUpdateAppStorePromo orientation="landscape" platform="android" />
+      )}
+      durationInFrames={1}
+      fps={1}
+      width={APPSTORE_LANDSCAPE_67_W}
+      height={APPSTORE_LANDSCAPE_67_H}
+    />
+    <Composition
+      id="promo-live-score-update-android-9x16-1080x1920"
+      component={() => <LiveScoreUpdateAndroidRatioPromo orientation="portrait" />}
+      durationInFrames={1}
+      fps={1}
+      width={1080}
+      height={1920}
+    />
+    <Composition
+      id="promo-live-score-update-android-16x9-1920x1080"
+      component={() => <LiveScoreUpdateAndroidRatioPromo orientation="landscape" />}
+      durationInFrames={1}
+      fps={1}
+      width={1920}
+      height={1080}
     />
   </>
 );

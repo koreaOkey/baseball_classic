@@ -42,6 +42,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.basehaptic.mobile.ui.components.BannerAd
 import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.model.EventFilterOption
+import com.basehaptic.mobile.data.model.EventNotificationChannel
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.EventType
 import com.basehaptic.mobile.data.model.Team
@@ -240,6 +242,10 @@ fun WatchTestScreen(
         )
     }
 
+    fun shouldHighlightLiveScorePreview(eventType: EventType): Boolean {
+        return eventType == EventType.SCORE || eventType == EventType.HOMERUN
+    }
+
     fun sendCurrentState(eventType: String?) {
         val filteredEventType = if (shouldSendEvent(eventType)) eventType else null
         WearGameSyncManager.sendGameData(
@@ -321,6 +327,15 @@ fun WatchTestScreen(
         context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
             .edit()
             .putBoolean(LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, true)
+            .apply {
+                if (alert) {
+                    putBoolean(
+                        EventFilterOption.all.first { it.id == "score" }
+                            .storageKey(EventNotificationChannel.LOCK_SCREEN),
+                        true
+                    )
+                }
+            }
             .apply()
         isLiveScorePreviewActive = true
 
@@ -475,14 +490,16 @@ fun WatchTestScreen(
                                                 addLog("[${event.eventType}] ${event.description}")
                                                 sendCurrentState(event.eventType.name)
                                                 if (isLiveScorePreviewActive) {
+                                                    val shouldHighlight = shouldHighlightLiveScorePreview(event.eventType)
                                                     val posted = postLiveScorePreviewState(
                                                         state = nextState,
                                                         eventType = event.eventType.name,
                                                         eventText = event.description,
-                                                        highlight = false
+                                                        highlight = shouldHighlight
                                                     )
                                                     if (posted) {
-                                                        addLog("[LIVE_SCORE] 알림 갱신: ${event.description}")
+                                                        val mode = if (shouldHighlight) "주요 이벤트" else "일반"
+                                                        addLog("[LIVE_SCORE] $mode 알림 갱신: ${event.description}")
                                                     }
                                                 }
                                                 delay(event.delayMs)

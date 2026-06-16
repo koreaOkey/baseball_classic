@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessaging
 
@@ -15,22 +15,16 @@ object PushSetup {
 
     fun initialize(activity: ComponentActivity) {
         NotificationChannels.ensureCreated(activity)
-        ensureNotificationPermission(activity)
         fetchTokenAndSync(activity.applicationContext)
     }
 
-    private fun ensureNotificationPermission(activity: ComponentActivity) {
+    fun requestNotificationPermission(activity: ComponentActivity) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val permission = Manifest.permission.POST_NOTIFICATIONS
         if (ContextCompat.checkSelfPermission(activity, permission) ==
             PackageManager.PERMISSION_GRANTED
         ) return
-        val launcher = activity.registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { granted ->
-            Log.i(TAG, "POST_NOTIFICATIONS granted=$granted")
-        }
-        launcher.launch(permission)
+        ActivityCompat.requestPermissions(activity, arrayOf(permission), 1001)
     }
 
     /**

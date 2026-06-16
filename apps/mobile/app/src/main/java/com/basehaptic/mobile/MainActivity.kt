@@ -1,10 +1,17 @@
 ﻿package com.basehaptic.mobile
 
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -52,6 +59,7 @@ import com.basehaptic.mobile.data.ThemeRepository
 import com.basehaptic.mobile.push.BaseHapticMessagingService
 import com.basehaptic.mobile.push.LiveScoreNotificationManager
 import com.basehaptic.mobile.push.NotificationIntentBus
+import com.basehaptic.mobile.push.NotificationChannels
 import com.basehaptic.mobile.push.PushSetup
 import com.basehaptic.mobile.push.TeamSubscriptionRegistrar
 import com.basehaptic.mobile.service.GameSyncForegroundService
@@ -89,6 +97,7 @@ private const val KEY_ACTIVE_THEME_ID = "active_theme_id"
 private const val KEY_ACTIVE_CHEER_THEME_ID = "active_cheer_theme_id"
 private const val KEY_LAST_SEEN_UPDATE_VERSION = "last_seen_update_version"
 private const val KEY_LAST_SEEN_FEATURE_GUIDE_VERSION = "last_seen_feature_guide_version"
+private const val KEY_LAST_NOTIFICATION_SETTINGS_CHECK_VERSION = "last_notification_settings_check_version"
 private const val ANDROID_STORE_URL = "market://details?id=com.basehaptic.mobile"
 
 private fun compareVersionNames(left: String, right: String): Int {
@@ -109,6 +118,58 @@ private fun requiresServerUpdate(currentVersion: String, config: BackendGamesRep
     val latestVersion = config.latestVersion.takeIf { it.isNotBlank() }
     return (minVersion != null && compareVersionNames(currentVersion, minVersion) < 0) ||
         (latestVersion != null && compareVersionNames(currentVersion, latestVersion) < 0)
+}
+
+private fun isNotificationRuntimePermissionMissing(context: Context): Boolean {
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+        PackageManager.PERMISSION_GRANTED
+}
+
+private fun liveScoreNotificationSettingsIssue(context: Context): String? {
+    NotificationChannels.ensureCreated(context)
+    if (isNotificationRuntimePermissionMissing(context) ||
+        !NotificationManagerCompat.from(context).areNotificationsEnabled()
+    ) {
+        return "앱 알림이 꺼져 있어 득점·홈런 알림을 잠금화면에서 받을 수 없습니다."
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+
+    val manager = context.getSystemService(NotificationManager::class.java) ?: return null
+    val channel = manager.getNotificationChannel(NotificationChannels.LIVE_SCORE_ALERTS_ID)
+        ?: return "라이브 스코어 주요 이벤트 알림 채널을 확인해야 합니다."
+
+    return when {
+        channel.importance < NotificationManager.IMPORTANCE_HIGH ->
+            "라이브 스코어 주요 이벤트 알림이 무음 또는 낮은 중요도로 설정되어 있습니다."
+        !channel.shouldVibrate() ->
+            "라이브 스코어 주요 이벤트 알림의 진동이 꺼져 있습니다."
+        channel.lockscreenVisibility == Notification.VISIBILITY_SECRET ->
+            "라이브 스코어 주요 이벤트 알림이 잠금화면에서 숨김으로 설정되어 있습니다."
+        else -> null
+    }
+}
+
+private fun openLiveScoreNotificationSettings(context: Context) {
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            putExtra(Settings.EXTRA_CHANNEL_ID, NotificationChannels.LIVE_SCORE_ALERTS_ID)
+        }
+    } else {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        }
+    }
+    runCatching {
+        context.startActivity(intent)
+    }.onFailure {
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+        )
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -218,6 +279,20 @@ class MainActivity : ComponentActivity() {
         getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
             .edit()
             .putString(KEY_LAST_SEEN_FEATURE_GUIDE_VERSION, version)
+            .apply()
+    }
+
+    private fun loadLastNotificationSettingsCheckVersion(): String {
+        return getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_LAST_NOTIFICATION_SETTINGS_CHECK_VERSION, null)
+            .orEmpty()
+    }
+
+    private fun persistLastNotificationSettingsCheckVersion(version: String) {
+        if (version.isBlank()) return
+        getSharedPreferences(USER_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_NOTIFICATION_SETTINGS_CHECK_VERSION, version)
             .apply()
     }
 
@@ -382,6 +457,9 @@ class MainActivity : ComponentActivity() {
                     onPersistLastSeenUpdateVersion = ::persistLastSeenUpdateVersion,
                     loadLastSeenFeatureGuideVersion = ::loadLastSeenFeatureGuideVersion,
                     onPersistLastSeenFeatureGuideVersion = ::persistLastSeenFeatureGuideVersion,
+                    loadLastNotificationSettingsCheckVersion = ::loadLastNotificationSettingsCheckVersion,
+                    onPersistLastNotificationSettingsCheckVersion = ::persistLastNotificationSettingsCheckVersion,
+                    onRequestNotificationPermission = { PushSetup.requestNotificationPermission(this) },
                 )
             }
         }
@@ -405,6 +483,9 @@ fun BaseHapticApp(
     onPersistLastSeenUpdateVersion: (String) -> Unit = {},
     loadLastSeenFeatureGuideVersion: () -> String = { "" },
     onPersistLastSeenFeatureGuideVersion: (String) -> Unit = {},
+    loadLastNotificationSettingsCheckVersion: () -> String = { "" },
+    onPersistLastNotificationSettingsCheckVersion: (String) -> Unit = {},
+    onRequestNotificationPermission: () -> Unit = {},
 ) {
     val authState by AuthManager.authState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -431,6 +512,7 @@ fun BaseHapticApp(
     var unlockedThemeIds by remember { mutableStateOf(initialUnlockedThemeIds) }
     var pendingReleaseNote by remember { mutableStateOf<com.basehaptic.mobile.data.model.ReleaseNote?>(null) }
     var showFeatureGuide by remember { mutableStateOf(false) }
+    var pendingNotificationSettingsIssue by remember { mutableStateOf<String?>(null) }
     var todayGamesSnapshot by remember(selectedTeam) { mutableStateOf<List<Game>>(emptyList()) }
     var todayGamesLoadedDate by remember(selectedTeam) { mutableStateOf<LocalDate?>(null) }
     var todayGamesReloadToken by remember(selectedTeam) { mutableStateOf(0) }
@@ -455,16 +537,25 @@ fun BaseHapticApp(
         showWatchSyncDialog = true
     }
 
-    fun showFeatureGuideIfNeeded(currentVersion: String) {
+    fun showNotificationSettingsPromptIfNeeded(currentVersion: String) {
         if (currentVersion.isBlank()) return
-        if (loadLastSeenFeatureGuideVersion() == currentVersion) return
+        if (loadLastNotificationSettingsCheckVersion() == currentVersion) return
+        onPersistLastNotificationSettingsCheckVersion(currentVersion)
+        pendingNotificationSettingsIssue = liveScoreNotificationSettingsIssue(context)
+    }
+
+    fun showFeatureGuideIfNeeded(currentVersion: String): Boolean {
+        if (currentVersion.isBlank()) return false
+        if (loadLastSeenFeatureGuideVersion() == currentVersion) return false
         showFeatureGuide = true
+        return true
     }
 
     fun dismissFeatureGuide() {
         val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
         onPersistLastSeenFeatureGuideVersion(currentVersion)
         showFeatureGuide = false
+        showNotificationSettingsPromptIfNeeded(currentVersion)
     }
 
     fun navigateTo(targetView: Screen) {
@@ -1110,12 +1201,51 @@ fun BaseHapticApp(
             )
         }
 
+        if (
+            requiredUpdateConfig == null &&
+            pendingReleaseNote == null &&
+            !showFeatureGuide &&
+            pendingNotificationSettingsIssue != null
+        ) {
+            AlertDialog(
+                onDismissRequest = { pendingNotificationSettingsIssue = null },
+                title = { Text(text = "알림 설정을 확인해 주세요") },
+                text = {
+                    Text(
+                        text = "경기 시작, 진행상황 알림을 위해 알림 허용이 필요합니다."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingNotificationSettingsIssue = null
+                            if (isNotificationRuntimePermissionMissing(context)) {
+                                onRequestNotificationPermission()
+                            } else {
+                                openLiveScoreNotificationSettings(context)
+                            }
+                        }
+                    ) {
+                        Text("알림 설정")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingNotificationSettingsIssue = null }) {
+                        Text("나중에")
+                    }
+                }
+            )
+        }
+
         pendingReleaseNote?.let { note ->
             com.basehaptic.mobile.ui.components.WhatsNewDialog(
                 note = note,
                 onConfirm = {
                     pendingReleaseNote = null
-                    showFeatureGuideIfNeeded(com.basehaptic.mobile.BuildConfig.VERSION_NAME)
+                    val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
+                    if (!showFeatureGuideIfNeeded(currentVersion)) {
+                        showNotificationSettingsPromptIfNeeded(currentVersion)
+                    }
                 }
             )
         }
@@ -1133,16 +1263,20 @@ fun BaseHapticApp(
                 val note = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
                 if (note != null) {
                     pendingReleaseNote = note
-                } else {
-                    showFeatureGuideIfNeeded(currentVersion)
+                } else if (!showFeatureGuideIfNeeded(currentVersion)) {
+                    showNotificationSettingsPromptIfNeeded(currentVersion)
                 }
             } else {
-                showFeatureGuideIfNeeded(currentVersion)
+                if (!showFeatureGuideIfNeeded(currentVersion)) {
+                    showNotificationSettingsPromptIfNeeded(currentVersion)
+                }
             }
             return@LaunchedEffect
         }
         if (lastSeen == currentVersion) {
-            showFeatureGuideIfNeeded(currentVersion)
+            if (!showFeatureGuideIfNeeded(currentVersion)) {
+                showNotificationSettingsPromptIfNeeded(currentVersion)
+            }
             return@LaunchedEffect
         }
 
@@ -1151,8 +1285,8 @@ fun BaseHapticApp(
         val note = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
         if (note != null) {
             pendingReleaseNote = note
-        } else {
-            showFeatureGuideIfNeeded(currentVersion)
+        } else if (!showFeatureGuideIfNeeded(currentVersion)) {
+            showNotificationSettingsPromptIfNeeded(currentVersion)
         }
     }
 }

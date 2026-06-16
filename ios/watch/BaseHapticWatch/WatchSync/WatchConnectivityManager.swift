@@ -92,6 +92,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         "event_filter_hit_enabled",
         "event_filter_steal_enabled",
         "event_filter_walk_enabled",
+        "event_filter_out_enabled",
         "event_filter_pitch_count_enabled",
         "event_filter_pitcher_change_enabled"
     ]
@@ -103,6 +104,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         "event_filter_hit_enabled": true,
         "event_filter_steal_enabled": false,
         "event_filter_walk_enabled": false,
+        "event_filter_out_enabled": false,
         "event_filter_pitch_count_enabled": false,
         "event_filter_pitcher_change_enabled": false
     ]
@@ -115,9 +117,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         case "HIT": key = "event_filter_hit_enabled"
         case "STEAL", "TAG_UP_ADVANCE": key = "event_filter_steal_enabled"
         case "WALK", "HIT_BY_PITCH": key = "event_filter_walk_enabled"
+        case "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY": key = "event_filter_out_enabled"
         case "BALL", "STRIKE": key = "event_filter_pitch_count_enabled"
         case "PITCHER_CHANGE": key = "event_filter_pitcher_change_enabled"
-        case "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY": return false
         default: return true
         }
         let fallback = eventFilterDefaults[key] ?? true

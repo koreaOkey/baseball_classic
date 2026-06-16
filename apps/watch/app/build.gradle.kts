@@ -4,6 +4,18 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+fun buildConfigString(value: String): String {
+    return "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+}
+
+val stagingBackendBaseUrl =
+    System.getenv("BASEHAPTIC_STAGING_BACKEND_BASE_URL")
+        ?: "https://baseballclassic-production-4796.up.railway.app"
+
+val productionBackendBaseUrl =
+    System.getenv("BASEHAPTIC_PRODUCTION_BACKEND_BASE_URL")
+        ?: "https://baseballclassic-production.up.railway.app"
+
 val keystoreProperties = mutableMapOf<String, String>()
 rootProject.file("keystore.properties").let { file ->
     if (file.exists()) {
@@ -33,12 +45,6 @@ android {
         targetSdk = 35
         versionCode = 23
         versionName = "1.1.4"
-
-        val backendBaseUrl = (
-            System.getenv("BASEHAPTIC_STAGING_BACKEND_BASE_URL")
-                ?: "https://baseballclassic-production-4796.up.railway.app"
-            ).replace("\"", "\\\"")
-        buildConfigField("String", "BACKEND_BASE_URL", "\"$backendBaseUrl\"")
     }
 
     buildFeatures {
@@ -46,10 +52,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "BACKEND_BASE_URL", buildConfigString(stagingBackendBaseUrl))
+        }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
+            buildConfigField("String", "BACKEND_BASE_URL", buildConfigString(productionBackendBaseUrl))
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

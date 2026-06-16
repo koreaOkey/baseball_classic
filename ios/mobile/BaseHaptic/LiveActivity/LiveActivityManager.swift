@@ -427,6 +427,7 @@ final class LiveActivityManager {
             "HIT",
             "WALK", "HIT_BY_PITCH",
             "STEAL", "TAG_UP_ADVANCE",
+            "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY",
             "BALL", "STRIKE",
             "PITCHER_CHANGE"
         ].contains(type) else { return false }
@@ -451,6 +452,9 @@ final class LiveActivityManager {
         case "HIT": return "\(name) 안타"
         case "WALK", "HIT_BY_PITCH": return "\(name) 출루"
         case "STEAL", "TAG_UP_ADVANCE": return "\(name) 주루 플레이"
+        case "OUT": return "\(name) 아웃"
+        case "DOUBLE_PLAY": return "병살"
+        case "TRIPLE_PLAY": return "삼중살"
         case "BALL": return "\(name) 볼"
         case "STRIKE": return "\(name) 스트라이크"
         case "PITCHER_CHANGE": return "투수 교체"
@@ -466,6 +470,9 @@ final class LiveActivityManager {
         case "HIT": return "안타"
         case "WALK", "HIT_BY_PITCH": return "출루"
         case "STEAL", "TAG_UP_ADVANCE": return "주루"
+        case "OUT": return "아웃"
+        case "DOUBLE_PLAY": return "병살"
+        case "TRIPLE_PLAY": return "삼중살"
         case "BALL": return "볼"
         case "STRIKE": return "스트라이크"
         case "PITCHER_CHANGE": return "투수교체"

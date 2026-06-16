@@ -1,6 +1,7 @@
 package com.basehaptic.mobile.data.model
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Flag
@@ -23,10 +24,7 @@ object EventFilterGate {
     ): Boolean {
         val type = eventType?.uppercase() ?: return true
         if (type.isBlank()) return true
-        val option = EventFilterOption.optionForEventType(type) ?: run {
-            if (type in setOf("OUT", "DOUBLE_PLAY", "TRIPLE_PLAY")) return false
-            return true
-        }
+        val option = EventFilterOption.optionForEventType(type) ?: return true
         val key = option.storageKey(channel)
         val prefs = context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
         return if (prefs.contains(key)) prefs.getBoolean(key, option.defaultEnabled(channel))
@@ -101,6 +99,15 @@ data class EventFilterOption(
                 lockScreenDefaultEnabled = false
             ),
             EventFilterOption(
+                id = "out",
+                watchStorageKey = "event_filter_out_enabled",
+                lockScreenStorageKey = "lock_screen_event_filter_out_enabled",
+                title = "아웃",
+                icon = Icons.Default.Close,
+                watchDefaultEnabled = false,
+                lockScreenDefaultEnabled = false
+            ),
+            EventFilterOption(
                 id = "pitch_count",
                 watchStorageKey = "event_filter_pitch_count_enabled",
                 lockScreenStorageKey = "lock_screen_event_filter_pitch_count_enabled",
@@ -126,6 +133,7 @@ data class EventFilterOption(
             "HIT" -> all.first { it.id == "hit" }
             "WALK", "HIT_BY_PITCH" -> all.first { it.id == "walk" }
             "STEAL", "TAG_UP_ADVANCE" -> all.first { it.id == "steal" }
+            "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY" -> all.first { it.id == "out" }
             "BALL", "STRIKE" -> all.first { it.id == "pitch_count" }
             "PITCHER_CHANGE" -> all.first { it.id == "pitcher_change" }
             else -> null

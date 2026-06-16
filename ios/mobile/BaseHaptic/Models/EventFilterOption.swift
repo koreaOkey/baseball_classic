@@ -9,7 +9,6 @@ enum EventFilterGate {
     static func isAllowed(eventType: String?, channel: EventNotificationChannel = .watch) -> Bool {
         guard let type = eventType?.uppercased(), !type.isEmpty else { return true }
         guard let option = EventFilterOption.option(forEventType: type) else {
-            if ["OUT", "DOUBLE_PLAY", "TRIPLE_PLAY"].contains(type) { return false }
             return true
         }
         let key = option.storageKey(for: channel)
@@ -73,6 +72,15 @@ struct EventFilterOption: Identifiable {
             lockScreenDefaultEnabled: false
         ),
         EventFilterOption(
+            id: "out",
+            watchStorageKey: "event_filter_out_enabled",
+            lockScreenStorageKey: "lock_screen_event_filter_out_enabled",
+            title: "아웃",
+            icon: "xmark.circle.fill",
+            watchDefaultEnabled: false,
+            lockScreenDefaultEnabled: false
+        ),
+        EventFilterOption(
             id: "pitch_count",
             watchStorageKey: "event_filter_pitch_count_enabled",
             lockScreenStorageKey: "lock_screen_event_filter_pitch_count_enabled",
@@ -127,6 +135,8 @@ struct EventFilterOption: Identifiable {
             return all.first { $0.id == "walk" }
         case "STEAL", "TAG_UP_ADVANCE":
             return all.first { $0.id == "steal" }
+        case "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY":
+            return all.first { $0.id == "out" }
         case "BALL", "STRIKE":
             return all.first { $0.id == "pitch_count" }
         case "PITCHER_CHANGE":

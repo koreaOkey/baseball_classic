@@ -2,41 +2,6 @@ import React from "react";
 import { AbsoluteFill, Img, staticFile } from "remotion";
 
 type Orientation = "portrait" | "landscape";
-type Platform = "ios" | "android";
-
-type PlatformContent = {
-  detailsLabel: string;
-  secondFeature: string;
-  lockScreenSrc: string;
-  lockScreenObjectPosition: string;
-  popupTitle: string;
-  popupLabel: string;
-  popupSrc: string;
-  popupObjectPosition: string;
-};
-
-const platformContent: Record<Platform, PlatformContent> = {
-  ios: {
-    detailsLabel: "다이나믹 아일랜드",
-    secondFeature: "다이나믹 아일랜드 점수 확인",
-    lockScreenSrc: "lock-screen.png",
-    lockScreenObjectPosition: "50% 100%",
-    popupTitle: "다이나믹 아일랜드",
-    popupLabel: "iOS",
-    popupSrc: "dynamic-island.png",
-    popupObjectPosition: "50% 0%",
-  },
-  android: {
-    detailsLabel: "실시간 알림 팝업",
-    secondFeature: "실시간 알림 팝업 점수 확인",
-    lockScreenSrc: "android-lock-screen.png",
-    lockScreenObjectPosition: "50% 52%",
-    popupTitle: "실시간 알림 팝업",
-    popupLabel: "Android",
-    popupSrc: "android-popup.png",
-    popupObjectPosition: "50% 0%",
-  },
-};
 
 const asset = (name: string) => staticFile(`live-score-update/${name}`);
 
@@ -59,7 +24,7 @@ const Background: React.FC = () => (
         inset: 0,
         opacity: 0.42,
         backgroundImage:
-          "linear-gradient(115deg, transparent 0 42%, rgba(250,204,21,0.12) 42% 43%, transparent 43% 100%), linear-gradient(65deg, transparent 0 54%, rgba(34,197,94,0.12) 54% 55%, transparent 55% 100%), repeating-linear-gradient(0deg, transparent 0 96px, rgba(255,255,255,0.035) 96px 98px)",
+          "linear-gradient(115deg, transparent 0 42%, rgba(250,204,21,0.12) 42% 43%, transparent 43% 100%), linear-gradient(65deg, transparent 0 54%, rgba(34,197,94,0.12) 54% 55%, transparent 55% 100%), repeating-linear-gradient(0deg, transparent 0 82px, rgba(255,255,255,0.035) 82px 84px)",
       }}
     />
   </>
@@ -69,28 +34,28 @@ const Header: React.FC<{ landscape?: boolean }> = ({ landscape }) => (
   <div
     style={{
       position: "absolute",
-      left: landscape ? 94 : 76,
-      top: landscape ? 68 : 88,
-      right: landscape ? 94 : 76,
+      left: landscape ? 64 : 58,
+      top: landscape ? 46 : 58,
+      right: landscape ? 64 : 58,
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
     }}
   >
-    <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
       <Img
         src={staticFile("yagubom_app_icon.png")}
         style={{
-          width: landscape ? 96 : 118,
-          height: landscape ? 96 : 118,
-          borderRadius: landscape ? 27 : 33,
-          boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+          width: landscape ? 72 : 84,
+          height: landscape ? 72 : 84,
+          borderRadius: landscape ? 20 : 24,
+          boxShadow: "0 16px 42px rgba(0,0,0,0.5)",
         }}
       />
       <div>
         <div
           style={{
-            fontSize: landscape ? 50 : 60,
+            fontSize: landscape ? 38 : 44,
             fontWeight: 960,
             letterSpacing: 0,
           }}
@@ -99,9 +64,9 @@ const Header: React.FC<{ landscape?: boolean }> = ({ landscape }) => (
         </div>
         <div
           style={{
-            marginTop: 5,
+            marginTop: 4,
             color: "rgba(255,255,255,0.62)",
-            fontSize: landscape ? 23 : 28,
+            fontSize: landscape ? 18 : 20,
             fontWeight: 800,
             letterSpacing: 0,
           }}
@@ -112,12 +77,12 @@ const Header: React.FC<{ landscape?: boolean }> = ({ landscape }) => (
     </div>
     <div
       style={{
-        padding: landscape ? "15px 24px" : "18px 28px",
+        padding: landscape ? "11px 18px" : "14px 20px",
         borderRadius: 999,
         background: "rgba(239,68,68,0.16)",
         border: "1px solid rgba(239,68,68,0.38)",
         color: "#FF5A5F",
-        fontSize: landscape ? 28 : 32,
+        fontSize: landscape ? 22 : 24,
         fontWeight: 950,
         letterSpacing: 0,
       }}
@@ -127,28 +92,60 @@ const Header: React.FC<{ landscape?: boolean }> = ({ landscape }) => (
   </div>
 );
 
+const CopyBlock: React.FC<{ landscape?: boolean }> = ({ landscape }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: landscape ? 64 : 58,
+      top: landscape ? 170 : 190,
+      width: landscape ? 760 : 920,
+    }}
+  >
+    <div
+      style={{
+        fontSize: landscape ? 66 : 72,
+        lineHeight: 1.06,
+        fontWeight: 980,
+        letterSpacing: 0,
+      }}
+    >
+      이제부터 경기를
+      <br />
+      놓치지 마세요
+    </div>
+    <div
+      style={{
+        marginTop: landscape ? 22 : 23,
+        color: "rgba(255,255,255,0.74)",
+        fontSize: landscape ? 25 : 27,
+        lineHeight: 1.36,
+        fontWeight: 760,
+        letterSpacing: 0,
+      }}
+    >
+      전체 상세 진행 상황부터 잠금화면, 실시간 알림 팝업까지
+      <br />
+      일상생활의 모든 곳에서 보고 싶은 경기를 볼 수 있어요.
+    </div>
+  </div>
+);
+
 const PhoneFrame = ({
   src,
   style,
-  objectPosition = "50% 50%",
-  radius = 74,
-  innerRadius = 56,
 }: {
   src: string;
   style: React.CSSProperties;
-  objectPosition?: string;
-  radius?: number;
-  innerRadius?: number;
 }) => (
   <div
     style={{
       position: "absolute",
-      borderRadius: radius,
-      padding: 16,
+      borderRadius: 58,
+      padding: 13,
       background:
         "linear-gradient(145deg, rgba(255,255,255,0.42), rgba(255,255,255,0.06) 34%, rgba(0,0,0,0.95))",
       boxShadow:
-        "0 40px 96px rgba(0,0,0,0.62), inset 0 0 0 1px rgba(255,255,255,0.2)",
+        "0 34px 82px rgba(0,0,0,0.62), inset 0 0 0 1px rgba(255,255,255,0.2)",
       ...style,
     }}
   >
@@ -157,7 +154,7 @@ const PhoneFrame = ({
         width: "100%",
         height: "100%",
         overflow: "hidden",
-        borderRadius: innerRadius,
+        borderRadius: 44,
         background: "#111217",
         boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
       }}
@@ -168,7 +165,6 @@ const PhoneFrame = ({
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          objectPosition,
           display: "block",
         }}
       />
@@ -184,6 +180,7 @@ const CaptureCard = ({
   objectPosition,
   width,
   height,
+  titleSize = 27,
 }: {
   title: string;
   label: string;
@@ -192,16 +189,17 @@ const CaptureCard = ({
   objectPosition: string;
   width: number;
   height: number;
+  titleSize?: number;
 }) => (
   <div
     style={{
       position: "absolute",
       width,
-      borderRadius: 40,
-      padding: 16,
+      borderRadius: 34,
+      padding: 13,
       background: "rgba(255,255,255,0.09)",
       border: "1px solid rgba(255,255,255,0.16)",
-      boxShadow: "0 32px 80px rgba(0,0,0,0.45)",
+      boxShadow: "0 26px 70px rgba(0,0,0,0.45)",
       ...style,
     }}
   >
@@ -210,20 +208,20 @@ const CaptureCard = ({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        marginBottom: 16,
+        marginBottom: 12,
       }}
     >
-      <div style={{ fontSize: 34, fontWeight: 930, letterSpacing: 0 }}>
+      <div style={{ fontSize: titleSize, fontWeight: 930, letterSpacing: 0 }}>
         {title}
       </div>
       <div
         style={{
-          padding: "10px 16px",
+          padding: "8px 13px",
           borderRadius: 999,
           background: "rgba(250,204,21,0.16)",
           border: "1px solid rgba(250,204,21,0.34)",
           color: "#FACC15",
-          fontSize: 22,
+          fontSize: 18,
           fontWeight: 900,
           letterSpacing: 0,
         }}
@@ -236,7 +234,7 @@ const CaptureCard = ({
         width: "100%",
         height,
         overflow: "hidden",
-        borderRadius: 28,
+        borderRadius: 24,
         background: "#111",
       }}
     >
@@ -267,8 +265,8 @@ const Feature = ({
     style={{
       display: "flex",
       alignItems: "center",
-      gap: landscape ? 15 : 18,
-      fontSize: landscape ? 30 : 34,
+      gap: landscape ? 12 : 13,
+      fontSize: landscape ? 25 : 26,
       fontWeight: 850,
       color: "rgba(255,255,255,0.9)",
       letterSpacing: 0,
@@ -276,11 +274,11 @@ const Feature = ({
   >
     <span
       style={{
-        width: landscape ? 18 : 20,
-        height: landscape ? 18 : 20,
+        width: landscape ? 15 : 16,
+        height: landscape ? 15 : 16,
         borderRadius: 999,
         background: accent,
-        boxShadow: `0 0 26px ${accent}80`,
+        boxShadow: `0 0 22px ${accent}80`,
         flexShrink: 0,
       }}
     />
@@ -288,120 +286,76 @@ const Feature = ({
   </div>
 );
 
-const CopyBlock: React.FC<{ content: PlatformContent; landscape?: boolean }> = ({
-  content,
-  landscape,
-}) => (
-  <div
-    style={{
-      position: "absolute",
-      left: landscape ? 94 : 76,
-      top: landscape ? 235 : 300,
-      width: landscape ? 1040 : 1080,
-    }}
-  >
-    <div
-      style={{
-        fontSize: landscape ? 90 : 100,
-        lineHeight: 1.06,
-        fontWeight: 980,
-        letterSpacing: 0,
-      }}
-    >
-      이제부터 경기를
-      <br />
-      놓치지 마세요
-    </div>
-    <div
-      style={{
-        marginTop: landscape ? 28 : 34,
-        width: landscape ? 1280 : 1080,
-        color: "rgba(255,255,255,0.74)",
-        fontSize: landscape ? 34 : 36,
-        lineHeight: 1.36,
-        fontWeight: 760,
-        letterSpacing: 0,
-      }}
-    >
-      전체 상세 진행 상황부터 잠금화면, {content.detailsLabel}까지
-      <br />
-      일상생활의 모든 곳에서 보고 싶은 경기를 볼 수 있어요.
-    </div>
-  </div>
-);
-
-const PortraitLayout: React.FC<{ content: PlatformContent }> = ({ content }) => (
+const PortraitLayout: React.FC = () => (
   <>
     <Header />
-    <CopyBlock content={content} />
-
+    <CopyBlock />
     <PhoneFrame
       src="detail-events.png"
       style={{
-        width: 300,
-        height: 650,
-        left: 68,
-        top: 1095,
-        opacity: 0.76,
+        width: 230,
+        height: 499,
+        left: 54,
+        top: 818,
+        opacity: 0.72,
         transform: "rotate(-5deg)",
       }}
     />
     <PhoneFrame
       src="detail-field.png"
       style={{
-        width: 462,
-        height: 1002,
-        left: 214,
-        top: 805,
+        width: 374,
+        height: 811,
+        left: 150,
+        top: 564,
         transform: "rotate(-1deg)",
       }}
     />
     <div
       style={{
         position: "absolute",
-        left: 278,
-        top: 767,
-        padding: "17px 28px",
+        left: 202,
+        top: 532,
+        padding: "12px 20px",
         borderRadius: 999,
         background: "#FACC15",
         color: "#111113",
-        fontSize: 33,
+        fontSize: 24,
         fontWeight: 950,
-        boxShadow: "0 22px 52px rgba(250,204,21,0.28)",
+        boxShadow: "0 18px 40px rgba(250,204,21,0.28)",
         letterSpacing: 0,
       }}
     >
       경기 전체 상세
     </div>
-
     <CaptureCard
       title="잠금화면"
       label="LIVE"
-      src={content.lockScreenSrc}
-      objectPosition={content.lockScreenObjectPosition}
-      width={465}
-      height={286}
-      style={{ right: 76, top: 1115 }}
+      src="android-lock-screen.png"
+      objectPosition="50% 52%"
+      width={424}
+      height={248}
+      style={{ right: 54, top: 770 }}
     />
     <CaptureCard
-      title={content.popupTitle}
-      label={content.popupLabel}
-      src={content.popupSrc}
-      objectPosition={content.popupObjectPosition}
-      width={465}
-      height={286}
-      style={{ right: 76, top: 1490 }}
+      title="실시간 알림 팝업"
+      label="Android"
+      src="android-popup.png"
+      objectPosition="50% 0%"
+      width={424}
+      height={248}
+      style={{ right: 54, top: 1090 }}
+      titleSize={25}
     />
-
     <div
       style={{
         position: "absolute",
-        left: 76,
-        right: 76,
-        bottom: 92,
-        minHeight: 260,
-        borderRadius: 48,
-        padding: "45px 50px",
+        left: 58,
+        right: 58,
+        bottom: 58,
+        minHeight: 195,
+        borderRadius: 36,
+        padding: "31px 35px",
         background: "rgba(255,255,255,0.08)",
         border: "1px solid rgba(255,255,255,0.14)",
         display: "flex",
@@ -409,17 +363,17 @@ const PortraitLayout: React.FC<{ content: PlatformContent }> = ({ content }) => 
         justifyContent: "space-between",
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 17 }}>
         <Feature text="타석별 실시간 진행 상황" accent="#22C55E" />
         <Feature text="잠금화면 라이브 스코어" accent="#FACC15" />
-        <Feature text={content.secondFeature} accent="#FF5A5F" />
+        <Feature text="실시간 알림 팝업 점수 확인" accent="#FF5A5F" />
       </div>
       <div
         style={{
-          width: 345,
+          width: 270,
           textAlign: "right",
           color: "rgba(255,255,255,0.72)",
-          fontSize: 34,
+          fontSize: 26,
           lineHeight: 1.34,
           fontWeight: 820,
           letterSpacing: 0,
@@ -433,42 +387,38 @@ const PortraitLayout: React.FC<{ content: PlatformContent }> = ({ content }) => 
   </>
 );
 
-const LandscapeLayout: React.FC<{ content: PlatformContent }> = ({
-  content,
-}) => (
+const LandscapeLayout: React.FC = () => (
   <>
     <Header landscape />
-    <CopyBlock content={content} landscape />
-
+    <CopyBlock landscape />
     <div
       style={{
         position: "absolute",
-        left: 94,
-        bottom: 86,
-        width: 955,
-        minHeight: 210,
-        borderRadius: 44,
-        padding: "38px 44px",
+        left: 64,
+        bottom: 62,
+        width: 690,
+        minHeight: 182,
+        borderRadius: 34,
+        padding: "31px 35px",
         background: "rgba(255,255,255,0.08)",
         border: "1px solid rgba(255,255,255,0.14)",
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
-        gap: 22,
+        gap: 18,
       }}
     >
       <Feature text="타석별 실시간 진행 상황" accent="#22C55E" landscape />
       <Feature text="잠금화면 라이브 스코어" accent="#FACC15" landscape />
-      <Feature text={content.secondFeature} accent="#FF5A5F" landscape />
+      <Feature text="실시간 알림 팝업 점수 확인" accent="#FF5A5F" landscape />
     </div>
-
     <PhoneFrame
       src="detail-events.png"
       style={{
-        width: 312,
-        height: 676,
-        left: 1120,
-        top: 394,
+        width: 236,
+        height: 512,
+        left: 780,
+        top: 338,
         opacity: 0.74,
         transform: "rotate(-5deg)",
       }}
@@ -476,59 +426,59 @@ const LandscapeLayout: React.FC<{ content: PlatformContent }> = ({
     <PhoneFrame
       src="detail-field.png"
       style={{
-        width: 430,
-        height: 932,
-        left: 1392,
-        top: 192,
+        width: 324,
+        height: 703,
+        left: 982,
+        top: 170,
         transform: "rotate(-1deg)",
       }}
     />
     <div
       style={{
         position: "absolute",
-        left: 1476,
-        top: 154,
-        padding: "15px 24px",
+        left: 1042,
+        top: 138,
+        padding: "11px 18px",
         borderRadius: 999,
         background: "#FACC15",
         color: "#111113",
-        fontSize: 30,
+        fontSize: 23,
         fontWeight: 950,
-        boxShadow: "0 22px 52px rgba(250,204,21,0.28)",
+        boxShadow: "0 18px 40px rgba(250,204,21,0.28)",
         letterSpacing: 0,
       }}
     >
       경기 전체 상세
     </div>
-
     <CaptureCard
       title="잠금화면"
       label="LIVE"
-      src={content.lockScreenSrc}
-      objectPosition={content.lockScreenObjectPosition}
-      width={615}
-      height={330}
-      style={{ right: 94, top: 222 }}
+      src="android-lock-screen.png"
+      objectPosition="50% 52%"
+      width={450}
+      height={236}
+      style={{ right: 64, top: 160 }}
+      titleSize={26}
     />
     <CaptureCard
-      title={content.popupTitle}
-      label={content.popupLabel}
-      src={content.popupSrc}
-      objectPosition={content.popupObjectPosition}
-      width={615}
-      height={330}
-      style={{ right: 94, top: 660 }}
+      title="실시간 알림 팝업"
+      label="Android"
+      src="android-popup.png"
+      objectPosition="50% 0%"
+      width={450}
+      height={236}
+      style={{ right: 64, top: 480 }}
+      titleSize={25}
     />
-
     <div
       style={{
         position: "absolute",
-        right: 102,
-        bottom: 70,
-        width: 570,
+        right: 72,
+        bottom: 55,
+        width: 410,
         textAlign: "right",
         color: "rgba(255,255,255,0.74)",
-        fontSize: 38,
+        fontSize: 29,
         lineHeight: 1.35,
         fontWeight: 850,
         letterSpacing: 0,
@@ -541,29 +491,19 @@ const LandscapeLayout: React.FC<{ content: PlatformContent }> = ({
   </>
 );
 
-export const LiveScoreUpdateAppStorePromo: React.FC<{
+export const LiveScoreUpdateAndroidRatioPromo: React.FC<{
   orientation: Orientation;
-  platform?: Platform;
-}> = ({ orientation, platform = "ios" }) => {
-  const landscape = orientation === "landscape";
-  const content = platformContent[platform];
-
-  return (
-    <AbsoluteFill
-      style={{
-        position: "relative",
-        overflow: "hidden",
-        background: "#07080B",
-        color: "white",
-        fontFamily,
-      }}
-    >
-      <Background />
-      {landscape ? (
-        <LandscapeLayout content={content} />
-      ) : (
-        <PortraitLayout content={content} />
-      )}
-    </AbsoluteFill>
-  );
-};
+}> = ({ orientation }) => (
+  <AbsoluteFill
+    style={{
+      position: "relative",
+      overflow: "hidden",
+      background: "#07080B",
+      color: "white",
+      fontFamily,
+    }}
+  >
+    <Background />
+    {orientation === "landscape" ? <LandscapeLayout /> : <PortraitLayout />}
+  </AbsoluteFill>
+);

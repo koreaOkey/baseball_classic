@@ -26,7 +26,7 @@ Android 폰은 라이브 경기 동안 잠금화면·알림 드로어에서 확�
 - **THEN** 폰은 햅틱·헤드업 노티를 발화하지 않고 라이브 스코어 ongoing notification만 갱신된다
 
 ### Requirement: 사용자 이벤트 선택 UI
-오늘의 경기 카드 하단에 "잠금화면" 토글과 "Watch" 토글을 노출해야 한다(MUST). 설정 화면에는 "알림 이벤트" 섹션을 노출하고 Watch/잠금화면 채널별 이벤트 선택을 제공해야 한다(MUST). "잠금화면"은 Android live_score ongoing notification 표시 여부를 제어하고, "Watch"는 워치 동기화 여부를 제어한다. 이벤트 선택은 SCORE·HOMERUN·HIT·WALK·STEAL·BALL·STRIKE·PITCHER_CHANGE 등 강한 이벤트 알림 타입을 채널별로 지정한다.
+오늘의 경기 카드 하단에 "잠금화면" 토글과 "Watch" 토글을 노출해야 한다(MUST). 설정 화면에는 "알림 이벤트" 섹션을 노출하고 Watch/잠금화면 채널별 이벤트 선택을 제공해야 한다(MUST). "잠금화면"은 Android live_score ongoing notification 표시 여부를 제어하고, "Watch"는 워치 동기화 여부를 제어한다. 이벤트 선택은 SCORE·HOMERUN·HIT·WALK·STEAL·OUT·BALL·STRIKE·PITCHER_CHANGE 등 강한 이벤트 알림 타입을 채널별로 지정한다.
 
 #### Scenario: 오늘의 경기 카드에서 토글 제어
 - **GIVEN** 오늘의 경기 카드가 표시된 상태에서

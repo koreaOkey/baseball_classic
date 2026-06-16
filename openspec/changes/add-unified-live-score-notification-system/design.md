@@ -82,8 +82,8 @@
 
 기본값:
 - ON: 득점(SCORE/SAC_FLY_SCORE), 홈런(HOMERUN), 안타(HIT)
-- OFF: 볼넷·출루(WALK/HIT_BY_PITCH), 도루·주루(STEAL/TAG_UP_ADVANCE), 스트라이크·볼(BALL/STRIKE), 투수 교체(PITCHER_CHANGE)
-- 제외: 위기 탈출/아웃/병살 계열은 설정 목록에서 제공하지 않으며 강한 알림 기본 대상이 아니다.
+- OFF: 볼넷·출루(WALK/HIT_BY_PITCH), 도루·주루(STEAL/TAG_UP_ADVANCE), 아웃(OUT/DOUBLE_PLAY/TRIPLE_PLAY), 스트라이크·볼(BALL/STRIKE), 투수 교체(PITCHER_CHANGE)
+- 제외: 위기 탈출 계열은 설정 목록에서 제공하지 않으며 강한 알림 기본 대상이 아니다.
 
 **근거**:
 - 스코어 자체는 항상 최신이어야 함(필터링하면 "스코어가 왜 이상하지?" 사용자 혼란)
@@ -142,7 +142,7 @@
 
 ## Migration Plan
 
-1. 백엔드: 사용자별 Watch/잠금화면 이벤트 선택 컬럼 추가(Supabase migration). 기본값 = SCORE/HOMERUN/HIT ON, WALK/STEAL/BALL/STRIKE/PITCHER_CHANGE OFF. push payload에 이벤트 타입이 이미 포함되어 있으면 재활용, 없으면 추가.
+1. 백엔드: 사용자별 Watch/잠금화면 이벤트 선택 컬럼 추가(Supabase migration). 기본값 = SCORE/HOMERUN/HIT ON, WALK/STEAL/OUT/BALL/STRIKE/PITCHER_CHANGE OFF. push payload에 이벤트 타입이 이미 포함되어 있으면 재활용, 없으면 추가.
 2. iOS 폰·Android 폰 동시 배포: 오늘의 경기 카드 하단에 "잠금화면"·"Watch" 토글 추가, 설정 UI에 Watch/잠금화면 채널별 이벤트 선택 추가, 워치 우선 햅틱 suppress 가드 추가, Android 폰 라이브 스코어 ongoing notification 신설.
 3. iOS 워치·Android 워치 동시 배포: ongoing 노티 동적 콘텐츠 갱신, long-look expand 필터 가드 추가.
 4. 폰·워치 버전 mismatch 대응: 워치가 구버전이면 ongoing 정적 텍스트 유지. 폰이 구버전이면 워치만 신규 동작(폰은 기존 헤드업). 단방향 호환.
@@ -153,5 +153,5 @@
 
 - iOS Live Activity 활성 상태에서 같은 정보 push 노티가 동시 표시되는가? 시각적 노이즈 발생 시 push 헤드업 suppress 정책 추가 필요. (실기기 테스트 필요)
 - Android Wear OS 타일 GameTileService는 본 change 이후에도 유지 가치가 있는가? ongoing 노티가 같은 정보를 제공하므로 deprecate 고려 — 별도 후속 change로 결정.
-- 이벤트 필터 기본값은 Watch/잠금화면 모두 SCORE/HOMERUN/HIT만 ON으로 결정. WALK/STEAL/BALL/STRIKE/PITCHER_CHANGE는 기본 OFF.
+- 이벤트 필터 기본값은 Watch/잠금화면 모두 SCORE/HOMERUN/HIT만 ON으로 결정. WALK/STEAL/OUT/BALL/STRIKE/PITCHER_CHANGE는 기본 OFF.
 - 백엔드 push payload에 이벤트 타입이 항상 포함되는가? 없으면 추가 → 클라이언트 가드 단순화 vs 백엔드 변경 범위.

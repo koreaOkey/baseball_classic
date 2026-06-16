@@ -75,6 +75,11 @@ object LiveScoreNotificationManager {
         )
         val shouldHighlight = highlightEvent &&
             EventFilterGate.isAllowed(context, latestEventType, EventNotificationChannel.LOCK_SCREEN)
+        val channelId = if (shouldHighlight) {
+            NotificationChannels.LIVE_SCORE_ALERTS_ID
+        } else {
+            NotificationChannels.LIVE_SCORE_ID
+        }
         val expandedView = buildExpandedRemoteViews(
             context = context,
             state = state,
@@ -87,7 +92,7 @@ object LiveScoreNotificationManager {
             highlightEvent = shouldHighlight
         )
 
-        val notification = NotificationCompat.Builder(context, NotificationChannels.LIVE_SCORE_ID)
+        val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
@@ -97,11 +102,13 @@ object LiveScoreNotificationManager {
             .setCustomBigContentView(expandedView)
             .setCustomHeadsUpContentView(expandedView)
             .setOngoing(true)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(!shouldHighlight)
             .setShowWhen(false)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setCategory(if (shouldHighlight) NotificationCompat.CATEGORY_EVENT else NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(if (shouldHighlight) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+            .setDefaults(if (shouldHighlight) NotificationCompat.DEFAULT_ALL else 0)
+            .setVibrate(if (shouldHighlight) longArrayOf(0, 180, 80, 180) else null)
             .setContentIntent(pendingIntent)
             .build()
 

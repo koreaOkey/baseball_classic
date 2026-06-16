@@ -6,7 +6,7 @@
 
 - 워치(iOS/Android) ongoing 노티를 정적 텍스트에서 **동적 스코어/이닝/BSO** 갱신 노티로 전환. 같은 notification id를 사용해 in-place replace.
 - Android 폰에 **라이브 스코어 ongoing notification**(iOS Live Activity 대응) 신설. 잠금화면·알림 드로어에서 스코어 노출.
-- 사용자별 이벤트 선택을 Watch와 잠금화면 채널로 분리 — 어떤 이벤트(SCORE/HOMERUN/HIT/WALK/STEAL/BALL/STRIKE 등)를 워치 알림 또는 잠금화면 강조로 받을지 선택. 백엔드 저장 + 모바일 설정 UI + 워치 sync.
+- 사용자별 이벤트 선택을 Watch와 잠금화면 채널로 분리 — 어떤 이벤트(SCORE/HOMERUN/HIT/WALK/STEAL/OUT/BALL/STRIKE 등)를 워치 알림 또는 잠금화면 강조로 받을지 선택. 백엔드 저장 + 모바일 설정 UI + 워치 sync.
 - **워치 우선 햅틱 정책**: 워치 페어링 + 활성 상태면 폰 햅틱·푸시 suppress. 한 이벤트 = 한 채널만 발화.
 - 이벤트 필터는 **채널별 강한 알림/강조 트리거에만 적용**. ongoing 스코어 갱신은 필터와 무관하게 항상 동작.
 - 미수신 이벤트 큐잉 제거 — 양쪽 모두 off 상태에서 발생한 이벤트는 drop. 깨어났을 때 ongoing 노티가 최신 스코어 + 최근 이벤트 1개만 표시.

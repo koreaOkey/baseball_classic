@@ -8,6 +8,12 @@ const compositionIds = [
   "promo-live-score-update-2688x1242",
   "promo-live-score-update-1284x2778",
   "promo-live-score-update-2778x1284",
+  "promo-live-score-update-android-1242x2688",
+  "promo-live-score-update-android-2688x1242",
+  "promo-live-score-update-android-1284x2778",
+  "promo-live-score-update-android-2778x1284",
+  "promo-live-score-update-android-9x16-1080x1920",
+  "promo-live-score-update-android-16x9-1920x1080",
 ];
 
 async function main() {

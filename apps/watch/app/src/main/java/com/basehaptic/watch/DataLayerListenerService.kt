@@ -43,6 +43,7 @@ class DataLayerListenerService : WearableListenerService() {
             "event_filter_hit_enabled",
             "event_filter_steal_enabled",
             "event_filter_walk_enabled",
+            "event_filter_out_enabled",
             "event_filter_pitch_count_enabled",
             "event_filter_pitcher_change_enabled"
         )
@@ -341,9 +342,9 @@ class DataLayerListenerService : WearableListenerService() {
             "HIT" -> "event_filter_hit_enabled"
             "STEAL", "TAG_UP_ADVANCE" -> "event_filter_steal_enabled"
             "WALK", "HIT_BY_PITCH" -> "event_filter_walk_enabled"
+            "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY" -> "event_filter_out_enabled"
             "BALL", "STRIKE" -> "event_filter_pitch_count_enabled"
             "PITCHER_CHANGE" -> "event_filter_pitcher_change_enabled"
-            "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY" -> return false
             else -> return true
         }
         val fallback = when (key) {

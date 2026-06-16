@@ -15,6 +15,7 @@ struct BaseHapticApp: App {
     @State private var requiredUpdateTitle = "업데이트가 필요합니다"
     @State private var requiredUpdateMessage = "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요."
     @State private var requiredUpdateStoreUrl = "itms-apps://itunes.apple.com/app/id6761336752"
+    @State private var isRequiredUpdate = true
     @Environment(\.scenePhase) private var scenePhase
     private let isExistingUserAtLaunch: Bool
 
@@ -34,6 +35,7 @@ struct BaseHapticApp: App {
             "event_filter_hit_enabled": true,
             "event_filter_walk_enabled": false,
             "event_filter_steal_enabled": false,
+            "event_filter_out_enabled": false,
             "event_filter_pitch_count_enabled": false,
             "event_filter_pitcher_change_enabled": false,
             "lock_screen_event_filter_score_enabled": true,
@@ -41,6 +43,7 @@ struct BaseHapticApp: App {
             "lock_screen_event_filter_hit_enabled": true,
             "lock_screen_event_filter_walk_enabled": false,
             "lock_screen_event_filter_steal_enabled": false,
+            "lock_screen_event_filter_out_enabled": false,
             "lock_screen_event_filter_pitch_count_enabled": false,
             "lock_screen_event_filter_pitcher_change_enabled": false,
         ])
@@ -65,13 +68,19 @@ struct BaseHapticApp: App {
         return .orderedSame
     }
 
-    private func requiresServerUpdate(currentVersion: String, config: AppConfig) -> Bool {
-        guard config.forceUpdate else { return false }
+    private func serverUpdateRequirement(currentVersion: String, config: AppConfig) -> Bool? {
         let minRequiresUpdate = !config.minSupportedVersion.isEmpty &&
             compareVersions(currentVersion, config.minSupportedVersion) == .orderedAscending
         let latestRequiresUpdate = !config.latestVersion.isEmpty &&
             compareVersions(currentVersion, config.latestVersion) == .orderedAscending
-        return minRequiresUpdate || latestRequiresUpdate
+
+        if minRequiresUpdate {
+            return true
+        }
+        if latestRequiresUpdate {
+            return config.forceUpdate
+        }
+        return nil
     }
 
     private func checkForAppStoreUpdate() async {
@@ -80,11 +89,12 @@ struct BaseHapticApp: App {
         else { return }
 
         if let config = await BackendGamesRepository.shared.fetchAppConfig(platform: "ios", version: currentVersion),
-           requiresServerUpdate(currentVersion: currentVersion, config: config) {
+           let updateIsRequired = serverUpdateRequirement(currentVersion: currentVersion, config: config) {
             await MainActor.run {
                 requiredUpdateTitle = config.updateTitle.isEmpty ? "업데이트가 필요합니다" : config.updateTitle
                 requiredUpdateMessage = config.updateMessage.isEmpty ? "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요." : config.updateMessage
                 requiredUpdateStoreUrl = config.storeUrl.isEmpty ? "itms-apps://itunes.apple.com/app/id6761336752" : config.storeUrl
+                isRequiredUpdate = updateIsRequired
                 showAppUpdateAlert = true
             }
             return
@@ -104,6 +114,7 @@ struct BaseHapticApp: App {
                     requiredUpdateTitle = "업데이트가 필요합니다"
                     requiredUpdateMessage = "새 버전 \(storeVersion)이 출시되었습니다.\n계속 이용하려면 업데이트해 주세요."
                     requiredUpdateStoreUrl = "itms-apps://itunes.apple.com/app/id6761336752"
+                    isRequiredUpdate = false
                     showAppUpdateAlert = true
                 }
             }
@@ -160,7 +171,11 @@ struct BaseHapticApp: App {
                 if showAppUpdateAlert {
                     RequiredUpdateOverlay(
                         title: requiredUpdateTitle,
-                        message: requiredUpdateMessage
+                        message: requiredUpdateMessage,
+                        isRequired: isRequiredUpdate,
+                        onDismiss: {
+                            showAppUpdateAlert = false
+                        }
                     ) {
                         if let url = URL(string: requiredUpdateStoreUrl) {
                             UIApplication.shared.open(url)
@@ -189,6 +204,8 @@ struct BaseHapticApp: App {
 private struct RequiredUpdateOverlay: View {
     let title: String
     let message: String
+    let isRequired: Bool
+    let onDismiss: () -> Void
     let onUpdate: () -> Void
 
     var body: some View {
@@ -221,6 +238,16 @@ private struct RequiredUpdateOverlay: View {
                         .padding(.vertical, 14)
                         .background(AppColors.blue600)
                         .cornerRadius(AppRadius.md)
+                }
+
+                if !isRequired {
+                    Button(action: onDismiss) {
+                        Text("나중에")
+                            .font(AppFont.bodyMedium)
+                            .foregroundColor(AppColors.gray300)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
                 }
             }
             .padding(AppSpacing.xxl)

@@ -6,7 +6,11 @@ import Foundation
 /// 3) 이미 LIVE인 경기가 있으면 즉시 팝업
 final class WatchGamePoller: ObservableObject {
     static let shared = WatchGamePoller()
+    #if DEBUG
     private static let defaultBaseURL = "https://baseballclassic-production-4796.up.railway.app"
+    #else
+    private static let defaultBaseURL = "https://baseballclassic-production.up.railway.app"
+    #endif
 
     private var pollingTask: Task<Void, Never>?
     private var promptedGameIds: Set<String> = []

@@ -42,8 +42,8 @@ targets:
           SUPABASE_URL: $(BASEHAPTIC_STAGING_SUPABASE_URL)
           SUPABASE_ANON_KEY: $(BASEHAPTIC_STAGING_SUPABASE_ANON_KEY)
         Release:
-          BACKEND_BASE_URL: https://baseballclassic-production-4796.up.railway.app
-          BACKEND_WS_URL: wss://baseballclassic-production-4796.up.railway.app
+          BACKEND_BASE_URL: https://baseballclassic-production.up.railway.app
+          BACKEND_WS_URL: wss://baseballclassic-production.up.railway.app
           SUPABASE_URL: https://egcsxoxqfcwjjcvjycry.supabase.co
           SUPABASE_ANON_KEY: sb_publishable_VTKZ4I3FS3COPXSe0dryjg_VDhg0D-a
     dependencies:
@@ -89,6 +89,6 @@ targets:
         Debug:
           BACKEND_BASE_URL: $(BASEHAPTIC_STAGING_BACKEND_BASE_URL)
         Release:
-          BACKEND_BASE_URL: https://baseballclassic-production-4796.up.railway.app
+          BACKEND_BASE_URL: https://baseballclassic-production.up.railway.app
 
 # BaseHapticLiveActivity는 ActivityKit/WidgetKit 기반 iOS Live Activity extension이다.
