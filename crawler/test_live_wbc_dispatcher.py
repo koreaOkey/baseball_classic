@@ -9,11 +9,14 @@ from live_wbc_dispatcher import (
     _map_schedule_status,
     _parse_schedule_url,
     _preview_has_lineup,
+    _run_schedule_import,
     _resolve_schedule_filters,
     _resolve_schedule_targets,
+    _schedule_snapshot_signature,
     _should_skip_schedule_snapshot,
     build_parser,
 )
+import live_wbc_dispatcher
 
 
 def test_parse_schedule_url_for_kbo() -> None:
@@ -367,6 +370,59 @@ def test_should_not_skip_schedule_snapshot_for_terminal_status_even_with_live_li
     assert _should_skip_schedule_snapshot({"statusCode": "RESULT", "statusInfo": "9\uD68C\uB9D0"}) is False
     assert _should_skip_schedule_snapshot({"statusCode": "FINISHED", "statusInfo": "9T"}) is False
     assert _should_skip_schedule_snapshot({"statusCode": "CANCELED", "statusInfo": "5\uD68C\uCD08"}) is False
+
+
+def test_schedule_snapshot_signature_ignores_observed_at() -> None:
+    first = {
+        "homeTeam": "KT",
+        "awayTeam": "롯데",
+        "gameDate": "2026-07-05",
+        "status": "SCHEDULED",
+        "inning": "18:00",
+        "homeScore": 0,
+        "awayScore": 0,
+        "observedAt": "2026-07-05T07:00:00Z",
+    }
+    second = {**first, "observedAt": "2026-07-05T07:05:00Z"}
+
+    assert _schedule_snapshot_signature(first) == _schedule_snapshot_signature(second)
+
+
+def test_schedule_import_skips_unchanged_snapshot(monkeypatch) -> None:
+    game = {
+        "gameId": "20260705LTKT02026",
+        "homeTeamName": "KT",
+        "awayTeamName": "롯데",
+        "statusCode": "SCHEDULED",
+        "statusInfo": "18:00",
+        "gameDate": "2026-07-05",
+    }
+    posted: list[str] = []
+
+    monkeypatch.setattr(live_wbc_dispatcher, "_fetch_schedule_games", lambda **kwargs: [game])
+
+    def fake_post(*, game_id: str, **kwargs):
+        posted.append(game_id)
+        return {"insertedEvents": 0, "duplicateEvents": 0}
+
+    monkeypatch.setattr(live_wbc_dispatcher, "_post_schedule_snapshot_to_backend", fake_post)
+    signatures: dict[str, str] = {}
+
+    for _ in range(2):
+        assert _run_schedule_import(
+            source_base_url="https://example.test",
+            backend_base_url="https://backend.example.test",
+            backend_api_key="key",
+            target_date=date(2026, 7, 5),
+            section_id="kbaseball",
+            category_id="kbo",
+            fetch_timeout=1.0,
+            backend_timeout=1.0,
+            backend_retries=1,
+            schedule_snapshot_signatures=signatures,
+        ) is True
+
+    assert posted == ["20260705LTKT02026"]
 
 
 def test_map_schedule_status_supports_canceled_and_postponed() -> None:

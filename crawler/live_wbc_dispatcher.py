@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import logging
 import os
 import re
@@ -818,6 +820,16 @@ def _schedule_game_to_snapshot(game: dict[str, Any], target_date: date) -> dict[
     }
 
 
+def _schedule_snapshot_signature(payload: dict[str, Any]) -> str:
+    stable_payload = {
+        key: value
+        for key, value in payload.items()
+        if key != "observedAt"
+    }
+    encoded = json.dumps(stable_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def _is_live_inning_text(inning_text: str) -> bool:
     normalized = str(inning_text or "").strip()
     if not normalized:
@@ -939,6 +951,7 @@ def _run_schedule_import(
     fetch_timeout: float,
     backend_timeout: float,
     backend_retries: int,
+    schedule_snapshot_signatures: dict[str, str] | None = None,
 ) -> bool:
     LOGGER.info(
         "[import] fetch date=%s section=%s category=%s",
@@ -968,6 +981,7 @@ def _run_schedule_import(
     success_count = 0
     failure_count = 0
     skipped_live_count = 0
+    skipped_unchanged_count = 0
     for game in games:
         game_id = str(game.get("gameId") or "").strip()
         if not game_id:
@@ -978,6 +992,12 @@ def _run_schedule_import(
             continue
 
         payload = _schedule_game_to_snapshot(game, target_date)
+        signature = _schedule_snapshot_signature(payload)
+        if schedule_snapshot_signatures is not None and schedule_snapshot_signatures.get(game_id) == signature:
+            skipped_unchanged_count += 1
+            LOGGER.info("[import] skipped_unchanged gameId=%s", game_id)
+            continue
+
         try:
             result = _post_schedule_snapshot_to_backend(
                 backend_base_url=backend_base_url,
@@ -988,6 +1008,8 @@ def _run_schedule_import(
                 retries=backend_retries,
             )
             success_count += 1
+            if schedule_snapshot_signatures is not None:
+                schedule_snapshot_signatures[game_id] = signature
             LOGGER.info(
                 "[import] synced gameId=%s status=%s inning=%s score=%s:%s inserted=%s duplicates=%s",
                 game_id,
@@ -1003,11 +1025,12 @@ def _run_schedule_import(
             LOGGER.warning("[import] sync_failed gameId=%s error=%s", game_id, exc)
 
     LOGGER.info(
-        "[import] done date=%s success=%s failed=%s skipped_live=%s",
+        "[import] done date=%s success=%s failed=%s skipped_live=%s skipped_unchanged=%s",
         target_date.isoformat(),
         success_count,
         failure_count,
         skipped_live_count,
+        skipped_unchanged_count,
     )
     return failure_count == 0
 
@@ -1173,6 +1196,7 @@ def run_dispatcher(args: argparse.Namespace) -> None:
 
     windows: dict[str, RelayCheckWindow] = {}
     running: dict[str, RunningCrawler] = {}
+    schedule_snapshot_signatures: dict[str, str] = {}
     imported_date: date | None = None
     last_import_attempt_at: datetime | None = None
     last_import_success_at: datetime | None = None
@@ -1375,6 +1399,7 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                                 fetch_timeout=args.http_timeout_sec,
                                 backend_timeout=backend_sync_timeout,
                                 backend_retries=backend_sync_retries,
+                                schedule_snapshot_signatures=schedule_snapshot_signatures,
                             ):
                                 all_success = False
                         if args.disable_team_record_sync:
