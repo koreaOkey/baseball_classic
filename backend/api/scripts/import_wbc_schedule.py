@@ -224,8 +224,7 @@ def main() -> None:
                 continue
             payload = _build_payload(game, observed_at=now_utc, target_date=args.date)
             row = upsert_game_from_snapshot(db, game_id=game_id, payload=payload)
-            if getattr(row, "_snapshot_meaningful_changed", True):
-                row.updated_at = now_utc
+            row.updated_at = now_utc
             upserted += 1
             print(
                 f"upserted gameId={game_id} {payload.awayTeam} vs {payload.homeTeam} "
