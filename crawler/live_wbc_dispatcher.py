@@ -830,6 +830,54 @@ def _schedule_snapshot_signature(payload: dict[str, Any]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _fetch_backend_games_by_id(
+    *,
+    backend_base_url: str,
+    target_date: date,
+    timeout: float,
+) -> dict[str, dict[str, Any]]:
+    endpoint = f"{backend_base_url.rstrip('/')}/games"
+    response = requests.get(
+        endpoint,
+        params={"date": target_date.isoformat(), "limit": 100},
+        headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, list):
+        return {}
+
+    games_by_id: dict[str, dict[str, Any]] = {}
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        game_id = str(item.get("id") or "").strip()
+        if game_id:
+            games_by_id[game_id] = item
+    return games_by_id
+
+
+def _backend_game_matches_schedule_snapshot(
+    backend_game: dict[str, Any] | None,
+    snapshot: dict[str, Any],
+) -> bool:
+    if not backend_game:
+        return False
+
+    text_fields = ("homeTeam", "awayTeam", "status", "inning", "startTime")
+    for field in text_fields:
+        if str(backend_game.get(field) or "").strip() != str(snapshot.get(field) or "").strip():
+            return False
+
+    int_fields = ("homeScore", "awayScore")
+    for field in int_fields:
+        if _safe_int(backend_game.get(field), default=-1) != _safe_int(snapshot.get(field), default=-2):
+            return False
+
+    return True
+
+
 def _is_live_inning_text(inning_text: str) -> bool:
     normalized = str(inning_text or "").strip()
     if not normalized:
@@ -982,6 +1030,16 @@ def _run_schedule_import(
     failure_count = 0
     skipped_live_count = 0
     skipped_unchanged_count = 0
+    backend_games_by_id: dict[str, dict[str, Any]] = {}
+    try:
+        backend_games_by_id = _fetch_backend_games_by_id(
+            backend_base_url=backend_base_url,
+            target_date=target_date,
+            timeout=backend_timeout,
+        )
+    except Exception as exc:
+        LOGGER.warning("[import] backend_state_fetch_failed date=%s error=%s", target_date.isoformat(), exc)
+
     for game in games:
         game_id = str(game.get("gameId") or "").strip()
         if not game_id:
@@ -996,6 +1054,12 @@ def _run_schedule_import(
         if schedule_snapshot_signatures is not None and schedule_snapshot_signatures.get(game_id) == signature:
             skipped_unchanged_count += 1
             LOGGER.info("[import] skipped_unchanged gameId=%s", game_id)
+            continue
+        if _backend_game_matches_schedule_snapshot(backend_games_by_id.get(game_id), payload):
+            skipped_unchanged_count += 1
+            if schedule_snapshot_signatures is not None:
+                schedule_snapshot_signatures[game_id] = signature
+            LOGGER.info("[import] skipped_unchanged gameId=%s source=backend-state", game_id)
             continue
 
         try:
