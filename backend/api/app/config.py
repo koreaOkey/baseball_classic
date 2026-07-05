@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     db_pool_size: int = 1
     db_max_overflow: int = 0
     db_pool_timeout_sec: int = 30
-    db_connect_timeout_sec: int = 10
+    db_connect_timeout_sec: int = 5
+    db_init_lock_timeout_sec: float = 3.0
     db_pool_recycle_sec: int = 1800
     redis_url: str | None = None
     redis_pubsub_channel: str = "basehaptic:live_events"

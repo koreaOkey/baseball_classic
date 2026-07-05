@@ -1,4 +1,5 @@
 import logging
+import time
 from contextlib import contextmanager
 from collections.abc import Generator
 from typing import Any
@@ -80,16 +81,36 @@ def init_db() -> None:
     # create_all(checkfirst=True) 가 race 를 일으켜 일부 워커가 pg_type/pg_class
     # UniqueViolation 으로 실패한다. 첫 새 테이블 추가 시 startup 이 길어지거나
     # 영구 실패할 수 있으므로 PostgreSQL advisory lock 으로 init 을 직렬화한다.
+    # The lock must be bounded: if another stale deployment holds or waits on it,
+    # serving /health is safer than blocking Railway startup indefinitely.
     if engine.dialect.name == "postgresql":
-        with engine.connect() as lock_conn:
-            lock_conn.execute(text("SELECT pg_advisory_lock(hashtext('basehaptic_init_db'))"))
-            lock_conn.commit()
-            try:
-                schema_conn = lock_conn.execution_options(isolation_level="AUTOCOMMIT")
-                _run_schema_init(schema_conn)
-            finally:
-                lock_conn.execute(text("SELECT pg_advisory_unlock(hashtext('basehaptic_init_db'))"))
-                lock_conn.commit()
+        try:
+            with engine.connect() as lock_conn:
+                deadline = time.monotonic() + max(0.0, float(settings.db_init_lock_timeout_sec))
+                while True:
+                    lock_acquired = bool(
+                        lock_conn.execute(text("SELECT pg_try_advisory_lock(hashtext('basehaptic_init_db'))")).scalar()
+                    )
+                    lock_conn.commit()
+                    if lock_acquired:
+                        break
+                    if time.monotonic() >= deadline:
+                        logger.warning(
+                            "startup schema init skipped: advisory lock busy timeout_sec=%s",
+                            settings.db_init_lock_timeout_sec,
+                        )
+                        return
+                    time.sleep(0.2)
+
+                try:
+                    schema_conn = lock_conn.execution_options(isolation_level="AUTOCOMMIT")
+                    _run_schema_init(schema_conn)
+                finally:
+                    lock_conn.execute(text("SELECT pg_advisory_unlock(hashtext('basehaptic_init_db'))"))
+                    lock_conn.commit()
+        except SQLAlchemyError as exc:
+            logger.warning("startup schema init skipped: database unavailable err=%s", exc)
+            return
     else:
         _run_schema_init(engine)
 
