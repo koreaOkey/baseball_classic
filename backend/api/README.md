@@ -133,6 +133,25 @@ xcodebuild -project ios/BaseHaptic.xcodeproj -scheme BaseHaptic -configuration D
     - tightened SQLAlchemy pool defaults and env-driven tuning (see section above).
     - operational recommendation: keep backend replicas/workers conservative during high-ingest windows.
 
+## Incident Notes (2026-07-05)
+
+- Supabase multi-resource exhaustion warning
+  - Symptom: Supabase dashboard reports exhausted resources and degraded performance.
+  - Observed expensive patterns:
+    - repeated `games` row updates where only `observed_at` / `updated_at` changed.
+    - advisory-lock wait during startup/schema initialization.
+    - duplicate ingest pressure from repeated snapshots.
+  - Backend mitigation:
+    - snapshot ingest now updates `games.observed_at` / `games.updated_at` only when a user-visible state field changes.
+    - unchanged snapshots skip state rebuild, WebSocket broadcast, HTTP cache writes, and Live Activity updates.
+    - lineup, batter stat, pitcher stat, and note sync now returns whether it actually changed data, so no-op snapshots remain cheap.
+  - Functional guarantee:
+    - score, inning, B/S/O, base runners, pitcher/batter, line score summary, inserted events, lineup, boxscore, notes, game-start notification, and final status still trigger normal ingest and push behavior.
+  - Verify after deploy:
+    - `pg_stat_statements` should show a lower growth rate for `UPDATE games SET observed_at...`.
+    - `pg_stat_activity` should not show persistent lock waits on `games`.
+    - API and WS clients should continue receiving state changes when the score/count/event stream changes.
+
 ## Recent Changes (2026-03-21)
 
 - Team-record ingest behavior was changed from unconditional overwrite to change-aware upsert:

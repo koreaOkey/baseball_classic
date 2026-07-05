@@ -1518,11 +1518,19 @@ def _ingest_crawler_snapshot_locked(
                 fallback_batter=payload.batter,
                 fallback_inning=game.inning,
             )
-            sync_snapshot_details(db, game_id=game_id, payload=payload)
-            current_state = build_game_state(db, game)
-            current_state_payload = current_state.model_dump(mode="json")
+            details_changed = sync_snapshot_details(db, game_id=game_id, payload=payload)
             current_event_payload = [to_event_out(item).model_dump(mode="json") for item in inserted_events]
-            current_game_summary_payload = to_game_summary(game).model_dump(mode="json")
+            snapshot_changed = bool(
+                current_event_payload
+                or details_changed
+                or getattr(game, "_snapshot_meaningful_changed", False)
+            )
+            current_state_payload = None
+            current_game_summary_payload = None
+            if snapshot_changed:
+                current_state = build_game_state(db, game)
+                current_state_payload = current_state.model_dump(mode="json")
+                current_game_summary_payload = to_game_summary(game).model_dump(mode="json")
             response_status = normalize_status(game.status)
             response_updated_at = game.updated_at
             db.commit()
@@ -1550,12 +1558,22 @@ def _ingest_crawler_snapshot_locked(
             )
             time.sleep(delay)
 
-    if game is None or state_payload is None or response_status is None or response_updated_at is None:
+    if game is None or response_status is None or response_updated_at is None:
         raise HTTPException(status_code=500, detail="snapshot ingest failed")
 
     # NOTE: 배포된 iOS의 .update 경로가 state.homeTeamId.teamName(마스코트만)을
     # 워치로 전달해 myTeam 비교가 깨지는 버그가 있어, 정상 동작하는 .state 경로로
     # 흐르도록 events + state 두 메시지로 분리해서 broadcast.
+    if state_payload is None:
+        return IngestResult(
+            gameId=game.id,
+            receivedEvents=len(payload.events),
+            insertedEvents=len(inserted_event_payload),
+            duplicateEvents=duplicate_count,
+            status=response_status,
+            updatedAt=response_updated_at,
+        )
+
     if inserted_event_payload:
         background_tasks.add_task(
             _broadcast_live_message,

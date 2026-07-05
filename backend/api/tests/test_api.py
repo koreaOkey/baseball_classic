@@ -416,6 +416,47 @@ def test_ingest_and_query_flow() -> None:
             assert db.query(GameNote).filter(GameNote.game_id == "20250501SSSK02025").count() == 1
 
 
+def test_duplicate_snapshot_skips_timestamp_only_update() -> None:
+    game_id = "20250501SSSK02025_NOOP"
+    with TestClient(app) as client:
+        first = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=sample_snapshot(),
+        )
+        assert first.status_code == 200
+        first_body = first.json()
+        assert first_body["insertedEvents"] == 2
+
+        duplicate_payload = sample_snapshot()
+        duplicate_payload["observedAt"] = "2026-02-17T09:00:30Z"
+        duplicate = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=duplicate_payload,
+        )
+        assert duplicate.status_code == 200
+        duplicate_body = duplicate.json()
+        assert duplicate_body["insertedEvents"] == 0
+        assert duplicate_body["duplicateEvents"] == 2
+        assert duplicate_body["updatedAt"].rstrip("Z") == first_body["updatedAt"].rstrip("Z")
+
+        changed_payload = sample_snapshot()
+        changed_payload["homeScore"] = 4
+        changed_payload["observedAt"] = "2026-02-17T09:01:00Z"
+        changed = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=changed_payload,
+        )
+        assert changed.status_code == 200
+        assert changed.json()["updatedAt"].rstrip("Z") != first_body["updatedAt"].rstrip("Z")
+
+        state = client.get(f"/games/{game_id}/state")
+        assert state.status_code == 200
+        assert state.json()["homeScore"] == 4
+
+
 def test_game_state_http_cache_uses_redis_payload() -> None:
     class FakeRedisRelay:
         def __init__(self) -> None:

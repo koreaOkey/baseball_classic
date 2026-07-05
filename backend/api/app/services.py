@@ -99,6 +99,12 @@ def ensure_utc(dt: datetime) -> datetime:
     return dt.astimezone(UTC)
 
 
+def _snapshot_value_equal(current: Any, incoming: Any) -> bool:
+    if isinstance(current, datetime) and isinstance(incoming, datetime):
+        return ensure_utc(current) == ensure_utc(incoming)
+    return current == incoming
+
+
 def normalize_status(raw: str) -> GameStatus:
     return STATUS_MAP.get(raw.strip().upper(), GameStatus.SCHEDULED)
 
@@ -363,73 +369,87 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
             )
             incoming_inning = prev_inning
 
-    game.home_team = payload.homeTeam
-    game.away_team = payload.awayTeam
-    game.status = next_status.value
     # FINISHED 전이 시 inning 텍스트도 일관 라벨로 강제 (무승부 분기 포함).
     # (네이버가 잠깐 "10회초" 같은 중간 상태를 찍어도 플리커 방지)
     if next_status is GameStatus.FINISHED:
-        game.inning = _finished_inning_label(payload.homeScore, payload.awayScore)
+        next_inning = _finished_inning_label(payload.homeScore, payload.awayScore)
     else:
-        game.inning = incoming_inning
-    game.home_score = payload.homeScore
-    game.away_score = payload.awayScore
-    game.ball_count = incoming_ball
-    game.strike_count = incoming_strike
-    game.out_count = incoming_out
-    game.base_first = incoming_b1
-    game.base_second = incoming_b2
-    game.base_third = incoming_b3
-    game.base_first_runner = incoming_b1_runner if incoming_b1 else None
-    game.base_second_runner = incoming_b2_runner if incoming_b2 else None
-    game.base_third_runner = incoming_b3_runner if incoming_b3 else None
-    game.pitcher = payload.pitcher
-    game.batter = payload.batter
+        next_inning = incoming_inning
+
     normalized_game_date = _game_date_from_game_id(game_id)
     if normalized_game_date is None:
         normalized_game_date = _normalize_game_date(payload.gameDate)
-    if normalized_game_date is not None:
-        game.game_date = normalized_game_date
     start_time = _normalize_start_time(payload.startTime)
     if start_time is None and next_status == GameStatus.SCHEDULED:
         start_time = _normalize_start_time(payload.inning)
-    if start_time is not None:
-        game.start_time = start_time
-    game.observed_at = ensure_utc(payload.observedAt) if payload.observedAt else game.observed_at
 
     computed = _compute_event_summary(payload) if payload.events else {}
-    game.home_hits = payload.homeHits if payload.homeHits is not None else computed.get("home_hits", game.home_hits)
-    game.away_hits = payload.awayHits if payload.awayHits is not None else computed.get("away_hits", game.away_hits)
-    game.home_home_runs = (
-        payload.homeHomeRuns if payload.homeHomeRuns is not None else computed.get("home_home_runs", game.home_home_runs)
-    )
-    game.away_home_runs = (
-        payload.awayHomeRuns if payload.awayHomeRuns is not None else computed.get("away_home_runs", game.away_home_runs)
-    )
-    game.home_outs_total = (
-        payload.homeOutsTotal if payload.homeOutsTotal is not None else computed.get("home_outs_total", game.home_outs_total)
-    )
-    game.away_outs_total = (
-        payload.awayOutsTotal if payload.awayOutsTotal is not None else computed.get("away_outs_total", game.away_outs_total)
-    )
+    next_values: dict[str, Any] = {
+        "home_team": payload.homeTeam,
+        "away_team": payload.awayTeam,
+        "status": next_status.value,
+        "inning": next_inning,
+        "home_score": payload.homeScore,
+        "away_score": payload.awayScore,
+        "ball_count": incoming_ball,
+        "strike_count": incoming_strike,
+        "out_count": incoming_out,
+        "base_first": incoming_b1,
+        "base_second": incoming_b2,
+        "base_third": incoming_b3,
+        "base_first_runner": incoming_b1_runner if incoming_b1 else None,
+        "base_second_runner": incoming_b2_runner if incoming_b2 else None,
+        "base_third_runner": incoming_b3_runner if incoming_b3 else None,
+        "pitcher": payload.pitcher,
+        "batter": payload.batter,
+        "home_hits": payload.homeHits if payload.homeHits is not None else computed.get("home_hits", game.home_hits),
+        "away_hits": payload.awayHits if payload.awayHits is not None else computed.get("away_hits", game.away_hits),
+        "home_home_runs": (
+            payload.homeHomeRuns if payload.homeHomeRuns is not None else computed.get("home_home_runs", game.home_home_runs)
+        ),
+        "away_home_runs": (
+            payload.awayHomeRuns if payload.awayHomeRuns is not None else computed.get("away_home_runs", game.away_home_runs)
+        ),
+        "home_outs_total": (
+            payload.homeOutsTotal if payload.homeOutsTotal is not None else computed.get("home_outs_total", game.home_outs_total)
+        ),
+        "away_outs_total": (
+            payload.awayOutsTotal if payload.awayOutsTotal is not None else computed.get("away_outs_total", game.away_outs_total)
+        ),
+    }
+    if normalized_game_date is not None:
+        next_values["game_date"] = normalized_game_date
+    if start_time is not None:
+        next_values["start_time"] = start_time
 
     if payload.events:
         latest_event = max(payload.events, key=lambda item: ensure_utc(item.occurredAt))
-        game.last_event_type = normalize_event_type(latest_event.type).value
-        game.last_event_desc = latest_event.description
-        game.last_event_at = ensure_utc(latest_event.occurredAt)
+        next_values["last_event_type"] = normalize_event_type(latest_event.type).value
+        next_values["last_event_desc"] = latest_event.description
+        next_values["last_event_at"] = ensure_utc(latest_event.occurredAt)
 
-    game.updated_at = ensure_utc(payload.observedAt) if payload.observedAt else now_utc()
-
-    # SCHEDULED → LIVE 전환을 1회 한정 시그널로 표시 (game-start 알림 트리거용)
     became_live = (
         next_status is GameStatus.LIVE
         and normalize_status(prev_status_value or "") is not GameStatus.LIVE
         and game.live_started_at is None
     )
+    meaningful_changed = is_new_game or became_live or any(
+        not _snapshot_value_equal(getattr(game, field_name), next_value)
+        for field_name, next_value in next_values.items()
+    )
+
+    for field_name, next_value in next_values.items():
+        if not _snapshot_value_equal(getattr(game, field_name), next_value):
+            setattr(game, field_name, next_value)
+
+    if meaningful_changed:
+        game.observed_at = ensure_utc(payload.observedAt) if payload.observedAt else game.observed_at
+        game.updated_at = ensure_utc(payload.observedAt) if payload.observedAt else now_utc()
+
     if became_live:
         game.live_started_at = now_utc()
     game._just_became_live = became_live  # type: ignore[attr-defined]
+    game._snapshot_meaningful_changed = meaningful_changed  # type: ignore[attr-defined]
 
     db.flush()
     return game
@@ -1021,9 +1041,9 @@ def _notes_current_hash(db: Session, game_id: str) -> str:
     return _snapshot_block_hash(normalized)
 
 
-def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> None:
+def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotRequest) -> bool:
     if db.get(Game, game_id) is None:
-        return
+        return False
 
     changed = False
 
@@ -1061,6 +1081,7 @@ def sync_snapshot_details(db: Session, game_id: str, payload: CrawlerSnapshotReq
 
     if changed:
         db.flush()
+    return changed
 
 
 @dataclass
