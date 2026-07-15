@@ -2743,3 +2743,64 @@ def test_weekly_team_rankings_aggregate_in_sql():
     items = response.json()["items"]
     assert items[0] == {"team_code": "DOOSAN", "count": 7, "rank": 1}
     assert items[1] == {"team_code": "LG", "count": 5, "rank": 2}
+
+
+def test_purge_expired_game_rows_deletes_old_details_keeps_games():
+    from datetime import datetime as dt
+
+    from app.db import init_db
+    from app.weather import KST as WEATHER_KST
+
+    init_db()
+    today = dt.now(WEATHER_KST).date()
+    old_id = "20260601TESTPURGE1"
+    recent_id = f"{today.strftime('%Y%m%d')}TESTPURGE2"
+    event_time = dt(2026, 6, 1, 10, 0, 0, tzinfo=timezone.utc)
+
+    with SessionLocal() as db:
+        db.add(Game(id=old_id, home_team="Doosan", away_team="LG", status="FINISHED",
+                    game_date=(today - timedelta(days=10)).isoformat()))
+        db.add(Game(id=recent_id, home_team="SSG", away_team="KT", status="LIVE",
+                    game_date=today.isoformat()))
+        db.flush()
+        for idx in range(3):
+            db.add(GameEvent(game_id=old_id, source_event_id=f"purge-old-{idx}",
+                             event_type="HIT", description="old", event_time=event_time))
+        db.add(GameEvent(game_id=recent_id, source_event_id="purge-recent-0",
+                         event_type="HIT", description="recent", event_time=event_time))
+        db.add(GameLineupSlot(game_id=old_id, team_side="home", batting_order=1, player_name="타자"))
+        db.add(GameBatterStat(game_id=old_id, team_side="home", player_name="타자"))
+        db.add(GamePitcherStat(game_id=old_id, team_side="home", player_name="투수"))
+        db.add(GameNote(game_id=old_id, note_type="INFO", note_title="t", note_body="b"))
+        db.commit()
+
+    # 배치 상한을 작게 잡아 배치 루프 경로까지 검증한다.
+    with patch.object(main_module, "GAME_DATA_PURGE_BATCH_ROWS", 2), \
+         patch.object(main_module, "GAME_DATA_PURGE_BATCH_PAUSE_SEC", 0):
+        deleted = main_module._purge_expired_game_rows()
+
+    # 다른 테스트가 남긴 과거 경기도 함께 정리될 수 있으므로 하한으로 검증한다.
+    assert deleted["game_events"] >= 3
+    assert deleted["game_lineup_slots"] >= 1
+    assert deleted["game_batter_stats"] >= 1
+    assert deleted["game_pitcher_stats"] >= 1
+    assert deleted["game_notes"] >= 1
+
+    with SessionLocal() as db:
+        # games 행은 보존, 최근 경기 상세는 유지
+        assert db.get(Game, old_id) is not None
+        assert db.get(Game, recent_id) is not None
+        remaining = db.query(GameEvent).filter(GameEvent.game_id == old_id).count()
+        assert remaining == 0
+        assert db.query(GameEvent).filter(GameEvent.game_id == recent_id).count() == 1
+        db.query(Game).filter(Game.id.in_((old_id, recent_id))).delete(synchronize_session=False)
+        db.query(GameEvent).filter(GameEvent.game_id == recent_id).delete(synchronize_session=False)
+        db.commit()
+
+
+def test_purge_expired_game_rows_noop_when_nothing_old():
+    from app.db import init_db
+
+    init_db()
+    deleted = main_module._purge_expired_game_rows()
+    assert deleted == {}

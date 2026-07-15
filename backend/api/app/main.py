@@ -37,7 +37,11 @@ from .models import (
     CheerEvent,
     DeviceToken,
     Game,
+    GameBatterStat,
     GameEvent,
+    GameLineupSlot,
+    GameNote,
+    GamePitcherStat,
     LiveViewSession,
     LiveActivityToken,
     TeamCheckinDaily,
@@ -350,10 +354,25 @@ def _team_record_message(*, row: TeamRecordOut) -> dict[str, Any]:
 
 
 # 만료 푸시 데이터 정리 주기 (일 1회) 및 보존 기간
-PUSH_DATA_PURGE_INTERVAL_SEC = 24 * 60 * 60
 PUSH_DATA_PURGE_INITIAL_DELAY_SEC = 120
+PURGE_RUN_HOUR_KST = 4          # 경기·크롤러와 겹치지 않는 새벽 시간대
 LIVE_ROW_MAX_AGE_DAYS = 7       # live_activity_tokens / live_view_sessions
 DEVICE_TOKEN_MAX_AGE_DAYS = 90  # device_tokens / team_subscription_tokens
+
+# 경기 상세 데이터 보존 기간 — 지나면 이벤트/라인업/스탯/노트를 삭제한다.
+# games 행(스코어·결과)은 계속 보존하며, 클라이언트는 라이브 중·직후에만
+# 이벤트를 조회하므로 사용자 기능에는 영향이 없다.
+GAME_DATA_RETENTION_DAYS = 7
+GAME_DATA_PURGE_BATCH_ROWS = 10_000   # 배치당 삭제 행 상한 (짧은 트랜잭션 유지)
+GAME_DATA_PURGE_BATCH_PAUSE_SEC = 0.5
+
+
+def _seconds_until_next_kst_hour(hour: int) -> float:
+    now = datetime.now(KST)
+    target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
 
 
 def _purge_stale_push_rows() -> dict[str, int]:
@@ -380,8 +399,55 @@ def _purge_stale_push_rows() -> dict[str, int]:
     return deleted
 
 
+def _purge_expired_game_rows() -> dict[str, int]:
+    """보존 기간이 지난 경기의 상세 행(이벤트/라인업/스탯/노트)을 배치 삭제한다.
+
+    라이브 경기와 game_id 가 겹치지 않는 행만 대상이라 행 잠금 경합이 없고,
+    배치 단위로 커밋해 트랜잭션을 짧게 유지한다. games 행은 삭제하지 않는다.
+    """
+    assert_db_available()
+    cutoff_date = (datetime.now(KST) - timedelta(days=GAME_DATA_RETENTION_DAYS)).date().isoformat()
+    cutoff_ts = datetime.now(UTC) - timedelta(days=GAME_DATA_RETENTION_DAYS)
+    deleted: dict[str, int] = {}
+    with SessionLocal() as db:
+        expired_ids = [
+            row[0]
+            for row in db.execute(
+                select(Game.id).where(
+                    or_(
+                        Game.game_date < cutoff_date,
+                        and_(Game.game_date.is_(None), Game.created_at < cutoff_ts),
+                    )
+                )
+            )
+        ]
+        if not expired_ids:
+            return deleted
+        # game_notes.event_cursor 가 game_events 를 SET NULL 로 참조하므로 notes 를 먼저 지운다.
+        targets = (
+            (GameNote, GameNote.id),
+            (GameEvent, GameEvent.cursor),
+            (GameLineupSlot, GameLineupSlot.id),
+            (GameBatterStat, GameBatterStat.id),
+            (GamePitcherStat, GamePitcherStat.id),
+        )
+        for model, pk in targets:
+            total = 0
+            while True:
+                batch_ids = select(pk).where(model.game_id.in_(expired_ids)).limit(GAME_DATA_PURGE_BATCH_ROWS)
+                count = int(db.execute(delete(model).where(pk.in_(batch_ids))).rowcount or 0)
+                db.commit()
+                total += count
+                if count < GAME_DATA_PURGE_BATCH_ROWS:
+                    break
+                time.sleep(GAME_DATA_PURGE_BATCH_PAUSE_SEC)
+            if total:
+                deleted[model.__tablename__] = total
+    return deleted
+
+
 async def _push_data_purge_loop() -> None:
-    """앱 수명 동안 하루 1회 만료 푸시 데이터를 정리하는 백그라운드 태스크."""
+    """앱 수명 동안 하루 1회(KST 04:00) 만료 푸시/경기 데이터를 정리하는 백그라운드 태스크."""
     await asyncio.sleep(PUSH_DATA_PURGE_INITIAL_DELAY_SEC)
     while True:
         try:
@@ -392,7 +458,15 @@ async def _push_data_purge_loop() -> None:
             raise
         except Exception:
             logger.warning("[push-purge] purge failed", exc_info=True)
-        await asyncio.sleep(PUSH_DATA_PURGE_INTERVAL_SEC)
+        try:
+            expired = await asyncio.to_thread(_purge_expired_game_rows)
+            if expired:
+                logger.info("[game-purge] expired game rows deleted: %s", expired)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("[game-purge] purge failed", exc_info=True)
+        await asyncio.sleep(_seconds_until_next_kst_hour(PURGE_RUN_HOUR_KST))
 
 
 @asynccontextmanager
