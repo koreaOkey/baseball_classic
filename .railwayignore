@@ -1,0 +1,6 @@
+*
+!backend/
+!backend/api/
+!backend/api/**
+!crawler/
+!crawler/**

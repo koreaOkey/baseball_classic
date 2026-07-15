@@ -75,6 +75,7 @@ import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
 
 import com.basehaptic.mobile.ui.components.RewardedAdManager
+import com.basehaptic.mobile.ui.components.RewardedAdFormat
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.AppEventColors
 import com.basehaptic.mobile.ui.theme.AppFont
@@ -1215,6 +1216,7 @@ private fun WatchSyncBadge(
                     RewardedAdManager.loadAndShowAd(
                         context = context,
                         adUnitId = RewardedAdManager.WATCH_SYNC_AD_UNIT,
+                        format = RewardedAdFormat.REWARDED_INTERSTITIAL,
                     ) { rewardEarned ->
                         isAdLoading = false
                         if (rewardEarned) {

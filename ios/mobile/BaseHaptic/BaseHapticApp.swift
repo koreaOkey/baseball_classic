@@ -919,14 +919,13 @@ struct ContentView: View {
         }
 
         showLiveActivityDialog = false
-        RewardedAdManager.shared.loadAndShowAd(
-            adUnitID: RewardedAdManager.liveActivityAdUnitID
+        presentRewardedAdAfterModalDismissal(
+            adUnitID: RewardedAdManager.liveActivityAdUnitID,
+            format: .rewardedInterstitial
         ) { rewardEarned in
-            guard rewardEarned else {
-                closeLiveActivityDialog()
-                return
+            if rewardEarned {
+                LiveActivityAdLedger.markViewed(gameId: game.id)
             }
-            LiveActivityAdLedger.markViewed(gameId: game.id)
             completeStart()
         }
     }
@@ -1034,13 +1033,28 @@ struct ContentView: View {
         }
 
         showWatchSyncDialog = false
-        RewardedAdManager.shared.loadAndShowAd(
-            adUnitID: RewardedAdManager.watchSyncAdUnitID
+        presentRewardedAdAfterModalDismissal(
+            adUnitID: RewardedAdManager.watchSyncAdUnitID,
+            format: .rewardedInterstitial
         ) { rewardEarned in
             if rewardEarned {
                 WatchSyncAdLedger.markViewed(gameId: gameId)
             }
             completeSync()
+        }
+    }
+
+    private func presentRewardedAdAfterModalDismissal(
+        adUnitID: String,
+        format: RewardedAdFormat = .rewarded,
+        onComplete: @escaping (_ rewardEarned: Bool) -> Void
+    ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            RewardedAdManager.shared.loadAndShowAd(
+                adUnitID: adUnitID,
+                format: format,
+                onComplete: onComplete
+            )
         }
     }
 
@@ -1229,7 +1243,7 @@ struct ContentView: View {
             todayGames = cached
         }
         if let fresh = await BackendGamesRepository.shared.fetchTodayGamesCached(selectedTeam: selectedTeam) {
-            todayGames = await hydrateMissingLiveWeather(games: fresh, previousGames: todayGames)
+            todayGames = await hydrateMissingGameWeather(games: fresh, previousGames: todayGames)
         }
     }
 
@@ -1240,7 +1254,7 @@ struct ContentView: View {
 
         while !Task.isCancelled {
             if let fetched = await BackendGamesRepository.shared.fetchTodayGamesCached(selectedTeam: selectedTeam, forceRefresh: true) {
-                let hydrated = await hydrateMissingLiveWeather(games: fetched, previousGames: todayGames)
+                let hydrated = await hydrateMissingGameWeather(games: fetched, previousGames: todayGames)
                 todayGames = hydrated
 
                 // Auto-detect LIVE games for watch sync prompt
@@ -1748,7 +1762,7 @@ private func gameWithWeather(_ game: Game, weather: GameWeatherSummary) -> Game 
     )
 }
 
-private func hydrateMissingLiveWeather(games: [Game], previousGames: [Game]) async -> [Game] {
+private func hydrateMissingGameWeather(games: [Game], previousGames: [Game]) async -> [Game] {
     var previousWeatherByGameId: [String: GameWeatherSummary] = [:]
     for game in previousGames {
         if let weather = game.weather {
@@ -1759,7 +1773,7 @@ private func hydrateMissingLiveWeather(games: [Game], previousGames: [Game]) asy
     var hydrated: [Game] = []
     hydrated.reserveCapacity(games.count)
     for game in games {
-        guard game.status == .live, game.weather == nil else {
+        guard (game.status == .scheduled || game.status == .live), game.weather == nil else {
             hydrated.append(game)
             continue
         }

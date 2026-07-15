@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     db_connect_timeout_sec: int = 5
     db_init_lock_timeout_sec: float = 3.0
     db_pool_recycle_sec: int = 1800
+    db_unavailable_backoff_sec: int = 300
     redis_url: str | None = None
     redis_pubsub_channel: str = "basehaptic:live_events"
     instance_id: str | None = None

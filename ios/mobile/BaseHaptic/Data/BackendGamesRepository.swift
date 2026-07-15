@@ -509,17 +509,24 @@ final class BackendGamesRepository {
            let cachedPayload,
            !cachedPayload.isEmpty,
            let cached = parseScheduleRangePayload(cachedPayload, selectedTeam: selectedTeam) {
-            return cached
+            if !cached.isEmpty {
+                return cached
+            }
         }
 
         if let freshPayload = await fetchGamesByDateRangePayload(fromDate: normalizedFrom, toDate: normalizedTo),
            let fresh = parseScheduleRangePayload(freshPayload, selectedTeam: selectedTeam) {
-            defaults.set(selectedTeam.rawValue, forKey: "\(keyPrefix)_team")
-            defaults.set(fromString, forKey: "\(keyPrefix)_from")
-            defaults.set(toString, forKey: "\(keyPrefix)_to")
-            defaults.set(scheduleCacheVersion, forKey: "\(keyPrefix)_version")
-            defaults.set(freshPayload, forKey: "\(keyPrefix)_payload")
-            defaults.set(Date().timeIntervalSince1970, forKey: "\(keyPrefix)_cached_at")
+            if fresh.isEmpty {
+                defaults.removeObject(forKey: "\(keyPrefix)_payload")
+                defaults.removeObject(forKey: "\(keyPrefix)_cached_at")
+            } else {
+                defaults.set(selectedTeam.rawValue, forKey: "\(keyPrefix)_team")
+                defaults.set(fromString, forKey: "\(keyPrefix)_from")
+                defaults.set(toString, forKey: "\(keyPrefix)_to")
+                defaults.set(scheduleCacheVersion, forKey: "\(keyPrefix)_version")
+                defaults.set(freshPayload, forKey: "\(keyPrefix)_payload")
+                defaults.set(Date().timeIntervalSince1970, forKey: "\(keyPrefix)_cached_at")
+            }
             return fresh
         }
 
@@ -529,7 +536,9 @@ final class BackendGamesRepository {
            cachedVersion == scheduleCacheVersion,
            let cachedPayload,
            !cachedPayload.isEmpty {
-            return parseScheduleRangePayload(cachedPayload, selectedTeam: selectedTeam)
+            if let cached = parseScheduleRangePayload(cachedPayload, selectedTeam: selectedTeam), !cached.isEmpty {
+                return cached
+            }
         }
 
         return nil

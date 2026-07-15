@@ -878,6 +878,11 @@ def _backend_game_matches_schedule_snapshot(
     return True
 
 
+def _schedule_game_matches_target_date(game: dict[str, Any], target_date: date) -> bool:
+    schedule_date = _extract_schedule_game_date(game)
+    return schedule_date is None or schedule_date == target_date.isoformat()
+
+
 def _is_live_inning_text(inning_text: str) -> bool:
     normalized = str(inning_text or "").strip()
     if not normalized:
@@ -1043,6 +1048,14 @@ def _run_schedule_import(
     for game in games:
         game_id = str(game.get("gameId") or "").strip()
         if not game_id:
+            continue
+        if not _schedule_game_matches_target_date(game, target_date):
+            LOGGER.info(
+                "[import] skipped_date_mismatch gameId=%s targetDate=%s scheduleDate=%s",
+                game_id,
+                target_date.isoformat(),
+                _extract_schedule_game_date(game),
+            )
             continue
         if _should_skip_schedule_snapshot(game):
             skipped_live_count += 1

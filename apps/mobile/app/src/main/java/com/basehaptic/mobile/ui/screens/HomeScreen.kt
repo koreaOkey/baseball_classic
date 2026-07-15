@@ -98,6 +98,7 @@ fun HomeScreen(
     var showScheduleSheet by remember { mutableStateOf(false) }
     var scheduleLoadRequest by remember { mutableIntStateOf(0) }
     var scheduleForceRefresh by remember { mutableStateOf(false) }
+    var upcomingLoadRequest by remember { mutableIntStateOf(0) }
     var scheduleLoading by remember { mutableStateOf(false) }
     var scheduleError by remember { mutableStateOf<String?>(null) }
     var scheduleItems by remember {
@@ -309,7 +310,8 @@ fun HomeScreen(
 
     val upcomingGames by produceState(
         initialValue = emptyList<BackendGamesRepository.UpcomingGameSchedule>(),
-        selectedTeam
+        selectedTeam,
+        upcomingLoadRequest
     ) {
         if (selectedTeam == Team.NONE) {
             value = emptyList()
@@ -322,7 +324,8 @@ fun HomeScreen(
                     context = context.applicationContext,
                     selectedTeam = selectedTeam,
                     maxItems = 3,
-                    daysAhead = 30
+                    daysAhead = 30,
+                    forceRefresh = upcomingLoadRequest > 0
                 )
             }
         }.getOrNull()
@@ -426,6 +429,7 @@ fun HomeScreen(
                                 selectedScheduleDate = LocalDate.now()
                                 scheduleForceRefresh = false
                                 scheduleLoadRequest += 1
+                                upcomingLoadRequest += 1
                             },
                         shape = AppShapes.lg,
                         color = Color.White.copy(alpha = 0.15f)
@@ -656,6 +660,7 @@ fun HomeScreen(
                 onRetry = {
                     scheduleForceRefresh = true
                     scheduleLoadRequest += 1
+                    upcomingLoadRequest += 1
                 },
                 onPreviousMonth = { scheduleMonth = scheduleMonth.minusMonths(1) },
                 onNextMonth = { scheduleMonth = scheduleMonth.plusMonths(1) },

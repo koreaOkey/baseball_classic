@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from math import cos, floor, log, pi, pow, sin, tan
 from threading import Lock
 from typing import Any
+from urllib.parse import unquote
 
 import requests
 
@@ -14,9 +16,12 @@ from .models import Game
 
 KST = timezone(timedelta(hours=9))
 FORECAST_TTL_SECONDS = 30 * 60
+FORECAST_FAILURE_TTL_SECONDS = 60
+FORECAST_REQUEST_TIMEOUT_SECONDS = 12
 SUPPORTED_FORECAST_DAYS = 3
 BASE_TIMES = ("0200", "0500", "0800", "1100", "1400", "1700", "2000", "2300")
 FORECAST_ROWS = 1000
+logger = logging.getLogger(__name__)
 
 SKY_LABELS = {
     "1": "맑음",
@@ -61,7 +66,14 @@ _forecast_cache: dict[tuple[int, int, str, str, str], tuple[datetime, list[dict[
 _forecast_cache_lock = Lock()
 
 
-def build_weather_summary(game: Game, *, service_key: str, api_base_url: str, now: datetime | None = None) -> dict[str, Any] | None:
+def build_weather_summary(
+    game: Game,
+    *,
+    service_key: str,
+    api_base_url: str,
+    now: datetime | None = None,
+    allow_network: bool = True,
+) -> dict[str, Any] | None:
     if (game.status or "").upper() != "SCHEDULED":
         return None
 
@@ -80,6 +92,7 @@ def build_weather_summary(game: Game, *, service_key: str, api_base_url: str, no
         service_key=service_key,
         api_base_url=api_base_url,
         now=now,
+        allow_network=allow_network,
     )
     if not slots:
         return None
@@ -126,7 +139,7 @@ def build_hourly_weather(game: Game, *, service_key: str, api_base_url: str, tar
         now=now,
     )
     if not slots:
-        return None
+        return _empty_hourly_payload(game, stadium)
 
     selected = _nearest_slot(slots, start_time) if start_time else None
     items = []
@@ -153,6 +166,17 @@ def build_hourly_weather(game: Game, *, service_key: str, api_base_url: str, tar
     }
 
 
+def _empty_hourly_payload(game: Game, stadium: StadiumInfo) -> dict[str, Any]:
+    return {
+        "gameId": game.id,
+        "stadiumCode": stadium.code,
+        "stadiumName": stadium.name,
+        "stadiumShortName": _stadium_short_name(stadium),
+        "gameStartTime": game.start_time,
+        "items": [],
+    }
+
+
 def clear_weather_cache() -> None:
     with _forecast_cache_lock:
         _forecast_cache.clear()
@@ -165,8 +189,10 @@ def _forecast_slots_for_game(
     service_key: str,
     api_base_url: str,
     now: datetime | None,
+    allow_network: bool = True,
 ) -> list[ForecastSlot]:
-    if not service_key.strip():
+    normalized_service_key = _normalize_service_key(service_key)
+    if not normalized_service_key:
         return []
 
     now_kst = (now or datetime.now(KST)).astimezone(KST)
@@ -176,44 +202,84 @@ def _forecast_slots_for_game(
     base_date, base_time = _latest_base_datetime(now_kst)
     nx, ny = _to_kma_grid(stadium.latitude, stadium.longitude)
     raw_items = _fetch_vilage_forecast(
-        service_key=service_key,
+        service_key=normalized_service_key,
         api_base_url=api_base_url,
         base_date=base_date,
         base_time=base_time,
         nx=nx,
         ny=ny,
+        allow_network=allow_network,
     )
     return _parse_slots(raw_items, target_date)
 
 
-def _fetch_vilage_forecast(*, service_key: str, api_base_url: str, base_date: str, base_time: str, nx: int, ny: int) -> list[dict[str, Any]]:
-    cache_key = (nx, ny, base_date, base_time, service_key[-8:])
+def _fetch_vilage_forecast(
+    *,
+    service_key: str,
+    api_base_url: str,
+    base_date: str,
+    base_time: str,
+    nx: int,
+    ny: int,
+    allow_network: bool = True,
+) -> list[dict[str, Any]]:
+    normalized_service_key = _normalize_service_key(service_key)
+    cache_key = (nx, ny, base_date, base_time, normalized_service_key[-8:])
     now = datetime.now(timezone.utc)
     with _forecast_cache_lock:
         cached = _forecast_cache.get(cache_key)
         if cached is not None:
-            cached_at, cached_items = cached
-            if (now - cached_at).total_seconds() < FORECAST_TTL_SECONDS:
+            expires_at, cached_items = cached
+            if now < expires_at:
                 return cached_items
 
-    response = requests.get(
-        api_base_url,
-        params={
-            "serviceKey": service_key,
-            "pageNo": "1",
-            "numOfRows": str(FORECAST_ROWS),
-            "dataType": "JSON",
-            "base_date": base_date,
-            "base_time": base_time,
-            "nx": str(nx),
-            "ny": str(ny),
-        },
-        timeout=5,
-    )
-    response.raise_for_status()
-    payload = response.json()
+    if not allow_network:
+        return []
+
+    try:
+        response = requests.get(
+            api_base_url,
+            params={
+                "serviceKey": normalized_service_key,
+                "pageNo": "1",
+                "numOfRows": str(FORECAST_ROWS),
+                "dataType": "JSON",
+                "base_date": base_date,
+                "base_time": base_time,
+                "nx": str(nx),
+                "ny": str(ny),
+            },
+            timeout=FORECAST_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException as exc:
+        logger.warning(
+            "weather forecast request failed: base_date=%s base_time=%s nx=%s ny=%s timeout_sec=%s error=%s",
+            base_date,
+            base_time,
+            nx,
+            ny,
+            FORECAST_REQUEST_TIMEOUT_SECONDS,
+            exc.__class__.__name__,
+        )
+        with _forecast_cache_lock:
+            _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_FAILURE_TTL_SECONDS), [])
+        return []
+
     result = payload.get("response", {}).get("header", {}).get("resultCode")
     if result and result != "00":
+        logger.warning(
+            "weather forecast api returned non-success: base_date=%s base_time=%s nx=%s ny=%s result_code=%s result_msg=%s",
+            base_date,
+            base_time,
+            nx,
+            ny,
+            result,
+            payload.get("response", {}).get("header", {}).get("resultMsg"),
+        )
+        with _forecast_cache_lock:
+            _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_FAILURE_TTL_SECONDS), [])
         return []
     item = payload.get("response", {}).get("body", {}).get("items", {}).get("item") or []
     if isinstance(item, dict):
@@ -224,7 +290,7 @@ def _fetch_vilage_forecast(*, service_key: str, api_base_url: str, base_date: st
         items = []
 
     with _forecast_cache_lock:
-        _forecast_cache[cache_key] = (now, items)
+        _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_TTL_SECONDS), items)
     return items
 
 
@@ -295,6 +361,10 @@ def _indoor_summary(stadium: StadiumInfo) -> dict[str, Any]:
         "isIndoor": True,
         "displayText": f"경기 시작 예보 · {short_name} · 날씨 영향 적음",
     }
+
+
+def _normalize_service_key(service_key: str) -> str:
+    return unquote(service_key.strip())
 
 
 def _nearest_slot(slots: list[ForecastSlot], start_time: time) -> ForecastSlot | None:

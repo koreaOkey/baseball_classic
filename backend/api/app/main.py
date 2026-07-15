@@ -16,12 +16,21 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import and_, delete, func, or_, select
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .cheer_signals import build_cheer_signals, stadium_payloads
-from .db import SessionLocal, get_db, init_db
+from .db import (
+    DB_UNAVAILABLE_BACKOFF_SEC,
+    SessionLocal,
+    assert_db_available,
+    clear_db_unavailable,
+    db_unavailable_remaining_sec,
+    get_db,
+    init_db,
+    mark_db_unavailable,
+)
 from .event_bus import event_bus
 from .models import (
     AppConfig,
@@ -97,6 +106,8 @@ redis_relay = RedisBroadcastRelay(
 HTTP_LIVE_CACHE_TTL_SEC = 5
 HTTP_STANDINGS_CACHE_TTL_SEC = 30
 HTTP_STALE_CACHE_TTL_SEC = 300
+DB_UNAVAILABLE_CACHE_KEY = "ops:db_unavailable:v1"
+DB_UNAVAILABLE_CACHE_TTL_SEC = 24 * 60 * 60
 DEFAULT_STORE_URLS = {
     "android": "market://details?id=com.basehaptic.mobile",
     "ios": "itms-apps://itunes.apple.com/app/id6761336752",
@@ -104,10 +115,77 @@ DEFAULT_STORE_URLS = {
 
 _http_cache_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 _http_cache_stats: dict[str, int] = defaultdict(int)
+try:
+    _BASE_EXCEPTION_GROUP_TYPES = (BaseExceptionGroup,)
+except NameError:
+    _BASE_EXCEPTION_GROUP_TYPES = ()
 
 
 def _stale_http_cache_key(cache_key: str) -> str:
     return f"{cache_key}:stale"
+
+
+async def _redis_db_unavailable_remaining_sec(*, hold_expired: bool = False) -> float:
+    payload = await redis_relay.get_cache(DB_UNAVAILABLE_CACHE_KEY)
+    if payload is None:
+        return 0.0
+    try:
+        until = float(payload.get("until") or 0)
+    except (TypeError, ValueError):
+        await redis_relay.delete_cache(DB_UNAVAILABLE_CACHE_KEY)
+        return 0.0
+
+    remaining = until - time.time()
+    if remaining <= 0:
+        await redis_relay.delete_cache(DB_UNAVAILABLE_CACHE_KEY)
+        return 0.0
+    return remaining
+
+
+async def _mark_db_unavailable_global(backoff_sec: float = DB_UNAVAILABLE_BACKOFF_SEC) -> None:
+    mark_db_unavailable(backoff_sec)
+    await redis_relay.set_cache(
+        DB_UNAVAILABLE_CACHE_KEY,
+        {"until": time.time() + max(1.0, backoff_sec)},
+        ttl_sec=DB_UNAVAILABLE_CACHE_TTL_SEC,
+    )
+
+
+async def _clear_db_unavailable_global() -> None:
+    clear_db_unavailable()
+    await redis_relay.delete_cache(DB_UNAVAILABLE_CACHE_KEY)
+
+
+async def _db_unavailable_remaining_sec_global(*, hold_expired: bool = False) -> float:
+    redis_remaining = await _redis_db_unavailable_remaining_sec(hold_expired=hold_expired)
+    redis_connected = bool(
+        getattr(redis_relay, "enabled", False)
+        and getattr(redis_relay, "_publisher", None) is not None
+    )
+    if redis_connected and redis_remaining <= 0:
+        clear_db_unavailable()
+        return 0.0
+    return max(db_unavailable_remaining_sec(), redis_remaining)
+
+
+def _db_unavailable_response(remaining: float) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={"detail": f"database temporarily unavailable; retry in {int(remaining) + 1}s"},
+    )
+
+
+def _is_database_failure(exc: BaseException) -> bool:
+    if isinstance(exc, IntegrityError):
+        return False
+
+    if isinstance(exc, SQLAlchemyError):
+        return True
+
+    if _BASE_EXCEPTION_GROUP_TYPES and isinstance(exc, _BASE_EXCEPTION_GROUP_TYPES):
+        return any(_is_database_failure(inner) for inner in exc.exceptions)
+
+    return False
 
 
 async def _set_http_cache_payload(cache_key: str, payload: dict[str, Any], ttl_sec: int) -> None:
@@ -228,8 +306,18 @@ def _team_record_message(*, row: TeamRecordOut) -> dict[str, Any]:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    init_db()
     await redis_relay.start(_on_redis_live_message)
+    remaining = await _redis_db_unavailable_remaining_sec(hold_expired=True)
+    if remaining > 0:
+        mark_db_unavailable(remaining)
+        logger.warning("startup database initialization skipped during db backoff: remaining_sec=%.1f", remaining)
+    else:
+        try:
+            init_db()
+            await _clear_db_unavailable_global()
+        except Exception:
+            await _mark_db_unavailable_global()
+            logger.exception("startup database initialization failed; continuing in degraded mode")
     try:
         yield
     finally:
@@ -249,10 +337,23 @@ app.add_middleware(
 @app.middleware("http")
 async def log_unhandled_request_errors(request: Request, call_next):
     started = time.perf_counter()
+    if request.url.path not in {"/health", "/ready", "/internal/ops/db-backoff/clear"}:
+        remaining = await _db_unavailable_remaining_sec_global(hold_expired=True)
+        if remaining > 0:
+            return _db_unavailable_response(remaining)
     try:
         return await call_next(request)
-    except Exception:
+    except Exception as exc:
         elapsed_ms = (time.perf_counter() - started) * 1000
+        if _is_database_failure(exc):
+            await _mark_db_unavailable_global()
+            logger.exception(
+                "unhandled database request failed: method=%s path=%s elapsed_ms=%.1f",
+                request.method,
+                request.url.path,
+                elapsed_ms,
+            )
+            raise
         logger.exception(
             "unhandled request failed: method=%s path=%s elapsed_ms=%.1f",
             request.method,
@@ -282,12 +383,20 @@ def live() -> dict[str, Any]:
 async def ready() -> JSONResponse:
     db_connected = True
     db_detail: str = "connected"
+    remaining = await _db_unavailable_remaining_sec_global()
     try:
         with SessionLocal() as db:
             db.execute(select(1)).scalar_one()
+        await _clear_db_unavailable_global()
     except Exception as exc:
+        if remaining <= 0:
+            await _mark_db_unavailable_global()
+        logger.warning("ready database probe failed: %s", exc, exc_info=True)
         db_connected = False
-        db_detail = f"error:{exc.__class__.__name__}"
+        if remaining > 0:
+            db_detail = f"backoff:{int(remaining) + 1}s"
+        else:
+            db_detail = f"error:{exc.__class__.__name__}"
 
     redis_connected, redis_detail = await redis_relay.ping()
     is_ready = db_connected and redis_connected
@@ -300,6 +409,16 @@ async def ready() -> JSONResponse:
         "time": datetime.now(UTC),
     }
     return JSONResponse(status_code=200 if is_ready else 503, content=jsonable_encoder(payload))
+
+
+@app.post("/internal/ops/db-backoff/clear")
+async def clear_db_backoff(
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+) -> dict[str, str]:
+    if x_api_key is None or not secrets.compare_digest(x_api_key, settings.crawler_api_key):
+        raise HTTPException(status_code=401, detail="invalid api key")
+    await _clear_db_unavailable_global()
+    return {"status": "ok"}
 
 
 @app.get("/health/verbose")
@@ -410,6 +529,7 @@ def _list_games_payload(
     to_date: date | None,
     limit: int,
 ) -> list[dict[str, Any]]:
+    assert_db_available()
     query = select(Game)
     if status is not None:
         query = query.where(Game.status == status.value)
@@ -451,7 +571,7 @@ def _list_games_payload(
 
     with SessionLocal() as db:
         games = db.execute(query).scalars().all()
-        return [_game_summary_payload(game) for game in games]
+        return [_game_summary_payload(game, allow_weather_network=False) for game in games]
 
 
 @app.get("/games/{game_id}", response_model=GameSummaryOut)
@@ -468,6 +588,7 @@ async def get_game(game_id: str) -> dict[str, Any]:
 
 
 def _get_game_payload(game_id: str) -> dict[str, Any]:
+    assert_db_available()
     with SessionLocal() as db:
         game = db.get(Game, game_id)
         if game is None:
@@ -475,13 +596,14 @@ def _get_game_payload(game_id: str) -> dict[str, Any]:
         return _game_summary_payload(game)
 
 
-def _game_summary_payload(game: Game) -> dict[str, Any]:
+def _game_summary_payload(game: Game, *, allow_weather_network: bool = True) -> dict[str, Any]:
     payload = to_game_summary(game).model_dump(mode="json")
     try:
         weather = build_weather_summary(
             game,
             service_key=settings.weather_service_key,
             api_base_url=settings.weather_api_base_url,
+            allow_network=allow_weather_network,
         )
     except Exception:
         logger.warning("weather summary unavailable: game_id=%s", game.id, exc_info=True)
@@ -495,6 +617,7 @@ async def get_game_weather(
     game_id: str,
     weather_date: date | None = Query(default=None, alias="date"),
 ) -> dict[str, Any]:
+    assert_db_available()
     with SessionLocal() as db:
         game = db.get(Game, game_id)
         if game is None:
@@ -529,6 +652,7 @@ async def get_game_state(game_id: str) -> dict[str, Any]:
 
 
 def _get_game_state_payload(game_id: str) -> dict[str, Any]:
+    assert_db_available()
     with SessionLocal() as db:
         game = db.get(Game, game_id)
         if game is None:
@@ -572,6 +696,7 @@ def _get_game_events_payload(
     inning_number: int | None,
     scoring_only: bool,
 ) -> dict[str, Any]:
+    assert_db_available()
     with SessionLocal() as db:
         game = db.get(Game, game_id)
         if game is None:
@@ -798,7 +923,20 @@ def register_live_activity_token(
             game_id=payload.game_id,
             my_team=payload.my_team,
         ))
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.execute(
+            select(LiveActivityToken).where(
+                LiveActivityToken.game_id == payload.game_id,
+                LiveActivityToken.token == payload.token,
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            raise
+        existing.my_team = payload.my_team
+        db.commit()
     background_tasks.add_task(_invalidate_live_activity_token_cache, payload.game_id)
     return {"status": "ok"}
 
@@ -882,6 +1020,7 @@ def unregister_team_subscription(
 
 def _load_push_tokens(game_id: str) -> list[tuple[str, str | None, bool, str, str]]:
     """게임에 구독된 디바이스 토큰 목록 조회 (sync DB work)"""
+    assert_db_available()
     with SessionLocal() as db:
         rows = db.execute(
             select(
@@ -1168,6 +1307,7 @@ def _load_team_subscriptions(my_teams: set[str]) -> list[tuple[str, str, str, bo
     """응원팀이 my_teams 에 포함된 구독 토큰 조회. (token, my_team, platform, is_sandbox, display_style)"""
     if not my_teams:
         return []
+    assert_db_available()
     with SessionLocal() as db:
         rows = db.execute(
             select(
@@ -1330,6 +1470,7 @@ async def _send_push_for_game_events(
 
 def _load_live_activity_tokens(game_id: str) -> list[str]:
     """게임에 구독된 Live Activity 토큰 목록 조회"""
+    assert_db_available()
     with SessionLocal() as db:
         rows = db.execute(
             select(LiveActivityToken.token).where(LiveActivityToken.game_id == game_id)
@@ -1396,6 +1537,7 @@ def _get_team_record_standings_payload(
     category_id: str,
     season_code: str,
 ) -> list[dict[str, Any]]:
+    assert_db_available()
     with SessionLocal() as db:
         rows = get_team_records(
             db,
@@ -1440,6 +1582,7 @@ def _get_team_record_by_team_payload(
     category_id: str,
     season_code: str,
 ) -> dict[str, Any]:
+    assert_db_available()
     with SessionLocal() as db:
         row = get_team_record(
             db,
@@ -1702,6 +1845,7 @@ def ingest_crawler_team_records(
 
 def _load_game_initial_data(game_id: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """Sync DB work for WS on-connect, intended to run via asyncio.to_thread."""
+    assert_db_available()
     with SessionLocal() as db:
         game = db.get(Game, game_id)
         if game is None:
@@ -1727,6 +1871,11 @@ async def _load_game_initial_data_cached(game_id: str) -> tuple[dict[str, Any] |
 
 @app.websocket("/ws/games/{game_id}")
 async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
+    remaining = await _db_unavailable_remaining_sec_global(hold_expired=True)
+    if remaining > 0:
+        await websocket.accept()
+        await websocket.close(code=1013, reason=f"database retry in {int(remaining) + 1}s")
+        return
     if not await event_bus.connect(websocket):
         return
     await event_bus.register(game_id, websocket)
@@ -1747,7 +1896,12 @@ async def websocket_game_stream(websocket: WebSocket, game_id: str) -> None:
             )
     except WebSocketDisconnect:
         pass
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            logger.warning("ws game stream aborted game_id=%s: %s", game_id, exc)
     except Exception as exc:
+        if _is_database_failure(exc):
+            await _mark_db_unavailable_global()
         logger.warning("ws game stream aborted game_id=%s: %s", game_id, exc)
     finally:
         await event_bus.disconnect(game_id, websocket)
@@ -1757,6 +1911,7 @@ def _load_team_record_initial_data(
     category_id: str, season_code: str, team_id: str,
 ) -> dict[str, Any] | None:
     """Sync DB work for team-record WS on-connect, intended to run via asyncio.to_thread."""
+    assert_db_available()
     with SessionLocal() as db:
         row = get_team_record(db, category_id=category_id, season_code=season_code, team_id=team_id)
         if row is None:
@@ -1784,6 +1939,11 @@ async def websocket_team_record_stream(
     category_id: str = Query(default="kbo", alias="categoryId"),
     season_code: str | None = Query(default=None, alias="seasonCode"),
 ) -> None:
+    remaining = await _db_unavailable_remaining_sec_global(hold_expired=True)
+    if remaining > 0:
+        await websocket.accept()
+        await websocket.close(code=1013, reason=f"database retry in {int(remaining) + 1}s")
+        return
     normalized_category_id = category_id.strip().lower()
     normalized_season_code = (season_code or str(datetime.now(UTC).year)).strip()
     normalized_team_id = team_id.strip().upper()
@@ -1810,7 +1970,12 @@ async def websocket_team_record_stream(
             )
     except WebSocketDisconnect:
         pass
+    except HTTPException as exc:
+        if exc.status_code != 503:
+            logger.warning("ws team-record stream aborted channel=%s: %s", channel, exc)
     except Exception as exc:
+        if _is_database_failure(exc):
+            await _mark_db_unavailable_global()
         logger.warning("ws team-record stream aborted channel=%s: %s", channel, exc)
     finally:
         await event_bus.disconnect(channel, websocket)
@@ -1930,6 +2095,7 @@ def _hash_ip(ip: str | None) -> str | None:
 
 
 def _validate_pending_cheer_events_background() -> None:
+    assert_db_available()
     with SessionLocal() as db:
         validate_pending_cheer_events(db, limit=100)
 

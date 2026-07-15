@@ -14,6 +14,7 @@ from live_wbc_dispatcher import (
     _resolve_schedule_targets,
     _backend_game_matches_schedule_snapshot,
     _schedule_snapshot_signature,
+    _schedule_game_matches_target_date,
     _should_skip_schedule_snapshot,
     build_parser,
 )
@@ -222,6 +223,17 @@ def test_build_schedule_import_dates_until_overrides_days() -> None:
         date(2026, 6, 11),
         date(2026, 6, 12),
     ]
+
+
+def test_schedule_game_matches_target_date_filters_mismatched_game_date() -> None:
+    game = {"gameId": "20260627HHSK02026", "gameDate": "2026-06-27"}
+
+    assert _schedule_game_matches_target_date(game, date(2026, 6, 27)) is True
+    assert _schedule_game_matches_target_date(game, date(2026, 6, 29)) is False
+
+
+def test_schedule_game_matches_target_date_allows_missing_game_date() -> None:
+    assert _schedule_game_matches_target_date({"gameId": "unknown"}, date(2026, 6, 29)) is True
 
 
 def test_build_schedule_import_dates_for_refresh_respects_start_date() -> None:

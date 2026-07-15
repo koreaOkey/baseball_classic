@@ -1,12 +1,15 @@
 import os
 import sys
 import asyncio
+import requests
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 API_ROOT = Path(__file__).resolve().parents[1]
 if str(API_ROOT) not in sys.path:
@@ -27,7 +30,7 @@ from app import db as db_module  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import AppConfig, DeviceToken, Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord, TeamSubscriptionToken  # noqa: E402
 from app.services import _event_out_count, normalize_event_type, normalize_status  # noqa: E402
-from app.weather import build_weather_summary  # noqa: E402
+from app.weather import build_hourly_weather, build_weather_summary, clear_weather_cache, _fetch_vilage_forecast  # noqa: E402
 
 
 def sample_snapshot() -> dict:
@@ -358,6 +361,7 @@ def test_ingest_and_query_flow() -> None:
 
         state = client.get("/games/20250501SSSK02025/state")
         assert state.status_code == 200
+
         state_body = state.json()
         assert state_body["homeScore"] == 3
         assert state_body["awayScore"] == 2
@@ -455,6 +459,131 @@ def test_duplicate_snapshot_skips_timestamp_only_update() -> None:
         state = client.get(f"/games/{game_id}/state")
         assert state.status_code == 200
         assert state.json()["homeScore"] == 4
+
+
+def test_health_stays_available_when_startup_db_init_fails() -> None:
+    def fail_init_db() -> None:
+        raise OperationalError("SELECT 1", {}, Exception("db unavailable"))
+
+    with patch.object(main_module, "init_db", fail_init_db):
+        with TestClient(app) as client:
+            health = client.get("/health")
+
+    assert health.status_code == 200
+    assert health.json()["status"] == "ok"
+
+
+def test_games_returns_503_during_db_backoff() -> None:
+    with TestClient(app) as client:
+        with patch.object(db_module, "is_sqlite", False):
+            db_module.mark_db_unavailable()
+            try:
+                response = client.get("/games?date=1999-01-01&limit=1")
+            finally:
+                db_module.clear_db_unavailable()
+
+    assert response.status_code == 503
+    assert "database temporarily unavailable" in response.json()["detail"]
+
+
+def test_ready_clears_db_backoff_after_successful_probe() -> None:
+    with TestClient(app) as client:
+        with patch.object(db_module, "is_sqlite", False):
+            db_module.mark_db_unavailable()
+            try:
+                response = client.get("/ready")
+                remaining = db_module.db_unavailable_remaining_sec()
+            finally:
+                db_module.clear_db_unavailable()
+
+    assert response.json()["db"] == "connected"
+    assert remaining == 0.0
+
+
+def test_db_backoff_classifier_only_matches_database_failures() -> None:
+    db_error = OperationalError("SELECT 1", {}, Exception("db unavailable"))
+    duplicate_error = IntegrityError("INSERT", {}, Exception("duplicate token"))
+
+    assert main_module._is_database_failure(db_error) is True
+    assert main_module._is_database_failure(duplicate_error) is False
+    assert main_module._is_database_failure(RuntimeError("non-db failure")) is False
+
+
+def test_live_activity_token_duplicate_race_is_idempotent() -> None:
+    class FakeResult:
+        def __init__(self, value):
+            self.value = value
+
+        def scalar_one_or_none(self):
+            return self.value
+
+    class ExistingToken:
+        my_team = "OLD"
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self.existing = ExistingToken()
+            self.execute_calls = 0
+            self.commit_calls = 0
+            self.rollback_calls = 0
+            self.added = []
+
+        def execute(self, statement):
+            self.execute_calls += 1
+            if self.execute_calls == 1:
+                return FakeResult(None)
+            return FakeResult(self.existing)
+
+        def add(self, item):
+            self.added.append(item)
+
+        def commit(self):
+            self.commit_calls += 1
+            if self.commit_calls == 1:
+                raise IntegrityError("INSERT", {}, Exception("duplicate token"))
+
+        def rollback(self):
+            self.rollback_calls += 1
+
+    fake_db = FakeDb()
+    payload = main_module.LiveActivityTokenRequest(
+        token="duplicate-token",
+        game_id="20260628HHSK02026",
+        my_team="HANWHA",
+    )
+
+    response = main_module.register_live_activity_token(payload, BackgroundTasks(), db=fake_db)
+
+    assert response == {"status": "ok"}
+    assert fake_db.rollback_calls == 1
+    assert fake_db.commit_calls == 2
+    assert fake_db.existing.my_team == "HANWHA"
+
+
+def test_expired_redis_db_backoff_marker_is_cleared() -> None:
+    class FakeRedisRelay:
+        def __init__(self) -> None:
+            self.store = {
+                main_module.DB_UNAVAILABLE_CACHE_KEY: {
+                    "until": main_module.time.time() - 10,
+                },
+            }
+
+        async def get_cache(self, key):
+            return self.store.get(key)
+
+        async def delete_cache(self, key):
+            self.store.pop(key, None)
+
+    fake_redis = FakeRedisRelay()
+
+    with patch.object(main_module, "redis_relay", fake_redis):
+        remaining = asyncio.run(
+            main_module._redis_db_unavailable_remaining_sec(hold_expired=True)
+        )
+
+    assert remaining == 0.0
+    assert main_module.DB_UNAVAILABLE_CACHE_KEY not in fake_redis.store
 
 
 def test_game_state_http_cache_uses_redis_payload() -> None:
@@ -1265,6 +1394,34 @@ def test_list_games_includes_optional_weather_summary() -> None:
         assert item["weather"]["displayText"] == "경기 시작 예보 · 잠실 · 18시 기준 · 흐림 23° · 강수 30%"
 
 
+def test_list_games_uses_cached_weather_only() -> None:
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["gameDate"] = "2026-06-16"
+        payload["status"] = "SCHEDULED"
+        payload["inning"] = "18:30"
+        payload["startTime"] = "18:30"
+
+        ingest = client.post(
+            "/internal/crawler/games/WEATHERCACHED001/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        allow_network_values: list[bool | None] = []
+
+        def fake_weather_summary(*args, **kwargs):
+            allow_network_values.append(kwargs.get("allow_network"))
+            return None
+
+        with patch.object(main_module, "build_weather_summary", side_effect=fake_weather_summary):
+            games = client.get("/games?date=2026-06-16&limit=100")
+
+    assert games.status_code == 200
+    assert False in allow_network_values
+
+
 def test_weather_summary_dome_fallback_without_external_api_key() -> None:
     game = Game(
         id="20260616DOME001",
@@ -1295,6 +1452,115 @@ def test_weather_summary_missing_key_returns_none_for_outdoor_game() -> None:
     )
 
     assert build_weather_summary(game, service_key="", api_base_url="") is None
+
+
+def test_weather_forecast_failure_is_cached() -> None:
+    clear_weather_cache()
+    with patch("app.weather.requests.get", side_effect=requests.Timeout("weather timeout")) as get:
+        first = _fetch_vilage_forecast(
+            service_key="test-weather-key",
+            api_base_url="https://weather.example.test/forecast",
+            base_date="20260616",
+            base_time="0200",
+            nx=60,
+            ny=127,
+        )
+        second = _fetch_vilage_forecast(
+            service_key="test-weather-key",
+            api_base_url="https://weather.example.test/forecast",
+            base_date="20260616",
+            base_time="0200",
+            nx=60,
+            ny=127,
+        )
+
+    clear_weather_cache()
+    assert first == []
+    assert second == []
+    assert get.call_count == 1
+
+
+def test_weather_forecast_decodes_encoded_service_key_before_request() -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {
+                "response": {
+                    "header": {"resultCode": "00"},
+                    "body": {"items": {"item": []}},
+                }
+            }
+
+    captured_params: dict[str, str] = {}
+
+    def fake_get(*args, **kwargs):
+        captured_params.update(kwargs["params"])
+        return FakeResponse()
+
+    clear_weather_cache()
+    with patch("app.weather.requests.get", side_effect=fake_get):
+        _fetch_vilage_forecast(
+            service_key="abc%2Bdef%2Fghi%3D%3D",
+            api_base_url="https://weather.example.test/forecast",
+            base_date="20260616",
+            base_time="0200",
+            nx=61,
+            ny=127,
+        )
+
+    clear_weather_cache()
+    assert captured_params["serviceKey"] == "abc+def/ghi=="
+
+
+def test_weather_summary_can_skip_network_on_cache_miss() -> None:
+    game = Game(
+        id="20260616OPEN002",
+        game_date="2026-06-16",
+        home_team="두산",
+        away_team="LG",
+        status="SCHEDULED",
+        inning="18:30",
+        start_time="18:30",
+    )
+    now = datetime(2026, 6, 16, 12, tzinfo=timezone(timedelta(hours=9)))
+
+    clear_weather_cache()
+    with patch("app.weather.requests.get", side_effect=AssertionError("network should not be used")):
+        weather = build_weather_summary(
+            game,
+            service_key="test-weather-key",
+            api_base_url="https://weather.example.test/forecast",
+            now=now,
+            allow_network=False,
+        )
+
+    clear_weather_cache()
+    assert weather is None
+
+
+def test_hourly_weather_unavailable_returns_empty_payload() -> None:
+    game = Game(
+        id="20260616OPEN001",
+        game_date="2026-06-16",
+        home_team="두산",
+        away_team="LG",
+        status="SCHEDULED",
+        inning="18:30",
+        start_time="18:30",
+    )
+
+    weather = build_hourly_weather(
+        game,
+        service_key="",
+        api_base_url="",
+        target_date=date(2026, 6, 16),
+    )
+
+    assert weather is not None
+    assert weather["stadiumShortName"] == "잠실"
+    assert weather["items"] == []
 
 
 def test_game_weather_hourly_endpoint() -> None:

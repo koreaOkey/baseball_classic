@@ -80,6 +80,7 @@ import com.basehaptic.mobile.wear.WatchCompanionStatusRepository
 import com.basehaptic.mobile.wear.WearThemeSyncManager
 import com.basehaptic.mobile.wear.WearWatchSyncBridge
 import com.basehaptic.mobile.ui.components.RewardedAdManager
+import com.basehaptic.mobile.ui.components.RewardedAdFormat
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.RequestConfiguration
 import java.time.LocalDate
@@ -121,12 +122,13 @@ private fun compareVersionNames(left: String, right: String): Int {
     return 0
 }
 
-private fun requiresServerUpdate(currentVersion: String, config: BackendGamesRepository.AppConfig): Boolean {
-    if (!config.forceUpdate) return false
+internal fun requiresServerUpdate(currentVersion: String, config: BackendGamesRepository.AppConfig): Boolean {
     val minVersion = config.minSupportedVersion.takeIf { it.isNotBlank() }
     val latestVersion = config.latestVersion.takeIf { it.isNotBlank() }
-    return (minVersion != null && compareVersionNames(currentVersion, minVersion) < 0) ||
-        (latestVersion != null && compareVersionNames(currentVersion, latestVersion) < 0)
+    if (minVersion != null && compareVersionNames(currentVersion, minVersion) < 0) return true
+    return config.forceUpdate &&
+        latestVersion != null &&
+        compareVersionNames(currentVersion, latestVersion) < 0
 }
 
 private fun isNotificationRuntimePermissionMissing(context: Context): Boolean {
@@ -700,6 +702,7 @@ fun BaseHapticApp(
         RewardedAdManager.loadAndShowAd(
             context = context,
             adUnitId = RewardedAdManager.WATCH_SYNC_AD_UNIT,
+            format = RewardedAdFormat.REWARDED_INTERSTITIAL,
         ) { rewardEarned ->
             if (rewardEarned) {
                 WatchSyncAdLedger.markViewed(context, gameId)
@@ -765,6 +768,7 @@ fun BaseHapticApp(
         RewardedAdManager.loadAndShowAd(
             context = context,
             adUnitId = RewardedAdManager.LIVE_SCORE_AD_UNIT,
+            format = RewardedAdFormat.REWARDED_INTERSTITIAL,
         ) { rewardEarned ->
             if (rewardEarned) {
                 LiveScoreAdLedger.markViewed(context, game.id)
@@ -968,7 +972,7 @@ fun BaseHapticApp(
             }
         }.getOrNull()
         if (freshGames != null) {
-            todayGamesSnapshot = hydrateMissingLiveWeather(
+            todayGamesSnapshot = hydrateMissingGameWeather(
                 games = freshGames,
                 previousGames = todayGamesSnapshot
             )
@@ -1530,7 +1534,7 @@ private fun BackendGamesRepository.GameWeatherHourly.toGameStartWeatherSummary()
     )
 }
 
-private suspend fun hydrateMissingLiveWeather(
+private suspend fun hydrateMissingGameWeather(
     games: List<Game>,
     previousGames: List<Game>
 ): List<Game> = withContext(Dispatchers.IO) {
@@ -1539,7 +1543,7 @@ private suspend fun hydrateMissingLiveWeather(
         .toMap()
 
     games.map { game ->
-        if (game.weather != null || game.status != GameStatus.LIVE) {
+        if (game.weather != null || (game.status != GameStatus.SCHEDULED && game.status != GameStatus.LIVE)) {
             game
         } else {
             val preservedWeather = previousWeatherByGameId[game.id]

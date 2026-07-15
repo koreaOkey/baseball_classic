@@ -41,8 +41,8 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
         targetSdk = 35
-        versionCode = 28
-        versionName = "1.1.6"
+        versionCode = 30
+        versionName = "1.1.7"
     }
 
     buildFeatures {

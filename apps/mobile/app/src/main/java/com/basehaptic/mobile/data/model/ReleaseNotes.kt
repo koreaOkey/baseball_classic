@@ -12,6 +12,14 @@ object ReleaseNotes {
     // 일치하는 entry 가 없으면 모달이 노출되지 않는다.
     val all: List<ReleaseNote> = listOf(
         ReleaseNote(
+            version = "1.1.7",
+            subtitle = "6/17일 배포",
+            bullets = listOf(
+                "경기장 날씨 확인 기능 추가",
+                "오류 개선",
+            ),
+        ),
+        ReleaseNote(
             version = "1.1.6",
             subtitle = "6/17일 배포",
             bullets = listOf(

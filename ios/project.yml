@@ -30,7 +30,7 @@ targets:
       base:
         INFOPLIST_FILE: mobile/BaseHaptic/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app
-        MARKETING_VERSION: "1.1.6"
+        MARKETING_VERSION: "1.1.7"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_ENTITLEMENTS: BaseHaptic.entitlements
@@ -42,6 +42,9 @@ targets:
           SUPABASE_URL: $(BASEHAPTIC_STAGING_SUPABASE_URL)
           SUPABASE_ANON_KEY: $(BASEHAPTIC_STAGING_SUPABASE_ANON_KEY)
         Release:
+          # Release builds use the promoted staging backend/Supabase resources.
+          # The Railway URL contains "production" because it is the default
+          # environment name inside the isolated staging Railway project.
           BACKEND_BASE_URL: https://baseballclassic-production-4796.up.railway.app
           BACKEND_WS_URL: wss://baseballclassic-production-4796.up.railway.app
           SUPABASE_URL: https://egcsxoxqfcwjjcvjycry.supabase.co
@@ -65,7 +68,7 @@ targets:
       base:
         INFOPLIST_FILE: liveactivity/BaseHapticLiveActivity/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app.liveactivity
-        MARKETING_VERSION: "1.1.6"
+        MARKETING_VERSION: "1.1.7"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         APPLICATION_EXTENSION_API_ONLY: "YES"
@@ -80,7 +83,7 @@ targets:
       base:
         INFOPLIST_FILE: watch/BaseHapticWatch/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.basehaptic.app.watchkitapp
-        MARKETING_VERSION: "1.1.6"
+        MARKETING_VERSION: "1.1.7"
         CURRENT_PROJECT_VERSION: "1"
         SUPPORTS_WATCH_COMPANION: "YES"
         CODE_SIGN_ENTITLEMENTS: "BaseHapticWatch Watch App.entitlements"
@@ -89,6 +92,7 @@ targets:
         Debug:
           BACKEND_BASE_URL: $(BASEHAPTIC_STAGING_BACKEND_BASE_URL)
         Release:
+          # Release builds use the promoted staging backend. See infra/staging/README.md.
           BACKEND_BASE_URL: https://baseballclassic-production-4796.up.railway.app
 
 # BaseHapticLiveActivity는 ActivityKit/WidgetKit 기반 iOS Live Activity extension이다.

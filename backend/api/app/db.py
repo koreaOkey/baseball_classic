@@ -1,9 +1,12 @@
 import logging
+import threading
 import time
 from contextlib import contextmanager
 from collections.abc import Generator
+from pathlib import Path
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -15,6 +18,10 @@ from .config import get_settings
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+DB_UNAVAILABLE_BACKOFF_SEC = float(max(1, settings.db_unavailable_backoff_sec))
+DB_UNAVAILABLE_STATE_FILE = Path("/tmp/basehaptic_db_unavailable_until")
+_db_unavailable_until = 0.0
+_db_unavailable_lock = threading.Lock()
 
 GAME_EVENT_TYPE_VALUES = (
     "BALL",
@@ -72,6 +79,60 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, expi
 
 class Base(DeclarativeBase):
     pass
+
+
+def mark_db_unavailable(backoff_sec: float = DB_UNAVAILABLE_BACKOFF_SEC) -> None:
+    if is_sqlite:
+        return
+    until = time.monotonic() + max(1.0, backoff_sec)
+    with _db_unavailable_lock:
+        global _db_unavailable_until
+        _db_unavailable_until = max(_db_unavailable_until, until)
+    try:
+        DB_UNAVAILABLE_STATE_FILE.write_text(str(until), encoding="utf-8")
+    except OSError:
+        logger.exception("failed to persist db unavailable marker")
+
+
+def clear_db_unavailable() -> None:
+    with _db_unavailable_lock:
+        global _db_unavailable_until
+        _db_unavailable_until = 0.0
+    try:
+        DB_UNAVAILABLE_STATE_FILE.unlink(missing_ok=True)
+    except OSError:
+        logger.exception("failed to clear db unavailable marker")
+
+
+def db_unavailable_remaining_sec() -> float:
+    with _db_unavailable_lock:
+        until = _db_unavailable_until
+    try:
+        raw_until = DB_UNAVAILABLE_STATE_FILE.read_text(encoding="utf-8").strip()
+        until = max(until, float(raw_until))
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError):
+        logger.exception("failed to read db unavailable marker")
+    return max(0.0, until - time.monotonic())
+
+
+def db_unavailable_marker_exists() -> bool:
+    return db_unavailable_remaining_sec() > 0
+
+
+def assert_db_available() -> None:
+    remaining = db_unavailable_remaining_sec()
+    if remaining > 0:
+        raise HTTPException(
+            status_code=503,
+            detail=f"database temporarily unavailable; retry in {int(remaining) + 1}s",
+        )
+    if db_unavailable_marker_exists():
+        raise HTTPException(
+            status_code=503,
+            detail="database temporarily unavailable; retry in 1s",
+        )
 
 
 def init_db() -> None:
@@ -402,6 +463,7 @@ def _execute_ddl_best_effort(conn: Connection, ddl: str) -> None:
 
 
 def get_db() -> Generator[Session, None, None]:
+    assert_db_available()
     db = SessionLocal()
     try:
         yield db
