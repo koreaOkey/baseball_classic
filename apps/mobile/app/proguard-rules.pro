@@ -20,17 +20,12 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
-# Keep data classes
--keep class com.basehaptic.mobile.data.model.** { *; }
+# data.model 클래스는 org.json 수동 파싱만 사용 (Gson/Moshi 등 리플렉션 직렬화 없음) → keep 불필요.
+# Compose 는 R8 기본 규칙 + 라이브러리 consumer rules 로 충분 → 전체 keep 제거 (R8 최적화 복원).
 
-# Keep Compose
--keep class androidx.compose.** { *; }
--keepclassmembers class androidx.compose.** { *; }
-
-# OkHttp / WebSocket
+# OkHttp / WebSocket — 라이브러리 consumer rules 로 충분, 전체 keep 불필요
 -dontwarn okhttp3.**
 -dontwarn okio.**
--keep class okhttp3.** { *; }
 
 # Supabase / Ktor
 -dontwarn io.ktor.**

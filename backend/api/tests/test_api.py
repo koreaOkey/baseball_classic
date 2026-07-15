@@ -23,6 +23,7 @@ if DB_FILE.exists():
 os.environ["BASEHAPTIC_DATABASE_URL"] = f"sqlite+pysqlite:///{DB_FILE.as_posix()}"
 os.environ["BASEHAPTIC_CRAWLER_API_KEY"] = "test-key"
 os.environ["BASEHAPTIC_CORS_ALLOW_ORIGINS"] = "*"
+os.environ["BASEHAPTIC_SUPABASE_JWT_SECRET"] = "test-jwt-secret-0123456789abcdef0123456789abcdef"
 
 from app.main import app  # noqa: E402
 from app import main as main_module  # noqa: E402
@@ -2065,12 +2066,14 @@ def test_game_start_push_groups_korean_home_away_against_code_subscriptions() ->
             ("android-lotte-token", "LOTTE", "android", False, "MASCOT"),
         ]
 
-    async def fake_fcm(tokens: list[str], *, title: str, body: str, data: dict[str, str] | None = None) -> list[str]:
+    async def fake_fcm(
+        tokens: list[str], *, title: str, body: str, data: dict[str, str] | None = None,
+    ) -> tuple[list[str], list[str]]:
         captured.append({"tokens": tokens, "title": title, "body": body, "data": data})
-        return []
+        return [], []
 
     with patch.object(main_module, "_load_team_subscriptions", side_effect=fake_load_team_subscriptions), \
-        patch.object(main_module, "send_fcm_visible_push_to_tokens", side_effect=fake_fcm):
+        patch.object(main_module, "send_fcm_visible_push_to_tokens_detailed", side_effect=fake_fcm):
         asyncio.run(main_module._send_game_start_notification("20260616LTOB02026", "두산", "롯데"))
 
     assert len(captured) == 2
@@ -2549,3 +2552,194 @@ def test_cheer_events_user_id_index_exists():
     inspector = inspect(engine)
     index_names = {idx["name"] for idx in inspector.get_indexes("cheer_events")}
     assert "idx_cheer_events_user_id" in index_names
+
+
+def _make_supabase_jwt(
+    sub: str = "user-jwt-1",
+    *,
+    secret: str = "test-jwt-secret-0123456789abcdef0123456789abcdef",
+    aud: str = "authenticated",
+) -> str:
+    import jwt
+
+    return jwt.encode({"sub": sub, "aud": aud}, secret, algorithm="HS256")
+
+
+def test_jwt_valid_signature_is_accepted():
+    from app.db import init_db
+
+    init_db()
+    token = _make_supabase_jwt(sub="user-jwt-valid-1")
+    with TestClient(app) as client:
+        response = client.get(
+            "/cheer-events/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 200
+    assert response.json()["user_id"] == "user-jwt-valid-1"
+
+
+def test_jwt_invalid_signature_is_rejected():
+    from app.db import init_db
+
+    init_db()
+    forged = _make_supabase_jwt(
+        sub="user-jwt-forged-1",
+        secret="attacker-secret-0123456789abcdef0123456789abcdef",
+    )
+    with TestClient(app) as client:
+        response = client.get(
+            "/cheer-events/me",
+            headers={"Authorization": f"Bearer {forged}"},
+        )
+    assert response.status_code == 401
+
+
+def test_jwt_unsigned_token_is_rejected():
+    import base64
+    import json as jsonlib
+
+    from app.db import init_db
+
+    init_db()
+
+    def b64url(data: dict) -> str:
+        raw = jsonlib.dumps(data, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+    # alg=none 무서명 토큰은 반드시 거부되어야 한다 (기존 unverified decode 회귀 방지).
+    unsigned = f"{b64url({'alg': 'none', 'typ': 'JWT'})}.{b64url({'sub': 'user-x', 'aud': 'authenticated'})}."
+    with TestClient(app) as client:
+        response = client.get(
+            "/cheer-events/me",
+            headers={"Authorization": f"Bearer {unsigned}"},
+        )
+    assert response.status_code == 401
+
+
+def test_jwt_missing_secret_fails_closed():
+    from app.db import init_db
+
+    init_db()
+    token = _make_supabase_jwt(sub="user-jwt-noconf-1")
+    with patch.object(main_module.settings, "supabase_jwt_secret", ""):
+        with TestClient(app) as client:
+            response = client.get(
+                "/cheer-events/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    assert response.status_code == 401
+
+
+def test_cheer_events_me_applies_limit_and_offset():
+    from datetime import datetime, timezone
+
+    from app.db import init_db
+
+    init_db()
+    user_id = "user-limit-1"
+    with SessionLocal() as db:
+        for hour in range(5):
+            _insert_cheer_event(
+                db,
+                user_id=user_id,
+                client_ts=datetime(2026, 6, 10, 9 + hour, 0, 0, tzinfo=timezone.utc),
+                status="valid",
+            )
+
+    token = _make_supabase_jwt(sub=user_id)
+    headers = {"Authorization": f"Bearer {token}"}
+    with TestClient(app) as client:
+        limited = client.get("/cheer-events/me?limit=2", headers=headers)
+        assert limited.status_code == 200
+        body = limited.json()
+        assert body["count"] == 2
+        assert len(body["items"]) == 2
+
+        paged = client.get("/cheer-events/me?limit=2&offset=4", headers=headers)
+        assert paged.status_code == 200
+        assert paged.json()["count"] == 1
+
+        default = client.get("/cheer-events/me", headers=headers)
+        assert default.status_code == 200
+        assert default.json()["count"] == 5
+
+
+def test_silent_push_prunes_permanently_failed_tokens():
+    from app.db import init_db
+
+    init_db()
+    game_id = "20260715PRUNE01"
+    with SessionLocal() as db:
+        db.add(DeviceToken(token="dead-token-1", game_id=game_id, my_team="DOOSAN", platform="ios", is_sandbox=False))
+        db.add(DeviceToken(token="alive-token-1", game_id=game_id, my_team="LG", platform="ios", is_sandbox=False))
+        db.commit()
+
+    async def fake_cached_push_tokens(gid: str):
+        return [
+            ("dead-token-1", "DOOSAN", False, "ios", "TEAM"),
+            ("alive-token-1", "LG", False, "ios", "TEAM"),
+        ]
+
+    async def fake_send_push_with_result(token, payload, *, use_sandbox=None, platform="ios"):
+        # dead-token-1 은 APNs 410 Unregistered 상황을 흉내낸다.
+        return (False, True) if token == "dead-token-1" else (True, False)
+
+    state_payload = {"gameId": game_id, "bases": {}}
+    with patch.object(main_module, "_cached_push_tokens", side_effect=fake_cached_push_tokens), \
+        patch.object(main_module, "send_push_with_result", side_effect=fake_send_push_with_result):
+        asyncio.run(main_module._send_push_for_game_events(game_id, state_payload, []))
+
+    with SessionLocal() as db:
+        remaining = {row.token for row in db.query(DeviceToken).filter_by(game_id=game_id).all()}
+    assert remaining == {"alive-token-1"}
+
+
+def test_fcm_batch_send_reports_all_failed_when_unconfigured():
+    from app import fcm as fcm_module
+
+    failed, unregistered = asyncio.run(
+        fcm_module.send_visible_push_to_tokens_detailed(["t1", "t2"], title="t", body="b")
+    )
+    assert failed == ["t1", "t2"]
+    assert unregistered == []
+
+
+def test_debug_relay_stats_requires_api_key():
+    with TestClient(app) as client:
+        unauthorized = client.get("/debug/relay-stats")
+        assert unauthorized.status_code == 401
+
+        authorized = client.get("/debug/relay-stats", headers={"X-API-Key": "test-key"})
+        assert authorized.status_code == 200
+
+
+def test_weekly_team_rankings_aggregate_in_sql():
+    from datetime import timedelta
+
+    from app.db import init_db
+    from app.models import TeamCheckinDaily
+    from app.weather import KST as WEATHER_KST
+    from datetime import datetime as dt
+
+    init_db()
+    today = dt.now(WEATHER_KST).date()
+    with SessionLocal() as db:
+        db.execute(text("DELETE FROM team_checkin_daily"))
+        for offset, count in ((1, 3), (2, 4)):
+            db.add(TeamCheckinDaily(
+                team_code="DOOSAN",
+                date=(today - timedelta(days=offset)).isoformat(),
+                count=count,
+            ))
+        db.add(TeamCheckinDaily(team_code="LG", date=(today - timedelta(days=1)).isoformat(), count=5))
+        # 7일 윈도 밖의 데이터는 집계에서 제외되어야 한다.
+        db.add(TeamCheckinDaily(team_code="LG", date=(today - timedelta(days=30)).isoformat(), count=99))
+        db.commit()
+
+    with TestClient(app) as client:
+        response = client.get("/rankings/teams?period=weekly")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items[0] == {"team_code": "DOOSAN", "count": 7, "rank": 1}
+    assert items[1] == {"team_code": "LG", "count": 5, "rank": 2}

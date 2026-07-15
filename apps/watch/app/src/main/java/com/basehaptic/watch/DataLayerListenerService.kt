@@ -160,7 +160,7 @@ class DataLayerListenerService : WearableListenerService() {
                 .edit()
                 .putString(PREF_KEY_TEAM_NAME, myTeam)
                 .apply()
-            sendBroadcast(Intent(ACTION_THEME_UPDATED))
+            sendBroadcast(Intent(ACTION_THEME_UPDATED).setPackage(packageName))
         }
 
         // 모바일에서 이미 경기 관람을 시작한 경우 → 워치 팝업 자동 수락
@@ -193,10 +193,12 @@ class DataLayerListenerService : WearableListenerService() {
         if (isFinished) {
             GameForegroundService.stop(this)
         } else {
+            // 라이브 동기화 세션이 데이터를 밀어주는 동안은 독립 폴링 불필요
+            WatchGamePoller.stopPolling()
             GameForegroundService.start(this)
         }
 
-        sendBroadcast(Intent(ACTION_GAME_UPDATED))
+        sendBroadcast(Intent(ACTION_GAME_UPDATED).setPackage(packageName))
     }
     
     /**
@@ -223,7 +225,7 @@ class DataLayerListenerService : WearableListenerService() {
         }
 
         editor.apply()
-        sendBroadcast(Intent(ACTION_THEME_UPDATED))
+        sendBroadcast(Intent(ACTION_THEME_UPDATED).setPackage(packageName))
     }
     
     /**
@@ -263,7 +265,7 @@ class DataLayerListenerService : WearableListenerService() {
 
         saveLatestEvent(eventType, eventCursor.takeIf { it > 0L })
         triggerHapticFeedback(eventType)
-        sendBroadcast(Intent(ACTION_GAME_UPDATED))
+        sendBroadcast(Intent(ACTION_GAME_UPDATED).setPackage(packageName))
     }
 
     private fun handleWatchSyncPrompt(item: DataItem) {
@@ -297,10 +299,10 @@ class DataLayerListenerService : WearableListenerService() {
                 .edit()
                 .putString(PREF_KEY_TEAM_NAME, myTeam)
                 .apply()
-            sendBroadcast(Intent(ACTION_THEME_UPDATED))
+            sendBroadcast(Intent(ACTION_THEME_UPDATED).setPackage(packageName))
         }
 
-        sendBroadcast(Intent(ACTION_WATCH_SYNC_PROMPT))
+        sendBroadcast(Intent(ACTION_WATCH_SYNC_PROMPT).setPackage(packageName))
         wakeScreenForPrompt(gameId)
     }
 
@@ -343,7 +345,7 @@ class DataLayerListenerService : WearableListenerService() {
             }
         }
         if (changed) {
-            sendBroadcast(Intent(ACTION_SETTINGS_UPDATED))
+            sendBroadcast(Intent(ACTION_SETTINGS_UPDATED).setPackage(packageName))
         }
     }
 

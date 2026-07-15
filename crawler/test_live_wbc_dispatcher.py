@@ -1,12 +1,19 @@
 import argparse
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from live_wbc_dispatcher import (
+    KST,
+    MAX_CRAWLER_RESTARTS_PER_GAME,
+    RelayCheckWindow,
     _build_schedule_import_dates,
     _build_schedule_import_dates_for_mode,
     _build_schedule_import_dates_until,
     _build_team_record_payload,
+    _crawler_restart_backoff_sec,
+    _handle_crawler_exit,
+    _import_marks_daily_complete,
     _map_schedule_status,
+    _merge_relay_windows,
     _parse_schedule_url,
     _preview_has_lineup,
     _run_schedule_import,
@@ -527,3 +534,175 @@ def test_map_schedule_status_supports_canceled_and_postponed() -> None:
     assert _map_schedule_status("POSTPONED") == "POSTPONED"
     assert _map_schedule_status("ppd") == "POSTPONED"
     assert _map_schedule_status("suspended") == "POSTPONED"
+
+
+# --- C1: 크롤러 비정상 종료 시 윈도우 재시작 ---
+
+
+def _make_window(**overrides) -> RelayCheckWindow:
+    defaults = dict(
+        game_id="20260715LTKT02026",
+        start_at=datetime(2026, 7, 15, 18, 0, tzinfo=KST),
+    )
+    defaults.update(overrides)
+    return RelayCheckWindow(**defaults)
+
+
+def test_handle_crawler_exit_nonzero_schedules_restart_with_backoff() -> None:
+    now = datetime(2026, 7, 15, 19, 0, tzinfo=KST)
+    window = _make_window(launched=True, checks_done=3)
+
+    action = _handle_crawler_exit(window, 1, now, is_terminal=False)
+
+    assert action == "restart-scheduled"
+    assert window.launched is False
+    assert window.exhausted is False
+    assert window.restart_count == 1
+    assert window.next_check_at == now + timedelta(seconds=60)
+
+
+def test_handle_crawler_exit_backoff_grows_and_caps_at_900() -> None:
+    assert _crawler_restart_backoff_sec(0) == 60.0
+    assert _crawler_restart_backoff_sec(1) == 120.0
+    assert _crawler_restart_backoff_sec(2) == 240.0
+    assert _crawler_restart_backoff_sec(4) == 900.0
+    assert _crawler_restart_backoff_sec(9) == 900.0
+
+
+def test_handle_crawler_exit_zero_with_live_game_schedules_restart() -> None:
+    now = datetime(2026, 7, 15, 19, 0, tzinfo=KST)
+    window = _make_window(launched=True)
+
+    action = _handle_crawler_exit(window, 0, now, is_terminal=False)
+
+    assert action == "restart-scheduled"
+    assert window.launched is False
+
+
+def test_handle_crawler_exit_terminal_game_marks_exhausted() -> None:
+    now = datetime(2026, 7, 15, 22, 0, tzinfo=KST)
+    window = _make_window(launched=True)
+
+    action = _handle_crawler_exit(window, 0, now, is_terminal=True)
+
+    assert action == "terminal"
+    assert window.exhausted is True
+    assert window.restart_count == 0
+
+
+def test_handle_crawler_exit_zero_with_unknown_status_assumes_terminal() -> None:
+    now = datetime(2026, 7, 15, 22, 0, tzinfo=KST)
+    window = _make_window(launched=True)
+
+    action = _handle_crawler_exit(window, 0, now, is_terminal=None)
+
+    assert action == "assumed-terminal"
+    assert window.exhausted is True
+
+
+def test_handle_crawler_exit_restart_cap_reached() -> None:
+    now = datetime(2026, 7, 15, 20, 0, tzinfo=KST)
+    window = _make_window(launched=True, restart_count=MAX_CRAWLER_RESTARTS_PER_GAME)
+
+    action = _handle_crawler_exit(window, 1, now, is_terminal=False)
+
+    assert action == "restart-cap"
+    assert window.exhausted is True
+
+
+# --- C2: import 실패 시 완료로 표시하지 않음 ---
+
+
+def test_import_incomplete_when_today_failed_keeps_daily_import_due() -> None:
+    today = date(2026, 7, 15)
+    import_dates = [today, today + timedelta(days=1)]
+
+    # 오늘 날짜 import 실패 → 완료로 표시하면 안 됨 (should_daily_import 유지)
+    assert _import_marks_daily_complete(today, import_dates, {today}) is False
+    # 미래 날짜만 실패한 경우는 오늘 기준으로 완료 처리
+    assert _import_marks_daily_complete(today, import_dates, {today + timedelta(days=1)}) is True
+    # 전부 성공
+    assert _import_marks_daily_complete(today, import_dates, set()) is True
+
+
+def test_import_incomplete_when_today_not_in_range_requires_all_success() -> None:
+    today = date(2026, 7, 15)
+    past_dates = [date(2026, 3, 1), date(2026, 3, 2)]
+
+    assert _import_marks_daily_complete(today, past_dates, {date(2026, 3, 1)}) is False
+    assert _import_marks_daily_complete(today, past_dates, set()) is True
+
+
+# --- C4: 자정 윈도우 교체 시 전날 미종료 경기 유지 ---
+
+
+def test_merge_relay_windows_retains_pending_previous_date_window() -> None:
+    now = datetime(2026, 7, 16, 0, 10, tzinfo=KST)
+    suspended_yesterday = _make_window(
+        game_id="20260715SSLG02026",
+        start_at=datetime(2026, 7, 15, 18, 0, tzinfo=KST),
+        checks_done=12,
+    )
+    exhausted_yesterday = _make_window(
+        game_id="20260715HHNC02026",
+        start_at=datetime(2026, 7, 15, 18, 0, tzinfo=KST),
+        exhausted=True,
+    )
+    existing = {
+        suspended_yesterday.game_id: suspended_yesterday,
+        exhausted_yesterday.game_id: exhausted_yesterday,
+    }
+    loaded_today = {
+        "20260716LTKT02026": _make_window(
+            game_id="20260716LTKT02026",
+            start_at=datetime(2026, 7, 16, 18, 0, tzinfo=KST),
+        ),
+    }
+
+    merged = _merge_relay_windows(existing, loaded_today, now)
+
+    # 전날 미종료(우천 중단 등) 윈도우는 유지, 종료된 윈도우는 제거
+    assert suspended_yesterday.game_id in merged
+    assert merged[suspended_yesterday.game_id] is suspended_yesterday
+    assert exhausted_yesterday.game_id not in merged
+    assert "20260716LTKT02026" in merged
+
+
+def test_merge_relay_windows_drops_stale_windows_beyond_max_age() -> None:
+    now = datetime(2026, 7, 16, 0, 10, tzinfo=KST)
+    stale = _make_window(
+        game_id="20260710OBWO02026",
+        start_at=now - timedelta(hours=72),
+    )
+
+    merged = _merge_relay_windows({stale.game_id: stale}, {}, now)
+
+    assert merged == {}
+
+
+def test_merge_relay_windows_keeps_existing_launched_window() -> None:
+    now = datetime(2026, 7, 15, 12, 0, tzinfo=KST)
+    launched = _make_window(launched=True, restart_count=2)
+    loaded = {launched.game_id: _make_window()}
+
+    merged = _merge_relay_windows({launched.game_id: launched}, loaded, now)
+
+    assert merged[launched.game_id] is launched
+    assert merged[launched.game_id].restart_count == 2
+
+
+def test_parser_enable_file_log_default_off() -> None:
+    parser = build_parser()
+    args_default = parser.parse_args(["--backend-base-url", "http://localhost:8080", "--backend-api-key", "x"])
+    assert args_default.enable_file_log is False
+
+    args_enabled = parser.parse_args(
+        [
+            "--backend-base-url",
+            "http://localhost:8080",
+            "--backend-api-key",
+            "x",
+            "--enable-file-log",
+        ]
+    )
+    assert args_enabled.enable_file_log is True

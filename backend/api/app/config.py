@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +30,12 @@ class Settings(BaseSettings):
     # Supabase Admin
     supabase_url: str = ""
     supabase_service_role_key: str = ""
+    # Supabase Auth JWT 서명 검증용 시크릿 (HS256).
+    # SUPABASE_JWT_SECRET 또는 BASEHAPTIC_SUPABASE_JWT_SECRET 둘 다 허용.
+    supabase_jwt_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("SUPABASE_JWT_SECRET", "BASEHAPTIC_SUPABASE_JWT_SECRET"),
+    )
 
     # APNs
     apns_key_base64: str | None = None  # .p8 파일 내용을 base64 인코딩한 값

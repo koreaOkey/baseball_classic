@@ -7,14 +7,24 @@ enum RewardedAdFormat {
     case rewardedInterstitial
 }
 
+/// 광고 시청 결과 — 보상 지급 정책을 호출부가 구분할 수 있도록 세분화
+/// - rewardEarned: 광고를 끝까지 시청하여 보상 획득
+/// - loadFailed: no-fill/네트워크 오류 등 광고 자체 실패 (사용자 잘못 아님 → 우아한 성능 저하로 통과 허용)
+/// - dismissedWithoutReward: 사용자가 보상 전에 광고를 닫음 (보상 거부)
+/// - busy: 이미 다른 광고가 진행 중 (중복 탭 — 아무것도 지급/소비하지 않아야 함)
+enum RewardedAdOutcome {
+    case rewardEarned
+    case loadFailed
+    case dismissedWithoutReward
+    case busy
+}
+
 @MainActor
 final class RewardedAdManager: NSObject, ObservableObject {
     static let shared = RewardedAdManager()
 
     @Published var isLoading = false
 
-    private var pendingCompletion: ((Bool) -> Void)?
-    private var rewardEarnedForCurrentAd = false
     private var presentingAdDelegate: AdDelegate?
 
     private override init() { super.init() }
@@ -53,14 +63,15 @@ final class RewardedAdManager: NSObject, ObservableObject {
     }
 
     /// 광고 로드 → 표시 → dismiss 후 콜백.
-    /// `rewardEarned`: 사용자가 광고를 끝까지 시청했으면 true. 로드/표시 실패도 콜백을 호출하며 false.
+    /// 결과는 `RewardedAdOutcome`으로 구분 — 호출부에서 보상 지급 정책을 판단한다.
     func loadAndShowAd(
         adUnitID: String,
         format: RewardedAdFormat = .rewarded,
-        onComplete: @escaping (_ rewardEarned: Bool) -> Void
+        onComplete: @escaping (_ outcome: RewardedAdOutcome) -> Void
     ) {
         guard !isLoading else {
-            onComplete(false)
+            // 중복 탭 가드 — 보상도 대기 상태 소비도 하지 않도록 busy로 구분해서 알림
+            onComplete(.busy)
             return
         }
         isLoading = true
@@ -75,32 +86,32 @@ final class RewardedAdManager: NSObject, ObservableObject {
 
     private func loadAndShowRewardedAd(
         adUnitID: String,
-        onComplete: @escaping (_ rewardEarned: Bool) -> Void
+        onComplete: @escaping (_ outcome: RewardedAdOutcome) -> Void
     ) {
         RewardedAd.load(with: adUnitID, request: Request()) { [weak self] ad, error in
             Task { @MainActor in
                 guard let self else {
-                    onComplete(false)
+                    onComplete(.loadFailed)
                     return
                 }
                 self.isLoading = false
 
                 if let error {
                     print("[RewardedAd] Load failed: \(error.localizedDescription)")
-                    onComplete(false)
+                    onComplete(.loadFailed)
                     return
                 }
 
                 guard let ad,
                       let presenter = Self.currentAdPresenter() else {
                     print("[RewardedAd] No ad or no root VC")
-                    onComplete(false)
+                    onComplete(.loadFailed)
                     return
                 }
 
-                let delegate = AdDelegate { rewardEarned in
+                let delegate = AdDelegate { outcome in
                     self.presentingAdDelegate = nil
-                    onComplete(rewardEarned)
+                    onComplete(outcome)
                 }
                 self.presentingAdDelegate = delegate
                 ad.fullScreenContentDelegate = delegate
@@ -115,32 +126,32 @@ final class RewardedAdManager: NSObject, ObservableObject {
 
     private func loadAndShowRewardedInterstitialAd(
         adUnitID: String,
-        onComplete: @escaping (_ rewardEarned: Bool) -> Void
+        onComplete: @escaping (_ outcome: RewardedAdOutcome) -> Void
     ) {
         RewardedInterstitialAd.load(with: adUnitID, request: Request()) { [weak self] ad, error in
             Task { @MainActor in
                 guard let self else {
-                    onComplete(false)
+                    onComplete(.loadFailed)
                     return
                 }
                 self.isLoading = false
 
                 if let error {
                     print("[RewardedInterstitialAd] Load failed: \(error.localizedDescription)")
-                    onComplete(false)
+                    onComplete(.loadFailed)
                     return
                 }
 
                 guard let ad,
                       let presenter = Self.currentAdPresenter() else {
                     print("[RewardedInterstitialAd] No ad or no root VC")
-                    onComplete(false)
+                    onComplete(.loadFailed)
                     return
                 }
 
-                let delegate = AdDelegate { rewardEarned in
+                let delegate = AdDelegate { outcome in
                     self.presentingAdDelegate = nil
-                    onComplete(rewardEarned)
+                    onComplete(outcome)
                 }
                 self.presentingAdDelegate = delegate
                 ad.fullScreenContentDelegate = delegate
@@ -181,20 +192,22 @@ private extension UIViewController {
 
 private final class AdDelegate: NSObject, FullScreenContentDelegate {
     var rewardEarned = false
-    private let onDismissOrFail: (Bool) -> Void
+    private let onDismissOrFail: (RewardedAdOutcome) -> Void
 
-    init(onDismissOrFail: @escaping (Bool) -> Void) {
+    init(onDismissOrFail: @escaping (RewardedAdOutcome) -> Void) {
         self.onDismissOrFail = onDismissOrFail
         super.init()
     }
 
     func adDidDismissFullScreenContent(_ ad: any FullScreenPresentingAd) {
-        onDismissOrFail(rewardEarned)
+        // 보상 없이 닫힘 = 사용자가 광고를 중간에 종료한 것
+        onDismissOrFail(rewardEarned ? .rewardEarned : .dismissedWithoutReward)
     }
 
     func ad(_ ad: any FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: any Error) {
         print("[RewardedAd] Present failed: \(error.localizedDescription)")
-        onDismissOrFail(false)
+        // 표시 실패는 광고 측 문제 → loadFailed로 취급 (사용자 잘못 아님)
+        onDismissOrFail(.loadFailed)
     }
 }
 

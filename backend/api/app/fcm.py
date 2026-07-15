@@ -93,6 +93,73 @@ def _send_blocking(token: str, title: str, body: str, data: dict[str, str]) -> b
         return False
 
 
+# send_each 배치 최대 크기 (FCM 권장 상한 500)
+FCM_SEND_EACH_BATCH_SIZE = 500
+
+
+def _send_each_blocking(
+    tokens: list[str], title: str, body: str, data: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    """send_each 배치 전송. (실패 토큰, 영구 실패=Unregistered 토큰) 반환."""
+    from firebase_admin import messaging
+
+    failed: list[str] = []
+    unregistered: list[str] = []
+    for start in range(0, len(tokens), FCM_SEND_EACH_BATCH_SIZE):
+        batch = tokens[start:start + FCM_SEND_EACH_BATCH_SIZE]
+        messages = [
+            messaging.Message(
+                token=token,
+                notification=messaging.Notification(title=title, body=body),
+                data={k: str(v) for k, v in data.items()},
+                android=messaging.AndroidConfig(
+                    priority="high",
+                    notification=messaging.AndroidNotification(
+                        channel_id="game_alerts",
+                        default_sound=True,
+                    ),
+                ),
+            )
+            for token in batch
+        ]
+        try:
+            batch_response = messaging.send_each(messages)
+        except Exception as exc:
+            logger.warning("[FCM] send_each batch failed size=%d error=%s", len(batch), exc)
+            failed.extend(batch)
+            continue
+
+        for token, response in zip(batch, batch_response.responses):
+            if response.success:
+                continue
+            failed.append(token)
+            if isinstance(response.exception, messaging.UnregisteredError):
+                unregistered.append(token)
+            logger.warning(
+                "[FCM] send failed token=%s... error=%s", token[:16], response.exception,
+            )
+    return failed, unregistered
+
+
+async def send_visible_push_to_tokens_detailed(
+    tokens: list[str],
+    *,
+    title: str,
+    body: str,
+    data: dict[str, str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """여러 Android 디바이스에 visible push 배치 전송.
+
+    (실패 토큰, 영구 실패=Unregistered 토큰) 을 반환한다. 영구 실패 토큰은
+    호출부에서 DB 정리(prune) 대상으로 쓴다.
+    """
+    if not tokens:
+        return [], []
+    if not _ensure_initialized():
+        return list(tokens), []
+    return await asyncio.to_thread(_send_each_blocking, tokens, title, body, data or {})
+
+
 async def send_visible_push_to_tokens(
     tokens: list[str],
     *,
@@ -100,15 +167,8 @@ async def send_visible_push_to_tokens(
     body: str,
     data: dict[str, str] | None = None,
 ) -> list[str]:
-    """여러 Android 디바이스에 visible push 병렬 전송. 실패 토큰 반환."""
-    if not tokens:
-        return []
-    results = await asyncio.gather(
-        *(send_visible_push(t, title=title, body=body, data=data) for t in tokens),
-        return_exceptions=True,
+    """여러 Android 디바이스에 visible push 배치 전송. 실패 토큰 반환."""
+    failed, _ = await send_visible_push_to_tokens_detailed(
+        tokens, title=title, body=body, data=data,
     )
-    failed: list[str] = []
-    for token, result in zip(tokens, results):
-        if isinstance(result, BaseException) or result is False:
-            failed.append(token)
     return failed

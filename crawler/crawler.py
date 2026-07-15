@@ -20,6 +20,11 @@ from backend_sender import build_snapshot_payload, post_snapshot_to_backend
 
 BASE_URL = "https://api-gw.sports.naver.com"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; BaseballClassicCrawler/1.0)"
+LIVE_STATUS = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
+# 경기 시작 전(중계 텍스트 없음)에는 폴링 주기를 늦춘다 (C6)
+PREGAME_IDLE_INTERVAL_SEC = 60
+# watch 루프에서 연속 크롤 실패가 이 횟수에 도달하면 비정상 종료해 dispatcher 재시작에 맡긴다 (C1)
+MAX_CONSECUTIVE_CRAWL_FAILURES = 10
 FINAL_STATUS = {
     "RESULT",
     "END",
@@ -459,9 +464,22 @@ def build_output_name(game_id: str) -> str:
     return f"relay_{game_id}_{timestamp}.xlsx"
 
 
+def _should_fetch_inning(inning: int, current_inning: int, cached: Optional[Dict[str, Any]]) -> bool:
+    """이닝별 relay 재조회 여부. (C5)
+
+    - 캐시에 없으면 항상 조회한다.
+    - 현재 이닝과 직전 이닝은 매 폴마다 조회한다 (이닝 전환 직후 늦게 붙는 기록 반영).
+    - 그 외(이미 종료된 이닝, 아직 시작하지 않은 이닝)는 캐시를 사용한다.
+    """
+    if cached is None:
+        return True
+    return current_inning - 1 <= inning <= current_inning
+
+
 def crawl_once_detailed(
     game_id: str,
     base_url: str = BASE_URL,
+    relay_cache: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> Tuple[Dict[str, Any], Dict[int, Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
     game_url = f"{base_url}/schedule/games/{game_id}"
     game_data = fetch_json(game_url).get("result", {}).get("game", {})
@@ -476,10 +494,17 @@ def crawl_once_detailed(
         "pitcher_changes": [],
     }
 
-    inning_limit = max(9, _current_inning_number(game_data))
+    current_inning = _current_inning_number(game_data)
+    inning_limit = max(9, current_inning)
     for inning in range(1, inning_limit + 1):
-        relay_url = f"{base_url}/schedule/games/{game_id}/relay?inning={inning}"
-        relay_data = fetch_json(relay_url).get("result", {}).get("textRelayData") or {}
+        cached = relay_cache.get(inning) if relay_cache is not None else None
+        if _should_fetch_inning(inning, current_inning, cached):
+            relay_url = f"{base_url}/schedule/games/{game_id}/relay?inning={inning}"
+            relay_data = fetch_json(relay_url).get("result", {}).get("textRelayData") or {}
+            if relay_cache is not None:
+                relay_cache[inning] = relay_data
+        else:
+            relay_data = cached
         relays_by_inning[inning] = relay_data
         parsed = parse_relay(relay_data, teams)
         combined["at_bats"].extend(parsed["at_bats"])
@@ -550,16 +575,35 @@ def run(
 ) -> None:
     posted_source_event_ids: set[str] = set()
     last_posted_state_signature: str | None = None
+    relay_cache: Dict[int, Dict[str, Any]] = {}
+    consecutive_failures = 0
 
     while True:
         try:
-            game_data, relays_by_inning, combined = crawl_once_detailed(game_id=game_id, base_url=base_url)
-        except requests.RequestException as exc:
-            print(f"[crawl][warn] gameId={game_id} fetch_failed error={exc}", flush=True)
+            game_data, relays_by_inning, combined = crawl_once_detailed(
+                game_id=game_id, base_url=base_url, relay_cache=relay_cache
+            )
+        except Exception as exc:
+            # RequestException 외에도 잘못된 payload(ValueError 등)로 죽지 않도록 넓게 잡는다 (C1)
+            consecutive_failures += 1
+            print(
+                f"[crawl][warn] gameId={game_id} crawl_failed "
+                f"({consecutive_failures}/{MAX_CONSECUTIVE_CRAWL_FAILURES}) "
+                f"error={type(exc).__name__}: {exc}",
+                flush=True,
+            )
             if not watch:
                 raise
+            if consecutive_failures >= MAX_CONSECUTIVE_CRAWL_FAILURES:
+                # 연속 실패 상한 도달: 비정상 종료해 dispatcher 의 백오프 재시작에 맡긴다
+                print(
+                    f"[crawl][error] gameId={game_id} giving_up consecutive_failures={consecutive_failures}",
+                    flush=True,
+                )
+                raise SystemExit(1)
             time.sleep(interval)
             continue
+        consecutive_failures = 0
 
         if output_path:
             save_excel(output_path, game_data, combined)
@@ -569,6 +613,9 @@ def run(
         away_score = game_data.get("awayTeamScore")
         home_score = game_data.get("homeTeamScore")
         relay_count = sum(len((relay.get("textRelays") or [])) for relay in relays_by_inning.values())
+        # 경기 전(중계 텍스트 없음)에는 느린 주기로 폴링, 라이브 전환 시 원래 주기로 복귀 (C6)
+        is_pregame_idle = status not in LIVE_STATUS and status not in FINAL_STATUS and relay_count == 0
+        poll_interval = max(interval, PREGAME_IDLE_INTERVAL_SEC) if is_pregame_idle else interval
         print(
             f"[crawl] at={datetime.now().isoformat(timespec='seconds')} "
             f"gameId={game_id} status={status or '-'} inning={inning or '-'} "
@@ -604,7 +651,7 @@ def run(
                 )
                 if not watch or status in FINAL_STATUS:
                     break
-                time.sleep(interval)
+                time.sleep(poll_interval)
                 continue
             try:
                 last_error: requests.RequestException | None = None
@@ -651,7 +698,7 @@ def run(
 
         if not watch or status in FINAL_STATUS:
             break
-        time.sleep(interval)
+        time.sleep(poll_interval)
 
 
 def main() -> None:

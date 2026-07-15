@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- debug 빌드 전용 overlay: 로컬 백엔드(10.0.2.2 등) 테스트를 위해 cleartext 허용.
+     release 빌드에는 병합되지 않음. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:usesCleartextTraffic="true" />
+
+</manifest>

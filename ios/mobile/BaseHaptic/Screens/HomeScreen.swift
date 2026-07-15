@@ -1820,6 +1820,7 @@ private let weatherForecastCalendar: Calendar = {
 
 private let weatherForecastDateFormatter: DateFormatter = {
     let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX") // 비그레고리력 기기 캘린더 영향 차단
     formatter.dateFormat = "yyyy-MM-dd"
     formatter.timeZone = TimeZone(identifier: "Asia/Seoul") ?? .current
     return formatter

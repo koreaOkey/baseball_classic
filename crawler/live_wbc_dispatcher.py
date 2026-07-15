@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+from logging.handlers import TimedRotatingFileHandler
 import re
 import subprocess
 import sys
@@ -32,6 +33,14 @@ LEAGUE_PRESETS: dict[str, tuple[str, str]] = {
     "kbo": ("kbaseball", "kbo"),
 }
 KBO_GAME_ID_PATTERN = re.compile(r"^\d{8}[A-Z]{4}\d{5}$")
+# 크롤러 비정상 종료 시 게임당 최대 재시작 횟수 (초과 시 ERROR 로그 후 포기)
+MAX_CRAWLER_RESTARTS_PER_GAME = 10
+# 재시작 백오프 상한 (초)
+CRAWLER_RESTART_BACKOFF_MAX_SEC = 900
+# 자정 윈도우 교체 시 전날 미종료 경기(우천 중단/연기 등)를 유지하는 최대 시간
+RETAINED_WINDOW_MAX_AGE = timedelta(hours=48)
+# relay 체크 연속 fetch 실패가 이 횟수 이상이면 "네이버 응답 실패 지속" ERROR 로그
+NAVER_FETCH_FAILURE_ALERT_THRESHOLD = 5
 
 
 @dataclass(frozen=True)
@@ -49,6 +58,10 @@ class RelayCheckWindow:
     launched: bool = False
     exhausted: bool = False
     next_check_at: datetime | None = None
+    # 크롤러 비정상 종료 후 재시작 횟수 (C1)
+    restart_count: int = 0
+    # relay 체크 연속 fetch 실패 횟수 (C3: 네이버 장애 vs 중계 미시작 구분)
+    relay_fetch_failures: int = 0
 
     def __post_init__(self) -> None:
         if self.next_check_at is None:
@@ -59,7 +72,7 @@ class RelayCheckWindow:
 class RunningCrawler:
     game_id: str
     process: subprocess.Popen[str]
-    log_path: Path
+    log_path: Path | None
     log_handle: Any
     started_at: datetime
 
@@ -107,25 +120,54 @@ def _release_dispatcher_lock(handle: TextIO) -> None:
         handle.close()
 
 
-def _setup_logging(log_dir: Path) -> Path:
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"dispatcher_{datetime.now(KST):%Y%m%d}.log"
-
+def _setup_logging(log_dir: Path, *, enable_file_log: bool = False) -> Path | None:
     LOGGER.setLevel(logging.INFO)
     LOGGER.handlers.clear()
     LOGGER.propagate = False
 
     formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 
-    file_handler = logging.FileHandler(log_path, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    LOGGER.addHandler(file_handler)
+    log_path: Path | None = None
+    if enable_file_log:
+        # 로컬 디버깅용 파일 로그: 자정 회전 + 7일 보관 (컨테이너에선 stdout만 사용)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "dispatcher.log"
+        file_handler = TimedRotatingFileHandler(
+            log_path,
+            when="midnight",
+            backupCount=7,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(formatter)
+        LOGGER.addHandler(file_handler)
 
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
     LOGGER.addHandler(stream_handler)
 
     return log_path
+
+
+# _safe_json_get 실패 로그는 호스트당 아래 주기로 rate-limit (네이버 장애 시 로그 폭주 방지)
+_JSON_GET_FAILURE_LOG_INTERVAL_SEC = 60.0
+_json_get_failure_last_log_at: dict[str, float] = {}
+
+
+def _log_json_get_failure(url: str, exc: Exception) -> None:
+    host = urlparse(url).netloc or url
+    now_mono = time.monotonic()
+    last_logged = _json_get_failure_last_log_at.get(host)
+    if last_logged is not None and now_mono - last_logged < _JSON_GET_FAILURE_LOG_INTERVAL_SEC:
+        return
+    _json_get_failure_last_log_at[host] = now_mono
+    status_code = getattr(getattr(exc, "response", None), "status_code", None)
+    LOGGER.warning(
+        "[http] json_get_failed host=%s url=%s error=%s status=%s",
+        host,
+        url,
+        f"{type(exc).__name__}: {exc}",
+        status_code if status_code is not None else "-",
+    )
 
 
 def _safe_json_get(url: str, timeout: float) -> Any | None:
@@ -139,7 +181,8 @@ def _safe_json_get(url: str, timeout: float) -> Any | None:
         payload = response.json()
         if isinstance(payload, (dict, list)):
             return payload
-    except Exception:
+    except Exception as exc:
+        _log_json_get_failure(url, exc)
         return None
     return None
 
@@ -270,6 +313,40 @@ def _load_today_windows_from_backend(
     return windows
 
 
+def _merge_relay_windows(
+    existing_windows: dict[str, RelayCheckWindow],
+    loaded: dict[str, RelayCheckWindow],
+    now: datetime,
+) -> dict[str, RelayCheckWindow]:
+    """오늘 로드된 윈도우와 기존 윈도우를 병합한다. (C4)
+
+    자정 넘어 윈도우가 교체될 때 전날의 미종료 경기(우천 중단/연기 재개 등)를
+    RETAINED_WINDOW_MAX_AGE 이내에서 유지한다.
+    """
+    merged: dict[str, RelayCheckWindow] = {}
+    for game_id, loaded_window in loaded.items():
+        existing = existing_windows.get(game_id)
+        if existing is None:
+            merged[game_id] = loaded_window
+            continue
+        if existing.launched or existing.exhausted:
+            merged[game_id] = existing
+            continue
+        existing.start_at = loaded_window.start_at
+        if existing.next_check_at is None:
+            existing.next_check_at = loaded_window.start_at
+        merged[game_id] = existing
+
+    for game_id, existing in existing_windows.items():
+        if game_id in merged or existing.exhausted:
+            continue
+        if now - existing.start_at > RETAINED_WINDOW_MAX_AGE:
+            continue
+        merged[game_id] = existing
+
+    return merged
+
+
 def _preview_has_lineup(preview_payload: Any | None) -> bool:
     if not isinstance(preview_payload, dict):
         return False
@@ -305,7 +382,12 @@ def _relay_is_available(
     timeout: float,
     *,
     enable_preview_lineup_precheck: bool = False,
-) -> tuple[bool, bool]:
+) -> tuple[bool, bool, bool]:
+    """(available, is_final, fetch_failed) 를 반환한다.
+
+    fetch_failed=True 는 네이버 응답 자체를 받지 못한 경우로,
+    "중계가 아직 시작되지 않음"(False, False, False)과 구분된다. (C3)
+    """
     game_url = f"{source_base_url.rstrip('/')}/schedule/games/{game_id}"
     relay_url = f"{source_base_url.rstrip('/')}/schedule/games/{game_id}/relay?inning=1"
     preview_url = f"{source_base_url.rstrip('/')}/schedule/games/{game_id}/preview"
@@ -313,22 +395,22 @@ def _relay_is_available(
     game_payload = _safe_json_get(game_url, timeout=timeout)
     relay_payload = _safe_json_get(relay_url, timeout=timeout)
     if not isinstance(game_payload, dict) or not isinstance(relay_payload, dict):
-        return False, False
+        return False, False, True
 
     game = (game_payload.get("result") or {}).get("game") or {}
     relay_data = (relay_payload.get("result") or {}).get("textRelayData") or {}
     status_code = str(game.get("statusCode") or "").strip().upper()
     if status_code in TERMINAL_STATUS_CODES:
-        return False, True
+        return False, True, False
 
     # statusCode가 terminal이 아니어도 statusInfo로 취소/연기 판별
     mapped = _map_schedule_status(game.get("statusCode"), game.get("statusInfo"))
     if mapped in ("CANCELED", "POSTPONED", "FINISHED"):
-        return False, True
+        return False, True, False
 
     text_relays = relay_data.get("textRelays") or []
     if isinstance(text_relays, list) and len(text_relays) > 0:
-        return True, False
+        return True, False, False
 
     # Before first pitch, some games expose lineup/entry rows without relay text.
     for lineup_key in ("homeLineup", "awayLineup", "homeEntry", "awayEntry"):
@@ -340,27 +422,87 @@ def _relay_is_available(
         if (isinstance(batters, list) and len(batters) > 0) or (
             isinstance(pitchers, list) and len(pitchers) > 0
         ):
-            return True, False
-
-    game_center = game.get("gameCenterUrl") or {}
-    if isinstance(game_center, dict):
-        if game_center.get("lineupTabUrl") or game_center.get("relayTabUrl"):
-            return True, False
+            return True, False, False
 
     # Some games expose relay/live metadata before first relay text appears.
+    # gameCenterUrl 은 경기 시작 몇 시간 전부터 노출되므로 LIVE 상태일 때만 신뢰한다. (C6)
     if status_code in LIVE_STATUS_CODES:
+        game_center = game.get("gameCenterUrl") or {}
+        if isinstance(game_center, dict):
+            if game_center.get("lineupTabUrl") or game_center.get("relayTabUrl"):
+                return True, False, False
         live_list = game.get("liveList") or []
         if isinstance(live_list, list) and len(live_list) > 0:
-            return True, False
+            return True, False, False
         if game.get("manualRelayUrl"):
-            return True, False
+            return True, False, False
 
     if enable_preview_lineup_precheck:
         preview_payload = _safe_json_get(preview_url, timeout=timeout)
         if _preview_has_lineup(preview_payload):
-            return True, False
+            return True, False, False
 
-    return False, False
+    return False, False, False
+
+
+def _fetch_game_is_terminal(source_base_url: str, game_id: str, timeout: float) -> bool | None:
+    """소스(네이버) 기준 경기 종료 여부. 조회 실패 시 None."""
+    game_url = f"{source_base_url.rstrip('/')}/schedule/games/{game_id}"
+    payload = _safe_json_get(game_url, timeout=timeout)
+    if not isinstance(payload, dict):
+        return None
+    game = (payload.get("result") or {}).get("game") or {}
+    if not isinstance(game, dict) or not game:
+        return None
+    status_code = str(game.get("statusCode") or "").strip().upper()
+    if status_code in TERMINAL_STATUS_CODES:
+        return True
+    return _map_schedule_status(game.get("statusCode"), game.get("statusInfo")) in (
+        "FINISHED",
+        "CANCELED",
+        "POSTPONED",
+    )
+
+
+def _crawler_restart_backoff_sec(restart_count: int) -> float:
+    """n번째 재시작 전 대기 시간: min(60 * 2^n, 900)초."""
+    return float(min(60 * (2 ** max(0, restart_count)), CRAWLER_RESTART_BACKOFF_MAX_SEC))
+
+
+def _handle_crawler_exit(
+    window: RelayCheckWindow,
+    exit_code: int,
+    now: datetime,
+    *,
+    is_terminal: bool | None,
+    max_restarts: int = MAX_CRAWLER_RESTARTS_PER_GAME,
+) -> str:
+    """크롤러 프로세스 종료 후 윈도우 상태를 갱신한다. (C1)
+
+    반환값:
+      - "terminal": 경기 종료 확인, 재시작 불필요
+      - "assumed-terminal": 정상 종료 + 상태 확인 실패 → 종료로 간주
+      - "restart-cap": 재시작 상한 도달, 포기
+      - "restart-scheduled": 백오프 후 재시작 예약
+    """
+    if is_terminal is True:
+        window.exhausted = True
+        return "terminal"
+
+    if exit_code == 0 and is_terminal is None:
+        # 크롤러는 FINAL 상태에서만 0으로 종료하므로, 상태 확인 실패 시 종료로 간주해 재시작 루프를 막는다.
+        window.exhausted = True
+        return "assumed-terminal"
+
+    if window.restart_count >= max_restarts:
+        window.exhausted = True
+        return "restart-cap"
+
+    backoff_sec = _crawler_restart_backoff_sec(window.restart_count)
+    window.restart_count += 1
+    window.launched = False
+    window.next_check_at = now + timedelta(seconds=backoff_sec)
+    return "restart-scheduled"
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -1112,6 +1254,20 @@ def _run_schedule_import(
     return failure_count == 0
 
 
+def _import_marks_daily_complete(
+    target_date: date,
+    import_dates: list[date],
+    failed_dates: set[date],
+) -> bool:
+    """오늘 날짜 import가 성공했을 때만 일일 import를 완료로 표시한다. (C2)
+
+    오늘이 import 범위에 없으면 전체 성공 여부를 따른다.
+    """
+    if target_date in import_dates:
+        return target_date not in failed_dates
+    return not failed_dates
+
+
 def _build_schedule_import_dates(start_date: date, days: int) -> list[date]:
     return _build_schedule_import_dates_until(start_date=start_date, days=days, until_date=None)
 
@@ -1161,11 +1317,15 @@ def _start_crawler(
     crawler_backend_timeout_sec: float,
     crawler_backend_retries: int,
     log_dir: Path,
+    enable_file_log: bool = False,
 ) -> RunningCrawler:
     crawler_script = repo_root / "crawler" / "crawler.py"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / f"live_crawler_{game_id}.log"
-    log_handle = log_path.open("a", encoding="utf-8")
+    log_path: Path | None = None
+    log_handle: Any = None
+    if enable_file_log:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / f"live_crawler_{game_id}.log"
+        log_handle = log_path.open("a", encoding="utf-8")
 
     normalized_backend_retries = max(1, int(crawler_backend_retries))
     normalized_backend_timeout = max(1.0, float(crawler_backend_timeout_sec))
@@ -1189,11 +1349,12 @@ def _start_crawler(
         "--backend-retries",
         str(normalized_backend_retries),
     ]
+    # 파일 로그 비활성 시 stdout 상속 → 컨테이너(Railway)가 그대로 수집 (C7)
     process = subprocess.Popen(
         cmd,
         cwd=str(repo_root),
-        stdout=log_handle,
-        stderr=subprocess.STDOUT,
+        stdout=log_handle if log_handle is not None else None,
+        stderr=subprocess.STDOUT if log_handle is not None else None,
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -1214,8 +1375,9 @@ def _cleanup_finished_processes(running: dict[str, RunningCrawler]) -> list[tupl
         code = running_crawler.process.poll()
         if code is None:
             continue
-        running_crawler.log_handle.close()
-        LOGGER.info("[crawler] stopped gameId=%s exit=%s log=%s", game_id, code, running_crawler.log_path)
+        if running_crawler.log_handle is not None:
+            running_crawler.log_handle.close()
+        LOGGER.info("[crawler] stopped gameId=%s exit=%s log=%s", game_id, code, running_crawler.log_path or "stdout")
         del running[game_id]
         stopped.append((game_id, code))
     return stopped
@@ -1225,8 +1387,8 @@ def run_dispatcher(args: argparse.Namespace) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     python_executable = sys.executable
     log_dir = repo_root / args.log_dir
-    dispatcher_log_path = _setup_logging(log_dir)
-    LOGGER.info("[dispatcher] started pid=%s log=%s", os.getpid(), dispatcher_log_path)
+    dispatcher_log_path = _setup_logging(log_dir, enable_file_log=args.enable_file_log)
+    LOGGER.info("[dispatcher] started pid=%s log=%s", os.getpid(), dispatcher_log_path or "stdout-only")
     schedule_targets = _resolve_schedule_targets(args)
     backend_sync_timeout = (
         max(1.0, float(args.backend_sync_timeout_sec))
@@ -1292,20 +1454,7 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                 len(windows),
             )
             return
-        merged: dict[str, RelayCheckWindow] = {}
-        for game_id, loaded_window in loaded.items():
-            existing = windows.get(game_id)
-            if existing is None:
-                merged[game_id] = loaded_window
-                continue
-            if existing.launched or existing.exhausted:
-                merged[game_id] = existing
-                continue
-            existing.start_at = loaded_window.start_at
-            if existing.next_check_at is None:
-                existing.next_check_at = loaded_window.start_at
-            merged[game_id] = existing
-        windows = merged
+        windows = _merge_relay_windows(windows, loaded, datetime.now(KST))
         preview_ids = ",".join(sorted(windows.keys())[:8])
         LOGGER.info(
             "[dispatcher] windows_loaded=%s date=%s preview=%s",
@@ -1336,19 +1485,31 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                 continue
 
             window.checks_done += 1
-            available, is_final = _relay_is_available(
+            available, is_final, fetch_failed = _relay_is_available(
                 source_base_url=args.source_base_url,
                 game_id=game_id,
                 timeout=args.http_timeout_sec,
                 enable_preview_lineup_precheck=args.enable_preview_lineup_precheck,
             )
+            # 네이버 응답 실패(장애/포맷 변경)와 "중계 미시작"을 로그로 구분 (C3)
+            if fetch_failed:
+                window.relay_fetch_failures += 1
+                if window.relay_fetch_failures >= NAVER_FETCH_FAILURE_ALERT_THRESHOLD:
+                    LOGGER.error(
+                        "[relay] 네이버 응답 실패 지속 gameId=%s consecutive=%s",
+                        game_id,
+                        window.relay_fetch_failures,
+                    )
+            else:
+                window.relay_fetch_failures = 0
             LOGGER.info(
-                "[relay] gameId=%s check=%s maxMinutes=%s available=%s final=%s",
+                "[relay] gameId=%s check=%s maxMinutes=%s available=%s final=%s fetchFailed=%s",
                 game_id,
                 window.checks_done,
                 args.relay_check_minutes if args.relay_check_minutes > 0 else "until-final",
                 available,
                 is_final,
+                fetch_failed,
             )
             if available:
                 running_crawler = _start_crawler(
@@ -1362,14 +1523,16 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                     crawler_backend_timeout_sec=args.crawler_backend_timeout_sec,
                     crawler_backend_retries=args.crawler_backend_retries,
                     log_dir=log_dir,
+                    enable_file_log=args.enable_file_log,
                 )
                 running[game_id] = running_crawler
                 window.launched = True
                 LOGGER.info(
-                    "[crawler] started gameId=%s pid=%s log=%s",
+                    "[crawler] started gameId=%s pid=%s restart=%s log=%s",
                     game_id,
                     running_crawler.process.pid,
-                    running_crawler.log_path,
+                    window.restart_count,
+                    running_crawler.log_path or "stdout",
                 )
             else:
                 if is_final:
@@ -1426,6 +1589,35 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                     forced_synced,
                 )
 
+                # 크롤러가 죽었는데 경기가 안 끝났으면 백오프 후 재시작 대상으로 되돌린다. (C1)
+                window = windows.get(game_id)
+                if window is None:
+                    continue
+                is_terminal = _fetch_game_is_terminal(
+                    source_base_url=args.source_base_url,
+                    game_id=game_id,
+                    timeout=args.http_timeout_sec,
+                )
+                action = _handle_crawler_exit(window, exit_code, now, is_terminal=is_terminal)
+                if action == "restart-scheduled":
+                    LOGGER.warning(
+                        "[crawler] restart_scheduled gameId=%s exit=%s restart=%s/%s nextCheckAt=%s",
+                        game_id,
+                        exit_code,
+                        window.restart_count,
+                        MAX_CRAWLER_RESTARTS_PER_GAME,
+                        window.next_check_at.isoformat() if window.next_check_at else "-",
+                    )
+                elif action == "restart-cap":
+                    LOGGER.error(
+                        "[crawler] restart_cap_reached gameId=%s exit=%s restarts=%s 재시작 상한 도달, 이 경기는 더 이상 재시작하지 않음",
+                        game_id,
+                        exit_code,
+                        window.restart_count,
+                    )
+                else:
+                    LOGGER.info("[crawler] window_closed gameId=%s reason=%s", game_id, action)
+
             check_relay_windows(now)
 
             import_trigger = datetime.combine(
@@ -1451,7 +1643,7 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                     mode = "daily" if should_daily_import else "refresh"
                     last_import_attempt_at = now
                     LOGGER.info("[import] due mode=%s date=%s", mode, now.date().isoformat())
-                    all_success = True
+                    failed_dates: set[date] = set()
                     import_dates = _build_schedule_import_dates_for_mode(
                         args,
                         today=now.date(),
@@ -1478,7 +1670,7 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                                 backend_retries=backend_sync_retries,
                                 schedule_snapshot_signatures=schedule_snapshot_signatures,
                             ):
-                                all_success = False
+                                failed_dates.add(import_date)
                         if args.disable_team_record_sync:
                             LOGGER.info("[team-record] skipped reason=disabled-by-flag")
                         elif running:
@@ -1500,10 +1692,22 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                                 backend_retries=backend_sync_retries,
                             )
 
-                    imported_date = now.date()
-                    last_import_success_at = now
+                    # 오늘 날짜 import가 성공했을 때만 완료로 표시한다.
+                    # 실패 시 imported_date/last_import_success_at 을 남겨두면
+                    # should_daily_import 가 유지되어 --import-retry-interval-sec 후 재시도된다. (C2)
+                    if _import_marks_daily_complete(now.date(), import_dates, failed_dates):
+                        imported_date = now.date()
+                        last_import_success_at = now
+                    else:
+                        LOGGER.warning(
+                            "[import] incomplete mode=%s date=%s failed_dates=%s retry_in=%ss",
+                            mode,
+                            now.date().isoformat(),
+                            ",".join(sorted(d.isoformat() for d in failed_dates)),
+                            args.import_retry_interval_sec,
+                        )
                     refresh_windows(now.date())
-                    if not all_success:
+                    if failed_dates:
                         LOGGER.warning("[import] partial_failure date=%s", now.date().isoformat())
 
             time.sleep(args.dispatch_interval_sec)
@@ -1511,7 +1715,8 @@ def run_dispatcher(args: argparse.Namespace) -> None:
         for running_crawler in running.values():
             if running_crawler.process.poll() is None:
                 running_crawler.process.terminate()
-            running_crawler.log_handle.close()
+            if running_crawler.log_handle is not None:
+                running_crawler.log_handle.close()
         _release_dispatcher_lock(lock_handle)
 
 
@@ -1684,6 +1889,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Retries for dispatcher -> backend sync POST requests.",
     )
     parser.add_argument("--log-dir", default="log")
+    parser.add_argument(
+        "--enable-file-log",
+        action="store_true",
+        default=str(os.getenv("DISPATCHER_ENABLE_FILE_LOG") or "").strip().lower() in {"1", "true", "yes", "on"},
+        help=(
+            "Write dispatcher/crawler logs to files under --log-dir (rotated daily, 7 backups). "
+            "Default off: containers rely on stdout capture (e.g. Railway). "
+            "Env: DISPATCHER_ENABLE_FILE_LOG=1"
+        ),
+    )
     return parser
 
 

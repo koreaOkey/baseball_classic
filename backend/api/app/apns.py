@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 APNS_PRODUCTION_URL = "https://api.push.apple.com"
 APNS_SANDBOX_URL = "https://api.sandbox.push.apple.com"
 
+# 토큰이 더 이상 유효하지 않아 재시도해도 소용없는 영구 실패 reason.
+# 호출부에서 해당 토큰을 DB 에서 정리(prune)하는 근거로 쓴다.
+PERMANENT_FAILURE_REASONS = frozenset({"Unregistered", "BadDeviceToken"})
+
+
+def _is_permanent_failure(status_code: int, reason: str) -> bool:
+    return status_code == 410 or reason in PERMANENT_FAILURE_REASONS
+
 # JWT 토큰 캐싱 (최대 50분, APNs는 1시간 만료)
 _cached_jwt: str | None = None
 _cached_jwt_expires: float = 0
@@ -79,10 +87,24 @@ async def send_push(
     platform: str = "ios",
 ) -> bool:
     """단일 디바이스에 silent push 전송"""
+    ok, _ = await send_push_with_result(
+        device_token, payload, use_sandbox=use_sandbox, platform=platform,
+    )
+    return ok
+
+
+async def send_push_with_result(
+    device_token: str,
+    payload: dict[str, Any],
+    *,
+    use_sandbox: bool | None = None,
+    platform: str = "ios",
+) -> tuple[bool, bool]:
+    """단일 디바이스에 silent push 전송. (성공 여부, 영구 실패 여부) 반환."""
     settings = get_settings()
     jwt_token = _create_jwt_token()
     if jwt_token is None:
-        return False
+        return False, False
 
     sandbox = use_sandbox if use_sandbox is not None else settings.apns_use_sandbox
 
@@ -120,7 +142,7 @@ async def send_push(
                 # 환경이 바뀌었으면 DB 업데이트를 위해 로그
                 if try_sandbox != sandbox:
                     logger.info("[APNs] Push succeeded with fallback env: sandbox=%s token=%s...", try_sandbox, device_token[:16])
-                return True
+                return True, False
 
             body = response.text
             reason = ""
@@ -135,13 +157,13 @@ async def send_push(
                 continue
 
             logger.warning("[APNs] Push failed: status=%s body=%s token=%s... sandbox=%s topic=%s", response.status_code, body, device_token[:16], try_sandbox, topic)
-            return False
+            return False, _is_permanent_failure(response.status_code, reason)
 
         except Exception:
             logger.exception("[APNs] Push request error: token=%s...", device_token[:16])
-            return False
+            return False, False
 
-    return False
+    return False, False
 
 
 async def send_live_activity_push(
@@ -152,10 +174,24 @@ async def send_live_activity_push(
     timestamp: int | None = None,
 ) -> bool:
     """ActivityKit Live Activity push 전송"""
+    ok, _ = await send_live_activity_push_with_result(
+        push_token, content_state, event_type=event_type, timestamp=timestamp,
+    )
+    return ok
+
+
+async def send_live_activity_push_with_result(
+    push_token: str,
+    content_state: dict[str, Any],
+    *,
+    event_type: str = "update",  # "update" or "end"
+    timestamp: int | None = None,
+) -> tuple[bool, bool]:
+    """ActivityKit Live Activity push 전송. (성공 여부, 영구 실패 여부) 반환."""
     settings = get_settings()
     jwt_token = _create_jwt_token()
     if jwt_token is None:
-        return False
+        return False, False
 
     base_url = APNS_SANDBOX_URL if settings.apns_use_sandbox else APNS_PRODUCTION_URL
     url = f"{base_url}/3/device/{push_token}"
@@ -187,17 +223,22 @@ async def send_live_activity_push(
         )
 
         if response.status_code == 200:
-            return True
+            return True, False
 
+        reason = ""
+        try:
+            reason = json.loads(response.text).get("reason", "")
+        except Exception:
+            pass
         logger.warning(
             "[APNs-LA] Push failed: status=%s body=%s token=%s...",
             response.status_code, response.text, push_token[:16],
         )
-        return False
+        return False, _is_permanent_failure(response.status_code, reason)
 
     except Exception:
         logger.exception("[APNs-LA] Push request error: token=%s...", push_token[:16])
-        return False
+        return False, False
 
 
 async def send_push_to_tokens(
@@ -233,10 +274,31 @@ async def send_visible_push(
     `category` 를 지정하면 클라이언트에 등록된 UNNotificationCategory 의 액션
     버튼이 알림에 표시된다.
     """
+    ok, _ = await send_visible_push_with_result(
+        device_token,
+        title=title,
+        body=body,
+        data=data,
+        use_sandbox=use_sandbox,
+        category=category,
+    )
+    return ok
+
+
+async def send_visible_push_with_result(
+    device_token: str,
+    *,
+    title: str,
+    body: str,
+    data: dict[str, Any] | None = None,
+    use_sandbox: bool | None = None,
+    category: str | None = None,
+) -> tuple[bool, bool]:
+    """단일 iOS 디바이스에 visible push 전송. (성공 여부, 영구 실패 여부) 반환."""
     settings = get_settings()
     jwt_token = _create_jwt_token()
     if jwt_token is None:
-        return False
+        return False, False
 
     sandbox = use_sandbox if use_sandbox is not None else settings.apns_use_sandbox
     headers = {
@@ -267,7 +329,7 @@ async def send_visible_push(
                 headers={**headers, "content-type": "application/json"},
             )
             if response.status_code == 200:
-                return True
+                return True, False
 
             reason = ""
             try:
@@ -280,28 +342,32 @@ async def send_visible_push(
                 "[APNs-visible] send failed status=%s body=%s token=%s... sandbox=%s",
                 response.status_code, response.text, device_token[:16], try_sandbox,
             )
-            return False
+            return False, _is_permanent_failure(response.status_code, reason)
         except Exception:
             logger.exception("[APNs-visible] request error token=%s...", device_token[:16])
-            return False
+            return False, False
 
-    return False
+    return False, False
 
 
-async def send_visible_push_to_tokens(
+async def send_visible_push_to_tokens_detailed(
     tokens_with_sandbox: list[tuple[str, bool]],
     *,
     title: str,
     body: str,
     data: dict[str, Any] | None = None,
     category: str | None = None,
-) -> list[str]:
-    """여러 iOS 디바이스에 visible push 병렬 전송. 실패 토큰 반환."""
+) -> tuple[list[str], list[str]]:
+    """여러 iOS 디바이스에 visible push 병렬 전송.
+
+    (실패 토큰, 영구 실패 토큰) 을 반환한다. 영구 실패(410 Unregistered /
+    BadDeviceToken) 토큰은 호출부에서 DB 정리(prune) 대상으로 쓴다.
+    """
     if not tokens_with_sandbox:
-        return []
+        return [], []
     results = await asyncio.gather(
         *(
-            send_visible_push(
+            send_visible_push_with_result(
                 token,
                 title=title,
                 body=body,
@@ -314,7 +380,29 @@ async def send_visible_push_to_tokens(
         return_exceptions=True,
     )
     failed: list[str] = []
+    permanently_failed: list[str] = []
     for (token, _), result in zip(tokens_with_sandbox, results):
-        if isinstance(result, BaseException) or result is False:
+        if isinstance(result, BaseException):
             failed.append(token)
+            continue
+        ok, permanent = result
+        if not ok:
+            failed.append(token)
+            if permanent:
+                permanently_failed.append(token)
+    return failed, permanently_failed
+
+
+async def send_visible_push_to_tokens(
+    tokens_with_sandbox: list[tuple[str, bool]],
+    *,
+    title: str,
+    body: str,
+    data: dict[str, Any] | None = None,
+    category: str | None = None,
+) -> list[str]:
+    """여러 iOS 디바이스에 visible push 병렬 전송. 실패 토큰 반환."""
+    failed, _ = await send_visible_push_to_tokens_detailed(
+        tokens_with_sandbox, title=title, body=body, data=data, category=category,
+    )
     return failed

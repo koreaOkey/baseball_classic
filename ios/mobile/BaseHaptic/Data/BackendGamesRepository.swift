@@ -254,16 +254,25 @@ enum TeamRecordStreamMessage {
 final class BackendGamesRepository {
     static let shared = BackendGamesRepository()
     private let session: URLSession
+    private let webSocketSession: URLSession
     private let timeoutInterval: TimeInterval = 5.0
     private let scheduleCacheTTL: TimeInterval = 6 * 60 * 60
     private let scheduleCacheVersion = 2
     private let cache = NSCache<NSString, CacheEntry>()
 
     private init() {
+        // REST 전용 세션 — 짧은 타임아웃으로 빠른 실패
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = timeoutInterval
         config.timeoutIntervalForResource = timeoutInterval
         session = URLSession(configuration: config)
+
+        // WebSocket 전용 세션 — REST용 5초 타임아웃을 공유하면
+        // timeoutIntervalForResource(5초)에 걸려 스트림이 연결 직후 강제 종료된다.
+        let wsConfig = URLSessionConfiguration.default
+        wsConfig.timeoutIntervalForRequest = 60
+        wsConfig.timeoutIntervalForResource = 7 * 24 * 60 * 60 // 사실상 무제한 (기본값과 동일)
+        webSocketSession = URLSession(configuration: wsConfig)
     }
 
     // MARK: - Cache
@@ -948,7 +957,7 @@ final class BackendGamesRepository {
                 return
             }
 
-            let task = session.webSocketTask(with: url)
+            let task = webSocketSession.webSocketTask(with: url)
 
             func receiveMessage() {
                 task.receive { result in
@@ -1045,8 +1054,10 @@ final class BackendGamesRepository {
 
     private static let kstHourMinute: DateFormatter = {
         let f = DateFormatter()
+        // 고정 포맷 파싱/출력은 en_US_POSIX + KST 고정 (비그레고리력 기기·해외 시간대 대응)
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "HH:mm"
-        f.timeZone = .current
+        f.timeZone = TimeZone(identifier: "Asia/Seoul")
         return f
     }()
 
@@ -1064,7 +1075,9 @@ final class BackendGamesRepository {
         let prefix = String(gameId.prefix(8))
         guard prefix.allSatisfy(\.isNumber) else { return nil }
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd"
+        formatter.timeZone = TimeZone(identifier: "Asia/Seoul")
         return formatter.date(from: prefix)
     }
 
@@ -1074,7 +1087,10 @@ final class BackendGamesRepository {
 
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
+        // 백엔드 날짜(KST 기준)를 파싱/생성 — 기기 캘린더/시간대 영향 차단
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "Asia/Seoul")
         return f
     }()
 }

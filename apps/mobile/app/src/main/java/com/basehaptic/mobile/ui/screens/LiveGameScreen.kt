@@ -66,6 +66,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.basehaptic.mobile.BuildConfig
 import com.basehaptic.mobile.R
 import com.basehaptic.mobile.data.BackendGamesRepository
@@ -76,6 +79,7 @@ import com.basehaptic.mobile.data.model.Team
 
 import com.basehaptic.mobile.ui.components.RewardedAdManager
 import com.basehaptic.mobile.ui.components.RewardedAdFormat
+import com.basehaptic.mobile.ui.components.RewardedAdResult
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.AppEventColors
 import com.basehaptic.mobile.ui.theme.AppFont
@@ -113,6 +117,7 @@ fun LiveGameScreen(
     onBack: () -> Unit
 ) {
     val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var gameState by remember(gameId) { mutableStateOf<BackendGamesRepository.LiveGameState?>(null) }
     var events by remember(gameId) { mutableStateOf<List<BackendGamesRepository.LiveEvent>>(emptyList()) }
     var loadError by remember(gameId) { mutableStateOf<String?>(null) }
@@ -148,21 +153,27 @@ fun LiveGameScreen(
         else -> null
     }
 
-    val filteredEvents = run {
+    // 리컴포지션마다 전체 이벤트 재필터링을 피하기 위해 입력이 바뀔 때만 재계산
+    val filteredEvents = remember(allEvents, selectedInningNumber, isScoreFilterActive) {
         if (isScoreFilterActive) {
-            return@run allEvents.filter { event ->
+            allEvents.filter { event ->
                 val t = event.type.uppercase()
                 t == "SCORE" || t == "SAC_FLY_SCORE"
             }
-        }
-        val n = selectedInningNumber ?: return@run allEvents
-        allEvents.filter { event ->
-            val inn = event.inning ?: return@filter false
-            inningNumber(inn) == n
+        } else {
+            val n = selectedInningNumber
+            if (n == null) {
+                allEvents
+            } else {
+                allEvents.filter { event ->
+                    val inn = event.inning ?: return@filter false
+                    inningNumber(inn) == n
+                }
+            }
         }
     }
 
-    val filteredAtBats = AtBatGroup.group(filteredEvents)
+    val filteredAtBats = remember(filteredEvents) { AtBatGroup.group(filteredEvents) }
 
     LaunchedEffect(gameId) {
         if (gameId.isNullOrBlank()) return@LaunchedEffect
@@ -215,55 +226,58 @@ fun LiveGameScreen(
             }
         }
 
-        while (currentCoroutineContext().isActive) {
-            runRecoveryPull()
+        // 백그라운드 진입 시 소켓을 닫고 포그라운드 복귀 시 재연결 (STARTED 동안만 스트리밍)
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (currentCoroutineContext().isActive) {
+                runRecoveryPull()
 
-            runCatching {
-                BackendGamesRepository.streamGame(gameId).collect { message ->
-                    when (message) {
-                        BackendGamesRepository.LiveStreamMessage.Connected -> {
-                            reconnectAttempt = 0
-                            loadError = null
-                        }
-
-                        BackendGamesRepository.LiveStreamMessage.Closed -> {
-                            throw IllegalStateException("live stream closed")
-                        }
-
-                        is BackendGamesRepository.LiveStreamMessage.Error -> {
-                            throw message.throwable
-                        }
-
-                        is BackendGamesRepository.LiveStreamMessage.Events -> {
-                            mergeEvents(message.items)
-                        }
-
-                        is BackendGamesRepository.LiveStreamMessage.State -> {
-                            gameState = message.state
-                            loadError = null
-                        }
-
-                        is BackendGamesRepository.LiveStreamMessage.Update -> {
-                            mergeEvents(message.events)
-                            message.state?.let {
-                                gameState = it
+                runCatching {
+                    BackendGamesRepository.streamGame(gameId).collect { message ->
+                        when (message) {
+                            BackendGamesRepository.LiveStreamMessage.Connected -> {
+                                reconnectAttempt = 0
                                 loadError = null
                             }
-                        }
 
-                        is BackendGamesRepository.LiveStreamMessage.Pong -> Unit
+                            BackendGamesRepository.LiveStreamMessage.Closed -> {
+                                throw IllegalStateException("live stream closed")
+                            }
+
+                            is BackendGamesRepository.LiveStreamMessage.Error -> {
+                                throw message.throwable
+                            }
+
+                            is BackendGamesRepository.LiveStreamMessage.Events -> {
+                                mergeEvents(message.items)
+                            }
+
+                            is BackendGamesRepository.LiveStreamMessage.State -> {
+                                gameState = message.state
+                                loadError = null
+                            }
+
+                            is BackendGamesRepository.LiveStreamMessage.Update -> {
+                                mergeEvents(message.events)
+                                message.state?.let {
+                                    gameState = it
+                                    loadError = null
+                                }
+                            }
+
+                            is BackendGamesRepository.LiveStreamMessage.Pong -> Unit
+                        }
+                    }
+                }.onFailure {
+                    if (gameState == null) {
+                        loadError = "실시간 연결이 불안정합니다. 재연결 중..."
                     }
                 }
-            }.onFailure {
-                if (gameState == null) {
-                    loadError = "실시간 연결이 불안정합니다. 재연결 중..."
-                }
-            }
 
-            if (!currentCoroutineContext().isActive) break
-            val delayMs = reconnectDelaysMs[reconnectAttempt.coerceAtMost(reconnectDelaysMs.lastIndex)]
-            reconnectAttempt = (reconnectAttempt + 1).coerceAtMost(reconnectDelaysMs.lastIndex)
-            delay(delayMs)
+                if (!currentCoroutineContext().isActive) break
+                val delayMs = reconnectDelaysMs[reconnectAttempt.coerceAtMost(reconnectDelaysMs.lastIndex)]
+                reconnectAttempt = (reconnectAttempt + 1).coerceAtMost(reconnectDelaysMs.lastIndex)
+                delay(delayMs)
+            }
         }
     }
 
@@ -1213,16 +1227,24 @@ private fun WatchSyncBadge(
                         return@TextButton
                     }
                     isAdLoading = true
+                    // 광고 게이트 정책: 보상 획득 또는 광고 로드 실패만 동기화 허용, 조기 닫기는 거부, BUSY 는 no-op
                     RewardedAdManager.loadAndShowAd(
                         context = context,
                         adUnitId = RewardedAdManager.WATCH_SYNC_AD_UNIT,
                         format = RewardedAdFormat.REWARDED_INTERSTITIAL,
-                    ) { rewardEarned ->
+                    ) { result ->
                         isAdLoading = false
-                        if (rewardEarned) {
-                            WatchSyncAdLedger.markViewed(context, gameId)
+                        when (result) {
+                            RewardedAdResult.REWARD_EARNED -> {
+                                WatchSyncAdLedger.markViewed(context, gameId)
+                                onSetSyncedGame(gameId)
+                            }
+                            RewardedAdResult.LOAD_FAILED -> onSetSyncedGame(gameId)
+                            RewardedAdResult.DISMISSED_WITHOUT_REWARD,
+                            RewardedAdResult.BUSY -> {
+                                visualOn = isSyncedToCurrent
+                            }
                         }
-                        onSetSyncedGame(gameId)
                     }
                 }) {
                     Text(text = "확인")

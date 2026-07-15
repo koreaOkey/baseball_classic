@@ -48,16 +48,23 @@ class GameSyncForegroundService : Service() {
 
         private const val NOTIFICATION_CHANNEL_ID = "game_sync_channel"
         private const val NOTIFICATION_ID = 1001
+
+        // 경기 상태가 LIVE 가 아닌 관측이 연속 N회면 service 종료 (무한 가동 방지)
+        private const val MAX_NON_LIVE_OBSERVATIONS = 3
+        // 최대 가동 시간 backstop — 어떤 이유로든 6시간을 넘기면 강제 종료
+        private const val MAX_RUNTIME_MS = 6 * 60 * 60 * 1000L
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var streamingJob: Job? = null
+    private var maxRuntimeJob: Job? = null
 
     private var selectedTeam: Team = Team.NONE
     private var syncedGameId: String? = null
     private var watchSyncEnabled: Boolean = true
     private var liveScoreEnabled: Boolean = true
     private var lastNotificationText: String? = null
+    private var nonLiveObservationCount = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -99,22 +106,23 @@ class GameSyncForegroundService : Service() {
                     startForeground(NOTIFICATION_ID, notification)
                 }
                 startStreamingLoop(gameId)
+
+                // 최대 가동 시간 backstop
+                maxRuntimeJob?.cancel()
+                maxRuntimeJob = serviceScope.launch {
+                    delay(MAX_RUNTIME_MS)
+                    Log.w(TAG, "Max runtime reached — stopping service")
+                    stopStreamingAndSelf()
+                }
             }
 
             ACTION_STOP_STREAMING -> {
-                streamingJob?.cancel()
-                streamingJob = null
-                syncedGameId = null
+                maxRuntimeJob?.cancel()
+                maxRuntimeJob = null
                 watchSyncEnabled = false
                 liveScoreEnabled = false
                 com.basehaptic.mobile.push.LiveScoreNotificationManager.remove(applicationContext)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                } else {
-                    @Suppress("DEPRECATION")
-                    stopForeground(true)
-                }
-                stopSelf()
+                stopStreamingAndSelf()
             }
 
             null -> {
@@ -135,8 +143,42 @@ class GameSyncForegroundService : Service() {
 
     // ── Streaming loop ──
 
+    /** 스트리밍 중단 + foreground 알림 제거 + service 종료 공통 처리 */
+    private fun stopStreamingAndSelf() {
+        syncedGameId = null
+        streamingJob?.cancel()
+        streamingJob = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+        stopSelf()
+    }
+
+    /**
+     * LIVE 가 아닌 상태 관측 카운트 갱신. 연속 MAX_NON_LIVE_OBSERVATIONS 회면 service 종료.
+     * FINISHED 뿐 아니라 CANCELED/SCHEDULED 등 어떤 비-LIVE 상태로 고착돼도 무한 가동을 막는다.
+     */
+    private fun trackNonLiveObservation(status: GameStatus): Boolean {
+        if (status == GameStatus.LIVE) {
+            nonLiveObservationCount = 0
+            return false
+        }
+        nonLiveObservationCount += 1
+        if (nonLiveObservationCount >= MAX_NON_LIVE_OBSERVATIONS) {
+            Log.i(TAG, "Game not LIVE for $nonLiveObservationCount consecutive observations — stopping service")
+            com.basehaptic.mobile.push.LiveScoreNotificationManager.remove(applicationContext)
+            stopStreamingAndSelf()
+            return true
+        }
+        return false
+    }
+
     private fun startStreamingLoop(gameId: String) {
         streamingJob?.cancel()
+        nonLiveObservationCount = 0
         streamingJob = serviceScope.launch {
             var cursor = 0L
             var localEvents: List<BackendGamesRepository.LiveEvent> = emptyList()
@@ -149,6 +191,9 @@ class GameSyncForegroundService : Service() {
             var reconnectAttempt = 0
 
             fun pushStateToWatch(state: BackendGamesRepository.LiveGameState) {
+                // 비-LIVE 상태 연속 관측 시 종료 (FINISHED 메시지를 못 받아도 무한 가동 방지)
+                if (trackNonLiveObservation(state.status)) return
+
                 // 폰 라이브 스코어 ongoing notification (잠금화면·드로어 표시)
                 if (liveScoreEnabled && state.status == GameStatus.LIVE) {
                     latestLiveScoreState = state
@@ -270,28 +315,10 @@ class GameSyncForegroundService : Service() {
 
                         // 워치 관람 자동 종료 → foreground service 종료해 알림 제거.
                         // 사용자가 다시 앱 켜면 polling 재시작.
-                        syncedGameId = null
-                        streamingJob?.cancel()
-                        streamingJob = null
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                            stopForeground(STOP_FOREGROUND_REMOVE)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            stopForeground(true)
-                        }
-                        stopSelf()
+                        stopStreamingAndSelf()
                     }
                 } else if (!watchSyncEnabled && state.status == GameStatus.FINISHED) {
-                    syncedGameId = null
-                    streamingJob?.cancel()
-                    streamingJob = null
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        stopForeground(true)
-                    }
-                    stopSelf()
+                    stopStreamingAndSelf()
                 }
             }
 

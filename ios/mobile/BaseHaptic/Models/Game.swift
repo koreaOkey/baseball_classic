@@ -8,7 +8,8 @@ enum GameStatus: String, Codable {
     case postponed = "POSTPONED"
 }
 
-struct Game: Identifiable, Codable {
+// Equatable: 5초 폴링에서 값이 그대로면 @State 재할당(전체 리렌더)을 건너뛰기 위함
+struct Game: Identifiable, Codable, Equatable {
     let id: String
     let homeTeam: String
     let awayTeam: String
@@ -57,7 +58,7 @@ struct Game: Identifiable, Codable {
     }
 }
 
-struct GameWeatherSummary: Codable {
+struct GameWeatherSummary: Codable, Equatable {
     let stadiumCode: String
     let stadiumName: String
     let stadiumShortName: String
@@ -73,13 +74,13 @@ struct GameWeatherSummary: Codable {
     let displayText: String
 }
 
-struct Pitcher: Codable {
+struct Pitcher: Codable, Equatable {
     let name: String
     let winStreak: Int
     let record: PitcherRecord
 }
 
-struct PitcherRecord: Codable {
+struct PitcherRecord: Codable, Equatable {
     let wins: Int
     let draws: Int
     let losses: Int

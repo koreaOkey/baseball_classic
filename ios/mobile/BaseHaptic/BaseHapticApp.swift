@@ -18,6 +18,7 @@ struct BaseHapticApp: App {
     @State private var requiredUpdateMessage = "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요."
     @State private var requiredUpdateStoreUrl = "itms-apps://itunes.apple.com/app/id6761336752"
     @State private var isRequiredUpdate = true
+    @State private var promptedUpdateVersion = ""
     @Environment(\.scenePhase) private var scenePhase
     private let isExistingUserAtLaunch: Bool
 
@@ -89,6 +90,24 @@ struct BaseHapticApp: App {
         return nil
     }
 
+    // 선택 업데이트 안내 "나중에" 디바운스: 같은 버전은 하루에 한 번만 다시 표시
+    // (강제 업데이트 minimum version 경로에는 적용하지 않음)
+    private static let dismissedOptionalUpdateVersionKey = "optional_update_dismissed_version"
+    private static let dismissedOptionalUpdateAtKey = "optional_update_dismissed_at"
+
+    private func shouldShowOptionalUpdateAlert(for version: String) -> Bool {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: Self.dismissedOptionalUpdateVersionKey) == version else { return true }
+        let dismissedAt = defaults.double(forKey: Self.dismissedOptionalUpdateAtKey)
+        return Date().timeIntervalSince1970 - dismissedAt >= 24 * 60 * 60
+    }
+
+    private func markOptionalUpdateAlertDismissed(version: String) {
+        let defaults = UserDefaults.standard
+        defaults.set(version, forKey: Self.dismissedOptionalUpdateVersionKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: Self.dismissedOptionalUpdateAtKey)
+    }
+
     private func checkForAppStoreUpdate() async {
         guard let bundleId = Bundle.main.bundleIdentifier,
               let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
@@ -101,7 +120,9 @@ struct BaseHapticApp: App {
                 requiredUpdateMessage = config.updateMessage.isEmpty ? "안정적인 서비스 운영을 위해 최신 버전으로 업데이트해 주세요." : config.updateMessage
                 requiredUpdateStoreUrl = config.storeUrl.isEmpty ? "itms-apps://itunes.apple.com/app/id6761336752" : config.storeUrl
                 isRequiredUpdate = updateIsRequired
-                showAppUpdateAlert = true
+                promptedUpdateVersion = config.latestVersion
+                // 강제 업데이트는 항상, 선택 업데이트는 디바운스를 통과할 때만 표시
+                showAppUpdateAlert = updateIsRequired || shouldShowOptionalUpdateAlert(for: config.latestVersion)
             }
             return
         }
@@ -116,11 +137,13 @@ struct BaseHapticApp: App {
             else { return }
 
             if storeVersion.compare(currentVersion, options: .numeric) == .orderedDescending {
+                guard shouldShowOptionalUpdateAlert(for: storeVersion) else { return }
                 await MainActor.run {
                     requiredUpdateTitle = "업데이트가 필요합니다"
                     requiredUpdateMessage = "새 버전 \(storeVersion)이 출시되었습니다.\n계속 이용하려면 업데이트해 주세요."
                     requiredUpdateStoreUrl = "itms-apps://itunes.apple.com/app/id6761336752"
                     isRequiredUpdate = false
+                    promptedUpdateVersion = storeVersion
                     showAppUpdateAlert = true
                 }
             }
@@ -199,6 +222,10 @@ struct BaseHapticApp: App {
                         isRequired: isRequiredUpdate,
                         onDismiss: {
                             showAppUpdateAlert = false
+                            // "나중에"를 누른 선택 업데이트는 같은 버전에 대해 하루 동안 다시 띄우지 않음
+                            if !isRequiredUpdate {
+                                markOptionalUpdateAlertDismissed(version: promptedUpdateVersion)
+                            }
                         }
                     ) {
                         if let url = URL(string: requiredUpdateStoreUrl) {
@@ -640,8 +667,9 @@ struct ContentView: View {
                         onUnlockTheme: { theme in
                             rewardedAdManager.loadAndShowAd(
                                 adUnitID: RewardedAdManager.themeStoreAdUnitID
-                            ) { rewardEarned in
-                                guard rewardEarned else { return }
+                            ) { outcome in
+                                // 테마 잠금해제는 영구 보상이므로 끝까지 시청한 경우에만 지급
+                                guard outcome == .rewardEarned else { return }
                                 unlockedThemeIds.insert(theme.id)
                                 UserDefaults.standard.set(Array(unlockedThemeIds), forKey: "unlocked_theme_ids")
                                 if theme.id.hasPrefix("cheer_") {
@@ -922,11 +950,20 @@ struct ContentView: View {
         presentRewardedAdAfterModalDismissal(
             adUnitID: RewardedAdManager.liveActivityAdUnitID,
             format: .rewardedInterstitial
-        ) { rewardEarned in
-            if rewardEarned {
+        ) { outcome in
+            // 보상 정책: 끝까지 시청 시 지급, 광고 자체 실패(no-fill 등)는 사용자 잘못이 아니므로 통과,
+            // 사용자가 중간에 닫으면 거부, 중복 탭(busy)은 아무것도 하지 않음.
+            switch outcome {
+            case .rewardEarned:
                 LiveActivityAdLedger.markViewed(gameId: game.id)
+                completeStart()
+            case .loadFailed:
+                completeStart()
+            case .dismissedWithoutReward:
+                closeLiveActivityDialog()
+            case .busy:
+                break
             }
-            completeStart()
         }
     }
 
@@ -1036,18 +1073,27 @@ struct ContentView: View {
         presentRewardedAdAfterModalDismissal(
             adUnitID: RewardedAdManager.watchSyncAdUnitID,
             format: .rewardedInterstitial
-        ) { rewardEarned in
-            if rewardEarned {
+        ) { outcome in
+            // 보상 정책: 끝까지 시청 시 지급, 광고 자체 실패(no-fill 등)는 사용자 잘못이 아니므로 통과,
+            // 사용자가 중간에 닫으면 거부, 중복 탭(busy)은 아무것도 하지 않음.
+            switch outcome {
+            case .rewardEarned:
                 WatchSyncAdLedger.markViewed(gameId: gameId)
+                completeSync()
+            case .loadFailed:
+                completeSync()
+            case .dismissedWithoutReward:
+                closeWatchSyncDialog()
+            case .busy:
+                break
             }
-            completeSync()
         }
     }
 
     private func presentRewardedAdAfterModalDismissal(
         adUnitID: String,
         format: RewardedAdFormat = .rewarded,
-        onComplete: @escaping (_ rewardEarned: Bool) -> Void
+        onComplete: @escaping (_ outcome: RewardedAdOutcome) -> Void
     ) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             RewardedAdManager.shared.loadAndShowAd(
@@ -1255,7 +1301,10 @@ struct ContentView: View {
         while !Task.isCancelled {
             if let fetched = await BackendGamesRepository.shared.fetchTodayGamesCached(selectedTeam: selectedTeam, forceRefresh: true) {
                 let hydrated = await hydrateMissingGameWeather(games: fetched, previousGames: todayGames)
-                todayGames = hydrated
+                // 값이 그대로면 재할당하지 않아 5초마다 전체 리렌더되는 것을 방지
+                if todayGames != hydrated {
+                    todayGames = hydrated
+                }
 
                 // Auto-detect LIVE games for watch sync prompt
                 let myTeamGames = hydrated.filter { $0.isMyTeam }
@@ -1762,6 +1811,29 @@ private func gameWithWeather(_ game: Game, weather: GameWeatherSummary) -> Game 
     )
 }
 
+/// 날씨 조회 실패(예보 없음 포함)를 게임별로 기억해 두는 negative cache
+/// — 5초 폴링마다 실패한 /games/{id}/weather를 다시 두드리지 않도록 TTL 동안 재시도를 막는다.
+private enum GameWeatherFailureCache {
+    private static let ttl: TimeInterval = 10 * 60
+    private static var failedAt: [String: Date] = [:]
+    private static let lock = NSLock()
+
+    static func shouldSkip(gameId: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let at = failedAt[gameId] else { return false }
+        if Date().timeIntervalSince(at) < ttl { return true }
+        failedAt[gameId] = nil
+        return false
+    }
+
+    static func markFailure(gameId: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        failedAt[gameId] = Date()
+    }
+}
+
 private func hydrateMissingGameWeather(games: [Game], previousGames: [Game]) async -> [Game] {
     var previousWeatherByGameId: [String: GameWeatherSummary] = [:]
     for game in previousGames {
@@ -1781,10 +1853,16 @@ private func hydrateMissingGameWeather(games: [Game], previousGames: [Game]) asy
             hydrated.append(gameWithWeather(game, weather: preservedWeather))
             continue
         }
+        // 최근에 실패한 게임은 TTL 동안 재시도하지 않음
+        if GameWeatherFailureCache.shouldSkip(gameId: game.id) {
+            hydrated.append(game)
+            continue
+        }
         if let forecast = await BackendGamesRepository.shared.fetchGameHourlyWeather(gameId: game.id, targetDate: Date()),
            let fetchedWeather = gameStartWeatherSummary(from: forecast) {
             hydrated.append(gameWithWeather(game, weather: fetchedWeather))
         } else {
+            GameWeatherFailureCache.markFailure(gameId: game.id)
             hydrated.append(game)
         }
     }

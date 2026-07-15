@@ -47,3 +47,6 @@ log/
 
 # Node modules
 **/node_modules/
+
+# Local sqlite databases (backend runtime/test artifacts)
+backend/api/**/*.db

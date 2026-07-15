@@ -42,6 +42,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.basehaptic.mobile.R
 import com.basehaptic.mobile.ui.components.BannerAd
 import com.basehaptic.mobile.data.BackendGamesRepository
@@ -264,47 +267,51 @@ fun HomeScreen(
         }
     }
 
+    val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(selectedTeam) {
         if (selectedTeam == Team.NONE) return@LaunchedEffect
 
-        val reconnectDelaysMs = listOf(1_000L, 2_000L, 5_000L, 10_000L)
-        var reconnectAttempt = 0
-        while (currentCoroutineContext().isActive) {
-            runCatching {
-                BackendGamesRepository.streamTeamRecord(selectedTeam).collect { message ->
-                    when (message) {
-                        BackendGamesRepository.TeamRecordStreamMessage.Connected -> {
-                            reconnectAttempt = 0
-                        }
-
-                        BackendGamesRepository.TeamRecordStreamMessage.Closed -> {
-                            throw IllegalStateException("team record stream closed")
-                        }
-
-                        is BackendGamesRepository.TeamRecordStreamMessage.Error -> {
-                            throw message.throwable
-                        }
-
-                        is BackendGamesRepository.TeamRecordStreamMessage.TeamRecord -> {
-                            teamRecordStats = message.value
-                            withContext(Dispatchers.IO) {
-                                BackendGamesRepository.cacheTodayTeamRecord(
-                                    context = context.applicationContext,
-                                    selectedTeam = selectedTeam,
-                                    value = message.value
-                                )
+        // 백그라운드 진입 시 소켓을 닫고 포그라운드 복귀 시 재연결 (STARTED 동안만 스트리밍)
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            val reconnectDelaysMs = listOf(1_000L, 2_000L, 5_000L, 10_000L)
+            var reconnectAttempt = 0
+            while (currentCoroutineContext().isActive) {
+                runCatching {
+                    BackendGamesRepository.streamTeamRecord(selectedTeam).collect { message ->
+                        when (message) {
+                            BackendGamesRepository.TeamRecordStreamMessage.Connected -> {
+                                reconnectAttempt = 0
                             }
-                        }
 
-                        is BackendGamesRepository.TeamRecordStreamMessage.Pong -> Unit
+                            BackendGamesRepository.TeamRecordStreamMessage.Closed -> {
+                                throw IllegalStateException("team record stream closed")
+                            }
+
+                            is BackendGamesRepository.TeamRecordStreamMessage.Error -> {
+                                throw message.throwable
+                            }
+
+                            is BackendGamesRepository.TeamRecordStreamMessage.TeamRecord -> {
+                                teamRecordStats = message.value
+                                withContext(Dispatchers.IO) {
+                                    BackendGamesRepository.cacheTodayTeamRecord(
+                                        context = context.applicationContext,
+                                        selectedTeam = selectedTeam,
+                                        value = message.value
+                                    )
+                                }
+                            }
+
+                            is BackendGamesRepository.TeamRecordStreamMessage.Pong -> Unit
+                        }
                     }
                 }
-            }
 
-            if (!currentCoroutineContext().isActive) break
-            val delayMs = reconnectDelaysMs[reconnectAttempt.coerceAtMost(reconnectDelaysMs.lastIndex)]
-            reconnectAttempt = (reconnectAttempt + 1).coerceAtMost(reconnectDelaysMs.lastIndex)
-            delay(delayMs)
+                if (!currentCoroutineContext().isActive) break
+                val delayMs = reconnectDelaysMs[reconnectAttempt.coerceAtMost(reconnectDelaysMs.lastIndex)]
+                reconnectAttempt = (reconnectAttempt + 1).coerceAtMost(reconnectDelaysMs.lastIndex)
+                delay(delayMs)
+            }
         }
     }
 

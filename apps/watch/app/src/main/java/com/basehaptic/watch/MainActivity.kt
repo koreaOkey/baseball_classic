@@ -51,6 +51,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -118,11 +121,12 @@ class MainActivity : ComponentActivity() {
         // Ongoing Activity: prevents system kill + shows on watch face
         createOngoingNotificationChannel()
         postOngoingActivity()
+        // 앱 내부 브로드캐스트만 수신 — 외부 앱 노출 차단
         ContextCompat.registerReceiver(
             this,
             ongoingUpdateReceiver,
             IntentFilter(DataLayerListenerService.ACTION_GAME_UPDATED),
-            ContextCompat.RECEIVER_EXPORTED
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
 
         setContent {
@@ -299,65 +303,27 @@ fun WatchApp(isAmbient: Boolean = false) {
     // 로 종료 시점에 해제. onFinally 누락 대비 delay() 완료 후 자동 해제되는 구조.
     var isPlayingVideo by remember { mutableStateOf(false) }
 
-    // 영상 ExoPlayer 미리 초기화
-    val hitPlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_hit_clip}")
+    // 이벤트 영상용 공유 ExoPlayer 1개 — 클립은 짧아 이벤트 시점에 setMediaItem/prepare 해도
+    // 지연이 체감되지 않는다. (플레이어 5개 상시 준비 → 메모리/디코더 낭비 제거)
+    val eventPlayer = remember(context) {
         ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(clipUri))
             repeatMode = Player.REPEAT_MODE_OFF
             volume = 0f
             playWhenReady = false
-            prepare()
-        }
-    }
-    val homeRunPlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_homerun_clip}")
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(clipUri))
-            repeatMode = Player.REPEAT_MODE_OFF
-            volume = 0f
-            playWhenReady = false
-            prepare()
-        }
-    }
-    val doublePlayPlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_double_play_clip}")
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(clipUri))
-            repeatMode = Player.REPEAT_MODE_OFF
-            volume = 0f
-            playWhenReady = false
-            prepare()
-        }
-    }
-    val scorePlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_score_clip}")
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(clipUri))
-            repeatMode = Player.REPEAT_MODE_OFF
-            volume = 0f
-            playWhenReady = false
-            prepare()
-        }
-    }
-    val victoryPlayer = remember(context) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/${R.raw.penguin_victory_clip}")
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(clipUri))
-            repeatMode = Player.REPEAT_MODE_OFF
-            volume = 0f
-            playWhenReady = false
-            prepare()
         }
     }
 
-    DisposableEffect(hitPlayer, homeRunPlayer, doublePlayPlayer, scorePlayer, victoryPlayer) {
+    fun playEventClip(rawResId: Int) {
+        val clipUri = Uri.parse("android.resource://${context.packageName}/$rawResId")
+        eventPlayer.setMediaItem(MediaItem.fromUri(clipUri))
+        eventPlayer.prepare()
+        eventPlayer.seekTo(0)
+        eventPlayer.play()
+    }
+
+    DisposableEffect(eventPlayer) {
         onDispose {
-            hitPlayer.release()
-            homeRunPlayer.release()
-            doublePlayPlayer.release()
-            scorePlayer.release()
-            victoryPlayer.release()
+            eventPlayer.release()
         }
     }
 
@@ -403,7 +369,8 @@ fun WatchApp(isAmbient: Boolean = false) {
                 }
             }
         }
-        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        // 앱 내부 브로드캐스트만 수신 — 외부 앱 노출 차단
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         onDispose { context.unregisterReceiver(receiver) }
     }
 
@@ -417,12 +384,24 @@ fun WatchApp(isAmbient: Boolean = false) {
         }
     }
 
-    // 워치 독립 경기 폴링 시작
-    LaunchedEffect(syncedTeamName) {
-        val team = syncedTeamName
-        if (team.isNotBlank() && team != "DEFAULT" && gameData?.isLive != true) {
-            WatchGamePoller.startPolling(context, team)
+    // 워치 독립 경기 폴링 — 포그라운드 진입 시 재무장(당일 경기 종료/날짜 변경 후에도 복귀 시 재시작),
+    // 백그라운드 진입 시 중단해 배터리/네트워크 낭비 방지.
+    val pollerLifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(pollerLifecycleOwner, syncedTeamName) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> {
+                    val team = syncedTeamName
+                    if (team.isNotBlank() && team != "DEFAULT" && gameData?.isLive != true) {
+                        WatchGamePoller.startPolling(context, team)
+                    }
+                }
+                Lifecycle.Event.ON_STOP -> WatchGamePoller.stopPolling()
+                else -> Unit
+            }
         }
+        pollerLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { pollerLifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val teamName = if (syncedTeamName != "DEFAULT") syncedTeamName else (gameData?.myTeamName ?: "DEFAULT")
@@ -468,13 +447,12 @@ fun WatchApp(isAmbient: Boolean = false) {
         val token = homeRunTransitionToken ?: return@LaunchedEffect
         isPlayingVideo = true
         try {
-            homeRunPlayer.seekTo(0)
-            homeRunPlayer.play()
+            playEventClip(R.raw.penguin_homerun_clip)
             isHomeRunTransitionVisible = true
             delay(HOMERUN_SCREEN_DURATION_MS)
             if (homeRunTransitionToken == token) {
                 isHomeRunTransitionVisible = false
-                homeRunPlayer.pause()
+                eventPlayer.pause()
             }
         } finally {
             isPlayingVideo = false
@@ -485,13 +463,12 @@ fun WatchApp(isAmbient: Boolean = false) {
         val token = hitTransitionToken ?: return@LaunchedEffect
         isPlayingVideo = true
         try {
-            hitPlayer.seekTo(0)
-            hitPlayer.play()
+            playEventClip(R.raw.penguin_hit_clip)
             isHitTransitionVisible = true
             delay(HIT_SCREEN_DURATION_MS)
             if (hitTransitionToken == token) {
                 isHitTransitionVisible = false
-                hitPlayer.pause()
+                eventPlayer.pause()
             }
         } finally {
             isPlayingVideo = false
@@ -502,13 +479,12 @@ fun WatchApp(isAmbient: Boolean = false) {
         val token = doublePlayTransitionToken ?: return@LaunchedEffect
         isPlayingVideo = true
         try {
-            doublePlayPlayer.seekTo(0)
-            doublePlayPlayer.play()
+            playEventClip(R.raw.penguin_double_play_clip)
             isDoublePlayTransitionVisible = true
             delay(DOUBLE_PLAY_SCREEN_DURATION_MS)
             if (doublePlayTransitionToken == token) {
                 isDoublePlayTransitionVisible = false
-                doublePlayPlayer.pause()
+                eventPlayer.pause()
             }
         } finally {
             isPlayingVideo = false
@@ -519,13 +495,12 @@ fun WatchApp(isAmbient: Boolean = false) {
         val token = scoreTransitionToken ?: return@LaunchedEffect
         isPlayingVideo = true
         try {
-            scorePlayer.seekTo(0)
-            scorePlayer.play()
+            playEventClip(R.raw.penguin_score_clip)
             isScoreTransitionVisible = true
             delay(SCORE_SCREEN_DURATION_MS)
             if (scoreTransitionToken == token) {
                 isScoreTransitionVisible = false
-                scorePlayer.pause()
+                eventPlayer.pause()
             }
         } finally {
             isPlayingVideo = false
@@ -536,13 +511,12 @@ fun WatchApp(isAmbient: Boolean = false) {
         val token = victoryTransitionToken ?: return@LaunchedEffect
         isPlayingVideo = true
         try {
-            victoryPlayer.seekTo(0)
-            victoryPlayer.play()
+            playEventClip(R.raw.penguin_victory_clip)
             isVictoryTransitionVisible = true
             delay(VICTORY_SCREEN_DURATION_MS)
             if (victoryTransitionToken == token) {
                 isVictoryTransitionVisible = false
-                victoryPlayer.pause()
+                eventPlayer.pause()
             }
         } finally {
             isPlayingVideo = false
@@ -561,12 +535,11 @@ fun WatchApp(isAmbient: Boolean = false) {
             if (myTeamWon && eventVideoEnabled) {
                 isPlayingVideo = true
                 try {
-                    victoryPlayer.seekTo(0)
-                    victoryPlayer.play()
+                    playEventClip(R.raw.penguin_victory_clip)
                     isVictoryTransitionVisible = true
                     delay(VICTORY_SCREEN_DURATION_MS)
                     isVictoryTransitionVisible = false
-                    victoryPlayer.pause()
+                    eventPlayer.pause()
                 } finally {
                     isPlayingVideo = false
                 }
@@ -607,11 +580,11 @@ fun WatchApp(isAmbient: Boolean = false) {
                         label = "event_transition"
                     ) { state ->
                         when (state) {
-                            "victory" -> PlayerTransitionScreen(victoryPlayer)
-                            "homerun" -> PlayerTransitionScreen(homeRunPlayer)
-                            "score" -> PlayerTransitionScreen(scorePlayer)
-                            "double_play" -> PlayerTransitionScreen(doublePlayPlayer)
-                            "hit" -> PlayerTransitionScreen(hitPlayer)
+                            "victory",
+                            "homerun",
+                            "score",
+                            "double_play",
+                            "hit" -> PlayerTransitionScreen(eventPlayer)
                             else -> {
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     if (gameData != null) {

@@ -39,4 +39,10 @@ if [ -n "${SCHEDULE_REFRESH_UNTIL:-}" ]; then
   set -- "$@" --schedule-refresh-until "${SCHEDULE_REFRESH_UNTIL}"
 fi
 
+# 파일 로그는 기본 비활성: Railway 가 stdout 을 수집한다.
+# 로컬 디버깅 시 DISPATCHER_ENABLE_FILE_LOG=1 로 켜면 log/ 아래에 일 단위 회전(7일 보관) 파일이 남는다.
+if [ -n "${DISPATCHER_ENABLE_FILE_LOG:-}" ]; then
+  set -- "$@" --enable-file-log
+fi
+
 exec "$@"

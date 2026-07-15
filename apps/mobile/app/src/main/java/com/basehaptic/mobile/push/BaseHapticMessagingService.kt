@@ -14,6 +14,7 @@ import com.basehaptic.mobile.wear.WatchCompanionStatusRepository
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 
 class BaseHapticMessagingService : FirebaseMessagingService() {
 
@@ -86,9 +87,14 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
         )
 
         // 워치 우선 햅틱 정책: 워치 앱 설치/연결 상태면 폰 진동·소리 suppress (배너는 유지)
+        // GMS 조회가 느려도 알림 게시가 지연되지 않도록 1초 타임아웃 + 마지막 성공 조회 캐시 fallback.
         val watchActive = try {
-            runBlocking { WatchCompanionStatusRepository.getStatus(this@BaseHapticMessagingService) } ==
-                WatchCompanionStatus.Installed
+            val status = runBlocking {
+                withTimeoutOrNull(WATCH_STATUS_TIMEOUT_MS) {
+                    WatchCompanionStatusRepository.getStatus(this@BaseHapticMessagingService)
+                }
+            } ?: WatchCompanionStatusRepository.getCachedStatus(this)
+            status == WatchCompanionStatus.Installed
         } catch (e: Exception) {
             false
         }
@@ -119,6 +125,7 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "BaseHapticFCM"
+        private const val WATCH_STATUS_TIMEOUT_MS = 1_000L
         const val PREFS_NAME = "fcm_prefs"
         const val KEY_FCM_TOKEN = "fcm_token"
         const val EXTRA_GAME_ID = "extra_game_id"

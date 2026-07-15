@@ -30,6 +30,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +85,7 @@ import com.basehaptic.mobile.wear.WearThemeSyncManager
 import com.basehaptic.mobile.wear.WearWatchSyncBridge
 import com.basehaptic.mobile.ui.components.RewardedAdManager
 import com.basehaptic.mobile.ui.components.RewardedAdFormat
+import com.basehaptic.mobile.ui.components.RewardedAdResult
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.RequestConfiguration
 import java.time.LocalDate
@@ -563,24 +568,26 @@ fun BaseHapticApp(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var currentView by remember { mutableStateOf<Screen>(Screen.Home) }
-    val navigationHistory = remember { mutableStateListOf<Screen>() }
+    // 회전·분할화면·프로세스 킬에도 라이브 관람 위치를 잃지 않도록 내비게이션 핵심 상태는 rememberSaveable 로 보존
+    var currentView by rememberSaveable(stateSaver = ScreenSaver) { mutableStateOf<Screen>(Screen.Home) }
+    val navigationHistory = rememberSaveable(saver = NavigationHistorySaver) { mutableStateListOf<Screen>() }
     var activeTheme by remember { mutableStateOf(initialActiveTheme) }
     var activeCheerTheme by remember { mutableStateOf(initialActiveCheerTheme) }
-    var selectedGameId by remember { mutableStateOf<String?>(null) }
+    var selectedGameId by rememberSaveable { mutableStateOf<String?>(null) }
     var syncedGameId by remember { mutableStateOf(loadSavedGameId(context, KEY_SYNCED_GAME_ID)) }
     var activeLiveScoreGameId by remember { mutableStateOf(loadSavedGameId(context, KEY_ACTIVE_LIVE_SCORE_GAME_ID)) }
     var registeredLiveScoreSessionGameId by remember { mutableStateOf<String?>(null) }
     var registeredWatchSessionGameId by remember { mutableStateOf<String?>(null) }
-    var showWatchSyncDialog by remember { mutableStateOf(false) }
+    var showWatchSyncDialog by rememberSaveable { mutableStateOf(false) }
+    // showLiveScoreDialog 는 pendingLiveScoreGame(Game 객체, 저장 불가)에 의존하므로 remember 유지 — 잃어도 재요청 가능
     var showLiveScoreDialog by remember { mutableStateOf(false) }
     var showLiveScoreNotificationPermissionDialog by remember { mutableStateOf(false) }
     var resumeLiveScoreAfterNotificationSettings by remember { mutableStateOf(false) }
     var showGameNotStartedDialog by remember { mutableStateOf(false) }
-    var pendingWatchSyncGameId by remember { mutableStateOf<String?>(null) }
-    var pendingWatchSyncNavigateToLive by remember { mutableStateOf(false) }
-    var pendingWatchSyncHomeTeam by remember { mutableStateOf("") }
-    var pendingWatchSyncAwayTeam by remember { mutableStateOf("") }
+    var pendingWatchSyncGameId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingWatchSyncNavigateToLive by rememberSaveable { mutableStateOf(false) }
+    var pendingWatchSyncHomeTeam by rememberSaveable { mutableStateOf("") }
+    var pendingWatchSyncAwayTeam by rememberSaveable { mutableStateOf("") }
     var pendingLiveScoreGame by remember { mutableStateOf<Game?>(null) }
     var requiredUpdateConfig by remember { mutableStateOf<BackendGamesRepository.AppConfig?>(null) }
     val observedMyTeamGameStatus = remember { mutableStateMapOf<String, GameStatus>() }
@@ -699,15 +706,22 @@ fun BaseHapticApp(
         }
 
         showWatchSyncDialog = false
+        // 광고 게이트 정책: 보상 획득(REWARD_EARNED) 또는 광고 자체 로드 실패(LOAD_FAILED, no-fill/네트워크)만 통과.
+        // 보상 전에 광고를 닫으면(DISMISSED_WITHOUT_REWARD) 거부, 중복 요청(BUSY)은 pending 상태를 건드리지 않는 no-op.
         RewardedAdManager.loadAndShowAd(
             context = context,
             adUnitId = RewardedAdManager.WATCH_SYNC_AD_UNIT,
             format = RewardedAdFormat.REWARDED_INTERSTITIAL,
-        ) { rewardEarned ->
-            if (rewardEarned) {
-                WatchSyncAdLedger.markViewed(context, gameId)
+        ) { result ->
+            when (result) {
+                RewardedAdResult.REWARD_EARNED -> {
+                    WatchSyncAdLedger.markViewed(context, gameId)
+                    completeSync()
+                }
+                RewardedAdResult.LOAD_FAILED -> completeSync()
+                RewardedAdResult.DISMISSED_WITHOUT_REWARD -> closeWatchSyncDialog()
+                RewardedAdResult.BUSY -> Unit
             }
-            completeSync()
         }
     }
 
@@ -765,15 +779,21 @@ fun BaseHapticApp(
         }
 
         showLiveScoreDialog = false
+        // 광고 게이트 정책: 보상 획득 또는 광고 로드 실패만 통과, 조기 닫기는 거부, BUSY 는 no-op (confirmPendingWatchSync 와 동일)
         RewardedAdManager.loadAndShowAd(
             context = context,
             adUnitId = RewardedAdManager.LIVE_SCORE_AD_UNIT,
             format = RewardedAdFormat.REWARDED_INTERSTITIAL,
-        ) { rewardEarned ->
-            if (rewardEarned) {
-                LiveScoreAdLedger.markViewed(context, game.id)
+        ) { result ->
+            when (result) {
+                RewardedAdResult.REWARD_EARNED -> {
+                    LiveScoreAdLedger.markViewed(context, game.id)
+                    completeLiveScoreStart()
+                }
+                RewardedAdResult.LOAD_FAILED -> completeLiveScoreStart()
+                RewardedAdResult.DISMISSED_WITHOUT_REWARD -> closeLiveScoreDialog()
+                RewardedAdResult.BUSY -> Unit
             }
-            completeLiveScoreStart()
         }
     }
 
@@ -840,7 +860,8 @@ fun BaseHapticApp(
             }
         }
         val filter = IntentFilter(WearWatchSyncBridge.ACTION_WATCH_SYNC_RESPONSE)
-        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        // 앱 내부 브로드캐스트만 수신 — 외부 앱 노출 차단
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         consumePendingWatchSyncResponse()
 
         onDispose {
@@ -1186,11 +1207,14 @@ fun BaseHapticApp(
                             onPersistActiveCheerThemeId(theme?.id)
                         },
                         onUnlockTheme = { theme ->
+                            // 광고 게이트 정책: 보상 획득 또는 광고 로드 실패만 해금, 조기 닫기·BUSY 는 no-op (워치 동기화 게이트와 동일)
                             RewardedAdManager.loadAndShowAd(
                                 context = context,
                                 adUnitId = RewardedAdManager.THEME_STORE_AD_UNIT,
-                            ) { rewardEarned ->
-                                if (!rewardEarned) return@loadAndShowAd
+                            ) { result ->
+                                val granted = result == RewardedAdResult.REWARD_EARNED ||
+                                    result == RewardedAdResult.LOAD_FAILED
+                                if (!granted) return@loadAndShowAd
                                 unlockedThemeIds = unlockedThemeIds + theme.id
                                 onPersistUnlockedThemeIds(unlockedThemeIds)
                                 if (theme.id.startsWith("cheer_")) {
@@ -1664,3 +1688,36 @@ sealed class Screen {
     object WatchTest : Screen()
     object MyTeam : Screen()
 }
+
+// rememberSaveable 용 Screen <-> String 매핑 (R8 난독화와 무관하게 안정적인 이름 사용)
+private fun screenToName(screen: Screen): String = when (screen) {
+    Screen.Home -> "Home"
+    Screen.LiveGame -> "LiveGame"
+    Screen.Community -> "Community"
+    Screen.Store -> "Store"
+    Screen.Settings -> "Settings"
+    Screen.WatchTest -> "WatchTest"
+    Screen.MyTeam -> "MyTeam"
+}
+
+private fun screenFromName(name: String): Screen = when (name) {
+    "LiveGame" -> Screen.LiveGame
+    "Community" -> Screen.Community
+    "Store" -> Screen.Store
+    "Settings" -> Screen.Settings
+    "WatchTest" -> Screen.WatchTest
+    "MyTeam" -> Screen.MyTeam
+    else -> Screen.Home
+}
+
+private val ScreenSaver = Saver<Screen, String>(
+    save = { screenToName(it) },
+    restore = { screenFromName(it) }
+)
+
+private val NavigationHistorySaver = listSaver<SnapshotStateList<Screen>, String>(
+    save = { history -> history.map(::screenToName) },
+    restore = { saved ->
+        mutableStateListOf<Screen>().apply { addAll(saved.map(::screenFromName)) }
+    }
+)

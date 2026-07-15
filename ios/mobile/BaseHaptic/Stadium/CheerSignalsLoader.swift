@@ -136,7 +136,10 @@ final class CheerSignalsLoader {
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
+        // 백엔드 조회용 날짜(KST 기준) — 기기 캘린더/시간대 영향 차단
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(identifier: "Asia/Seoul")
         return f
     }()
 }

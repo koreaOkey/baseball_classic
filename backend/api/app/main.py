@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
-from collections import defaultdict
-from datetime import UTC, date, datetime
+from collections import OrderedDict, defaultdict
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, Callable
 import asyncio
 import hashlib
@@ -43,15 +43,16 @@ from .models import (
     TeamCheckinDaily,
     TeamCheckinSeason,
     TeamSubscriptionToken,
+    UserCheckinDaily,
+    UserCheckinSeason,
 )
 from .redis_bus import RedisBroadcastRelay
 from .apns import (
-    send_live_activity_push,
-    send_push,
-    send_push_to_tokens,
-    send_visible_push_to_tokens as send_apns_visible_push_to_tokens,
+    send_live_activity_push_with_result,
+    send_push_with_result,
+    send_visible_push_to_tokens_detailed as send_apns_visible_push_to_tokens_detailed,
 )
-from .fcm import send_visible_push_to_tokens as send_fcm_visible_push_to_tokens
+from .fcm import send_visible_push_to_tokens_detailed as send_fcm_visible_push_to_tokens_detailed
 from .schemas import (
     AppConfigOut,
     AppNoticeOut,
@@ -83,7 +84,7 @@ from .services import (
     upsert_team_records,
     upsert_game_from_snapshot,
 )
-from .weather import build_hourly_weather, build_weather_summary
+from .weather import KST, build_hourly_weather, build_weather_summary
 from .workers.cheer_validator import validate_pending_cheer_events
 
 
@@ -94,7 +95,38 @@ logging.basicConfig(
     force=True,
 )
 logger = logging.getLogger(__name__)
-_snapshot_ingest_locks: dict[str, threading.Lock] = defaultdict(threading.Lock)
+
+# 락 레지스트리는 무한히 자라지 않도록 LRU 캡을 둔다 (오래되고 미사용인 락부터 축출).
+_MAX_LOCK_REGISTRY_ENTRIES = 512
+_snapshot_ingest_locks: OrderedDict[str, threading.Lock] = OrderedDict()
+_snapshot_ingest_locks_guard = threading.Lock()
+
+
+def _evict_stale_locks(registry: OrderedDict[str, Any], *, keep_key: str) -> None:
+    """캡 초과 시 현재 잡혀 있지 않은 가장 오래된 락부터 제거."""
+    while len(registry) > _MAX_LOCK_REGISTRY_ENTRIES:
+        evicted = False
+        for old_key, old_lock in list(registry.items()):
+            if old_key == keep_key:
+                continue
+            if not old_lock.locked():
+                registry.pop(old_key, None)
+                evicted = True
+                break
+        if not evicted:
+            break
+
+
+def _get_snapshot_ingest_lock(game_id: str) -> threading.Lock:
+    with _snapshot_ingest_locks_guard:
+        lock = _snapshot_ingest_locks.get(game_id)
+        if lock is None:
+            lock = threading.Lock()
+            _snapshot_ingest_locks[game_id] = lock
+        else:
+            _snapshot_ingest_locks.move_to_end(game_id)
+        _evict_stale_locks(_snapshot_ingest_locks, keep_key=game_id)
+        return lock
 
 SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS = (0.2, 0.5, 1.0)
 redis_relay = RedisBroadcastRelay(
@@ -113,8 +145,20 @@ DEFAULT_STORE_URLS = {
     "ios": "itms-apps://itunes.apple.com/app/id6761336752",
 }
 
-_http_cache_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+_http_cache_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
 _http_cache_stats: dict[str, int] = defaultdict(int)
+
+
+def _get_http_cache_lock(lock_key: str) -> asyncio.Lock:
+    # 이벤트 루프에서만 접근하므로 별도 가드 없이 LRU 캡만 적용.
+    lock = _http_cache_locks.get(lock_key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _http_cache_locks[lock_key] = lock
+    else:
+        _http_cache_locks.move_to_end(lock_key)
+    _evict_stale_locks(_http_cache_locks, keep_key=lock_key)
+    return lock
 try:
     _BASE_EXCEPTION_GROUP_TYPES = (BaseExceptionGroup,)
 except NameError:
@@ -204,6 +248,7 @@ async def _get_or_set_http_cache_payload(
     cache_key: str,
     ttl_sec: int,
     loader: Callable[[], dict[str, Any]],
+    lock_key: str | None = None,
 ) -> dict[str, Any]:
     cached = await redis_relay.get_cache(cache_key)
     if cached is not None:
@@ -211,7 +256,7 @@ async def _get_or_set_http_cache_payload(
         return cached
 
     _http_cache_stats["miss"] += 1
-    lock = _http_cache_locks[cache_key]
+    lock = _get_http_cache_lock(lock_key or cache_key)
     async with lock:
         cached = await redis_relay.get_cache(cache_key)
         if cached is not None:
@@ -304,8 +349,60 @@ def _team_record_message(*, row: TeamRecordOut) -> dict[str, Any]:
     }
 
 
+# 만료 푸시 데이터 정리 주기 (일 1회) 및 보존 기간
+PUSH_DATA_PURGE_INTERVAL_SEC = 24 * 60 * 60
+PUSH_DATA_PURGE_INITIAL_DELAY_SEC = 120
+LIVE_ROW_MAX_AGE_DAYS = 7       # live_activity_tokens / live_view_sessions
+DEVICE_TOKEN_MAX_AGE_DAYS = 90  # device_tokens / team_subscription_tokens
+
+
+def _purge_stale_push_rows() -> dict[str, int]:
+    """오래된 푸시/관람 데이터 삭제 (모든 대상 테이블에 updated_at 존재)."""
+    assert_db_available()
+    now = datetime.now(UTC)
+    live_cutoff = now - timedelta(days=LIVE_ROW_MAX_AGE_DAYS)
+    token_cutoff = now - timedelta(days=DEVICE_TOKEN_MAX_AGE_DAYS)
+    deleted: dict[str, int] = {}
+    with SessionLocal() as db:
+        deleted["live_activity_tokens"] = int(db.execute(
+            delete(LiveActivityToken).where(LiveActivityToken.updated_at < live_cutoff)
+        ).rowcount or 0)
+        deleted["live_view_sessions"] = int(db.execute(
+            delete(LiveViewSession).where(LiveViewSession.updated_at < live_cutoff)
+        ).rowcount or 0)
+        deleted["device_tokens"] = int(db.execute(
+            delete(DeviceToken).where(DeviceToken.updated_at < token_cutoff)
+        ).rowcount or 0)
+        deleted["team_subscription_tokens"] = int(db.execute(
+            delete(TeamSubscriptionToken).where(TeamSubscriptionToken.updated_at < token_cutoff)
+        ).rowcount or 0)
+        db.commit()
+    return deleted
+
+
+async def _push_data_purge_loop() -> None:
+    """앱 수명 동안 하루 1회 만료 푸시 데이터를 정리하는 백그라운드 태스크."""
+    await asyncio.sleep(PUSH_DATA_PURGE_INITIAL_DELAY_SEC)
+    while True:
+        try:
+            deleted = await asyncio.to_thread(_purge_stale_push_rows)
+            if any(deleted.values()):
+                logger.info("[push-purge] stale rows deleted: %s", deleted)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("[push-purge] purge failed", exc_info=True)
+        await asyncio.sleep(PUSH_DATA_PURGE_INTERVAL_SEC)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if not settings.supabase_jwt_secret:
+        # fail closed: 시크릿이 없으면 토큰 인증 요청은 전부 401 로 거부된다.
+        logger.critical(
+            "SUPABASE_JWT_SECRET is not configured; "
+            "token-authenticated endpoints (/account, /cheer-events*) will reject all requests"
+        )
     await redis_relay.start(_on_redis_live_message)
     remaining = await _redis_db_unavailable_remaining_sec(hold_expired=True)
     if remaining > 0:
@@ -318,9 +415,15 @@ async def lifespan(_: FastAPI):
         except Exception:
             await _mark_db_unavailable_global()
             logger.exception("startup database initialization failed; continuing in degraded mode")
+    purge_task = asyncio.create_task(_push_data_purge_loop())
     try:
         yield
     finally:
+        purge_task.cancel()
+        try:
+            await purge_task
+        except (asyncio.CancelledError, Exception):
+            pass
         await redis_relay.stop()
 
 
@@ -475,7 +578,11 @@ def get_app_config(
 
 
 @app.get("/debug/relay-stats")
-async def debug_relay_stats() -> dict[str, Any]:
+async def debug_relay_stats(
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+) -> dict[str, Any]:
+    if x_api_key is None or not secrets.compare_digest(x_api_key, settings.crawler_api_key):
+        raise HTTPException(status_code=401, detail="invalid api key")
     import os as _os
     import socket as _socket
     return {
@@ -593,7 +700,8 @@ def _get_game_payload(game_id: str) -> dict[str, Any]:
         game = db.get(Game, game_id)
         if game is None:
             raise HTTPException(status_code=404, detail="game not found")
-        return _game_summary_payload(game)
+    # 날씨 네트워크 조회(최대 수 초 블로킹)는 DB 세션/커넥션을 반납한 뒤 수행한다.
+    return _game_summary_payload(game)
 
 
 def _game_summary_payload(game: Game, *, allow_weather_network: bool = True) -> dict[str, Any]:
@@ -612,29 +720,35 @@ def _game_summary_payload(game: Game, *, allow_weather_network: bool = True) -> 
     return payload
 
 
+def _load_game_for_weather(game_id: str) -> Game | None:
+    assert_db_available()
+    with SessionLocal() as db:
+        return db.get(Game, game_id)
+
+
 @app.get("/games/{game_id}/weather", response_model=GameWeatherHourlyOut)
 async def get_game_weather(
     game_id: str,
     weather_date: date | None = Query(default=None, alias="date"),
 ) -> dict[str, Any]:
-    assert_db_available()
-    with SessionLocal() as db:
-        game = db.get(Game, game_id)
-        if game is None:
-            raise HTTPException(status_code=404, detail="game not found")
-        target_date = weather_date or date.today()
+    # 게임 조회는 세션 안에서 끝내고, 최대 십수 초 걸리는 날씨 네트워크 조회는
+    # DB 세션/커넥션을 반납한 뒤 수행한다.
+    game = await asyncio.to_thread(_load_game_for_weather, game_id)
+    if game is None:
+        raise HTTPException(status_code=404, detail="game not found")
+    target_date = weather_date or datetime.now(KST).date()
 
-        try:
-            payload = await asyncio.to_thread(
-                build_hourly_weather,
-                game,
-                service_key=settings.weather_service_key,
-                api_base_url=settings.weather_api_base_url,
-                target_date=target_date,
-            )
-        except Exception:
-            logger.warning("hourly weather unavailable: game_id=%s", game_id, exc_info=True)
-            payload = None
+    try:
+        payload = await asyncio.to_thread(
+            build_hourly_weather,
+            game,
+            service_key=settings.weather_service_key,
+            api_base_url=settings.weather_api_base_url,
+            target_date=target_date,
+        )
+    except Exception:
+        logger.warning("hourly weather unavailable: game_id=%s", game_id, exc_info=True)
+        payload = None
 
     if payload is None:
         raise HTTPException(status_code=503, detail="weather unavailable")
@@ -685,6 +799,8 @@ async def get_game_events(
             inning_number=inning_number,
             scoring_only=scoring_only,
         ),
+        # after 커서까지 락 키에 포함하면 락 엔트리가 폭증하므로 game_id 단위로만 잠근다.
+        lock_key=f"http:game_events:lock:{game_id}",
     )
 
 
@@ -726,16 +842,56 @@ def _get_game_events_payload(
 # MARK: - Account Deletion
 
 def _extract_user_id_from_token(authorization: str) -> str:
-    """JWT에서 user_id(sub)를 추출. 서명 검증은 Supabase가 담당."""
+    """Supabase JWT 서명(HS256)을 검증하고 user_id(sub)를 추출.
+
+    시크릿 미설정 시 무검증 디코드로 폴백하지 않고 401 로 fail-closed 한다.
+    """
+    if not settings.supabase_jwt_secret:
+        logger.critical(
+            "SUPABASE_JWT_SECRET is not configured; rejecting token-authenticated request"
+        )
+        raise HTTPException(status_code=401, detail="token verification not configured")
+
     token = authorization.removeprefix("Bearer ").strip()
     try:
-        payload = jwt.decode(token, options={"verify_signature": False})
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="invalid token: missing sub")
-        return user_id
-    except jwt.DecodeError:
+        payload = jwt.decode(
+            token,
+            key=settings.supabase_jwt_secret,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+    except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="invalid token")
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="invalid token: missing sub")
+    return user_id
+
+
+def _purge_user_backend_rows(user_id: str) -> None:
+    """탈퇴한 사용자의 백엔드 데이터 삭제 (best-effort, 실패해도 탈퇴는 성공 처리)."""
+    try:
+        with SessionLocal() as db:
+            cheer_deleted = db.execute(
+                delete(CheerEvent).where(CheerEvent.user_id == user_id)
+            ).rowcount
+            daily_deleted = db.execute(
+                delete(UserCheckinDaily).where(UserCheckinDaily.user_id == user_id)
+            ).rowcount
+            season_deleted = db.execute(
+                delete(UserCheckinSeason).where(UserCheckinSeason.user_id == user_id)
+            ).rowcount
+            session_deleted = db.execute(
+                delete(LiveViewSession).where(LiveViewSession.user_key == user_id)
+            ).rowcount
+            db.commit()
+        logger.info(
+            "account data purged: user_id=%s cheer_events=%d user_checkin_daily=%d "
+            "user_checkin_season=%d live_view_sessions=%d",
+            user_id, cheer_deleted, daily_deleted, season_deleted, session_deleted,
+        )
+    except Exception:
+        logger.exception("account data purge failed: user_id=%s", user_id)
 
 
 @app.delete("/account")
@@ -763,6 +919,9 @@ async def delete_account(
     if resp.status_code >= 400 and resp.status_code != 404:
         logger.error("supabase delete user failed: status=%s body=%s", resp.status_code, resp.text)
         raise HTTPException(status_code=502, detail="failed to delete account")
+
+    # Supabase 계정 삭제 성공 시 백엔드 보유 데이터도 함께 정리 (best-effort)
+    await asyncio.to_thread(_purge_user_backend_rows, user_id)
 
     return {"status": "ok"}
 
@@ -792,6 +951,8 @@ def register_device_token(
                 "platform": payload.platform,
                 "is_sandbox": payload.is_sandbox,
                 "display_name_style": payload.display_name_style,
+                # 재등록 시 최근 사용 시각 갱신 (90일 미사용 purge 기준)
+                "updated_at": datetime.now(UTC),
             },
         )
         db.execute(stmt)
@@ -829,12 +990,6 @@ def unregister_device_token(
     game_id: str = Query(...),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    db.execute(
-        select(DeviceToken).where(
-            DeviceToken.token == token,
-            DeviceToken.game_id == game_id,
-        )
-    )
     row = db.execute(
         select(DeviceToken).where(
             DeviceToken.token == token,
@@ -982,6 +1137,8 @@ def register_team_subscription(
                 "platform": payload.platform,
                 "is_sandbox": payload.is_sandbox,
                 "display_name_style": payload.display_name_style,
+                # 재등록 시 최근 사용 시각 갱신 (90일 미사용 purge 기준)
+                "updated_at": datetime.now(UTC),
             },
         )
         db.execute(stmt)
@@ -1101,6 +1258,74 @@ async def _invalidate_push_token_cache(game_id: str) -> None:
 
 async def _invalidate_live_activity_token_cache(game_id: str) -> None:
     await redis_relay.delete_cache(_LIVE_ACTIVITY_TOKEN_CACHE_KEY.format(game_id=game_id))
+
+
+# MARK: - Dead push token pruning (B3)
+
+def _delete_device_token_rows(game_id: str, tokens: list[str]) -> int:
+    with SessionLocal() as db:
+        result = db.execute(
+            delete(DeviceToken).where(
+                DeviceToken.game_id == game_id,
+                DeviceToken.token.in_(tokens),
+            )
+        )
+        db.commit()
+        return int(result.rowcount or 0)
+
+
+async def _prune_dead_device_tokens(game_id: str, tokens: list[str]) -> None:
+    """APNs 영구 실패(410 Unregistered / BadDeviceToken) 토큰을 DB 에서 정리."""
+    if not tokens:
+        return
+    try:
+        deleted = await asyncio.to_thread(_delete_device_token_rows, game_id, tokens)
+        await _invalidate_push_token_cache(game_id)
+        logger.info("[push-prune] device_tokens pruned: game_id=%s count=%d", game_id, deleted)
+    except Exception:
+        logger.warning("[push-prune] device_tokens prune failed: game_id=%s", game_id, exc_info=True)
+
+
+def _delete_team_subscription_token_rows(tokens: list[str]) -> int:
+    with SessionLocal() as db:
+        result = db.execute(
+            delete(TeamSubscriptionToken).where(TeamSubscriptionToken.token.in_(tokens))
+        )
+        db.commit()
+        return int(result.rowcount or 0)
+
+
+async def _prune_dead_team_subscription_tokens(tokens: list[str]) -> None:
+    if not tokens:
+        return
+    try:
+        deleted = await asyncio.to_thread(_delete_team_subscription_token_rows, tokens)
+        logger.info("[push-prune] team_subscription_tokens pruned: count=%d", deleted)
+    except Exception:
+        logger.warning("[push-prune] team_subscription_tokens prune failed", exc_info=True)
+
+
+def _delete_live_activity_token_rows(game_id: str, tokens: list[str]) -> int:
+    with SessionLocal() as db:
+        result = db.execute(
+            delete(LiveActivityToken).where(
+                LiveActivityToken.game_id == game_id,
+                LiveActivityToken.token.in_(tokens),
+            )
+        )
+        db.commit()
+        return int(result.rowcount or 0)
+
+
+async def _prune_dead_live_activity_tokens(game_id: str, tokens: list[str]) -> None:
+    if not tokens:
+        return
+    try:
+        deleted = await asyncio.to_thread(_delete_live_activity_token_rows, game_id, tokens)
+        await _invalidate_live_activity_token_cache(game_id)
+        logger.info("[push-prune] live_activity_tokens pruned: game_id=%s count=%d", game_id, deleted)
+    except Exception:
+        logger.warning("[push-prune] live_activity_tokens prune failed: game_id=%s", game_id, exc_info=True)
 
 
 # 배포된 워치(2026-04-05 커밋 30720af 이후)는 home_team/away_team을 마스코트로
@@ -1373,7 +1598,7 @@ async def _send_game_start_notification(
 
         if ios_targets:
             tasks.append(
-                send_apns_visible_push_to_tokens(
+                send_apns_visible_push_to_tokens_detailed(
                     ios_targets,
                     title=title,
                     body=body,
@@ -1384,12 +1609,20 @@ async def _send_game_start_notification(
             total_ios += len(ios_targets)
         if android_tokens:
             tasks.append(
-                send_fcm_visible_push_to_tokens(android_tokens, title=title, body=body, data=data)
+                send_fcm_visible_push_to_tokens_detailed(android_tokens, title=title, body=body, data=data)
             )
             total_android += len(android_tokens)
 
+    dead_tokens: list[str] = []
     if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, BaseException):
+                continue
+            _, permanently_failed = result
+            dead_tokens.extend(permanently_failed)
+    # 영구 실패(APNs Unregistered/BadDeviceToken, FCM Unregistered) 토큰 정리
+    await _prune_dead_team_subscription_tokens(dead_tokens)
     logger.info(
         "[game-start-push] gameId=%s ios=%d android=%d teams=%s",
         game_id, total_ios, total_android, sorted(f"{team}:{style}" for team, style in grouped.keys()),
@@ -1440,6 +1673,8 @@ async def _send_push_for_game_events(
         "pitcher_pitch_count": pitcher_pitch_count if pitcher_pitch_count is not None else -1,
     }
 
+    dead_tokens: set[str] = set()
+
     async def _fanout(push_payload: dict[str, Any]) -> None:
         coros = []
         for token in tokens:
@@ -1449,13 +1684,21 @@ async def _send_push_for_game_events(
                 "my_team": _normalize_my_team_for_watch(info["my_team"]),
                 "display_name_style": info["display_name_style"],
             }
-            coros.append(send_push(
+            coros.append(send_push_with_result(
                 token,
                 payload_with_team,
                 use_sandbox=info["is_sandbox"],
                 platform=info["platform"],
             ))
-        await asyncio.gather(*coros, return_exceptions=True)
+        results = await asyncio.gather(*coros, return_exceptions=True)
+        for token, result in zip(tokens, results):
+            if isinstance(result, BaseException):
+                continue
+            ok, permanent = result
+            # android 행은 APNs 판정으로 삭제하지 않는다 (FCM 토큰이 APNs 에서
+            # BadDeviceToken 으로 보일 수 있으므로 오삭제 방지).
+            if not ok and permanent and token_info[token]["platform"] != "android":
+                dead_tokens.add(token)
 
     if event_payloads:
         for event in event_payloads:
@@ -1466,6 +1709,9 @@ async def _send_push_for_game_events(
             })
     else:
         await _fanout(base_payload)
+
+    if dead_tokens:
+        await _prune_dead_device_tokens(game_id, sorted(dead_tokens))
 
 
 def _load_live_activity_tokens(game_id: str) -> list[str]:
@@ -1505,10 +1751,19 @@ async def _send_live_activity_update(
         "lastEventType": last_event_type,
     }
 
-    await asyncio.gather(
-        *(send_live_activity_push(token, content_state, event_type=event_type) for token in tokens),
+    results = await asyncio.gather(
+        *(send_live_activity_push_with_result(token, content_state, event_type=event_type) for token in tokens),
         return_exceptions=True,
     )
+    dead_tokens: list[str] = []
+    for token, result in zip(tokens, results):
+        if isinstance(result, BaseException):
+            continue
+        ok, permanent = result
+        if not ok and permanent:
+            dead_tokens.append(token)
+    if dead_tokens:
+        await _prune_dead_live_activity_tokens(game_id, dead_tokens)
 
 
 @app.get("/team-records", response_model=list[TeamRecordOut])
@@ -1629,7 +1884,7 @@ def ingest_crawler_snapshot(
     if x_api_key is None or not secrets.compare_digest(x_api_key, settings.crawler_api_key):
         raise HTTPException(status_code=401, detail="invalid crawler api key")
 
-    game_lock = _snapshot_ingest_locks[game_id]
+    game_lock = _get_snapshot_ingest_lock(game_id)
     with game_lock:
         return _ingest_crawler_snapshot_locked(game_id=game_id, payload=payload, background_tasks=background_tasks, db=db)
 
@@ -2034,7 +2289,7 @@ def get_cheer_signals(
     db: Annotated[Session, Depends(get_db)],
     target_date: date | None = Query(default=None, alias="date"),
 ) -> dict[str, Any]:
-    resolved_date = target_date or datetime.now(UTC).date()
+    resolved_date = target_date or datetime.now(KST).date()
     return {
         "date": resolved_date.isoformat(),
         "items": build_cheer_signals(db, target_date=resolved_date),
@@ -2133,24 +2388,21 @@ def get_team_rankings(
             for idx, r in enumerate(rows)
         ]
     else:
-        from datetime import timedelta
-
-        today = date.today()
+        today = datetime.now(KST).date()
         since = today - timedelta(days=7)
+        total_count = func.sum(TeamCheckinDaily.count).label("count")
         rows = (
             db.execute(
-                select(TeamCheckinDaily.team_code, TeamCheckinDaily.count)
+                select(TeamCheckinDaily.team_code, total_count)
                 .where(TeamCheckinDaily.date >= since.isoformat())
+                .group_by(TeamCheckinDaily.team_code)
+                .order_by(total_count.desc(), TeamCheckinDaily.team_code.asc())
             )
             .all()
         )
-        agg: dict[str, int] = defaultdict(int)
-        for team_code, count in rows:
-            agg[team_code] += count
-        sorted_items = sorted(agg.items(), key=lambda x: x[1], reverse=True)
         items = [
-            {"team_code": team_code, "count": count, "rank": idx + 1}
-            for idx, (team_code, count) in enumerate(sorted_items)
+            {"team_code": row.team_code, "count": int(row.count), "rank": idx + 1}
+            for idx, row in enumerate(rows)
         ]
     # 집계는 iOS + Android raw 이벤트를 합산한 값. 분리 응답이 필요하면 별도 엔드포인트로 추가.
     return {
@@ -2168,6 +2420,8 @@ def get_my_cheer_events(
     since: str | None = Query(None, description="ISO8601 또는 YYYY-MM-DD. 시즌 시작 등 하한."),
     until: str | None = Query(None, description="ISO8601 또는 YYYY-MM-DD. 상한."),
     only_valid: bool = Query(True, description="false 시 invalid/suspicious도 포함."),
+    limit: int = Query(200, ge=1, le=500, description="최대 반환 개수."),
+    offset: int = Query(0, ge=0, description="페이지네이션 오프셋."),
 ) -> dict[str, Any]:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="authorization header required")
@@ -2185,7 +2439,7 @@ def get_my_cheer_events(
             stmt = stmt.where(CheerEvent.client_ts <= datetime.fromisoformat(until.replace("Z", "+00:00")))
         except ValueError:
             raise HTTPException(status_code=400, detail="until must be ISO8601 or YYYY-MM-DD")
-    stmt = stmt.order_by(CheerEvent.client_ts.desc())
+    stmt = stmt.order_by(CheerEvent.client_ts.desc()).limit(limit).offset(offset)
 
     rows = db.execute(stmt).scalars().all()
     items = [

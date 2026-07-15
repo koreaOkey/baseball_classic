@@ -43,7 +43,7 @@ class MobileDataLayerListenerService : WearableListenerService() {
             if (accepted) {
                 notifyPhoneAdRequired(gameId)
             }
-            sendBroadcast(Intent(WearWatchSyncBridge.ACTION_WATCH_SYNC_RESPONSE))
+            sendBroadcast(Intent(WearWatchSyncBridge.ACTION_WATCH_SYNC_RESPONSE).setPackage(packageName))
         }
     }
 

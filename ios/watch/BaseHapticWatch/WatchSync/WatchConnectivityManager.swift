@@ -55,6 +55,12 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             print("[WatchConnectivity] Activated: \(activationState.rawValue)")
         }
 
+        // 활성화 전에 보류된 워치 APNs 토큰이 있으면 재전송 (transferUserInfo로 큐잉되어 전달 보장)
+        if activationState == .activated, let pendingToken = pendingWatchPushToken {
+            pendingWatchPushToken = nil
+            sendWatchPushToken(pendingToken)
+        }
+
         let ctx = session.receivedApplicationContext
 
         // applicationContext에서 게임 데이터 복원
@@ -449,12 +455,14 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     func handleDirectPushHapticEvent(eventType: String) {
         let upper = eventType.uppercased()
         print("⌚ [WatchConn] Direct push haptic: \(upper) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
-        latestEventType = upper
-        latestEventTimestamp = Date()
+        // 필터에 걸린 이벤트는 latestEventType도 갱신하지 않는다 (handleHapticEvent와 동일).
+        // 갱신하면 차단된 이벤트가 전체 화면 애니메이션으로 노출됨.
         guard Self.isEventTypeAllowedByFilter(eventType) else {
             print("⌚ [WatchConn] event filter blocked push haptic: \(upper)")
             return
         }
+        latestEventType = upper
+        latestEventTimestamp = Date()
         triggerHaptic(eventType: eventType)
     }
 
@@ -466,12 +474,18 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     // MARK: - Send Watch Push Token to iPhone
 
+    /// 세션 활성화 전에 도착한 워치 APNs 토큰 보류분 — activationDidCompleteWith에서 재전송
+    private var pendingWatchPushToken: String?
+
     /// 워치 APNs 토큰을 iPhone으로 전달 (iPhone이 백엔드에 등록)
     func sendWatchPushToken(_ token: String) {
         guard WCSession.default.activationState == .activated else {
+            // 토큰을 버리지 않고 보류 → 활성화 완료 시 재전송
+            pendingWatchPushToken = token
             print("⌚ [WatchConn] Session not activated, deferring watch token send")
             return
         }
+        pendingWatchPushToken = nil
 
         let message: [String: Any] = [
             "type": "watch_push_token",
