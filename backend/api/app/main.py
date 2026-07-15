@@ -423,13 +423,16 @@ def _purge_expired_game_rows() -> dict[str, int]:
         ]
         if not expired_ids:
             return deleted
-        # game_notes.event_cursor 가 game_events 를 SET NULL 로 참조하므로 notes 를 먼저 지운다.
+        # FK 제약에 맞춘 삭제 순서 (db/migrations/20260302_001 기준):
+        # - game_batter_stats → game_lineup_slots 복합 FK (RESTRICT) → batter 를 lineup 보다 먼저
+        # - game_notes.event_cursor / game_lineup_slots.*_event_cursor → game_events (SET NULL)
+        #   → events 를 맨 마지막에 지워 불필요한 SET NULL 업데이트를 피한다
         targets = (
             (GameNote, GameNote.id),
-            (GameEvent, GameEvent.cursor),
-            (GameLineupSlot, GameLineupSlot.id),
             (GameBatterStat, GameBatterStat.id),
             (GamePitcherStat, GamePitcherStat.id),
+            (GameLineupSlot, GameLineupSlot.id),
+            (GameEvent, GameEvent.cursor),
         )
         for model, pk in targets:
             total = 0
