@@ -440,7 +440,8 @@ final class BackendGamesRepository {
         let schedules = await fetchMyTeamScheduleRangeCached(
             selectedTeam: selectedTeam,
             fromDate: fromDate,
-            toDate: toDate
+            toDate: toDate,
+            cacheScope: "upcoming" // 홈 카드(30일)와 일정 시트(시즌 전체)가 같은 캐시를 덮어쓰지 않도록 분리
         ) ?? []
         return schedules
             .filter { $0.gameDate > today && $0.game.status == .scheduled }
@@ -488,11 +489,49 @@ final class BackendGamesRepository {
         }
     }
 
+    /// TTL을 무시하고 조건(팀/기간/버전)이 일치하는 일정 캐시를 즉시 읽는다.
+    /// 시트를 열 때 오래된 데이터라도 먼저 그려주고(stale-while-revalidate),
+    /// 신선 여부는 `isStale` 플래그로 알려 호출 측이 백그라운드 갱신을 결정하게 한다.
+    func peekMyTeamScheduleRangeCache(
+        selectedTeam: Team,
+        fromDate: Date,
+        toDate: Date,
+        cacheScope: String? = nil
+    ) -> (items: [UpcomingGameSchedule], isStale: Bool)? {
+        guard selectedTeam != .none else { return nil }
+        let calendar = Calendar.current
+        let normalizedFrom = calendar.startOfDay(for: fromDate)
+        let normalizedTo = max(calendar.startOfDay(for: toDate), normalizedFrom)
+        let fromString = dateFormatter.string(from: normalizedFrom)
+        let toString = dateFormatter.string(from: normalizedTo)
+        let defaults = UserDefaults.standard
+        let keyPrefix = scheduleRangeCacheKeyPrefix(scope: cacheScope)
+
+        guard defaults.string(forKey: "\(keyPrefix)_team") == selectedTeam.rawValue,
+              defaults.string(forKey: "\(keyPrefix)_from") == fromString,
+              defaults.string(forKey: "\(keyPrefix)_to") == toString,
+              defaults.integer(forKey: "\(keyPrefix)_version") == scheduleCacheVersion,
+              let payload = defaults.string(forKey: "\(keyPrefix)_payload"),
+              !payload.isEmpty,
+              let items = parseScheduleRangePayload(payload, selectedTeam: selectedTeam),
+              !items.isEmpty else {
+            return nil
+        }
+        let cachedAt = defaults.double(forKey: "\(keyPrefix)_cached_at")
+        return (items: items, isStale: !isFreshScheduleCache(cachedAt))
+    }
+
+    private func scheduleRangeCacheKeyPrefix(scope: String?) -> String {
+        guard let scope, !scope.isEmpty else { return "schedule_range" }
+        return "schedule_range_\(scope)"
+    }
+
     func fetchMyTeamScheduleRangeCached(
         selectedTeam: Team,
         fromDate: Date,
         toDate: Date,
-        forceRefresh: Bool = false
+        forceRefresh: Bool = false,
+        cacheScope: String? = nil
     ) async -> [UpcomingGameSchedule]? {
         guard selectedTeam != .none else { return [] }
         let calendar = Calendar.current
@@ -501,7 +540,7 @@ final class BackendGamesRepository {
         let fromString = dateFormatter.string(from: normalizedFrom)
         let toString = dateFormatter.string(from: normalizedTo)
         let defaults = UserDefaults.standard
-        let keyPrefix = "schedule_range"
+        let keyPrefix = scheduleRangeCacheKeyPrefix(scope: cacheScope)
         let cachedTeam = defaults.string(forKey: "\(keyPrefix)_team")
         let cachedFrom = defaults.string(forKey: "\(keyPrefix)_from")
         let cachedTo = defaults.string(forKey: "\(keyPrefix)_to")
@@ -523,7 +562,7 @@ final class BackendGamesRepository {
             }
         }
 
-        if let freshPayload = await fetchGamesByDateRangePayload(fromDate: normalizedFrom, toDate: normalizedTo),
+        if let freshPayload = await fetchGamesByDateRangePayload(selectedTeam: selectedTeam, fromDate: normalizedFrom, toDate: normalizedTo),
            let fresh = parseScheduleRangePayload(freshPayload, selectedTeam: selectedTeam) {
             if fresh.isEmpty {
                 defaults.removeObject(forKey: "\(keyPrefix)_payload")
@@ -605,7 +644,42 @@ final class BackendGamesRepository {
         }
     }
 
-    private func fetchGamesByDateRangePayload(fromDate: Date, toDate: Date) async -> String? {
+    /// 팀 필터를 지원하는 신규 백엔드용 단일 요청.
+    /// 팀당 시즌 전체 경기(~144)는 limit=500 안에 모두 들어오므로 요청 1번으로 끝난다.
+    /// 실패(구버전 400 아님 — team 파라미터는 무시됨, 네트워크 오류 등) 시 nil을 반환해 월 단위 폴백을 태운다.
+    private func fetchTeamGamesRangePayload(selectedTeam: Team, fromDate: Date, toDate: Date) async -> String? {
+        guard selectedTeam != .none else { return nil }
+        let fromString = dateFormatter.string(from: fromDate)
+        let toString = dateFormatter.string(from: toDate)
+        let baseURL = BackendConfig.baseURL.trimmingSuffix("/")
+        // 팀 코드는 Team enum rawValue(DOOSAN/LG/SSG/...)와 백엔드 코드가 동일하다.
+        let endpoint = "\(baseURL)/games?team=\(selectedTeam.rawValue)&from=\(fromString)&to=\(toString)&limit=500"
+        guard let payload = await getJSON(endpoint: endpoint, parser: { data in
+            String(data: data, encoding: .utf8)
+        }) else { return nil }
+
+        // 구버전 백엔드는 team 파라미터를 무시하고 리그 전체를 반환한다.
+        // 그 경우 시즌 전체 요청은 limit=500에 잘려 일정이 누락될 수 있으므로,
+        // 응원팀 외 경기가 섞여 있으면 서버 필터 미지원으로 판단하고 월 단위 폴백을 사용한다.
+        guard let data = payload.data(using: .utf8),
+              let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return nil
+        }
+        let serverFiltered = items.allSatisfy { item in
+            let home = Team.fromBackendName(item["homeTeam"] as? String ?? "")
+            let away = Team.fromBackendName(item["awayTeam"] as? String ?? "")
+            return home == selectedTeam || away == selectedTeam
+        }
+        return serverFiltered ? payload : nil
+    }
+
+    private func fetchGamesByDateRangePayload(selectedTeam: Team, fromDate: Date, toDate: Date) async -> String? {
+        // 1) 신규 백엔드: 팀 필터 단일 요청 (시즌 전체도 1회 왕복)
+        if let teamPayload = await fetchTeamGamesRangePayload(selectedTeam: selectedTeam, fromDate: fromDate, toDate: toDate) {
+            return teamPayload
+        }
+
+        // 2) 폴백: 기존 리그 전체 월 단위 순차 요청 (클라이언트 측 응원팀 필터는 파싱 단계에서 유지)
         let calendar = Calendar.current
         if calendar.isDate(fromDate, equalTo: toDate, toGranularity: .month) {
             return await fetchGamesByDateRangeRaw(fromDate: fromDate, toDate: toDate)

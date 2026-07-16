@@ -142,6 +142,8 @@ redis_relay = RedisBroadcastRelay(
 HTTP_LIVE_CACHE_TTL_SEC = 5
 HTTP_STANDINGS_CACHE_TTL_SEC = 30
 HTTP_STALE_CACHE_TTL_SEC = 300
+# 오늘이 포함되지 않은 일정 범위(전부 과거/전부 미래)는 크롤러 임포트 때만 바뀌므로 길게 캐시한다.
+HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC = 600
 DB_UNAVAILABLE_CACHE_KEY = "ops:db_unavailable:v1"
 DB_UNAVAILABLE_CACHE_TTL_SEC = 24 * 60 * 60
 DEFAULT_STORE_URLS = {
@@ -679,30 +681,58 @@ async def list_games(
     game_date: date | None = Query(default=None, alias="date"),
     from_date: date | None = Query(default=None, alias="from"),
     to_date: date | None = Query(default=None, alias="to"),
+    team: str | None = Query(default=None, min_length=2, max_length=32),
     limit: int = Query(default=20, ge=1, le=500),
 ) -> list[dict[str, Any]]:
+    team_labels: set[str] | None = None
+    if team is not None:
+        team_labels = _team_filter_labels(team)
+        if team_labels is None:
+            raise HTTPException(status_code=400, detail="unknown team code")
     cache_key = (
         "http:games:v1:"
         f"status={(status.value if status else '')}:"
         f"date={(game_date.isoformat() if game_date else '')}:"
         f"from={(from_date.isoformat() if from_date else '')}:"
         f"to={(to_date.isoformat() if to_date else '')}:"
+        f"team={(team.strip().upper() if team else '')}:"
         f"limit={limit}"
     )
     payload = await _get_or_set_http_cache_payload(
         cache_key=cache_key,
-        ttl_sec=HTTP_LIVE_CACHE_TTL_SEC,
+        ttl_sec=_games_list_cache_ttl(game_date=game_date, from_date=from_date, to_date=to_date),
         loader=lambda: {
             "items": _list_games_payload(
                 status=status,
                 game_date=game_date,
                 from_date=from_date,
                 to_date=to_date,
+                team_labels=team_labels,
                 limit=limit,
             )
         },
     )
     return payload.get("items") or []
+
+
+def _games_list_cache_ttl(*, game_date: date | None, from_date: date | None, to_date: date | None) -> int:
+    """오늘(KST)이 포함되지 않는 조회는 일정성 데이터라 캐시를 길게 가져간다."""
+    today_kst = datetime.now(KST).date()
+    if game_date is not None and game_date != today_kst:
+        return HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC
+    if from_date is not None and to_date is not None and not (from_date <= today_kst <= to_date):
+        return HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC
+    return HTTP_LIVE_CACHE_TTL_SEC
+
+
+def _team_filter_labels(team_code: str) -> set[str] | None:
+    """영문 응원팀 코드(DOOSAN 등)를 games 테이블에 저장되는 라벨 집합
+    (영문 코드 / 한글 모기업 / 마스코트)으로 확장한다. 미지원 코드는 None."""
+    code = team_code.strip().upper()
+    club = _TEAM_CODE_TO_CLUB.get(code)
+    if club is None:
+        return None
+    return {code, club, _TEAM_CODE_TO_MASCOT[code]}
 
 
 def _list_games_payload(
@@ -712,11 +742,15 @@ def _list_games_payload(
     from_date: date | None,
     to_date: date | None,
     limit: int,
+    team_labels: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     assert_db_available()
     query = select(Game)
     if status is not None:
         query = query.where(Game.status == status.value)
+    if team_labels:
+        labels = sorted(team_labels)
+        query = query.where(or_(Game.home_team.in_(labels), Game.away_team.in_(labels)))
     if game_date is not None:
         iso_date = game_date.isoformat()
         prefix = game_date.strftime("%Y%m%d")

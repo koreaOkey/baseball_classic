@@ -189,11 +189,44 @@ fun HomeScreen(
             return@LaunchedEffect
         }
 
-        scheduleLoading = true
+        val forceRefresh = scheduleForceRefresh
+        scheduleForceRefresh = false
         scheduleError = null
         val today = LocalDate.now()
         val rangeFrom = scheduleSeasonStartDate(today)
         val rangeTo = scheduleSeasonEndDate(today)
+
+        // 1) TTL 무시하고 캐시가 있으면 즉시 렌더 (stale-while-revalidate).
+        //    오래된(6시간 초과) 데이터라도 먼저 보여주고 아래에서 조용히 갱신한다.
+        val cached = runCatching {
+            withContext(Dispatchers.IO) {
+                BackendGamesRepository.peekMyTeamScheduleRangeCache(
+                    context = context.applicationContext,
+                    selectedTeam = selectedTeam,
+                    fromDate = rangeFrom,
+                    toDate = rangeTo
+                )
+            }
+        }.getOrNull()
+        if (cached != null) {
+            scheduleItems = cached.items
+        } else if (!forceRefresh) {
+            // 캐시 키(팀/기간) 불일치 — 다른 팀의 잔존 데이터를 보여주지 않도록 비운다.
+            // 당겨서 새로고침일 때는 같은 팀의 기존 목록을 유지한다.
+            scheduleItems = emptyList()
+        }
+
+        // 신선한 캐시가 있고 강제 새로고침이 아니면 네트워크 요청 자체를 생략.
+        val needsFetch = forceRefresh || cached == null || cached.isStale
+        if (!needsFetch) {
+            scheduleLoading = false
+            return@LaunchedEffect
+        }
+
+        // 2) 표시할 데이터가 하나도 없을 때만 전체 스피너. stale 데이터가 보이는 중이거나
+        //    당겨서 새로고침이면 기존 화면을 유지한 채 조용히 갱신한다.
+        val hasVisibleItems = scheduleItems.isNotEmpty()
+        scheduleLoading = !hasVisibleItems
         val loaded = runCatching {
             withContext(Dispatchers.IO) {
                 BackendGamesRepository.fetchMyTeamScheduleRangeCached(
@@ -201,17 +234,18 @@ fun HomeScreen(
                     selectedTeam = selectedTeam,
                     fromDate = rangeFrom,
                     toDate = rangeTo,
-                    forceRefresh = scheduleForceRefresh
+                    forceRefresh = forceRefresh
                 )
             }
         }.getOrNull()
-        if (loaded == null) {
+        if (loaded != null) {
+            scheduleItems = loaded
+            scheduleError = null
+        } else if (!hasVisibleItems) {
+            // 보여줄 데이터가 전혀 없을 때만 에러 표시. stale 데이터가 있으면 그대로 유지.
             scheduleItems = emptyList()
             scheduleError = "응원팀 일정을 불러오지 못했습니다."
-        } else {
-            scheduleItems = loaded
         }
-        scheduleForceRefresh = false
         scheduleLoading = false
     }
 

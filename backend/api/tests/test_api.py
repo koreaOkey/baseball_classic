@@ -2804,3 +2804,56 @@ def test_purge_expired_game_rows_noop_when_nothing_old():
     init_db()
     deleted = main_module._purge_expired_game_rows()
     assert deleted == {}
+
+
+def test_list_games_team_filter():
+    from datetime import date as d, datetime as dt
+
+    from app.db import init_db
+
+    init_db()
+    with SessionLocal() as db:
+        db.add(Game(id="20260720LGOB02026", home_team="두산", away_team="LG", status="SCHEDULED",
+                    game_date="2026-07-20"))
+        db.add(Game(id="20260720SSKT02026", home_team="KT", away_team="SSG", status="SCHEDULED",
+                    game_date="2026-07-20"))
+        db.commit()
+
+    with TestClient(app) as client:
+        res = client.get("/games?from=2026-07-20&to=2026-07-20&team=DOOSAN&limit=500")
+        assert res.status_code == 200
+        ids = [g["id"] for g in res.json()]
+        assert "20260720LGOB02026" in ids
+        assert "20260720SSKT02026" not in ids
+
+        # 한글 모기업 라벨 저장값과 무관하게 영문 코드로 조회 가능해야 한다
+        res2 = client.get("/games?from=2026-07-20&to=2026-07-20&team=SSG&limit=500")
+        assert res2.status_code == 200
+        ids2 = [g["id"] for g in res2.json()]
+        assert "20260720SSKT02026" in ids2
+        assert "20260720LGOB02026" not in ids2
+
+        res3 = client.get("/games?date=2026-07-20&team=NOPE")
+        assert res3.status_code == 400
+
+    with SessionLocal() as db:
+        db.query(Game).filter(Game.id.in_(("20260720LGOB02026", "20260720SSKT02026"))).delete(synchronize_session=False)
+        db.commit()
+
+
+def test_games_list_cache_ttl_selection():
+    from datetime import timedelta as td, datetime as dt
+
+    from app.weather import KST as WEATHER_KST
+
+    today = dt.now(WEATHER_KST).date()
+    past = today - td(days=3)
+    future = today + td(days=3)
+
+    # 오늘 포함 → 라이브 TTL
+    assert main_module._games_list_cache_ttl(game_date=today, from_date=None, to_date=None) == main_module.HTTP_LIVE_CACHE_TTL_SEC
+    assert main_module._games_list_cache_ttl(game_date=None, from_date=past, to_date=future) == main_module.HTTP_LIVE_CACHE_TTL_SEC
+    # 전부 과거/미래 → 일정 TTL
+    assert main_module._games_list_cache_ttl(game_date=past, from_date=None, to_date=None) == main_module.HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC
+    assert main_module._games_list_cache_ttl(game_date=None, from_date=future, to_date=future + td(days=10)) == main_module.HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC
+    assert main_module._games_list_cache_ttl(game_date=None, from_date=past - td(days=10), to_date=past) == main_module.HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC

@@ -424,7 +424,11 @@ object BackendGamesRepository {
         val now = LocalDate.now()
         val fromDate = now.plusDays(1)
         val toDate = now.plusDays(normalizedDaysAhead.toLong())
-        val payload = fetchGamesByDateRangePayload(fromDate = fromDate, toDate = toDate) ?: return null
+        val payload = fetchMyTeamGamesRangePayload(
+            selectedTeam = selectedTeam,
+            fromDate = fromDate,
+            toDate = toDate
+        ) ?: return null
         val schedules = parseScheduleRangePayload(payload, selectedTeam) ?: return null
 
         return schedules
@@ -468,6 +472,37 @@ object BackendGamesRepository {
         )
     }
 
+    // 시즌 일정 캐시 읽기 결과. isStale 이 true 면 TTL(6시간)을 초과한 데이터 —
+    // UI 는 즉시 렌더한 뒤 백그라운드에서 새로 받아야 한다 (stale-while-revalidate).
+    data class CachedScheduleRange(
+        val items: List<UpcomingGameSchedule>,
+        val isStale: Boolean
+    )
+
+    // TTL 과 무관하게 (팀, 기간, 캐시 버전)이 일치하는 시즌 일정 캐시를 읽는다.
+    // 키 불일치·파싱 실패·빈 캐시면 null.
+    fun peekMyTeamScheduleRangeCache(
+        context: Context,
+        selectedTeam: Team,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): CachedScheduleRange? {
+        if (selectedTeam == Team.NONE) return null
+        val normalizedToDate = if (toDate.isBefore(fromDate)) fromDate else toDate
+        val prefs = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
+        val cacheMatches =
+            prefs.getString(KEY_SCHEDULE_RANGE_TEAM, null) == selectedTeam.name &&
+                prefs.getString(KEY_SCHEDULE_RANGE_FROM, null) == fromDate.toString() &&
+                prefs.getString(KEY_SCHEDULE_RANGE_TO, null) == normalizedToDate.toString() &&
+                prefs.getInt(KEY_SCHEDULE_RANGE_CACHE_VERSION, -1) == SCHEDULE_CACHE_VERSION
+        if (!cacheMatches) return null
+        val cachedPayload = prefs.getString(KEY_SCHEDULE_RANGE_PAYLOAD, null)
+        if (cachedPayload.isNullOrBlank()) return null
+        val items = parseUpcomingGamesPayload(cachedPayload)?.takeIf { it.isNotEmpty() } ?: return null
+        val cachedAt = prefs.getLong(KEY_SCHEDULE_RANGE_CACHED_AT, 0L)
+        return CachedScheduleRange(items = items, isStale = !isFreshScheduleCache(cachedAt))
+    }
+
     fun fetchMyTeamScheduleRangeCached(
         context: Context,
         selectedTeam: Team,
@@ -494,7 +529,11 @@ object BackendGamesRepository {
             parseUpcomingGamesPayload(cachedPayload)?.takeIf { it.isNotEmpty() }?.let { return it }
         }
 
-        val freshPayload = fetchGamesByDateRangePayload(fromDate = fromDate, toDate = normalizedToDate)
+        val freshPayload = fetchMyTeamGamesRangePayload(
+            selectedTeam = selectedTeam,
+            fromDate = fromDate,
+            toDate = normalizedToDate
+        )
         if (!freshPayload.isNullOrBlank()) {
             val fresh = parseScheduleRangePayload(freshPayload, selectedTeam)
             if (fresh != null) {
@@ -544,6 +583,24 @@ object BackendGamesRepository {
         val fullRangeEndpoint = "$baseUrl/games?from=${fromDate}&to=${toDate}&limit=500"
         return getJson(fullRangeEndpoint) { body -> body }
             ?: getJson("$baseUrl/games?from=${fromDate}&to=${toDate}&limit=100") { body -> body }
+    }
+
+    // 응원팀 경기만 서버 필터로 받아오는 단일 요청 (~144경기/시즌, limit=500 이내).
+    // 실패(네트워크/HTTP 오류) 시 기존 월 단위 청크 페치로 폴백한다.
+    // 구버전 백엔드는 team 파라미터를 무시하고 전체 리그를 반환할 수 있으므로,
+    // parseScheduleRangePayload 의 isMyTeam 필터가 안전망으로 유지되어야 한다.
+    private fun fetchMyTeamGamesRangePayload(
+        selectedTeam: Team,
+        fromDate: LocalDate,
+        toDate: LocalDate
+    ): String? {
+        if (selectedTeam != Team.NONE) {
+            val baseUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
+            val endpoint = "$baseUrl/games?team=${selectedTeam.name}&from=${fromDate}&to=${toDate}&limit=500"
+            getJson(endpoint) { body -> body }?.let { return it }
+            Log.w(TAG, "team-filtered range fetch failed, falling back to month chunks")
+        }
+        return fetchGamesByDateRangePayload(fromDate = fromDate, toDate = toDate)
     }
 
     private fun fetchGamesByDateRangePayload(fromDate: LocalDate, toDate: LocalDate): String? {

@@ -410,19 +410,42 @@ struct HomeScreen: View {
             return
         }
 
-        scheduleLoading = true
         scheduleError = nil
         let today = Date()
+        let fromDate = scheduleSeasonStartDate(today)
+        let toDate = scheduleSeasonEndDate(today)
+
+        // Stale-while-revalidate: TTL과 무관하게 조건이 맞는 캐시가 있으면 먼저 그린다.
+        // 스피너는 보여줄 캐시가 전혀 없을 때만 노출된다(시트의 loading 조건과 연동).
+        let cached = BackendGamesRepository.shared.peekMyTeamScheduleRangeCache(
+            selectedTeam: selectedTeam,
+            fromDate: fromDate,
+            toDate: toDate
+        )
+        if let cached, !cached.items.isEmpty {
+            scheduleItems = cached.items
+        } else {
+            // 팀/기간이 바뀌어 캐시가 없으면 이전 목록을 비워 스피너가 보이게 한다
+            scheduleItems = []
+        }
+
+        // 캐시가 신선하고 강제 새로고침이 아니면 네트워크 요청 생략
+        if let cached, !cached.isStale, !cached.items.isEmpty, !forceRefresh {
+            scheduleLoading = false
+            return
+        }
+
+        scheduleLoading = true
         let loaded = await BackendGamesRepository.shared.fetchMyTeamScheduleRangeCached(
             selectedTeam: selectedTeam,
-            fromDate: scheduleSeasonStartDate(today),
-            toDate: scheduleSeasonEndDate(today),
+            fromDate: fromDate,
+            toDate: toDate,
             forceRefresh: forceRefresh
         )
         if let loaded {
             scheduleItems = loaded
-        } else {
-            scheduleItems = []
+        } else if scheduleItems.isEmpty {
+            // 보여줄 캐시조차 없을 때만 에러 노출 — stale 데이터가 있으면 그대로 유지
             scheduleError = "응원팀 일정을 불러오지 못했습니다."
         }
         scheduleLoading = false
@@ -568,7 +591,8 @@ private struct MyTeamScheduleSheet: View {
                     title: "응원팀이 선택되지 않았습니다",
                     message: "마이팀에서 응원팀을 먼저 선택해주세요."
                 )
-            } else if loading {
+            } else if loading && schedules.isEmpty {
+                // 스피너는 보여줄 일정이 하나도 없을 때만 — 캐시(stale 포함)가 있으면 목록을 유지한 채 백그라운드 갱신
                 VStack(spacing: AppSpacing.md) {
                     ProgressView()
                         .tint(.white)
