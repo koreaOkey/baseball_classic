@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,"Apple SD Gothic Neo","Pretendard",sans-serif; }
+  body { background:#141416; padding:36px; width:1780px; }
+  h1 { color:#F4F4F5; font-size:26px; margin-bottom:6px; }
+  .sub { color:#A1A1AA; font-size:15px; margin-bottom:28px; }
+  .row { display:flex; gap:34px; align-items:flex-start; }
+  .col { width:390px; }
+  .col-label { text-align:center; margin-bottom:14px; }
+  .col-label .tag { display:inline-block; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:700; }
+  .tag.cur { background:#3F3F46; color:#D4D4D8; }
+  .tag.new { background:#2563EB; color:#fff; }
+  .col-label .t { color:#F4F4F5; font-size:17px; font-weight:800; margin-top:8px; }
+  .col-label .d { color:#A1A1AA; font-size:12.5px; margin-top:4px; line-height:1.5; }
+  .phone { width:390px; height:760px; background:#0A0A0B; border-radius:34px; border:2px solid #3F3F46; overflow:hidden; position:relative; }
+  .statusbar { height:34px; display:flex; justify-content:space-between; align-items:center; padding:0 22px; color:#D4D4D8; font-size:12.5px; font-weight:600; }
+  .navbar { display:flex; align-items:center; gap:10px; padding:8px 16px; }
+  .navbar .back { color:#A1A1AA; font-size:18px; }
+  .navbar .title { color:#F4F4F5; font-size:15.5px; font-weight:700; }
+  .navbar .live { margin-left:auto; background:#7C2D12; color:#FB923C; font-size:11px; font-weight:800; padding:3px 9px; border-radius:11px; }
+  .score { display:flex; justify-content:center; align-items:center; gap:26px; padding:10px 0 12px; }
+  .score .team { text-align:center; width:86px; }
+  .score .team .n { color:#F4F4F5; font-size:34px; font-weight:900; }
+  .score .team .m { color:#A1A1AA; font-size:13px; margin-top:2px; }
+  .inn { background:#27272A; border-radius:13px; padding:5px 11px; color:#FB923C; font-size:13px; font-weight:800; }
+  .card { background:#18181B; border:1px solid #27272A; border-radius:14px; margin:0 14px 12px; padding:12px; }
+  .card .hd { color:#A1A1AA; font-size:11.5px; font-weight:700; letter-spacing:.4px; margin-bottom:8px; }
+  /* 라인스코어 */
+  table.ls { width:100%; border-collapse:collapse; }
+  table.ls th, table.ls td { text-align:center; font-size:11.5px; padding:4px 0; }
+  table.ls th { color:#71717A; font-weight:600; }
+  table.ls td { color:#D4D4D8; }
+  table.ls td.tm { color:#F4F4F5; font-weight:700; text-align:left; padding-left:2px; width:52px; font-size:12px; }
+  table.ls td.rhe { color:#F4F4F5; font-weight:800; }
+  table.ls .cell-live { color:#FB923C; font-weight:800; }
+  table.ls tr.divider td { border-top:1px solid #27272A; }
+  /* 필드 카드 */
+  .field { height:150px; background:radial-gradient(ellipse at 50% 92%, #14532D 0%, #052E16 62%, #18181B 100%); border-radius:12px; position:relative; }
+  .diamond { position:absolute; left:50%; top:58%; width:64px; height:64px; transform:translate(-50%,-50%) rotate(45deg); border:2px solid rgba(244,244,245,.4); }
+  .base { position:absolute; width:13px; height:13px; transform:rotate(45deg); background:#FACC15; }
+  .b1 { right:66px; top:74px; } .b2 { left:50%; margin-left:-7px; top:34px; } .b3 { left:66px; top:74px; background:#3F3F46; }
+  .pos { position:absolute; color:#E4E4E7; font-size:9.5px; font-weight:700; background:rgba(10,10,11,.55); padding:2px 6px; border-radius:8px; }
+  .runner { position:absolute; color:#FACC15; font-size:9.5px; font-weight:800; background:rgba(10,10,11,.72); padding:2px 6px; border-radius:8px; }
+  /* 타석 카드 */
+  .atbat { display:flex; justify-content:space-between; align-items:center; }
+  .atbat .p { color:#F4F4F5; font-size:13px; font-weight:700; }
+  .atbat .s { color:#71717A; font-size:11px; margin-top:2px; }
+  .bso { display:flex; flex-direction:column; gap:3px; }
+  .bso .l { display:flex; gap:4px; align-items:center; }
+  .bso .k { color:#71717A; font-size:10px; font-weight:800; width:10px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#3F3F46; }
+  .dot.g { background:#4ADE80; } .dot.o { background:#FB923C; } .dot.r { background:#F87171; }
+  /* 탭 */
+  .tabs { display:flex; gap:8px; margin:0 14px 12px; }
+  .tab { flex:1; text-align:center; padding:9px 0; border-radius:11px; font-size:13px; font-weight:800; background:#18181B; color:#71717A; border:1px solid #27272A; }
+  .tab.on { background:#2563EB; color:#fff; border-color:#2563EB; }
+  .inntabs { display:flex; gap:5px; margin:0 14px 10px; overflow:hidden; }
+  .it { min-width:34px; text-align:center; padding:6px 0; border-radius:9px; font-size:12px; font-weight:700; background:#18181B; color:#71717A; border:1px solid #27272A; }
+  .it.on { background:#27272A; color:#FB923C; border-color:#FB923C; }
+  /* 이벤트 피드 */
+  .ev { display:flex; gap:10px; padding:9px 2px; border-bottom:1px solid #1F1F23; }
+  .ev:last-child { border-bottom:none; }
+  .badge { min-width:44px; height:22px; border-radius:11px; font-size:10.5px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .bg-hit { background:#14532D; color:#4ADE80; } .bg-score { background:#7C2D12; color:#FB923C; }
+  .bg-out { background:#450A0A; color:#F87171; } .bg-pitch { background:#27272A; color:#A1A1AA; }
+  .ev .tx { color:#D4D4D8; font-size:12.5px; line-height:1.45; flex:1; }
+  .ev .tm2 { color:#52525B; font-size:10.5px; white-space:nowrap; }
+  /* 박스스코어 표 */
+  table.bx { width:100%; border-collapse:collapse; }
+  table.bx th { color:#71717A; font-size:10.5px; font-weight:700; padding:5px 0; border-bottom:1px solid #27272A; }
+  table.bx td { color:#D4D4D8; font-size:11.5px; text-align:center; padding:5.5px 0; border-bottom:1px solid #1F1F23; }
+  table.bx td.nm { text-align:left; color:#F4F4F5; font-weight:600; }
+  table.bx td.hot { color:#4ADE80; font-weight:800; }
+  .seg { display:flex; gap:6px; margin-bottom:10px; }
+  .sg { flex:1; text-align:center; padding:7px 0; border-radius:9px; font-size:12px; font-weight:800; background:#27272A; color:#71717A; }
+  .sg.on { background:#3F3F46; color:#F4F4F5; }
+  /* tail 로딩 */
+  .loadmore { text-align:center; padding:10px; background:#18181B; border:1px dashed #3F3F46; border-radius:11px; margin:0 14px 10px; color:#60A5FA; font-size:12.5px; font-weight:700; }
+  .center-spin { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(10,10,11,.92); }
+  .spinner { width:34px; height:34px; border:4px solid #27272A; border-top-color:#3B82F6; border-radius:50%; }
+  .center-spin .t { color:#A1A1AA; font-size:13px; }
+  .timing { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); padding:5px 14px; border-radius:14px; font-size:12px; font-weight:800; }
+  .tm-bad { background:#450A0A; color:#F87171; } .tm-good { background:#14532D; color:#4ADE80; }
+  /* NEW 하이라이트 */
+  .hl { position:relative; border:2px solid #3B82F6 !important; box-shadow:0 0 0 4px rgba(59,130,246,.18); }
+  .newpin { position:absolute; top:-10px; right:10px; background:#2563EB; color:#fff; font-size:10px; font-weight:900; padding:2px 8px; border-radius:9px; letter-spacing:.5px; z-index:5; }
+  .half { display:flex; gap:14px; }
+</style>
+</head>
+<body>
+<h1>야구봄 · 경기 상세 개선 3종 UI 시안</h1>
+<div class="sub">현재 UI(왼쪽) 기준으로 ① 이닝별 라인스코어 ② 박스스코어 탭 ③ 빠른 진입(tail 로딩)이 적용된 모습 — 실제 앱 디자인 토큰(tokens.json) 색상 사용</div>
+<div class="row">
+
+  <!-- ═══ 현재 UI ═══ -->
+  <div class="col">
+    <div class="col-label">
+      <span class="tag cur">현재</span>
+      <div class="t">라이브 상세 (기준)</div>
+      <div class="d">스코어 헤더 + 필드/타석 카드 + 이닝 필터 + 중계 피드</div>
+    </div>
+    <div class="phone">
+      <div class="statusbar"><span>15:42</span><span>5G ▂▄▆ 🔋</span></div>
+      <div class="navbar"><span class="back">‹</span><span class="title">타이거즈 vs 랜더스</span><span class="live">● LIVE</span></div>
+      <div class="score">
+        <div class="team"><div class="n">4</div><div class="m">타이거즈</div></div>
+        <div class="inn">9회말</div>
+        <div class="team"><div class="n">5</div><div class="m">랜더스</div></div>
+      </div>
+      <div class="card" style="padding:8px;">
+        <div class="field">
+          <div class="diamond"></div>
+          <div class="base b1"></div><div class="base b2"></div><div class="base b3"></div>
+          <div class="pos" style="left:50%;top:12px;transform:translateX(-50%);">중견수 최지훈</div>
+          <div class="pos" style="left:26px;top:38px;">좌익수 에레디아</div>
+          <div class="pos" style="right:26px;top:38px;">우익수 한유섬</div>
+          <div class="pos" style="left:50%;top:64%;transform:translateX(-50%);">P 노경은</div>
+          <div class="runner" style="right:34px;top:96px;">1루 박찬호</div>
+          <div class="runner" style="left:50%;top:20px;transform:translateX(-50%);margin-top:14px;">2루 김도영</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="atbat">
+          <div><div class="p">🥎 노경은 · 투구 24</div><div class="s">P 랜더스</div></div>
+          <div class="bso">
+            <div class="l"><span class="k">B</span><span class="dot g"></span><span class="dot g"></span><span class="dot"></span></div>
+            <div class="l"><span class="k">S</span><span class="dot o"></span><span class="dot o"></span></div>
+            <div class="l"><span class="k">O</span><span class="dot r"></span><span class="dot r"></span></div>
+          </div>
+          <div style="text-align:right;"><div class="p">타자 김도영</div><div class="s">.312 · 21호</div></div>
+        </div>
+      </div>
+      <div class="inntabs">
+        <div class="it">전체</div><div class="it">7</div><div class="it">8</div><div class="it on">9</div><div class="it">득점</div>
+      </div>
+      <div class="card">
+        <div class="ev"><span class="badge bg-score">득점</span><span class="tx">김도영 : 우중간 2루타, 박찬호 홈인 (4:5)</span><span class="tm2">21:38</span></div>
+        <div class="ev"><span class="badge bg-hit">안타</span><span class="tx">박찬호 : 중전 안타</span><span class="tm2">21:35</span></div>
+        <div class="ev"><span class="badge bg-pitch">투구</span><span class="tx">헤이수스, 3구 스트라이크</span><span class="tm2">21:34</span></div>
+        <div class="ev"><span class="badge bg-out">아웃</span><span class="tx">나성범 : 유격수 땅볼 아웃</span><span class="tm2">21:31</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ① 라인스코어 ═══ -->
+  <div class="col">
+    <div class="col-label">
+      <span class="tag new">개선 ①</span>
+      <div class="t">이닝별 라인스코어</div>
+      <div class="d">스코어 헤더 아래 이닝별 득점 + R·H·E 표 추가<br>(크롤러 스코어보드 → GameStateOut.lineScore)</div>
+    </div>
+    <div class="phone">
+      <div class="statusbar"><span>15:42</span><span>5G ▂▄▆ 🔋</span></div>
+      <div class="navbar"><span class="back">‹</span><span class="title">타이거즈 vs 랜더스</span><span class="live">● LIVE</span></div>
+      <div class="score" style="padding-bottom:6px;">
+        <div class="team"><div class="n">4</div><div class="m">타이거즈</div></div>
+        <div class="inn">9회말</div>
+        <div class="team"><div class="n">5</div><div class="m">랜더스</div></div>
+      </div>
+      <div class="card hl" style="padding:10px 12px;">
+        <span class="newpin">NEW</span>
+        <table class="ls">
+          <tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th style="color:#A1A1AA;">R</th><th>H</th><th>E</th></tr>
+          <tr><td class="tm">타이거즈</td><td>0</td><td>1</td><td>0</td><td>0</td><td>2</td><td>0</td><td>0</td><td>0</td><td>1</td><td class="rhe">4</td><td>9</td><td>0</td></tr>
+          <tr class="divider"><td class="tm">랜더스</td><td>2</td><td>0</td><td>0</td><td>1</td><td>0</td><td>0</td><td>1</td><td>0</td><td class="cell-live">1</td><td class="rhe">5</td><td>11</td><td>1</td></tr>
+        </table>
+      </div>
+      <div class="card" style="padding:8px;">
+        <div class="field" style="height:132px;">
+          <div class="diamond"></div>
+          <div class="base b1"></div><div class="base b2"></div><div class="base b3"></div>
+          <div class="pos" style="left:50%;top:10px;transform:translateX(-50%);">중견수 최지훈</div>
+          <div class="pos" style="left:50%;top:62%;transform:translateX(-50%);">P 노경은</div>
+          <div class="runner" style="right:34px;top:84px;">1루 박찬호</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="atbat">
+          <div><div class="p">🥎 노경은 · 투구 24</div><div class="s">P 랜더스</div></div>
+          <div class="bso">
+            <div class="l"><span class="k">B</span><span class="dot g"></span><span class="dot g"></span><span class="dot"></span></div>
+            <div class="l"><span class="k">S</span><span class="dot o"></span><span class="dot o"></span></div>
+            <div class="l"><span class="k">O</span><span class="dot r"></span><span class="dot r"></span></div>
+          </div>
+          <div style="text-align:right;"><div class="p">타자 김도영</div><div class="s">.312 · 21호</div></div>
+        </div>
+      </div>
+      <div class="inntabs">
+        <div class="it">전체</div><div class="it">7</div><div class="it">8</div><div class="it on">9</div><div class="it">득점</div>
+      </div>
+      <div class="card" style="margin-bottom:0;">
+        <div class="ev"><span class="badge bg-score">득점</span><span class="tx">김도영 : 우중간 2루타, 박찬호 홈인 (4:5)</span><span class="tm2">21:38</span></div>
+        <div class="ev"><span class="badge bg-hit">안타</span><span class="tx">박찬호 : 중전 안타</span><span class="tm2">21:35</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ② 박스스코어 탭 ═══ -->
+  <div class="col">
+    <div class="col-label">
+      <span class="tag new">개선 ②</span>
+      <div class="t">박스스코어 탭</div>
+      <div class="d">이미 DB에 쌓이는 타자/투수 기록을 탭으로 노출<br>(중계 ↔ 박스스코어 전환)</div>
+    </div>
+    <div class="phone">
+      <div class="statusbar"><span>15:42</span><span>5G ▂▄▆ 🔋</span></div>
+      <div class="navbar"><span class="back">‹</span><span class="title">타이거즈 vs 랜더스</span><span class="live">● LIVE</span></div>
+      <div class="score" style="padding-bottom:6px;">
+        <div class="team"><div class="n">4</div><div class="m">타이거즈</div></div>
+        <div class="inn">9회말</div>
+        <div class="team"><div class="n">5</div><div class="m">랜더스</div></div>
+      </div>
+      <div class="tabs hl" style="border-radius:13px; padding:4px; background:#0A0A0B;">
+        <span class="newpin">NEW</span>
+        <div class="tab">중계</div><div class="tab on">박스스코어</div>
+      </div>
+      <div class="card">
+        <div class="seg"><div class="sg on">타이거즈 타자</div><div class="sg">랜더스 타자</div></div>
+        <table class="bx">
+          <tr><th style="text-align:left;">타순 · 선수</th><th>타수</th><th>안타</th><th>타점</th><th>득점</th><th>타율</th></tr>
+          <tr><td class="nm">1 박찬호 유</td><td>5</td><td class="hot">3</td><td>0</td><td>1</td><td>.301</td></tr>
+          <tr><td class="nm">2 김도영 3루</td><td>4</td><td class="hot">2</td><td class="hot">2</td><td>1</td><td>.312</td></tr>
+          <tr><td class="nm">3 최형우 지</td><td>4</td><td>1</td><td>1</td><td>0</td><td>.288</td></tr>
+          <tr><td class="nm">4 나성범 우</td><td>4</td><td>0</td><td>0</td><td>0</td><td>.265</td></tr>
+          <tr><td class="nm">5 김선빈 2루</td><td>3</td><td>1</td><td>0</td><td>1</td><td>.294</td></tr>
+          <tr><td class="nm">6 이우성 좌</td><td>3</td><td>1</td><td>1</td><td>0</td><td>.271</td></tr>
+          <tr><td class="nm">7 김태군 포</td><td>3</td><td>0</td><td>0</td><td>0</td><td>.243</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="hd">투수 기록</div>
+        <table class="bx">
+          <tr><th style="text-align:left;">투수</th><th>이닝</th><th>투구</th><th>피안타</th><th>실점</th><th>K</th></tr>
+          <tr><td class="nm">양현종 (선발)</td><td>6⅓</td><td>94</td><td>8</td><td>3</td><td class="hot">7</td></tr>
+          <tr><td class="nm">전상현</td><td>1⅔</td><td>28</td><td>2</td><td>1</td><td>2</td></tr>
+          <tr><td class="nm">정해영</td><td>1</td><td>24</td><td>1</td><td>1</td><td>1</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ③ tail 로딩 ═══ -->
+  <div class="col">
+    <div class="col-label">
+      <span class="tag new">개선 ③</span>
+      <div class="t">빠른 진입 (tail 로딩)</div>
+      <div class="d">경기 후반 진입 시 최근 이벤트부터 즉시 표시,<br>과거 기록은 위로 스크롤할 때 로드</div>
+    </div>
+    <div class="half">
+      <div>
+        <div class="phone" style="width:188px;height:380px;border-radius:22px;">
+          <div style="padding:10px 10px 6px;color:#F4F4F5;font-size:11px;font-weight:800;">현재 · 진입 시</div>
+          <div class="center-spin" style="top:30px;">
+            <div class="spinner"></div>
+            <div class="t" style="font-size:11px;">전체 중계 기록<br>불러오는 중…</div>
+          </div>
+          <div class="timing tm-bad" style="font-size:10px;">2,000개 순차 로딩 · 수 초 대기</div>
+        </div>
+        <div style="text-align:center;color:#71717A;font-size:11px;margin-top:8px;">Before</div>
+      </div>
+      <div>
+        <div class="phone" style="width:188px;height:380px;border-radius:22px;">
+          <div style="padding:10px 10px 6px;color:#F4F4F5;font-size:11px;font-weight:800;">개선 · 진입 즉시</div>
+          <div class="loadmore hl" style="margin:4px 8px 8px;font-size:10px;padding:7px;position:relative;">
+            <span class="newpin" style="font-size:8px;">NEW</span>↑ 이전 기록 불러오기</div>
+          <div class="card" style="margin:0 8px;padding:8px;">
+            <div class="ev" style="padding:6px 0;"><span class="badge bg-score" style="min-width:32px;height:18px;font-size:8.5px;">득점</span><span class="tx" style="font-size:9.5px;">김도영 2루타, 박찬호 홈인</span></div>
+            <div class="ev" style="padding:6px 0;"><span class="badge bg-hit" style="min-width:32px;height:18px;font-size:8.5px;">안타</span><span class="tx" style="font-size:9.5px;">박찬호 중전 안타</span></div>
+            <div class="ev" style="padding:6px 0;"><span class="badge bg-pitch" style="min-width:32px;height:18px;font-size:8.5px;">투구</span><span class="tx" style="font-size:9.5px;">3구 스트라이크</span></div>
+            <div class="ev" style="padding:6px 0;"><span class="badge bg-out" style="min-width:32px;height:18px;font-size:8.5px;">아웃</span><span class="tx" style="font-size:9.5px;">나성범 유격수 땅볼</span></div>
+          </div>
+          <div class="timing tm-good" style="font-size:10px;">최근 200개 즉시 표시</div>
+        </div>
+        <div style="text-align:center;color:#4ADE80;font-size:11px;margin-top:8px;font-weight:700;">After</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

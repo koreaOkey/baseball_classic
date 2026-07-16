@@ -232,6 +232,10 @@ def _ensure_game_columns(bind: SchemaBind = engine) -> None:
         "last_event_type": "VARCHAR(32)",
         "last_event_desc": "TEXT",
         "last_event_at": "TIMESTAMPTZ",
+        # 이닝별 라인스코어/실책 (배포된 prod Postgres 에 startup 시 자동 추가)
+        "line_score_json": "JSON",
+        "home_errors": "INTEGER",
+        "away_errors": "INTEGER",
     }
     for column_name, column_type in nullable_columns.items():
         if column_name not in columns:

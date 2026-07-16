@@ -66,6 +66,26 @@ struct LiveGameState {
     // DH 룰로 lineup 에는 빠지므로 BaseballFieldCard 마운드 자리에 따로 그린다.
     let homeStartingPitcher: String?
     let awayStartingPitcher: String?
+    // 이닝별 라인스코어 + 안타/실책 합계. 신규 백엔드에서만 내려오는 optional 필드 —
+    // 구버전 백엔드에서는 nil 이며 라인스코어 카드 자체를 숨긴다.
+    // (var + 기본값: memberwise init 에 defaulted 파라미터로 노출되어 기존 호출부 무영향)
+    var lineScore: GameLineScore? = nil
+    var homeHits: Int? = nil
+    var awayHits: Int? = nil
+    var homeErrors: Int? = nil
+    var awayErrors: Int? = nil
+}
+
+/// 이닝별 득점 라인스코어. 백엔드 GameStateOut.lineScore
+/// ({"home": {"1": 0, ...}, "away": {...}}) 를 이닝 번호(Int) 키로 정규화한 것.
+struct GameLineScore {
+    let home: [Int: Int]
+    let away: [Int: Int]
+
+    /// 라인스코어에 값이 존재하는 최대 이닝 번호 (없으면 0)
+    var maxInning: Int {
+        max(home.keys.max() ?? 0, away.keys.max() ?? 0)
+    }
 }
 
 struct LineupSlot {
@@ -161,6 +181,48 @@ struct LiveEvent: Identifiable {
 struct LiveEventsPage {
     let items: [LiveEvent]
     let nextCursor: Int64?
+}
+
+// MARK: - Boxscore (타자/투수 박스스코어)
+/// GET /games/{gameId}/boxscore 응답. 신규 백엔드 전용 —
+/// 구버전/미준비 시 fetch 가 nil 을 반환하고 UI 는 빈 상태 문구를 보여준다.
+struct GameBoxscore {
+    let gameId: String
+    let homeBatters: [BoxscoreBatterLine]
+    let awayBatters: [BoxscoreBatterLine]
+    let homePitchers: [BoxscorePitcherLine]
+    let awayPitchers: [BoxscorePitcherLine]
+
+    var isEmpty: Bool {
+        homeBatters.isEmpty && awayBatters.isEmpty && homePitchers.isEmpty && awayPitchers.isEmpty
+    }
+}
+
+struct BoxscoreBatterLine {
+    let battingOrder: Int?
+    let playerName: String
+    let position: String?
+    let atBats: Int
+    let hits: Int
+    let rbi: Int
+    let runs: Int
+    let homeRuns: Int
+    let walks: Int
+    let strikeouts: Int
+    let isStarter: Bool
+}
+
+struct BoxscorePitcherLine {
+    let appearanceOrder: Int?
+    let playerName: String
+    let isStarter: Bool
+    let outsRecorded: Int
+    let pitchesThrown: Int
+    let hitsAllowed: Int
+    let runsAllowed: Int
+    let earnedRuns: Int
+    let walksAllowed: Int
+    let strikeouts: Int
 }
 
 struct AppNotice {
@@ -355,6 +417,17 @@ final class BackendGamesRepository {
         return await getJSON(endpoint: endpoint) { data in
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
             return self.parseLiveGameState(json)
+        }
+    }
+
+    // MARK: - Game Boxscore
+    /// 타자/투수 박스스코어. 신규 백엔드 전용 엔드포인트 —
+    /// 404(구버전)·네트워크 실패 시 nil 을 반환하고 호출부는 마지막 데이터를 유지한다.
+    func fetchGameBoxscore(gameId: String) async -> GameBoxscore? {
+        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/games/\(gameId)/boxscore"
+        return await getJSON(endpoint: endpoint) { data in
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            return self.parseGameBoxscore(json, fallbackGameId: gameId)
         }
     }
 
@@ -860,8 +933,86 @@ final class BackendGamesRepository {
             homeLineup: homeLineup,
             awayLineup: awayLineup,
             homeStartingPitcher: (json["homeStartingPitcher"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-            awayStartingPitcher: (json["awayStartingPitcher"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            awayStartingPitcher: (json["awayStartingPitcher"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+            lineScore: parseLineScore(json["lineScore"]),
+            homeHits: jsonInt(json["homeHits"]),
+            awayHits: jsonInt(json["awayHits"]),
+            homeErrors: jsonInt(json["homeErrors"]),
+            awayErrors: jsonInt(json["awayErrors"])
         )
+    }
+
+    /// {"home": {"1": 0, ...}, "away": {...}} 형태의 lineScore 를 방어적으로 파싱.
+    /// 키가 숫자가 아니거나 값이 정수가 아닌 항목은 조용히 무시하고,
+    /// 유효한 이닝이 하나도 없으면 nil (→ 라인스코어 카드 숨김).
+    private func parseLineScore(_ raw: Any?) -> GameLineScore? {
+        guard let json = raw as? [String: Any] else { return nil }
+
+        func parseSide(_ key: String) -> [Int: Int] {
+            guard let dict = json[key] as? [String: Any] else { return [:] }
+            var result: [Int: Int] = [:]
+            for (inningKey, value) in dict {
+                guard let inning = Int(inningKey.trimmingCharacters(in: .whitespaces)),
+                      inning >= 1, inning <= 30,
+                      let runs = jsonInt(value) else { continue }
+                result[inning] = runs
+            }
+            return result
+        }
+
+        let home = parseSide("home")
+        let away = parseSide("away")
+        guard !home.isEmpty || !away.isEmpty else { return nil }
+        return GameLineScore(home: home, away: away)
+    }
+
+    private func parseGameBoxscore(_ json: [String: Any], fallbackGameId: String) -> GameBoxscore {
+        GameBoxscore(
+            gameId: (json["gameId"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? fallbackGameId,
+            homeBatters: parseBoxscoreBatters(json["homeBatters"]),
+            awayBatters: parseBoxscoreBatters(json["awayBatters"]),
+            homePitchers: parseBoxscorePitchers(json["homePitchers"]),
+            awayPitchers: parseBoxscorePitchers(json["awayPitchers"])
+        )
+    }
+
+    private func parseBoxscoreBatters(_ raw: Any?) -> [BoxscoreBatterLine] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let name = cleanOptionalString(item["playerName"]) else { return nil }
+            return BoxscoreBatterLine(
+                battingOrder: jsonInt(item["battingOrder"]),
+                playerName: name,
+                position: cleanOptionalString(item["position"]),
+                atBats: jsonInt(item["atBats"]) ?? 0,
+                hits: jsonInt(item["hits"]) ?? 0,
+                rbi: jsonInt(item["rbi"]) ?? 0,
+                runs: jsonInt(item["runs"]) ?? 0,
+                homeRuns: jsonInt(item["homeRuns"]) ?? 0,
+                walks: jsonInt(item["walks"]) ?? 0,
+                strikeouts: jsonInt(item["strikeouts"]) ?? 0,
+                isStarter: item["isStarter"] as? Bool ?? false
+            )
+        }
+    }
+
+    private func parseBoxscorePitchers(_ raw: Any?) -> [BoxscorePitcherLine] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        return items.compactMap { item in
+            guard let name = cleanOptionalString(item["playerName"]) else { return nil }
+            return BoxscorePitcherLine(
+                appearanceOrder: jsonInt(item["appearanceOrder"]),
+                playerName: name,
+                isStarter: item["isStarter"] as? Bool ?? false,
+                outsRecorded: jsonInt(item["outsRecorded"]) ?? 0,
+                pitchesThrown: jsonInt(item["pitchesThrown"]) ?? 0,
+                hitsAllowed: jsonInt(item["hitsAllowed"]) ?? 0,
+                runsAllowed: jsonInt(item["runsAllowed"]) ?? 0,
+                earnedRuns: jsonInt(item["earnedRuns"]) ?? 0,
+                walksAllowed: jsonInt(item["walksAllowed"]) ?? 0,
+                strikeouts: jsonInt(item["strikeouts"]) ?? 0
+            )
+        }
     }
 
     private func parseLineupSlot(_ json: [String: Any]) -> LineupSlot? {

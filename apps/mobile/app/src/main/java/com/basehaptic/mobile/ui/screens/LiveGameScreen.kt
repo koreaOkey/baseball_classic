@@ -5,6 +5,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -63,8 +65,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -95,8 +99,10 @@ import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.ui.theme.Gray950
 import com.basehaptic.mobile.ui.theme.Green400
 import com.basehaptic.mobile.ui.theme.Green500
+import com.basehaptic.mobile.ui.theme.Gray300
 import com.basehaptic.mobile.ui.theme.LocalTeamDisplayNameStyle
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
+import com.basehaptic.mobile.ui.theme.Orange500
 import com.basehaptic.mobile.ui.theme.Red500
 import com.basehaptic.mobile.ui.theme.Yellow400
 import com.basehaptic.mobile.ui.theme.Yellow500
@@ -126,6 +132,14 @@ fun LiveGameScreen(
         if (BuildConfig.DEBUG && gameId == "debug-watch-sync-test") return@run DebugDummyLiveGame.lineup
         gameState?.let { FieldLineup.from(it) }
     }
+
+    // 상세 콘텐츠 탭 (중계 | 박스스코어). 기본은 기존 중계 화면 그대로.
+    var selectedDetailTab by remember(gameId) { mutableStateOf(LiveDetailTab.RELAY) }
+    var boxscore by remember(gameId) { mutableStateOf<BackendGamesRepository.GameBoxscore?>(null) }
+    // 최초 조회 완료 전에는 스피너, 이후에는 실패해도 마지막 데이터/빈 상태 유지
+    var boxscoreFetchAttempted by remember(gameId) { mutableStateOf(false) }
+    // 박스스코어 팀 토글. 어웨이 팀이 초 공격이므로 어웨이 먼저 노출.
+    var boxscoreShowsHome by remember(gameId) { mutableStateOf(false) }
 
     var selectedInningNumber by remember(gameId) { mutableStateOf<Int?>(null) }
     var hasManualInningSelection by remember(gameId) { mutableStateOf(false) }
@@ -281,6 +295,34 @@ fun LiveGameScreen(
         }
     }
 
+    // 박스스코어 탭이 열려 있는 동안만 조회. 최초 1회 + LIVE 경기면 30초 주기 갱신.
+    // 탭 이탈/화면 백그라운드 시 코루틴이 취소되어 폴링도 함께 멈춘다.
+    LaunchedEffect(gameId, selectedDetailTab) {
+        val targetGameId = gameId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        if (selectedDetailTab != LiveDetailTab.BOXSCORE) return@LaunchedEffect
+        if (BuildConfig.DEBUG && targetGameId == "debug-watch-sync-test") {
+            // 디버그 더미 경기는 백엔드 조회 없이 빈 상태 노출
+            boxscoreFetchAttempted = true
+            return@LaunchedEffect
+        }
+
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (currentCoroutineContext().isActive) {
+                val fetched = runCatching {
+                    withContext(Dispatchers.IO) {
+                        BackendGamesRepository.fetchGameBoxscore(targetGameId)
+                    }
+                }.getOrNull()
+                // 갱신 실패 시 마지막 데이터 유지 (fetched == null 이면 덮어쓰지 않음)
+                if (fetched != null) boxscore = fetched
+                boxscoreFetchAttempted = true
+                // LIVE 가 아니면 1회 조회로 종료 (포그라운드 복귀 시 repeatOnLifecycle 이 재조회)
+                if (gameState?.status != GameStatus.LIVE) break
+                delay(30_000)
+            }
+        }
+    }
+
     LaunchedEffect(gameId, selectedEventFilterKey) {
         val targetGameId = gameId ?: return@LaunchedEffect
         val key = selectedEventFilterKey ?: return@LaunchedEffect
@@ -363,62 +405,88 @@ fun LiveGameScreen(
                     ScoreboardCard(state = state, latestEvent = allEvents.firstOrNull())
                 }
 
-                item {
-                    BaseballFieldCard(
-                        state = state,
-                        latestEvent = allEvents.firstOrNull(),
-                        recentEvents = allEvents,
-                        lineup = currentLineup
-                    )
-                }
-
-                item {
-                    InningTabs(
-                        state = state,
-                        selectedInningNumber = selectedInningNumber,
-                        isScoreFilterActive = isScoreFilterActive,
-                        onSelectInning = { n ->
-                            isScoreFilterActive = false
-                            selectedInningNumber = n
-                            hasManualInningSelection = true
-                        },
-                        onSelectScore = {
-                            isScoreFilterActive = true
-                            selectedInningNumber = null
-                            hasManualInningSelection = true
-                        }
-                    )
-                }
-
-                item {
-                    CurrentMatchupCard(state = state, latestEvent = allEvents.firstOrNull())
-                }
-
-                item {
-                    Text(
-                        text = "실시간 중계",
-                        style = AppFont.h5Bold,
-                        color = Color.White,
-                        modifier = Modifier.padding(top = AppSpacing.sm)
-                    )
-                }
-
-                if (filteredEvents.isEmpty()) {
+                // 이닝별 라인스코어. 구버전 백엔드(lineScore 미지원)에서는 카드 자체를 숨긴다.
+                if (state.lineScore != null) {
                     item {
-                        EmptyInningEventCard(isLoading = loadingEventFilterKey == selectedEventFilterKey)
+                        LineScoreCard(state = state)
+                    }
+                }
+
+                item {
+                    LiveDetailTabBar(
+                        selectedTab = selectedDetailTab,
+                        onSelect = { selectedDetailTab = it }
+                    )
+                }
+
+                if (selectedDetailTab == LiveDetailTab.RELAY) {
+                    item {
+                        BaseballFieldCard(
+                            state = state,
+                            latestEvent = allEvents.firstOrNull(),
+                            recentEvents = allEvents,
+                            lineup = currentLineup
+                        )
+                    }
+
+                    item {
+                        InningTabs(
+                            state = state,
+                            selectedInningNumber = selectedInningNumber,
+                            isScoreFilterActive = isScoreFilterActive,
+                            onSelectInning = { n ->
+                                isScoreFilterActive = false
+                                selectedInningNumber = n
+                                hasManualInningSelection = true
+                            },
+                            onSelectScore = {
+                                isScoreFilterActive = true
+                                selectedInningNumber = null
+                                hasManualInningSelection = true
+                            }
+                        )
+                    }
+
+                    item {
+                        CurrentMatchupCard(state = state, latestEvent = allEvents.firstOrNull())
+                    }
+
+                    item {
+                        Text(
+                            text = "실시간 중계",
+                            style = AppFont.h5Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(top = AppSpacing.sm)
+                        )
+                    }
+
+                    if (filteredEvents.isEmpty()) {
+                        item {
+                            EmptyInningEventCard(isLoading = loadingEventFilterKey == selectedEventFilterKey)
+                        }
+                    } else {
+                        itemsIndexed(filteredAtBats, key = { _, g -> g.id }) { index, group ->
+                            val prevKey = filteredAtBats.getOrNull(index - 1)?.let(::sectionKey)
+                            val currKey = sectionKey(group)
+                            if (index == 0 || prevKey != currKey) {
+                                AtBatSectionHeader(title = sectionTitle(group, state, teamDisplayNameStyle))
+                            }
+                            AtBatCard(
+                                group = group,
+                                awayTeamName = state.awayTeamId.displayName(teamDisplayNameStyle),
+                                homeTeamName = state.homeTeamId.displayName(teamDisplayNameStyle),
+                                highlightScoreOutcome = isScoreFilterActive,
+                            )
+                        }
                     }
                 } else {
-                    itemsIndexed(filteredAtBats, key = { _, g -> g.id }) { index, group ->
-                        val prevKey = filteredAtBats.getOrNull(index - 1)?.let(::sectionKey)
-                        val currKey = sectionKey(group)
-                        if (index == 0 || prevKey != currKey) {
-                            AtBatSectionHeader(title = sectionTitle(group, state, teamDisplayNameStyle))
-                        }
-                        AtBatCard(
-                            group = group,
-                            awayTeamName = state.awayTeamId.displayName(teamDisplayNameStyle),
-                            homeTeamName = state.homeTeamId.displayName(teamDisplayNameStyle),
-                            highlightScoreOutcome = isScoreFilterActive,
+                    item {
+                        BoxscoreSection(
+                            state = state,
+                            boxscore = boxscore,
+                            isLoading = !boxscoreFetchAttempted,
+                            showsHome = boxscoreShowsHome,
+                            onSelectHome = { boxscoreShowsHome = it }
                         )
                     }
                 }
@@ -676,6 +744,445 @@ private fun FavoriteTeamBadge() {
                 modifier = Modifier.size(AppSpacing.md)
             )
         }
+    }
+}
+
+// MARK: - 이닝별 라인스코어 카드
+
+/// 라인스코어 셀 기본 폭. 이닝 숫자·R/H/E 공통.
+private val LineScoreCellWidth = 26.dp
+
+@Composable
+private fun LineScoreCard(state: BackendGamesRepository.LiveGameState) {
+    val lineScore = state.lineScore ?: return
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
+    // 최소 9이닝, 연장이면 기록된 마지막 이닝까지 (10+ 이닝은 가로 스크롤)
+    val totalInnings = max(9, lineScore.maxInning)
+    val currentInning = if (state.status == GameStatus.LIVE) rawInningNumber(state.inning) else null
+    val isHomeBatting = state.inning.contains("말")
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.lg,
+        color = Gray900,
+        border = BorderStroke(1.dp, Gray800)
+    ) {
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = AppSpacing.md, vertical = AppSpacing.md)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                LineScoreHeaderRow(totalInnings = totalInnings)
+                LineScoreTeamRow(
+                    teamName = state.awayTeamId.displayName(teamDisplayNameStyle),
+                    innings = lineScore.away,
+                    totalInnings = totalInnings,
+                    highlightInning = currentInning.takeIf { !isHomeBatting },
+                    runs = state.awayScore,
+                    hits = state.awayHits,
+                    errors = state.awayErrors
+                )
+                LineScoreTeamRow(
+                    teamName = state.homeTeamId.displayName(teamDisplayNameStyle),
+                    innings = lineScore.home,
+                    totalInnings = totalInnings,
+                    highlightInning = currentInning.takeIf { isHomeBatting },
+                    runs = state.homeScore,
+                    hits = state.homeHits,
+                    errors = state.homeErrors
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LineScoreHeaderRow(totalInnings: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        LineScoreTeamNameCell(text = "")
+        for (inning in 1..totalInnings) {
+            LineScoreCell(text = inning.toString(), color = Gray500, style = AppFont.microBold)
+        }
+        Spacer(modifier = Modifier.width(AppSpacing.sm))
+        LineScoreCell(text = "R", color = Gray400, style = AppFont.microBold)
+        LineScoreCell(text = "H", color = Gray400, style = AppFont.microBold)
+        LineScoreCell(text = "E", color = Gray400, style = AppFont.microBold)
+    }
+}
+
+@Composable
+private fun LineScoreTeamRow(
+    teamName: String,
+    innings: Map<Int, Int>,
+    totalInnings: Int,
+    highlightInning: Int?,
+    runs: Int,
+    hits: Int?,
+    errors: Int?
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        LineScoreTeamNameCell(text = teamName)
+        for (inning in 1..totalInnings) {
+            val value = innings[inning]
+            // 진행 중인 이닝(공격 팀)은 라이브 강조색, 미진행 이닝은 "-"
+            val isCurrent = inning == highlightInning
+            LineScoreCell(
+                text = value?.toString() ?: "-",
+                color = when {
+                    isCurrent -> Orange500
+                    value == null -> Gray600
+                    else -> Gray100
+                },
+                style = if (isCurrent) AppFont.microBold else AppFont.micro
+            )
+        }
+        Spacer(modifier = Modifier.width(AppSpacing.sm))
+        LineScoreCell(text = runs.toString(), color = Color.White, style = AppFont.microBold)
+        LineScoreCell(text = hits?.toString() ?: "-", color = Gray300, style = AppFont.micro)
+        LineScoreCell(text = errors?.toString() ?: "-", color = Gray300, style = AppFont.micro)
+    }
+}
+
+@Composable
+private fun LineScoreTeamNameCell(text: String) {
+    Text(
+        text = text,
+        style = AppFont.microBold,
+        color = Color.White,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.width(56.dp)
+    )
+}
+
+@Composable
+private fun LineScoreCell(
+    text: String,
+    color: Color,
+    style: TextStyle,
+    width: Dp = LineScoreCellWidth
+) {
+    Text(
+        text = text,
+        style = style,
+        color = color,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        modifier = Modifier.width(width)
+    )
+}
+
+/// "9회말" → 9. inningNumber() 와 달리 연장(10회+)을 자르지 않는다.
+private fun rawInningNumber(inning: String): Int? =
+    Regex("(\\d+)회").find(inning)?.groupValues?.getOrNull(1)?.toIntOrNull()
+
+// MARK: - 상세 콘텐츠 탭 (중계 | 박스스코어)
+
+private enum class LiveDetailTab(val label: String) {
+    RELAY("중계"),
+    BOXSCORE("박스스코어"),
+}
+
+@Composable
+private fun LiveDetailTabBar(
+    selectedTab: LiveDetailTab,
+    onSelect: (LiveDetailTab) -> Unit
+) {
+    SegmentedTabRow(
+        options = LiveDetailTab.values().map { it.label },
+        selectedIndex = LiveDetailTab.values().indexOf(selectedTab),
+        onSelect = { index -> onSelect(LiveDetailTab.values()[index]) }
+    )
+}
+
+/// 동일 폭 2분할 세그먼트 토글. 상세 탭·박스스코어 팀 토글 공용.
+@Composable
+private fun SegmentedTabRow(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Gray900, AppShapes.pill)
+            .border(1.dp, Gray800, AppShapes.pill)
+            .padding(AppSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)
+    ) {
+        options.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(AppShapes.pill)
+                    .background(if (selected) Gray700 else Color.Transparent)
+                    .clickable { onSelect(index) }
+                    .padding(vertical = AppSpacing.sm),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = AppFont.captionBold,
+                    color = if (selected) Color.White else Gray400,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+// MARK: - 박스스코어 탭 콘텐츠
+
+@Composable
+private fun BoxscoreSection(
+    state: BackendGamesRepository.LiveGameState,
+    boxscore: BackendGamesRepository.GameBoxscore?,
+    isLoading: Boolean,
+    showsHome: Boolean,
+    onSelectHome: (Boolean) -> Unit
+) {
+    val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
+
+    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.md)) {
+        // 초 공격인 어웨이 팀이 먼저 (라인스코어 표기 순서와 동일)
+        SegmentedTabRow(
+            options = listOf(
+                "${state.awayTeamId.displayName(teamDisplayNameStyle)} 타자",
+                "${state.homeTeamId.displayName(teamDisplayNameStyle)} 타자"
+            ),
+            selectedIndex = if (showsHome) 1 else 0,
+            onSelect = { index -> onSelectHome(index == 1) }
+        )
+
+        val batters = if (showsHome) boxscore?.homeBatters.orEmpty() else boxscore?.awayBatters.orEmpty()
+        val pitchers = if (showsHome) boxscore?.homePitchers.orEmpty() else boxscore?.awayPitchers.orEmpty()
+
+        when {
+            boxscore == null && isLoading -> {
+                // 아직 데이터가 없을 때만 스피너 노출 (갱신 중엔 기존 데이터 유지)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = AppSpacing.xxxl),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 3.dp,
+                        color = Gray400
+                    )
+                }
+            }
+
+            batters.isEmpty() && pitchers.isEmpty() -> {
+                EmptyBoxscoreCard()
+            }
+
+            else -> {
+                if (batters.isNotEmpty()) {
+                    BoxscoreBatterTable(batters = batters)
+                }
+                if (pitchers.isNotEmpty()) {
+                    BoxscorePitcherTable(pitchers = pitchers)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyBoxscoreCard() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.lg,
+        color = Gray900
+    ) {
+        Text(
+            text = "박스스코어가 아직 준비되지 않았습니다",
+            style = AppFont.bodyMedium,
+            color = Gray400,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = AppSpacing.xxxl)
+        )
+    }
+}
+
+/// 박스스코어 숫자 컬럼 폭 (타자·투수 테이블 공통)
+private val BoxscoreStatCellWidth = 36.dp
+
+@Composable
+private fun BoxscoreBatterTable(batters: List<BackendGamesRepository.BoxscoreBatter>) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.lg,
+        color = Gray900,
+        border = BorderStroke(1.dp, Gray800)
+    ) {
+        Column(
+            modifier = Modifier.padding(AppSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "타순 · 선수",
+                    style = AppFont.microBold,
+                    color = Gray500,
+                    modifier = Modifier.weight(1f)
+                )
+                for (header in listOf("타수", "안타", "타점", "득점", "홈런")) {
+                    BoxscoreStatCell(text = header, color = Gray500, style = AppFont.microBold)
+                }
+            }
+
+            for (batter in batters) {
+                BoxscoreBatterRow(batter = batter)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxscoreBatterRow(batter: BackendGamesRepository.BoxscoreBatter) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)
+        ) {
+            Text(
+                text = batter.battingOrder?.toString() ?: "-",
+                style = AppFont.microBold,
+                color = Gray500,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.width(14.dp)
+            )
+            Text(
+                text = batter.playerName,
+                style = AppFont.captionMedium,
+                // 교체 출전 선수는 살짝 흐리게 구분
+                color = if (batter.isStarter) Color.White else Gray400,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            val position = batter.position?.trim().orEmpty()
+            if (position.isNotEmpty()) {
+                Text(
+                    text = position,
+                    style = AppFont.micro,
+                    color = Gray500,
+                    maxLines = 1
+                )
+            }
+        }
+        BoxscoreStatCell(text = batter.atBats.toString(), color = Gray300)
+        // 멀티히트(2안타+)·2타점+·홈런은 그린 강조
+        BoxscoreHighlightStatCell(value = batter.hits, threshold = 2)
+        BoxscoreHighlightStatCell(value = batter.rbi, threshold = 2)
+        BoxscoreStatCell(text = batter.runs.toString(), color = Gray300)
+        BoxscoreHighlightStatCell(value = batter.homeRuns, threshold = 1)
+    }
+}
+
+@Composable
+private fun BoxscorePitcherTable(pitchers: List<BackendGamesRepository.BoxscorePitcher>) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = AppShapes.lg,
+        color = Gray900,
+        border = BorderStroke(1.dp, Gray800)
+    ) {
+        Column(
+            modifier = Modifier.padding(AppSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
+        ) {
+            Text(text = "투수 기록", style = AppFont.captionBold, color = Yellow400)
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "투수",
+                    style = AppFont.microBold,
+                    color = Gray500,
+                    modifier = Modifier.weight(1f)
+                )
+                for (header in listOf("이닝", "투구", "피안타", "실점", "K")) {
+                    BoxscoreStatCell(text = header, color = Gray500, style = AppFont.microBold)
+                }
+            }
+
+            for (pitcher in pitchers) {
+                BoxscorePitcherRow(pitcher = pitcher)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxscorePitcherRow(pitcher: BackendGamesRepository.BoxscorePitcher) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)
+        ) {
+            Text(
+                text = pitcher.playerName,
+                style = AppFont.captionMedium,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (pitcher.isStarter) {
+                Text(text = "(선발)", style = AppFont.micro, color = Gray500, maxLines = 1)
+            }
+        }
+        BoxscoreStatCell(text = pitcherInningsText(pitcher.outsRecorded), color = Gray300)
+        BoxscoreStatCell(text = pitcher.pitchesThrown.toString(), color = Gray300)
+        BoxscoreStatCell(text = pitcher.hitsAllowed.toString(), color = Gray300)
+        BoxscoreStatCell(text = pitcher.runsAllowed.toString(), color = Gray300)
+        // 5K+ 는 그린 강조
+        BoxscoreHighlightStatCell(value = pitcher.strikeouts, threshold = 5)
+    }
+}
+
+@Composable
+private fun BoxscoreStatCell(
+    text: String,
+    color: Color,
+    style: TextStyle = AppFont.caption
+) {
+    Text(
+        text = text,
+        style = style,
+        color = color,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+        modifier = Modifier.width(BoxscoreStatCellWidth)
+    )
+}
+
+/// threshold 이상이면 그린 강조 (멀티히트·홈런·다K 등 주목할 기록)
+@Composable
+private fun BoxscoreHighlightStatCell(value: Int, threshold: Int) {
+    val highlighted = value >= threshold
+    BoxscoreStatCell(
+        text = value.toString(),
+        color = if (highlighted) Green400 else Gray300,
+        style = if (highlighted) AppFont.captionBold else AppFont.caption
+    )
+}
+
+/// 잡은 아웃카운트 → 이닝 표기. 19아웃 → "6⅓", 2아웃 → "⅔", 0아웃 → "0"
+private fun pitcherInningsText(outsRecorded: Int): String {
+    val outs = outsRecorded.coerceAtLeast(0)
+    val whole = outs / 3
+    return when (outs % 3) {
+        1 -> if (whole > 0) "$whole⅓" else "⅓"
+        2 -> if (whole > 0) "$whole⅔" else "⅔"
+        else -> whole.toString()
     }
 }
 
@@ -2044,6 +2551,15 @@ private object DebugDummyLiveGame {
         lastEventType = "SCORE",
         homeStartingPitcher = "김윤식",
         awayStartingPitcher = "김건우",
+        // 라인스코어 카드 확인용 더미 (합계가 homeScore/awayScore 와 일치)
+        lineScore = BackendGamesRepository.LineScore(
+            home = mapOf(1 to 2, 2 to 0, 3 to 4, 4 to 4),
+            away = mapOf(1 to 0, 2 to 1, 3 to 0, 4 to 0),
+        ),
+        homeHits = 11,
+        awayHits = 3,
+        homeErrors = 0,
+        awayErrors = 1,
     )
 
     private val austinRecord = mapOf(

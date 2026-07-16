@@ -16,6 +16,10 @@ struct LiveGameScreen: View {
     @State private var loadingInningNumbers: Set<Int> = []
     @State private var isScoreEventsLoaded: Bool = false
     @State private var isScoreEventsLoading: Bool = false
+    // 중계 ↔ 박스스코어 탭 상태. 중계 탭은 기존 콘텐츠 그대로 유지.
+    @State private var selectedDetailTab: LiveDetailTab = .relay
+    @State private var boxscore: GameBoxscore?
+    @State private var isBoxscoreLoading: Bool = false
     @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
 
     private var teamDisplayNameStyle: TeamDisplayNameStyle {
@@ -78,46 +82,68 @@ struct LiveGameScreen: View {
                 ScrollView {
                     LazyVStack(spacing: AppSpacing.md) {
                         ScoreboardCard(state: state, latestEvent: events.first)
-                        BaseballFieldCard(state: state, latestEvent: events.first, recentEvents: events, lineup: currentLineup)
-                        InningTabs(
-                            state: state,
-                            selectedInningNumber: selectedInningNumber,
-                            isScoreFilterActive: isScoreFilterActive,
-                            onSelectInning: { n in
-                                isScoreFilterActive = false
-                                selectedInningNumber = n
-                                hasManualInningSelection = true
-                                Task { await loadInningEvents(n) }
-                            },
-                            onSelectScore: {
-                                isScoreFilterActive = true
-                                selectedInningNumber = nil
-                                hasManualInningSelection = true
-                                Task { await loadScoreEvents() }
-                            }
-                        )
-                        CurrentMatchupCard(state: state, latestEvent: events.first)
 
-                        Text("실시간 중계")
-                            .font(AppFont.h5Bold)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, AppSpacing.sm)
+                        // ① 이닝별 라인스코어 — 신규 백엔드 lineScore 가 있을 때만 노출
+                        if let lineScore = state.lineScore {
+                            LineScoreCard(state: state, lineScore: lineScore)
+                        }
 
-                        if filteredEvents.isEmpty {
-                            EmptyInningEventCard(isLoading: isCurrentEventFilterLoading)
-                        } else {
-                            let groups = filteredAtBats
-                            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
-                                if index == 0 || sectionKey(for: groups[index - 1]) != sectionKey(for: group) {
-                                    AtBatSectionHeader(title: sectionTitle(for: group, state: state, style: teamDisplayNameStyle))
+                        // ② 중계 ↔ 박스스코어 탭
+                        LiveDetailTabBar(selected: $selectedDetailTab)
+
+                        if selectedDetailTab == .relay {
+                            BaseballFieldCard(state: state, latestEvent: events.first, recentEvents: events, lineup: currentLineup)
+                            InningTabs(
+                                state: state,
+                                selectedInningNumber: selectedInningNumber,
+                                isScoreFilterActive: isScoreFilterActive,
+                                onSelectInning: { n in
+                                    isScoreFilterActive = false
+                                    selectedInningNumber = n
+                                    hasManualInningSelection = true
+                                    Task { await loadInningEvents(n) }
+                                },
+                                onSelectScore: {
+                                    isScoreFilterActive = true
+                                    selectedInningNumber = nil
+                                    hasManualInningSelection = true
+                                    Task { await loadScoreEvents() }
                                 }
-                                AtBatCard(
-                                    group: group,
-                                    awayTeamName: state.awayTeamId.displayName(style: teamDisplayNameStyle),
-                                    homeTeamName: state.homeTeamId.displayName(style: teamDisplayNameStyle),
-                                    highlightScoreOutcome: isScoreFilterActive
-                                )
+                            )
+                            CurrentMatchupCard(state: state, latestEvent: events.first)
+
+                            Text("실시간 중계")
+                                .font(AppFont.h5Bold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.top, AppSpacing.sm)
+
+                            if filteredEvents.isEmpty {
+                                EmptyInningEventCard(isLoading: isCurrentEventFilterLoading)
+                            } else {
+                                let groups = filteredAtBats
+                                ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                                    if index == 0 || sectionKey(for: groups[index - 1]) != sectionKey(for: group) {
+                                        AtBatSectionHeader(title: sectionTitle(for: group, state: state, style: teamDisplayNameStyle))
+                                    }
+                                    AtBatCard(
+                                        group: group,
+                                        awayTeamName: state.awayTeamId.displayName(style: teamDisplayNameStyle),
+                                        homeTeamName: state.homeTeamId.displayName(style: teamDisplayNameStyle),
+                                        highlightScoreOutcome: isScoreFilterActive
+                                    )
+                                }
+                            }
+                        } else {
+                            BoxscoreSection(
+                                state: state,
+                                boxscore: boxscore,
+                                isLoading: isBoxscoreLoading
+                            )
+                            // 탭이 보이는 동안만 살아있는 task — 탭 전환/화면 이탈 시 자동 취소.
+                            // 첫 진입 시 즉시 fetch, LIVE 인 동안 30초 주기 갱신.
+                            .task(id: gameId) {
+                                await runBoxscoreRefreshLoop()
                             }
                         }
 
@@ -274,6 +300,28 @@ struct LiveGameScreen: View {
             loadError = nil
         } else if filteredEvents.isEmpty {
             loadError = "중계 데이터를 가져오지 못했습니다."
+        }
+    }
+
+    // MARK: - Boxscore
+    /// 박스스코어 탭이 보이는 동안 실행되는 루프.
+    /// - 데이터가 없을 때만 스피너 (isBoxscoreLoading)
+    /// - 갱신 실패 시 마지막 데이터 유지
+    /// - LIVE 가 아니면 1회 조회 후 종료, LIVE 면 30초 주기 갱신
+    private func runBoxscoreRefreshLoop() async {
+        guard let gameId = gameId, !gameId.isEmpty else { return }
+
+        while !Task.isCancelled {
+            if boxscore == nil {
+                isBoxscoreLoading = true
+            }
+            if let fetched = await BackendGamesRepository.shared.fetchGameBoxscore(gameId: gameId) {
+                boxscore = fetched
+            }
+            isBoxscoreLoading = false
+
+            guard gameState?.status == .live else { break }
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
         }
     }
 
@@ -927,6 +975,485 @@ private struct InningTabs: View {
 
     private var tabs: [String] {
         ["득점"] + (1...9).map { "\($0)회" }
+    }
+}
+
+// MARK: - ① 이닝별 라인스코어 카드
+/// 스코어 헤더 바로 아래 이닝별 득점 + R·H·E 표.
+/// 백엔드 lineScore 가 있을 때만 노출되며 (구버전 백엔드 → 숨김),
+/// 10회 이상 연장은 가로 스크롤로 대응한다.
+private struct LineScoreCard: View {
+    let state: LiveGameState
+    let lineScore: GameLineScore
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+
+    private var style: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
+
+    private let rowHeight: CGFloat = 22
+    private let inningCellWidth: CGFloat = 24
+    private let totalCellWidth: CGFloat = 28
+
+    /// 표시할 이닝 수 — 최소 9, 연장 시 라인스코어/현재 이닝까지 확장
+    private var totalInnings: Int {
+        max(9, lineScore.maxInning, currentInningNumber ?? 0)
+    }
+
+    /// LIVE 중일 때만 유효한 현재 진행 이닝 번호 (연장 포함, clamp 없음)
+    private var currentInningNumber: Int? {
+        guard state.status == .live else { return nil }
+        return fullInningNumber(state.inning)
+    }
+
+    /// 현재 공격 중인 팀이 홈인지 (초 = 어웨이 공격, 말 = 홈 공격)
+    private var battingSideIsHome: Bool? {
+        if state.inning.contains("초") { return false }
+        if state.inning.contains("말") { return true }
+        return nil
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: AppSpacing.md) {
+            // 팀명 고정 열 (가로 스크롤에서 제외)
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("팀")
+                    .font(AppFont.micro)
+                    .foregroundColor(AppColors.gray600)
+                    .frame(height: rowHeight)
+                teamNameCell(state.awayTeamId.displayName(style: style))
+                teamNameCell(state.homeTeamId.displayName(style: style))
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    headerRow
+                    scoreRow(isHome: false)
+                    scoreRow(isHome: true)
+                }
+            }
+        }
+        .padding(AppSpacing.lg)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.lg)
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.lg).stroke(AppColors.gray800, lineWidth: 1))
+    }
+
+    private func teamNameCell(_ name: String) -> some View {
+        Text(name)
+            .font(AppFont.microBold)
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: 56, minHeight: rowHeight, alignment: .leading)
+    }
+
+    private var headerRow: some View {
+        HStack(spacing: 0) {
+            ForEach(1...totalInnings, id: \.self) { inning in
+                let isCurrent = inning == currentInningNumber
+                Text("\(inning)")
+                    .font(isCurrent ? AppFont.microBold : AppFont.micro)
+                    .foregroundColor(isCurrent ? AppColors.orange500 : AppColors.gray500)
+                    .frame(width: inningCellWidth, height: rowHeight)
+            }
+            totalHeaderCell("R")
+            totalHeaderCell("H")
+            totalHeaderCell("E")
+        }
+    }
+
+    private func totalHeaderCell(_ label: String) -> some View {
+        Text(label)
+            .font(AppFont.microBold)
+            .foregroundColor(AppColors.gray400)
+            .frame(width: totalCellWidth, height: rowHeight)
+    }
+
+    private func scoreRow(isHome: Bool) -> some View {
+        let runsByInning = isHome ? lineScore.home : lineScore.away
+        let isBattingNow = state.status == .live && battingSideIsHome == isHome
+        return HStack(spacing: 0) {
+            ForEach(1...totalInnings, id: \.self) { inning in
+                let runs = runsByInning[inning]
+                // 진행 중 이닝의 공격팀 셀은 라이브 액센트(orange)로 강조
+                let isCurrentAttackCell = isBattingNow && inning == currentInningNumber
+                Text(runs.map { "\($0)" } ?? "-")
+                    .font(isCurrentAttackCell ? AppFont.microBold : AppFont.micro)
+                    .foregroundColor(
+                        isCurrentAttackCell
+                            ? AppColors.orange500
+                            : (runs == nil ? AppColors.gray600 : AppColors.gray100)
+                    )
+                    .frame(width: inningCellWidth, height: rowHeight)
+            }
+
+            // R — 현재 스코어 (공격팀 LIVE 강조)
+            Text("\(isHome ? state.homeScore : state.awayScore)")
+                .font(AppFont.microBold)
+                .foregroundColor(isBattingNow ? AppColors.orange500 : .white)
+                .frame(width: totalCellWidth, height: rowHeight)
+            // H — 안타 합계 (미제공 시 "-")
+            Text((isHome ? state.homeHits : state.awayHits).map { "\($0)" } ?? "-")
+                .font(AppFont.micro)
+                .foregroundColor(AppColors.gray300)
+                .frame(width: totalCellWidth, height: rowHeight)
+            // E — 실책 합계 (미제공 시 "-")
+            Text((isHome ? state.homeErrors : state.awayErrors).map { "\($0)" } ?? "-")
+                .font(AppFont.micro)
+                .foregroundColor(AppColors.gray300)
+                .frame(width: totalCellWidth, height: rowHeight)
+        }
+    }
+}
+
+/// 이닝 문자열("10회말" 등)에서 clamp 없이 이닝 번호를 추출. 연장(10회+)도 그대로 반환.
+private func fullInningNumber(_ inning: String) -> Int? {
+    guard let range = inning.range(of: #"(\d+)회"#, options: .regularExpression) else { return nil }
+    return Int(String(inning[range]).replacingOccurrences(of: "회", with: ""))
+}
+
+// MARK: - ② 중계 ↔ 박스스코어 탭
+private enum LiveDetailTab {
+    case relay
+    case boxscore
+}
+
+private struct LiveDetailTabBar: View {
+    @Binding var selected: LiveDetailTab
+
+    var body: some View {
+        HStack(spacing: AppSpacing.xs) {
+            tabButton(title: "중계", tab: .relay)
+            tabButton(title: "박스스코어", tab: .boxscore)
+        }
+        .padding(AppSpacing.xs)
+        .background(RoundedRectangle(cornerRadius: AppRadius.md).fill(AppColors.gray900))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.md).stroke(AppColors.gray800, lineWidth: 1))
+    }
+
+    private func tabButton(title: String, tab: LiveDetailTab) -> some View {
+        let isSelected = selected == tab
+        return Button {
+            selected = tab
+        } label: {
+            Text(title)
+                .font(AppFont.captionBold)
+                .foregroundColor(isSelected ? AppColors.gray950 : AppColors.gray400)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
+                        .fill(isSelected ? AppColors.yellow500 : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - 박스스코어 탭 콘텐츠
+private enum BoxscoreTeamSide {
+    case away
+    case home
+}
+
+private struct BoxscoreSection: View {
+    let state: LiveGameState
+    let boxscore: GameBoxscore?
+    let isLoading: Bool
+
+    // 어웨이 팀이 선공이므로 기본 선택은 어웨이
+    @State private var selectedSide: BoxscoreTeamSide = .away
+    @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+
+    private var style: TeamDisplayNameStyle {
+        TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
+
+    var body: some View {
+        if let boxscore, !boxscore.isEmpty {
+            content(boxscore)
+        } else if isLoading {
+            BoxscoreLoadingCard()
+        } else {
+            BoxscoreEmptyCard()
+        }
+    }
+
+    private func content(_ boxscore: GameBoxscore) -> some View {
+        let batters = selectedSide == .home ? boxscore.homeBatters : boxscore.awayBatters
+        let pitchers = selectedSide == .home ? boxscore.homePitchers : boxscore.awayPitchers
+        return VStack(alignment: .leading, spacing: AppSpacing.md) {
+            BoxscoreTeamSegment(
+                awayName: state.awayTeamId.displayName(style: style),
+                homeName: state.homeTeamId.displayName(style: style),
+                selected: $selectedSide
+            )
+
+            BoxscoreBatterTable(batters: sortedBatters(batters))
+
+            Text("투수 기록")
+                .font(AppFont.h5Bold)
+                .foregroundColor(.white)
+                .padding(.top, AppSpacing.sm)
+
+            BoxscorePitcherTable(pitchers: sortedPitchers(pitchers))
+        }
+    }
+
+    private func sortedBatters(_ batters: [BoxscoreBatterLine]) -> [BoxscoreBatterLine] {
+        batters.enumerated().sorted { lhs, rhs in
+            let lhsOrder = lhs.element.battingOrder ?? Int.max
+            let rhsOrder = rhs.element.battingOrder ?? Int.max
+            if lhsOrder != rhsOrder { return lhsOrder < rhsOrder }
+            // 같은 타순이면 선발 먼저, 이후는 응답 순서 유지
+            if lhs.element.isStarter != rhs.element.isStarter { return lhs.element.isStarter }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
+    private func sortedPitchers(_ pitchers: [BoxscorePitcherLine]) -> [BoxscorePitcherLine] {
+        pitchers.enumerated().sorted { lhs, rhs in
+            let lhsOrder = lhs.element.appearanceOrder ?? Int.max
+            let rhsOrder = rhs.element.appearanceOrder ?? Int.max
+            if lhsOrder != rhsOrder { return lhsOrder < rhsOrder }
+            if lhs.element.isStarter != rhs.element.isStarter { return lhs.element.isStarter }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+}
+
+private struct BoxscoreTeamSegment: View {
+    let awayName: String
+    let homeName: String
+    @Binding var selected: BoxscoreTeamSide
+
+    var body: some View {
+        HStack(spacing: AppSpacing.xs) {
+            segmentButton(title: "\(awayName) 타자", side: .away)
+            segmentButton(title: "\(homeName) 타자", side: .home)
+        }
+        .padding(AppSpacing.xs)
+        .background(RoundedRectangle(cornerRadius: AppRadius.md).fill(AppColors.gray900))
+    }
+
+    private func segmentButton(title: String, side: BoxscoreTeamSide) -> some View {
+        let isSelected = selected == side
+        return Button {
+            selected = side
+        } label: {
+            Text(title)
+                .font(AppFont.captionBold)
+                .foregroundColor(isSelected ? .white : AppColors.gray500)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppSpacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: AppRadius.sm)
+                        .fill(isSelected ? AppColors.gray700 : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct BoxscoreBatterTable: View {
+    let batters: [BoxscoreBatterLine]
+
+    private let statCellWidth: CGFloat = 36
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 헤더
+            HStack(spacing: AppSpacing.xs) {
+                Text("타순 · 선수")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("타수").frame(width: statCellWidth)
+                Text("안타").frame(width: statCellWidth)
+                Text("타점").frame(width: statCellWidth)
+                Text("득점").frame(width: statCellWidth)
+            }
+            .font(AppFont.micro)
+            .foregroundColor(AppColors.gray500)
+            .padding(.bottom, AppSpacing.sm)
+
+            Divider().overlay(AppColors.gray800)
+
+            if batters.isEmpty {
+                Text("타자 기록이 없습니다")
+                    .font(AppFont.caption)
+                    .foregroundColor(AppColors.gray500)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.lg)
+            } else {
+                ForEach(Array(batters.enumerated()), id: \.offset) { _, batter in
+                    batterRow(batter)
+                }
+            }
+        }
+        .padding(AppSpacing.lg)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.lg)
+    }
+
+    private func batterRow(_ batter: BoxscoreBatterLine) -> some View {
+        HStack(spacing: AppSpacing.xs) {
+            HStack(spacing: AppSpacing.xs) {
+                Text(batter.battingOrder.map { "\($0)" } ?? "-")
+                    .font(AppFont.microBold)
+                    .foregroundColor(AppColors.gray500)
+                    .frame(width: 16, alignment: .leading)
+                Text(batter.playerName)
+                    .font(AppFont.captionMedium)
+                    // 교체 출전 선수는 살짝 톤 다운
+                    .foregroundColor(batter.isStarter ? .white : AppColors.gray300)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if let position = batter.position, !position.isEmpty {
+                    Text(position)
+                        .font(AppFont.micro)
+                        .foregroundColor(AppColors.gray500)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            statCell(batter.atBats)
+            statCell(batter.hits, highlighted: batter.hits >= 2)
+            statCell(batter.rbi, highlighted: batter.rbi >= 2)
+            statCell(batter.runs, highlighted: batter.runs >= 2)
+        }
+        .padding(.vertical, AppSpacing.sm)
+    }
+
+    /// 멀티히트·멀티타점 등 눈에 띄는 기록은 green 액센트
+    private func statCell(_ value: Int, highlighted: Bool = false) -> some View {
+        Text("\(value)")
+            .font(highlighted ? AppFont.captionBold : AppFont.captionMedium)
+            .foregroundColor(highlighted ? AppColors.green400 : AppColors.gray200)
+            .frame(width: statCellWidth)
+    }
+}
+
+private struct BoxscorePitcherTable: View {
+    let pitchers: [BoxscorePitcherLine]
+
+    private let statCellWidth: CGFloat = 34
+    private let wideCellWidth: CGFloat = 40
+    private let narrowCellWidth: CGFloat = 26
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 헤더
+            HStack(spacing: AppSpacing.xs) {
+                Text("투수")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("이닝").frame(width: statCellWidth)
+                Text("투구").frame(width: statCellWidth)
+                Text("피안타").frame(width: wideCellWidth)
+                Text("실점").frame(width: statCellWidth)
+                Text("K").frame(width: narrowCellWidth)
+            }
+            .font(AppFont.micro)
+            .foregroundColor(AppColors.gray500)
+            .padding(.bottom, AppSpacing.sm)
+
+            Divider().overlay(AppColors.gray800)
+
+            if pitchers.isEmpty {
+                Text("투수 기록이 없습니다")
+                    .font(AppFont.caption)
+                    .foregroundColor(AppColors.gray500)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.lg)
+            } else {
+                ForEach(Array(pitchers.enumerated()), id: \.offset) { _, pitcher in
+                    pitcherRow(pitcher)
+                }
+            }
+        }
+        .padding(AppSpacing.lg)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.lg)
+    }
+
+    private func pitcherRow(_ pitcher: BoxscorePitcherLine) -> some View {
+        HStack(spacing: AppSpacing.xs) {
+            Text(pitcher.isStarter ? "\(pitcher.playerName) (선발)" : pitcher.playerName)
+                .font(AppFont.captionMedium)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(inningsPitchedText(outsRecorded: pitcher.outsRecorded))
+                .font(AppFont.captionMedium)
+                .foregroundColor(AppColors.gray200)
+                .frame(width: statCellWidth)
+            Text("\(pitcher.pitchesThrown)")
+                .font(AppFont.captionMedium)
+                .foregroundColor(AppColors.gray200)
+                .frame(width: statCellWidth)
+            Text("\(pitcher.hitsAllowed)")
+                .font(AppFont.captionMedium)
+                .foregroundColor(AppColors.gray200)
+                .frame(width: wideCellWidth)
+            Text("\(pitcher.runsAllowed)")
+                .font(AppFont.captionMedium)
+                .foregroundColor(AppColors.gray200)
+                .frame(width: statCellWidth)
+            // 탈삼진 다수는 green 액센트
+            Text("\(pitcher.strikeouts)")
+                .font(pitcher.strikeouts >= 5 ? AppFont.captionBold : AppFont.captionMedium)
+                .foregroundColor(pitcher.strikeouts >= 5 ? AppColors.green400 : AppColors.gray200)
+                .frame(width: narrowCellWidth)
+        }
+        .padding(.vertical, AppSpacing.sm)
+    }
+}
+
+/// 아웃카운트 → 이닝 표기 변환. 19아웃 → "6⅓" 스타일 (whole = outs/3, 나머지 ⅓/⅔).
+private func inningsPitchedText(outsRecorded: Int) -> String {
+    let outs = max(outsRecorded, 0)
+    let whole = outs / 3
+    let fraction: String
+    switch outs % 3 {
+    case 1: fraction = "⅓"
+    case 2: fraction = "⅔"
+    default: fraction = ""
+    }
+    if whole == 0 {
+        return fraction.isEmpty ? "0" : fraction
+    }
+    return "\(whole)\(fraction)"
+}
+
+private struct BoxscoreLoadingCard: View {
+    var body: some View {
+        VStack(spacing: AppSpacing.md) {
+            ProgressView()
+                .tint(AppColors.gray400)
+            Text("박스스코어를 불러오는 중...")
+                .font(AppFont.bodyMedium)
+                .foregroundColor(AppColors.gray400)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AppSpacing.xxxl)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.lg)
+    }
+}
+
+private struct BoxscoreEmptyCard: View {
+    var body: some View {
+        Text("박스스코어가 아직 준비되지 않았습니다")
+            .font(AppFont.bodyMedium)
+            .foregroundColor(AppColors.gray400)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.xxxl)
+            .background(AppColors.gray900)
+            .cornerRadius(AppRadius.lg)
     }
 }
 

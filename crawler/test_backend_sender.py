@@ -241,3 +241,88 @@ def test_normalize_status_supports_canceled_and_postponed() -> None:
     assert _normalize_status("RAIN_CANCEL") == "CANCELED"
     assert _normalize_status("POSTPONED") == "POSTPONED"
     assert _normalize_status("ppd") == "POSTPONED"
+
+
+# MARK: - 이닝별 라인스코어 / 실책 추출
+
+MOCK_RELAY_INNING_9 = (
+    CRAWLER_ROOT.parent / "data" / "mock_baseball" / "20260401WOSK02026" / "relay_inning_9.json"
+)
+
+
+def _mock_game_data() -> dict:
+    return {
+        "homeTeamName": "SSG",
+        "awayTeamName": "키움",
+        "statusCode": "RESULT",
+        "statusInfo": "경기종료",
+        "homeTeamScore": 2,
+        "awayTeamScore": 11,
+        "gameDateTime": "2026-04-01T18:30:00+09:00",
+    }
+
+
+def test_snapshot_payload_includes_line_score_and_errors_from_mock_relay() -> None:
+    import json
+
+    relay_data = json.loads(MOCK_RELAY_INNING_9.read_text(encoding="utf-8"))["result"]["textRelayData"]
+
+    payload = build_snapshot_payload(game_data=_mock_game_data(), relays_by_inning={9: relay_data})
+
+    # inningScore 문자열 값이 int 로 변환되어 lineScore 로 노출된다
+    assert payload["lineScore"]["home"] == {
+        "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 1, "7": 0, "8": 0, "9": 1,
+    }
+    assert payload["lineScore"]["away"] == {
+        "1": 3, "2": 0, "3": 0, "4": 0, "5": 2, "6": 2, "7": 0, "8": 0, "9": 4,
+    }
+    # currentGameState.homeError/awayError → homeErrors/awayErrors
+    assert payload["homeErrors"] == 2
+    assert payload["awayErrors"] == 0
+
+
+def test_snapshot_payload_omits_line_score_when_relay_has_no_inning_score() -> None:
+    # relay 데이터가 없는 경로(경기 전 등)에서는 필드 자체가 생략되어야 한다 (하위 호환)
+    payload = build_snapshot_payload(
+        game_data=_mock_game_data(), relays_by_inning={1: {"textRelays": []}}
+    )
+
+    assert "lineScore" not in payload
+    assert "homeErrors" not in payload
+    assert "awayErrors" not in payload
+
+
+def test_extract_line_score_skips_malformed_entries() -> None:
+    from backend_sender import _extract_line_score
+
+    relays = {
+        1: {
+            "textRelays": [{"no": 1, "homeOrAway": "0", "textOptions": []}],
+            "inningScore": {
+                "home": {"1": "0", "2": "-", "x": "3", "3": None},
+                "away": "broken",
+            },
+        }
+    }
+
+    # 정수 변환 불가("-", None)·비숫자 키("x")·비딕셔너리 side 는 방어적으로 건너뛴다
+    assert _extract_line_score(relays) == {"home": {"1": 0}}
+
+
+def test_extract_line_score_prefers_freshest_played_inning() -> None:
+    from backend_sender import _extract_line_score
+
+    # 캐시된 미래 이닝(9회, textRelays 없음)의 stale inningScore 대신
+    # 실제 진행된 최신 이닝(5회) relay 의 값을 사용해야 한다
+    relays = {
+        5: {
+            "textRelays": [{"no": 1, "homeOrAway": "0", "textOptions": []}],
+            "inningScore": {"home": {"1": "1"}, "away": {"1": "2"}},
+        },
+        9: {
+            "textRelays": [],
+            "inningScore": {"home": {"1": "0"}, "away": {"1": "0"}},
+        },
+    }
+
+    assert _extract_line_score(relays) == {"home": {"1": 1}, "away": {"1": 2}}

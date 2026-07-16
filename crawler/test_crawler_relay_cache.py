@@ -80,3 +80,16 @@ def test_crawl_once_detailed_without_cache_fetches_everything(monkeypatch) -> No
 
     relay_fetches = [url for url in fetched_urls if "relay?inning=" in url]
     assert len(relay_fetches) == 18
+
+
+def test_snapshot_state_signature_changes_when_line_score_changes() -> None:
+    base = {"status": "LIVE", "inning": "5회말", "homeScore": 1, "awayScore": 0}
+    unchanged = crawler._snapshot_state_signature(dict(base))
+    same = crawler._snapshot_state_signature(dict(base))
+    with_line_score = crawler._snapshot_state_signature({**base, "lineScore": {"home": {"1": 1}}})
+    with_errors = crawler._snapshot_state_signature({**base, "homeErrors": 1})
+
+    # 라인스코어/실책만 바뀌어도 시그니처가 달라져 백엔드로 재전송된다
+    assert unchanged == same
+    assert with_line_score != unchanged
+    assert with_errors != unchanged

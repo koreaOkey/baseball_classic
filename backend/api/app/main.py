@@ -66,6 +66,7 @@ from .schemas import (
     LiveViewSessionRequest,
     LiveActivityTokenRequest,
     EventsResponse,
+    GameBoxscoreOut,
     GameStateOut,
     GameStatus,
     GameSummaryOut,
@@ -82,6 +83,7 @@ from .services import (
     insert_events,
     normalize_status,
     sync_snapshot_details,
+    to_boxscore_out,
     to_team_record_out,
     to_event_out,
     to_game_summary,
@@ -144,6 +146,9 @@ HTTP_STANDINGS_CACHE_TTL_SEC = 30
 HTTP_STALE_CACHE_TTL_SEC = 300
 # 오늘이 포함되지 않은 일정 범위(전부 과거/전부 미래)는 크롤러 임포트 때만 바뀌므로 길게 캐시한다.
 HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC = 600
+# 박스스코어: LIVE 중에는 짧게, 종료/예정 경기는 사실상 정적이라 길게 캐시한다.
+HTTP_BOXSCORE_LIVE_CACHE_TTL_SEC = 30
+HTTP_BOXSCORE_IDLE_CACHE_TTL_SEC = 600
 DB_UNAVAILABLE_CACHE_KEY = "ops:db_unavailable:v1"
 DB_UNAVAILABLE_CACHE_TTL_SEC = 24 * 60 * 60
 DEFAULT_STORE_URLS = {
@@ -252,7 +257,9 @@ async def _delete_http_cache_payload(cache_key: str, *, delete_stale: bool = Fal
 async def _get_or_set_http_cache_payload(
     *,
     cache_key: str,
-    ttl_sec: int,
+    # int 또는 로드된 payload 를 받아 TTL 을 결정하는 callable.
+    # (예: 박스스코어는 경기 상태 LIVE 여부에 따라 TTL 이 달라진다)
+    ttl_sec: int | Callable[[dict[str, Any]], int],
     loader: Callable[[], dict[str, Any]],
     lock_key: str | None = None,
 ) -> dict[str, Any]:
@@ -282,7 +289,8 @@ async def _get_or_set_http_cache_payload(
             _http_cache_stats["loader_error"] += 1
             raise
 
-        await _set_http_cache_payload(cache_key, payload, ttl_sec)
+        resolved_ttl_sec = ttl_sec(payload) if callable(ttl_sec) else ttl_sec
+        await _set_http_cache_payload(cache_key, payload, resolved_ttl_sec)
         _http_cache_stats["set"] += 1
         return payload
 
@@ -883,6 +891,56 @@ def _get_game_state_payload(game_id: str) -> dict[str, Any]:
         if game is None:
             raise HTTPException(status_code=404, detail="game not found")
         return build_game_state(db, game).model_dump(mode="json")
+
+
+@app.get("/games/{game_id}/boxscore", response_model=GameBoxscoreOut)
+async def get_game_boxscore(game_id: str) -> dict[str, Any]:
+    cache_key = f"http:game_boxscore:v1:{game_id}"
+    # loader 실행 시점에 경기 상태를 확인해야 TTL 을 정할 수 있으므로 holder 로 전달한다.
+    is_live_holder = {"live": False}
+
+    def _loader() -> dict[str, Any]:
+        payload, is_live = _get_game_boxscore_payload(game_id)
+        is_live_holder["live"] = is_live
+        return payload
+
+    return await _get_or_set_http_cache_payload(
+        cache_key=cache_key,
+        ttl_sec=lambda _payload: (
+            HTTP_BOXSCORE_LIVE_CACHE_TTL_SEC if is_live_holder["live"] else HTTP_BOXSCORE_IDLE_CACHE_TTL_SEC
+        ),
+        loader=_loader,
+    )
+
+
+def _get_game_boxscore_payload(game_id: str) -> tuple[dict[str, Any], bool]:
+    """박스스코어 payload 와 라이브 여부(캐시 TTL 결정용)를 반환."""
+    assert_db_available()
+    with SessionLocal() as db:
+        game = db.get(Game, game_id)
+        if game is None:
+            raise HTTPException(status_code=404, detail="game not found")
+
+        # 타순/등판 순서 오름차순, NULL(교체 대기 등록 선수 등)은 뒤로 보낸다.
+        batter_rows = db.execute(
+            select(GameBatterStat)
+            .where(GameBatterStat.game_id == game_id)
+            .order_by(
+                func.coalesce(GameBatterStat.batting_order, 9999).asc(),
+                GameBatterStat.id.asc(),
+            )
+        ).scalars().all()
+        pitcher_rows = db.execute(
+            select(GamePitcherStat)
+            .where(GamePitcherStat.game_id == game_id)
+            .order_by(
+                func.coalesce(GamePitcherStat.appearance_order, 9999).asc(),
+                GamePitcherStat.id.asc(),
+            )
+        ).scalars().all()
+
+        payload = to_boxscore_out(game, batter_rows, pitcher_rows).model_dump(mode="json")
+        return payload, normalize_status(game.status) is GameStatus.LIVE
 
 
 @app.get("/games/{game_id}/events", response_model=EventsResponse)

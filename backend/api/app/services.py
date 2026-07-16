@@ -15,6 +15,8 @@ from .models import Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, G
 from .schemas import (
     BaseRunnerStatus,
     BaseStatus,
+    BoxscoreBatterOut,
+    BoxscorePitcherOut,
     CrawlerBatterStatIn,
     CrawlerEventIn,
     CrawlerGameNoteIn,
@@ -23,6 +25,7 @@ from .schemas import (
     CrawlerSnapshotRequest,
     CrawlerTeamRecordRequest,
     EventType,
+    GameBoxscoreOut,
     GameEventOut,
     GameStateOut,
     GameStatus,
@@ -421,6 +424,16 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
         next_values["game_date"] = normalized_game_date
     if start_time is not None:
         next_values["start_time"] = start_time
+
+    # 라인스코어/실책은 스냅샷이 제공했을 때만 갱신한다 — 미제공 스냅샷이 기존 값을
+    # 지우지 않도록. next_values 에 포함되므로 값 변경 시 meaningful_changed 가
+    # True 가 되어 클라이언트 state 브로드캐스트를 트리거한다.
+    if payload.lineScore is not None:
+        next_values["line_score_json"] = payload.lineScore
+    if payload.homeErrors is not None:
+        next_values["home_errors"] = payload.homeErrors
+    if payload.awayErrors is not None:
+        next_values["away_errors"] = payload.awayErrors
 
     if payload.events:
         latest_event = max(payload.events, key=lambda item: ensure_utc(item.occurredAt))
@@ -1530,4 +1543,57 @@ def build_game_state(db: Session, game: Game) -> GameStateOut:
         awayLineup=away_lineup,
         homeStartingPitcher=home_starting_pitcher,
         awayStartingPitcher=away_starting_pitcher,
+        lineScore=game.line_score_json if isinstance(game.line_score_json, dict) else None,
+        homeHits=game.home_hits,
+        awayHits=game.away_hits,
+        homeErrors=game.home_errors,
+        awayErrors=game.away_errors,
+    )
+
+
+def to_boxscore_out(
+    game: Game,
+    batter_rows: list[GameBatterStat],
+    pitcher_rows: list[GamePitcherStat],
+) -> GameBoxscoreOut:
+    """game_batter_stats / game_pitcher_stats 행을 박스스코어 응답으로 변환.
+
+    행 정렬(타순/등판 순서, NULL 은 뒤)은 호출부 쿼리에서 보장한다.
+    """
+
+    def _batter_out(row: GameBatterStat) -> BoxscoreBatterOut:
+        return BoxscoreBatterOut(
+            battingOrder=row.batting_order,
+            playerName=row.player_name,
+            position=row.primary_position,
+            atBats=row.at_bats,
+            hits=row.hits,
+            rbi=row.rbi,
+            runs=row.runs,
+            homeRuns=row.home_runs,
+            walks=row.walks,
+            strikeouts=row.strikeouts,
+            isStarter=bool(row.is_starter),
+        )
+
+    def _pitcher_out(row: GamePitcherStat) -> BoxscorePitcherOut:
+        return BoxscorePitcherOut(
+            appearanceOrder=row.appearance_order,
+            playerName=row.player_name,
+            isStarter=bool(row.is_starter),
+            outsRecorded=row.outs_recorded,
+            pitchesThrown=row.pitches_thrown,
+            hitsAllowed=row.hits_allowed,
+            runsAllowed=row.runs_allowed,
+            earnedRuns=row.earned_runs,
+            walksAllowed=row.walks_allowed,
+            strikeouts=row.strikeouts,
+        )
+
+    return GameBoxscoreOut(
+        gameId=game.id,
+        homeBatters=[_batter_out(row) for row in batter_rows if row.team_side == "home"],
+        awayBatters=[_batter_out(row) for row in batter_rows if row.team_side == "away"],
+        homePitchers=[_pitcher_out(row) for row in pitcher_rows if row.team_side == "home"],
+        awayPitchers=[_pitcher_out(row) for row in pitcher_rows if row.team_side == "away"],
     )

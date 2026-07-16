@@ -90,6 +90,60 @@ object BackendGamesRepository {
         // 선발투수 이름. DH 룰로 lineup 에서 빠지므로 BaseballFieldCard 마운드 자리 보조.
         val homeStartingPitcher: String? = null,
         val awayStartingPitcher: String? = null,
+        // 이닝별 득점 (이닝 번호 → 득점). 구버전 백엔드에서는 null — 라인스코어 카드 숨김.
+        val lineScore: LineScore? = null,
+        // 팀 누적 안타/실책. 백엔드가 채운 경우에만 값이 있고, 미지원이면 null ("-" 표기).
+        val homeHits: Int? = null,
+        val awayHits: Int? = null,
+        val homeErrors: Int? = null,
+        val awayErrors: Int? = null,
+    )
+
+    /// 이닝별 라인스코어. 키는 이닝 번호(1부터), 값은 해당 이닝 득점.
+    data class LineScore(
+        val home: Map<Int, Int>,
+        val away: Map<Int, Int>,
+    ) {
+        /// 기록된 최대 이닝 (연장 대응). 없으면 0.
+        val maxInning: Int
+            get() = maxOf(home.keys.maxOrNull() ?: 0, away.keys.maxOrNull() ?: 0)
+    }
+
+    /// GET /games/{gameId}/boxscore 응답. 신규 엔드포인트라 구버전 백엔드에서는 null.
+    data class GameBoxscore(
+        val gameId: String,
+        val homeBatters: List<BoxscoreBatter>,
+        val awayBatters: List<BoxscoreBatter>,
+        val homePitchers: List<BoxscorePitcher>,
+        val awayPitchers: List<BoxscorePitcher>,
+    )
+
+    data class BoxscoreBatter(
+        val battingOrder: Int?,
+        val playerName: String,
+        val position: String?,
+        val atBats: Int,
+        val hits: Int,
+        val rbi: Int,
+        val runs: Int,
+        val homeRuns: Int,
+        val walks: Int,
+        val strikeouts: Int,
+        val isStarter: Boolean,
+    )
+
+    data class BoxscorePitcher(
+        val appearanceOrder: Int?,
+        val playerName: String,
+        val isStarter: Boolean,
+        // 잡은 아웃카운트 총합. UI 에서 "6⅓" 형태 이닝 표기로 변환.
+        val outsRecorded: Int,
+        val pitchesThrown: Int,
+        val hitsAllowed: Int,
+        val runsAllowed: Int,
+        val earnedRuns: Int,
+        val walksAllowed: Int,
+        val strikeouts: Int,
     )
 
     data class LineupSlot(
@@ -676,6 +730,21 @@ object BackendGamesRepository {
         }
     }
 
+    /// 박스스코어(타자/투수 기록) 조회. 미지원 백엔드(404)·파싱 실패 시 null.
+    fun fetchGameBoxscore(gameId: String): GameBoxscore? {
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games/$gameId/boxscore"
+        return getJson(endpoint) { body ->
+            val root = JSONObject(body)
+            GameBoxscore(
+                gameId = root.optString("gameId").ifBlank { gameId },
+                homeBatters = root.optBatterArray("homeBatters"),
+                awayBatters = root.optBatterArray("awayBatters"),
+                homePitchers = root.optPitcherArray("homePitchers"),
+                awayPitchers = root.optPitcherArray("awayPitchers"),
+            )
+        }
+    }
+
     fun fetchGameEvents(
         gameId: String,
         after: Long,
@@ -1001,7 +1070,85 @@ object BackendGamesRepository {
             awayLineup = optLineupArray("awayLineup"),
             homeStartingPitcher = optString("homeStartingPitcher").ifBlank { null },
             awayStartingPitcher = optString("awayStartingPitcher").ifBlank { null },
+            lineScore = optLineScore("lineScore"),
+            homeHits = optNullableInt("homeHits"),
+            awayHits = optNullableInt("awayHits"),
+            homeErrors = optNullableInt("homeErrors"),
+            awayErrors = optNullableInt("awayErrors"),
         )
+    }
+
+    /// {"home": {"1": 0, "2": 1, ...}, "away": {...}} 방어적 파싱.
+    /// 키가 숫자가 아니거나 값이 정수가 아니면 해당 엔트리만 무시한다.
+    private fun JSONObject.optLineScore(key: String): LineScore? {
+        val obj = optJSONObject(key) ?: return null
+        fun parseSide(sideKey: String): Map<Int, Int> {
+            val side = obj.optJSONObject(sideKey) ?: return emptyMap()
+            return buildMap {
+                val iterator = side.keys()
+                while (iterator.hasNext()) {
+                    val rawKey = iterator.next()
+                    val inning = rawKey.trim().toIntOrNull() ?: continue
+                    if (inning < 1) continue
+                    val runs = side.optNullableInt(rawKey) ?: continue
+                    put(inning, runs)
+                }
+            }
+        }
+        return runCatching {
+            LineScore(home = parseSide("home"), away = parseSide("away"))
+        }.getOrNull()
+    }
+
+    private fun JSONObject.optBatterArray(key: String): List<BoxscoreBatter> {
+        val array = optJSONArray(key) ?: return emptyList()
+        return buildList(array.length()) {
+            for (i in 0 until array.length()) {
+                val row = array.optJSONObject(i) ?: continue
+                val name = row.optString("playerName").trim()
+                if (name.isEmpty()) continue
+                add(
+                    BoxscoreBatter(
+                        battingOrder = row.optNullableInt("battingOrder"),
+                        playerName = name,
+                        position = row.optCleanString("position"),
+                        atBats = row.optInt("atBats", 0),
+                        hits = row.optInt("hits", 0),
+                        rbi = row.optInt("rbi", 0),
+                        runs = row.optInt("runs", 0),
+                        homeRuns = row.optInt("homeRuns", 0),
+                        walks = row.optInt("walks", 0),
+                        strikeouts = row.optInt("strikeouts", 0),
+                        isStarter = row.optBoolean("isStarter", true),
+                    )
+                )
+            }
+        }
+    }
+
+    private fun JSONObject.optPitcherArray(key: String): List<BoxscorePitcher> {
+        val array = optJSONArray(key) ?: return emptyList()
+        return buildList(array.length()) {
+            for (i in 0 until array.length()) {
+                val row = array.optJSONObject(i) ?: continue
+                val name = row.optString("playerName").trim()
+                if (name.isEmpty()) continue
+                add(
+                    BoxscorePitcher(
+                        appearanceOrder = row.optNullableInt("appearanceOrder"),
+                        playerName = name,
+                        isStarter = row.optBoolean("isStarter", false),
+                        outsRecorded = row.optInt("outsRecorded", 0),
+                        pitchesThrown = row.optInt("pitchesThrown", 0),
+                        hitsAllowed = row.optInt("hitsAllowed", 0),
+                        runsAllowed = row.optInt("runsAllowed", 0),
+                        earnedRuns = row.optInt("earnedRuns", 0),
+                        walksAllowed = row.optInt("walksAllowed", 0),
+                        strikeouts = row.optInt("strikeouts", 0),
+                    )
+                )
+            }
+        }
     }
 
     private fun JSONObject.optLineupArray(key: String): List<LineupSlot> {

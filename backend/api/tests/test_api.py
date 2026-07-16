@@ -219,6 +219,9 @@ def test_schema_init_backfills_legacy_game_summary_columns(tmp_path: Path) -> No
         "last_event_type",
         "last_event_desc",
         "last_event_at",
+        "line_score_json",
+        "home_errors",
+        "away_errors",
     }.issubset(columns)
 
 
@@ -2857,3 +2860,249 @@ def test_games_list_cache_ttl_selection():
     assert main_module._games_list_cache_ttl(game_date=past, from_date=None, to_date=None) == main_module.HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC
     assert main_module._games_list_cache_ttl(game_date=None, from_date=future, to_date=future + td(days=10)) == main_module.HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC
     assert main_module._games_list_cache_ttl(game_date=None, from_date=past - td(days=10), to_date=past) == main_module.HTTP_SCHEDULE_RANGE_CACHE_TTL_SEC
+
+
+# MARK: - 이닝별 라인스코어 / 실책 (lineScore, homeErrors, awayErrors)
+
+def test_snapshot_line_score_and_errors_persist_and_survive_omission() -> None:
+    game_id = "20260401WOSK02026LS"
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        payload["lineScore"] = {"home": {"1": 0, "2": 1}, "away": {"1": 3}}
+        payload["homeErrors"] = 2
+        payload["awayErrors"] = 0
+        first = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert first.status_code == 200
+
+        state = client.get(f"/games/{game_id}/state")
+        assert state.status_code == 200
+        body = state.json()
+        assert body["lineScore"] == {"home": {"1": 0, "2": 1}, "away": {"1": 3}}
+        assert body["homeErrors"] == 2
+        assert body["awayErrors"] == 0
+
+        # lineScore/errors 를 생략한 스냅샷이 기존 저장값을 지우지 않는다
+        omitted = sample_snapshot()
+        omitted["homeScore"] = 4
+        omitted["observedAt"] = "2026-02-17T09:05:00Z"
+        second = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=omitted,
+        )
+        assert second.status_code == 200
+        second_updated_at = second.json()["updatedAt"]
+
+        body = client.get(f"/games/{game_id}/state").json()
+        assert body["homeScore"] == 4
+        assert body["lineScore"] == {"home": {"1": 0, "2": 1}, "away": {"1": 3}}
+        assert body["homeErrors"] == 2
+        assert body["awayErrors"] == 0
+
+        # lineScore 변경만으로도 meaningful change 로 잡혀 state 가 갱신된다
+        line_score_only = sample_snapshot()
+        line_score_only["homeScore"] = 4
+        line_score_only["lineScore"] = {"home": {"1": 0, "2": 1, "3": 2}, "away": {"1": 3}}
+        line_score_only["observedAt"] = "2026-02-17T09:06:00Z"
+        third = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=line_score_only,
+        )
+        assert third.status_code == 200
+        assert third.json()["updatedAt"] != second_updated_at
+
+        body = client.get(f"/games/{game_id}/state").json()
+        assert body["lineScore"] == {"home": {"1": 0, "2": 1, "3": 2}, "away": {"1": 3}}
+
+
+def test_game_state_line_score_defaults_to_none_when_never_provided() -> None:
+    game_id = "20260401WOSK02026LSN"
+    with TestClient(app) as client:
+        ingest = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=sample_snapshot(),
+        )
+        assert ingest.status_code == 200
+
+        body = client.get(f"/games/{game_id}/state").json()
+        assert body["lineScore"] is None
+        assert body["homeErrors"] is None
+        assert body["awayErrors"] is None
+
+
+# MARK: - 박스스코어 endpoint (/games/{game_id}/boxscore)
+
+def _boxscore_snapshot() -> dict:
+    return {
+        "homeTeam": "SSG",
+        "awayTeam": "키움",
+        "status": "LIVE",
+        "inning": "3회초",
+        "homeScore": 0,
+        "awayScore": 1,
+        "lineupSlots": [
+            {"teamSide": "home", "battingOrder": 1, "playerName": "홈1번", "isStarter": True},
+            {"teamSide": "home", "battingOrder": 2, "playerName": "홈2번", "isStarter": True},
+            {"teamSide": "away", "battingOrder": 1, "playerName": "원정1번", "isStarter": True},
+        ],
+        "batterStats": [
+            # 타순 없는 엔트리 선수(교체 대기)는 정렬 시 맨 뒤로 가야 한다
+            {
+                "teamSide": "home",
+                "playerName": "홈교체대기",
+                "battingOrder": None,
+                "primaryPosition": "포수",
+                "isStarter": False,
+            },
+            {
+                "teamSide": "home",
+                "playerName": "홈2번",
+                "battingOrder": 2,
+                "primaryPosition": "우익수",
+                "isStarter": True,
+                "atBats": 2,
+                "hits": 1,
+                "rbi": 1,
+                "runs": 1,
+                "homeRuns": 1,
+                "walks": 0,
+                "strikeouts": 1,
+            },
+            {
+                "teamSide": "home",
+                "playerName": "홈1번",
+                "battingOrder": 1,
+                "primaryPosition": "중견수",
+                "isStarter": True,
+                "atBats": 3,
+                "hits": 2,
+                "walks": 1,
+            },
+            {
+                "teamSide": "away",
+                "playerName": "원정1번",
+                "battingOrder": 1,
+                "primaryPosition": "유격수",
+                "isStarter": True,
+                "atBats": 2,
+            },
+        ],
+        "pitcherStats": [
+            # 등판 순서 역순으로 넣어도 appearance_order 로 정렬되어야 한다
+            {
+                "teamSide": "home",
+                "appearanceOrder": 2,
+                "playerName": "홈불펜",
+                "isStarter": False,
+                "outsRecorded": 3,
+                "pitchesThrown": 15,
+                "hitsAllowed": 1,
+                "runsAllowed": 0,
+                "earnedRuns": 0,
+                "walksAllowed": 1,
+                "strikeouts": 2,
+            },
+            {
+                "teamSide": "home",
+                "appearanceOrder": 1,
+                "playerName": "홈선발",
+                "isStarter": True,
+                "outsRecorded": 6,
+                "pitchesThrown": 40,
+                "hitsAllowed": 3,
+                "runsAllowed": 1,
+                "earnedRuns": 1,
+                "walksAllowed": 0,
+                "strikeouts": 4,
+            },
+            {
+                "teamSide": "away",
+                "appearanceOrder": 1,
+                "playerName": "원정선발",
+                "isStarter": True,
+                "outsRecorded": 6,
+                "pitchesThrown": 35,
+            },
+        ],
+    }
+
+
+def test_boxscore_returns_ordered_batters_and_pitchers() -> None:
+    game_id = "20260401WOSK02026BX"
+    with TestClient(app) as client:
+        ingest = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=_boxscore_snapshot(),
+        )
+        assert ingest.status_code == 200
+
+        response = client.get(f"/games/{game_id}/boxscore")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["gameId"] == game_id
+
+        # 타자: batting_order 오름차순, NULL 은 맨 뒤
+        assert [b["playerName"] for b in body["homeBatters"]] == ["홈1번", "홈2번", "홈교체대기"]
+        assert [b["battingOrder"] for b in body["homeBatters"]] == [1, 2, None]
+        leadoff = body["homeBatters"][0]
+        assert leadoff["position"] == "중견수"
+        assert leadoff["atBats"] == 3
+        assert leadoff["hits"] == 2
+        assert leadoff["walks"] == 1
+        assert leadoff["isStarter"] is True
+        assert body["homeBatters"][1]["homeRuns"] == 1
+        assert body["homeBatters"][1]["rbi"] == 1
+        assert body["homeBatters"][2]["isStarter"] is False
+        assert [b["playerName"] for b in body["awayBatters"]] == ["원정1번"]
+
+        # 투수: appearance_order 오름차순
+        assert [p["playerName"] for p in body["homePitchers"]] == ["홈선발", "홈불펜"]
+        starter = body["homePitchers"][0]
+        assert starter["appearanceOrder"] == 1
+        assert starter["isStarter"] is True
+        assert starter["outsRecorded"] == 6
+        assert starter["pitchesThrown"] == 40
+        assert starter["hitsAllowed"] == 3
+        assert starter["runsAllowed"] == 1
+        assert starter["earnedRuns"] == 1
+        assert starter["walksAllowed"] == 0
+        assert starter["strikeouts"] == 4
+        assert [p["playerName"] for p in body["awayPitchers"]] == ["원정선발"]
+
+
+def test_boxscore_404_when_game_missing_and_empty_when_no_stats() -> None:
+    with TestClient(app) as client:
+        missing = client.get("/games/UNKNOWN_GAME_ID/boxscore")
+        assert missing.status_code == 404
+
+        # 경기는 있지만 스탯이 없으면 빈 배열
+        game_id = "20260401WOSK02026BXE"
+        payload = sample_snapshot()
+        payload.pop("lineupSlots")
+        payload.pop("batterStats")
+        payload.pop("pitcherStats")
+        payload.pop("notes")
+        payload["events"] = []
+        ingest = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        response = client.get(f"/games/{game_id}/boxscore")
+        assert response.status_code == 200
+        assert response.json() == {
+            "gameId": game_id,
+            "homeBatters": [],
+            "awayBatters": [],
+            "homePitchers": [],
+            "awayPitchers": [],
+        }

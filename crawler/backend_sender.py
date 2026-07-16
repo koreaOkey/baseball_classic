@@ -448,6 +448,91 @@ def _extract_latest_entry(relays_by_inning: Dict[int, Dict[str, Any]], key: str)
     return {}
 
 
+def _relays_latest_first(relays_by_inning: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """게임 전체 누적 필드(inningScore 등)를 읽을 relay 를 신선한 순서로 나열.
+
+    이닝별 relay 캐시(C5) 때문에 아직 시작하지 않은 높은 이닝의 relay 는 과거
+    폴 시점의 stale 데이터일 수 있다. textRelays 가 있는(=실제 진행된, 현재
+    이닝은 매 폴 재조회되는) relay 를 높은 이닝부터 우선하고, 없으면 나머지를
+    높은 이닝부터 폴백으로 사용한다.
+    """
+    innings = sorted(relays_by_inning.keys(), reverse=True)
+    played = [inning for inning in innings if (relays_by_inning.get(inning) or {}).get("textRelays")]
+    played_set = set(played)
+    rest = [inning for inning in innings if inning not in played_set]
+    return [relays_by_inning.get(inning) or {} for inning in played + rest]
+
+
+def _extract_line_score(
+    relays_by_inning: Dict[int, Dict[str, Any]],
+) -> Optional[Dict[str, Dict[str, int]]]:
+    """이닝별 라인스코어 추출.
+
+    각 이닝 relay 의 textRelayData.inningScore 는 경기 전체 누적 딕셔너리
+    ({"home": {"1": "0", ...}, "away": {...}}) 이므로 가장 신선한 relay 에서
+    하나만 취한다. 값은 문자열로 오므로 정수 변환에 실패하는 엔트리("-" 등)는
+    방어적으로 건너뛴다. 데이터가 없으면 None (필드 생략).
+    """
+    for relay_data in _relays_latest_first(relays_by_inning):
+        raw = relay_data.get("inningScore")
+        if not isinstance(raw, dict):
+            continue
+
+        line_score: Dict[str, Dict[str, int]] = {}
+        for side in ("home", "away"):
+            side_raw = raw.get(side)
+            if not isinstance(side_raw, dict):
+                continue
+            side_scores: Dict[str, int] = {}
+            for inning_key, score_value in side_raw.items():
+                key = str(inning_key).strip()
+                if not key.isdigit():
+                    continue
+                try:
+                    score = int(str(score_value).strip())
+                except (TypeError, ValueError):
+                    continue
+                if score < 0:
+                    continue
+                side_scores[key] = score
+            if side_scores:
+                line_score[side] = side_scores
+
+        if line_score:
+            return line_score
+    return None
+
+
+def _extract_team_errors(
+    relays_by_inning: Dict[int, Dict[str, Any]],
+    fallback_state: Dict[str, Any],
+) -> Tuple[Optional[int], Optional[int]]:
+    """홈/원정 실책(homeError/awayError) 추출.
+
+    마지막 텍스트 옵션의 currentGameState(경기 최신 상태)를 우선 사용하고,
+    없으면 relay 최상위 currentGameState 를 신선한 relay 순서로 폴백한다.
+    데이터가 없으면 (None, None) — payload 에서 필드 생략.
+    """
+
+    def _parse(state: Any) -> Tuple[Optional[int], Optional[int]]:
+        if not isinstance(state, dict):
+            return None, None
+        home = _safe_int(state.get("homeError"), default=-1)
+        away = _safe_int(state.get("awayError"), default=-1)
+        return (home if home >= 0 else None), (away if away >= 0 else None)
+
+    home_errors, away_errors = _parse(fallback_state)
+    if home_errors is not None or away_errors is not None:
+        return home_errors, away_errors
+
+    for relay_data in _relays_latest_first(relays_by_inning):
+        home_errors, away_errors = _parse(relay_data.get("currentGameState"))
+        if home_errors is not None or away_errors is not None:
+            return home_errors, away_errors
+
+    return None, None
+
+
 def _extract_lineup_and_boxscore(
     relays_by_inning: Dict[int, Dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -893,6 +978,18 @@ def build_snapshot_payload(
         "pitcherStats": pitcher_stats,
         "notes": [],
     }
+
+    # 이닝별 라인스코어/실책은 relay 데이터가 있을 때만 optional 로 포함한다.
+    # (경기 전 스냅샷·구버전 백엔드와의 하위 호환을 위해 없으면 필드 자체를 생략)
+    line_score = _extract_line_score(relays_by_inning)
+    home_errors, away_errors = _extract_team_errors(relays_by_inning, latest_state)
+    if line_score is not None:
+        payload["lineScore"] = line_score
+    if home_errors is not None:
+        payload["homeErrors"] = home_errors
+    if away_errors is not None:
+        payload["awayErrors"] = away_errors
+
     return payload
 
 

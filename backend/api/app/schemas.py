@@ -154,6 +154,11 @@ class CrawlerSnapshotRequest(BaseModel):
     awayHomeRuns: int | None = Field(default=None, ge=0)
     homeOutsTotal: int | None = Field(default=None, ge=0)
     awayOutsTotal: int | None = Field(default=None, ge=0)
+    # 이닝별 라인스코어 {"home": {"1": 0, "2": 1, ...}, "away": {...}}.
+    # 크롤러가 relay inningScore 에서 추출해 보낸 경우에만 채워진다 (구버전 크롤러 호환).
+    lineScore: dict[str, dict[str, int]] | None = None
+    homeErrors: int | None = Field(default=None, ge=0)
+    awayErrors: int | None = Field(default=None, ge=0)
     observedAt: datetime | None = None
     events: list[CrawlerEventIn] = Field(default_factory=list)
     lineupSlots: list[CrawlerLineupSlotIn] | None = None
@@ -335,6 +340,51 @@ class GameStateOut(BaseModel):
     # GamePitcherStat(is_starter=True, appearance_order=1) 우선, 없으면 그냥 is_starter=True 첫 행.
     homeStartingPitcher: str | None = None
     awayStartingPitcher: str | None = None
+    # 이닝별 라인스코어 {"home": {"1": 0, ...}, "away": {...}}. 스냅샷이 제공한 경우에만
+    # 노출되며 default None 이라 구 클라이언트 디코딩에는 영향이 없다.
+    lineScore: dict[str, dict[str, int]] | None = None
+    homeHits: int | None = None
+    awayHits: int | None = None
+    homeErrors: int | None = None
+    awayErrors: int | None = None
+
+
+# MARK: - 박스스코어 (game_batter_stats / game_pitcher_stats 노출용)
+
+class BoxscoreBatterOut(BaseModel):
+    battingOrder: int | None = None
+    playerName: str
+    # GameBatterStat.primary_position 을 그대로 노출 (예: "좌익수", "대타").
+    position: str | None = None
+    atBats: int = 0
+    hits: int = 0
+    rbi: int = 0
+    runs: int = 0
+    homeRuns: int = 0
+    walks: int = 0
+    strikeouts: int = 0
+    isStarter: bool = False
+
+
+class BoxscorePitcherOut(BaseModel):
+    appearanceOrder: int | None = None
+    playerName: str
+    isStarter: bool = False
+    outsRecorded: int = 0
+    pitchesThrown: int = 0
+    hitsAllowed: int = 0
+    runsAllowed: int = 0
+    earnedRuns: int = 0
+    walksAllowed: int = 0
+    strikeouts: int = 0
+
+
+class GameBoxscoreOut(BaseModel):
+    gameId: str
+    homeBatters: list[BoxscoreBatterOut] = Field(default_factory=list)
+    awayBatters: list[BoxscoreBatterOut] = Field(default_factory=list)
+    homePitchers: list[BoxscorePitcherOut] = Field(default_factory=list)
+    awayPitchers: list[BoxscorePitcherOut] = Field(default_factory=list)
 
 
 class GameEventOut(BaseModel):

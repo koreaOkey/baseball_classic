@@ -62,6 +62,10 @@ class Game(Base):
     away_home_runs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     home_outs_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     away_outs_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 이닝별 라인스코어 {"home": {"1": 0, ...}, "away": {...}}. 스냅샷 미제공 시 NULL 유지.
+    line_score_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    home_errors: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    away_errors: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_event_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     last_event_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

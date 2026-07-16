@@ -553,6 +553,10 @@ def _snapshot_state_signature(snapshot: Dict[str, Any]) -> str:
         "awayHomeRuns": snapshot.get("awayHomeRuns"),
         "homeOutsTotal": snapshot.get("homeOutsTotal"),
         "awayOutsTotal": snapshot.get("awayOutsTotal"),
+        # 라인스코어/실책만 바뀐 스냅샷도 백엔드에 전송되도록 시그니처에 포함
+        "lineScore": snapshot.get("lineScore"),
+        "homeErrors": snapshot.get("homeErrors"),
+        "awayErrors": snapshot.get("awayErrors"),
         "lineupSlots": snapshot.get("lineupSlots") or [],
         "batterStats": snapshot.get("batterStats") or [],
         "pitcherStats": snapshot.get("pitcherStats") or [],
