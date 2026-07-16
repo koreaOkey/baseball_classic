@@ -49,6 +49,7 @@ import com.basehaptic.mobile.R
 import com.basehaptic.mobile.ui.components.BannerAd
 import com.basehaptic.mobile.data.BackendGamesRepository
 import com.basehaptic.mobile.data.model.*
+import com.basehaptic.mobile.toGameStartWeatherSummary
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.*
 import java.time.LocalDate
@@ -371,7 +372,7 @@ fun HomeScreen(
             }
         }.getOrNull()
         if (backendUpcomingGames != null) {
-            value = backendUpcomingGames
+            value = hydrateUpcomingGameWeather(backendUpcomingGames)
         }
     }
 
@@ -1527,6 +1528,29 @@ private fun TeamNameWithHomeLabel(
                 color = Gray400,
                 maxLines = 1
             )
+        }
+    }
+}
+
+// 다가오는 경기 목록은 일정 캐시(최대 6시간)를 그대로 그리므로, 날씨 없는 스냅샷이
+// 저장돼 있으면 카드에 예보가 계속 빠진다. 예보 지원 범위(+3일) 안의 경기인데
+// weather 가 비어 있으면 시간별 예보로 직접 채운다. 카드가 최대 3장이라 요청도 최대 3회.
+private suspend fun hydrateUpcomingGameWeather(
+    items: List<BackendGamesRepository.UpcomingGameSchedule>
+): List<BackendGamesRepository.UpcomingGameSchedule> = withContext(Dispatchers.IO) {
+    val forecastLimit = LocalDate.now().plusDays(3)
+    items.map { item ->
+        val game = item.game
+        if (game.status != GameStatus.SCHEDULED || game.weather != null || item.gameDate.isAfter(forecastLimit)) {
+            item
+        } else {
+            val weather = runCatching {
+                BackendGamesRepository.fetchGameHourlyWeather(
+                    gameId = game.id,
+                    targetDate = item.gameDate
+                )?.toGameStartWeatherSummary()
+            }.getOrNull()
+            if (weather != null) item.copy(game = game.copy(weather = weather)) else item
         }
     }
 }

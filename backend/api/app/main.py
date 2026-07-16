@@ -90,7 +90,7 @@ from .services import (
     upsert_team_records,
     upsert_game_from_snapshot,
 )
-from .weather import KST, build_hourly_weather, build_weather_summary
+from .weather import KST, SUPPORTED_FORECAST_DAYS, build_hourly_weather, build_weather_summary
 from .workers.cheer_validator import validate_pending_cheer_events
 
 
@@ -376,6 +376,13 @@ GAME_DATA_RETENTION_DAYS = 7
 GAME_DATA_PURGE_BATCH_ROWS = 10_000   # 배치당 삭제 행 상한 (짧은 트랜잭션 유지)
 GAME_DATA_PURGE_BATCH_PAUSE_SEC = 0.5
 
+# 날씨 예보 프리워밍 — 목록 응답(/games)은 지연 방지를 위해 KMA 네트워크 조회를
+# 하지 않으므로, 예보 캐시가 식으면(재배포·베이스타임 교체·TTL 만료) weather=null 로
+# 나간다. 예보 지원 범위(오늘~+3일)의 SCHEDULED 경기 구장 예보를 주기적으로 미리
+# 받아 두면 목록 응답에도 항상 날씨가 실린다. 구장 수만큼만 KMA 를 호출한다(캐시 공유).
+WEATHER_PREWARM_INITIAL_DELAY_SEC = 10
+WEATHER_PREWARM_INTERVAL_SEC = 20 * 60  # KMA 성공 캐시 TTL(30분)보다 짧게 유지
+
 
 def _seconds_until_next_kst_hour(hour: int) -> float:
     now = datetime.now(KST)
@@ -482,6 +489,55 @@ async def _push_data_purge_loop() -> None:
         await asyncio.sleep(_seconds_until_next_kst_hour(PURGE_RUN_HOUR_KST))
 
 
+def _prewarm_weather_forecasts() -> int:
+    """예보 지원 범위 내 SCHEDULED 경기들의 날씨 요약을 미리 계산해 KMA 캐시를 데운다."""
+    if not settings.weather_service_key.strip():
+        return 0
+    if db_unavailable_remaining_sec() > 0:
+        return 0
+
+    today = datetime.now(KST).date()
+    to_day = today + timedelta(days=SUPPORTED_FORECAST_DAYS)
+    from_prefix = today.strftime("%Y%m%d")
+    to_prefix = to_day.strftime("%Y%m%d")
+    game_id_date = func.substr(Game.id, 1, 8)
+    query = select(Game).where(
+        or_(
+            and_(Game.game_date >= today.isoformat(), Game.game_date <= to_day.isoformat()),
+            and_(Game.game_date.is_(None), game_id_date >= from_prefix, game_id_date <= to_prefix),
+        )
+    )
+    with SessionLocal() as db:
+        games = db.execute(query).scalars().all()
+
+    warmed = 0
+    for game in games:
+        # build_weather_summary 가 SCHEDULED 외 상태는 스스로 걸러낸다.
+        summary = build_weather_summary(
+            game,
+            service_key=settings.weather_service_key,
+            api_base_url=settings.weather_api_base_url,
+            allow_network=True,
+        )
+        if summary is not None:
+            warmed += 1
+    return warmed
+
+
+async def _weather_prewarm_loop() -> None:
+    await asyncio.sleep(WEATHER_PREWARM_INITIAL_DELAY_SEC)
+    while True:
+        try:
+            warmed = await asyncio.to_thread(_prewarm_weather_forecasts)
+            if warmed:
+                logger.info("[weather-prewarm] game weather summaries warmed: %d", warmed)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("[weather-prewarm] prewarm failed", exc_info=True)
+        await asyncio.sleep(WEATHER_PREWARM_INTERVAL_SEC)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     if not settings.supabase_jwt_secret:
@@ -503,14 +559,16 @@ async def lifespan(_: FastAPI):
             await _mark_db_unavailable_global()
             logger.exception("startup database initialization failed; continuing in degraded mode")
     purge_task = asyncio.create_task(_push_data_purge_loop())
+    weather_prewarm_task = asyncio.create_task(_weather_prewarm_loop())
     try:
         yield
     finally:
-        purge_task.cancel()
-        try:
-            await purge_task
-        except (asyncio.CancelledError, Exception):
-            pass
+        for task in (purge_task, weather_prewarm_task):
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
         await redis_relay.stop()
 
 

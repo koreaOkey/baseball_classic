@@ -1756,7 +1756,7 @@ private func isTerminalStatus(_ status: GameStatus) -> Bool {
     }
 }
 
-private func gameStartWeatherSummary(from forecast: GameWeatherHourly) -> GameWeatherSummary? {
+func gameStartWeatherSummary(from forecast: GameWeatherHourly) -> GameWeatherSummary? {
     guard let item = forecast.items.first(where: { $0.isGameStartForecast }) ?? forecast.items.first else {
         return nil
     }
@@ -1792,7 +1792,7 @@ private func gameStartWeatherSummary(from forecast: GameWeatherHourly) -> GameWe
     )
 }
 
-private func gameWithWeather(_ game: Game, weather: GameWeatherSummary) -> Game {
+func gameWithWeather(_ game: Game, weather: GameWeatherSummary) -> Game {
     Game(
         id: game.id,
         homeTeam: game.homeTeam,

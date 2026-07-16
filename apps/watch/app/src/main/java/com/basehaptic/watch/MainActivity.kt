@@ -90,9 +90,11 @@ class MainActivity : ComponentActivity() {
     private val ambientCallback = object : AmbientLifecycleObserver.AmbientLifecycleCallback {
         override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
             isAmbient = true
+            WatchGamePoller.setAmbient(true)
         }
         override fun onExitAmbient() {
             isAmbient = false
+            WatchGamePoller.setAmbient(false)
         }
     }
 
@@ -101,13 +103,7 @@ class MainActivity : ComponentActivity() {
     // Exposed to Compose via mutableStateOf
     private var isAmbient by mutableStateOf(false)
 
-    private val ongoingUpdateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(ctx: Context?, intent: Intent?) {
-            if (intent?.action == DataLayerListenerService.ACTION_GAME_UPDATED) {
-                postOngoingActivity()
-            }
-        }
-    }
+    private var lastOngoingContent: Pair<String, String>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -121,13 +117,6 @@ class MainActivity : ComponentActivity() {
         // Ongoing Activity: prevents system kill + shows on watch face
         createOngoingNotificationChannel()
         postOngoingActivity()
-        // 앱 내부 브로드캐스트만 수신 — 외부 앱 노출 차단
-        ContextCompat.registerReceiver(
-            this,
-            ongoingUpdateReceiver,
-            IntentFilter(DataLayerListenerService.ACTION_GAME_UPDATED),
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
 
         setContent {
             WatchApp(isAmbient = isAmbient)
@@ -135,10 +124,6 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        try {
-            unregisterReceiver(ongoingUpdateReceiver)
-        } catch (_: IllegalArgumentException) {
-        }
         stopOngoingActivity()
         super.onDestroy()
     }
@@ -155,10 +140,15 @@ class MainActivity : ComponentActivity() {
         manager.createNotificationChannel(channel)
     }
 
-    private fun postOngoingActivity() {
+    fun postOngoingActivity() {
         val gameData = readGameDataFromPrefs(this)
         val latestEvent = readLatestEventFromPrefs(this)
         val (title, contentText, statusTemplate) = buildOngoingContent(gameData, latestEvent)
+
+        // 내용이 바뀌지 않았으면 동일 알림 재게시 생략
+        val content = title to contentText
+        if (content == lastOngoingContent) return
+        lastOngoingContent = content
 
         val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -167,16 +157,6 @@ class MainActivity : ComponentActivity() {
             this, 0, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val notification = NotificationCompat.Builder(this, ONGOING_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(contentText)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .setContentIntent(pendingIntent)
-            .build()
 
         val ongoingNotificationBuilder = NotificationCompat.Builder(this, ONGOING_CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
@@ -204,7 +184,7 @@ class MainActivity : ComponentActivity() {
         ongoingActivity.apply(this)
 
         val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(ONGOING_NOTIFICATION_ID, notification)
+        manager.notify(ONGOING_NOTIFICATION_ID, ongoingNotificationBuilder.build())
     }
 
     private fun buildOngoingContent(
@@ -248,6 +228,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopOngoingActivity() {
+        lastOngoingContent = null
         val manager = getSystemService(NotificationManager::class.java)
         manager.cancel(ONGOING_NOTIFICATION_ID)
     }
@@ -304,26 +285,33 @@ fun WatchApp(isAmbient: Boolean = false) {
     var isPlayingVideo by remember { mutableStateOf(false) }
 
     // 이벤트 영상용 공유 ExoPlayer 1개 — 클립은 짧아 이벤트 시점에 setMediaItem/prepare 해도
-    // 지연이 체감되지 않는다. (플레이어 5개 상시 준비 → 메모리/디코더 낭비 제거)
-    val eventPlayer = remember(context) {
-        ExoPlayer.Builder(context).build().apply {
+    // 지연이 체감되지 않는다. 첫 재생 시점에 지연 생성하고, 클립 종료 시 stop()으로
+    // MediaCodec 을 반환해 이벤트 사이 디코더 점유를 없앤다.
+    var eventPlayer by remember { mutableStateOf<ExoPlayer?>(null) }
+
+    fun playEventClip(rawResId: Int) {
+        val player = eventPlayer ?: ExoPlayer.Builder(context).build().apply {
             repeatMode = Player.REPEAT_MODE_OFF
             volume = 0f
             playWhenReady = false
+        }.also { eventPlayer = it }
+        val clipUri = Uri.parse("android.resource://${context.packageName}/$rawResId")
+        player.setMediaItem(MediaItem.fromUri(clipUri))
+        player.prepare()
+        player.seekTo(0)
+        player.play()
+    }
+
+    fun stopEventClip() {
+        eventPlayer?.run {
+            stop()
+            clearMediaItems()
         }
     }
 
-    fun playEventClip(rawResId: Int) {
-        val clipUri = Uri.parse("android.resource://${context.packageName}/$rawResId")
-        eventPlayer.setMediaItem(MediaItem.fromUri(clipUri))
-        eventPlayer.prepare()
-        eventPlayer.seekTo(0)
-        eventPlayer.play()
-    }
-
-    DisposableEffect(eventPlayer) {
+    DisposableEffect(Unit) {
         onDispose {
-            eventPlayer.release()
+            eventPlayer?.release()
         }
     }
 
@@ -353,6 +341,7 @@ fun WatchApp(isAmbient: Boolean = false) {
                         latestEvent = readLatestEventFromPrefs(context)
                         // 모바일에서 경기 관람 시작 시 팝업이 자동 수락되었을 수 있으므로 갱신
                         watchSyncPrompt = readWatchSyncPromptFromPrefs(context)
+                        (context as? MainActivity)?.postOngoingActivity()
                     }
                     DataLayerListenerService.ACTION_WATCH_SYNC_PROMPT -> {
                         watchSyncPrompt = readWatchSyncPromptFromPrefs(context)
@@ -452,7 +441,7 @@ fun WatchApp(isAmbient: Boolean = false) {
             delay(HOMERUN_SCREEN_DURATION_MS)
             if (homeRunTransitionToken == token) {
                 isHomeRunTransitionVisible = false
-                eventPlayer.pause()
+                stopEventClip()
             }
         } finally {
             isPlayingVideo = false
@@ -468,7 +457,7 @@ fun WatchApp(isAmbient: Boolean = false) {
             delay(HIT_SCREEN_DURATION_MS)
             if (hitTransitionToken == token) {
                 isHitTransitionVisible = false
-                eventPlayer.pause()
+                stopEventClip()
             }
         } finally {
             isPlayingVideo = false
@@ -484,7 +473,7 @@ fun WatchApp(isAmbient: Boolean = false) {
             delay(DOUBLE_PLAY_SCREEN_DURATION_MS)
             if (doublePlayTransitionToken == token) {
                 isDoublePlayTransitionVisible = false
-                eventPlayer.pause()
+                stopEventClip()
             }
         } finally {
             isPlayingVideo = false
@@ -500,7 +489,7 @@ fun WatchApp(isAmbient: Boolean = false) {
             delay(SCORE_SCREEN_DURATION_MS)
             if (scoreTransitionToken == token) {
                 isScoreTransitionVisible = false
-                eventPlayer.pause()
+                stopEventClip()
             }
         } finally {
             isPlayingVideo = false
@@ -516,7 +505,7 @@ fun WatchApp(isAmbient: Boolean = false) {
             delay(VICTORY_SCREEN_DURATION_MS)
             if (victoryTransitionToken == token) {
                 isVictoryTransitionVisible = false
-                eventPlayer.pause()
+                stopEventClip()
             }
         } finally {
             isPlayingVideo = false
@@ -539,7 +528,7 @@ fun WatchApp(isAmbient: Boolean = false) {
                     isVictoryTransitionVisible = true
                     delay(VICTORY_SCREEN_DURATION_MS)
                     isVictoryTransitionVisible = false
-                    eventPlayer.pause()
+                    stopEventClip()
                 } finally {
                     isPlayingVideo = false
                 }
@@ -974,7 +963,7 @@ private fun AmbientGameScreen(gameData: GameData?) {
 }
 
 @Composable
-private fun PlayerTransitionScreen(player: ExoPlayer) {
+private fun PlayerTransitionScreen(player: ExoPlayer?) {
     Box(
         modifier = Modifier
             .fillMaxSize()

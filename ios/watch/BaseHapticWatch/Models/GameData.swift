@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct GameData {
+struct GameData: Equatable {
     let gameId: String
     let homeTeam: String
     let awayTeam: String
@@ -20,7 +20,7 @@ struct GameData {
     let myTeamName: String
 }
 
-struct BaseStatus {
+struct BaseStatus: Equatable {
     let first: Bool
     let second: Bool
     let third: Bool

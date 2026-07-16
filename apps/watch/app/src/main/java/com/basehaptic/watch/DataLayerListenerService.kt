@@ -80,12 +80,12 @@ class DataLayerListenerService : WearableListenerService() {
         const val KEY_LAST_EVENT_AT = "last_event_at"
         const val KEY_LAST_EVENT_CURSOR = "last_event_cursor"
         const val KEY_GAME_UPDATED_AT = "game_updated_at"
+        const val KEY_IS_LIVE = "is_live"
         const val KEY_PENDING_SYNC_GAME_ID = "pending_sync_game_id"
         const val KEY_PENDING_SYNC_HOME_TEAM = "pending_sync_home_team"
         const val KEY_PENDING_SYNC_AWAY_TEAM = "pending_sync_away_team"
         const val KEY_PENDING_SYNC_MY_TEAM = "pending_sync_my_team"
 
-        private const val WAKE_LOCK_TIMEOUT_MS = 3_000L
         private const val STALE_EVENT_THRESHOLD_MS = 10_000L
     }
     
@@ -151,6 +151,7 @@ class DataLayerListenerService : WearableListenerService() {
             .putInt(KEY_PITCHER_PITCH_COUNT, dataMap.getInt(KEY_PITCHER_PITCH_COUNT, -1))
             .putString(KEY_MY_TEAM, dataMap.getString(KEY_MY_TEAM, ""))
             .putLong(KEY_GAME_UPDATED_AT, System.currentTimeMillis())
+            .putBoolean(KEY_IS_LIVE, !isFinished)
             .apply()
 
         // 테마도 같이 업데이트 (게임 데이터의 my_team 기준)
@@ -275,8 +276,8 @@ class DataLayerListenerService : WearableListenerService() {
 
         val prefs = getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
         // 이미 해당 경기 데이터를 수신 중이면 팝업 무시
-        val currentGameId = prefs.getString("game_id", "") ?: ""
-        val isLive = prefs.getBoolean("is_live", false)
+        val currentGameId = prefs.getString(KEY_GAME_ID, "") ?: ""
+        val isLive = prefs.getBoolean(KEY_IS_LIVE, false)
         if (currentGameId == gameId && isLive) return
         // 이미 같은 경기 팝업이 떠있으면 무시
         val existingPromptId = prefs.getString(KEY_PENDING_SYNC_GAME_ID, "") ?: ""
@@ -311,17 +312,17 @@ class DataLayerListenerService : WearableListenerService() {
      */
     private fun handleSettingsUpdate(item: DataItem) {
         val dataMap = DataMapItem.fromDataItem(item).dataMap
-        val prefs = getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE)
+        val editor = getSharedPreferences(SETTINGS_PREFS_NAME, Context.MODE_PRIVATE).edit()
         var changed = false
         if (dataMap.containsKey(PREF_KEY_EVENT_VIDEO_ENABLED)) {
             val enabled = dataMap.getBoolean(PREF_KEY_EVENT_VIDEO_ENABLED, true)
-            prefs.edit().putBoolean(PREF_KEY_EVENT_VIDEO_ENABLED, enabled).apply()
+            editor.putBoolean(PREF_KEY_EVENT_VIDEO_ENABLED, enabled)
             Log.d(TAG, "event_video_enabled = $enabled")
             changed = true
         }
         if (dataMap.containsKey(PREF_KEY_LIVE_HAPTIC_ENABLED)) {
             val enabled = dataMap.getBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, true)
-            prefs.edit().putBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, enabled).apply()
+            editor.putBoolean(PREF_KEY_LIVE_HAPTIC_ENABLED, enabled)
             Log.d(TAG, "live_haptic_enabled = $enabled")
             changed = true
         }
@@ -332,19 +333,20 @@ class DataLayerListenerService : WearableListenerService() {
             } else {
                 TeamDisplayNameStyle.TEAM.name
             }
-            prefs.edit().putString(PREF_KEY_TEAM_DISPLAY_NAME_STYLE, normalizedStyle).apply()
+            editor.putString(PREF_KEY_TEAM_DISPLAY_NAME_STYLE, normalizedStyle)
             Log.d(TAG, "team_display_name_style = $normalizedStyle")
             changed = true
         }
         for (filterKey in EVENT_FILTER_PREF_KEYS) {
             if (dataMap.containsKey(filterKey)) {
                 val enabled = dataMap.getBoolean(filterKey, true)
-                prefs.edit().putBoolean(filterKey, enabled).apply()
+                editor.putBoolean(filterKey, enabled)
                 Log.d(TAG, "$filterKey = $enabled")
                 changed = true
             }
         }
         if (changed) {
+            editor.apply()
             sendBroadcast(Intent(ACTION_SETTINGS_UPDATED).setPackage(packageName))
         }
     }
@@ -449,36 +451,20 @@ class DataLayerListenerService : WearableListenerService() {
         vibrator.vibrate(effect)
     }
 
+    // 화면 깨우기는 MainActivity 의 setTurnScreenOn(true)/setShowWhenLocked(true) 에 위임
     private fun wakeScreenForEvent(eventType: String) {
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
         if (powerManager?.isInteractive == true) return
 
-        acquireWakeLock(powerManager)
         launchMainActivity(extraKey = "wake_event_type", extraValue = eventType) { error ->
             Log.e(TAG, "Failed to open watch screen for event: $eventType", error)
         }
     }
 
     private fun wakeScreenForPrompt(gameId: String) {
-        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
-        if (powerManager?.isInteractive != true) {
-            acquireWakeLock(powerManager)
-        }
         launchMainActivity(extraKey = "sync_prompt_game_id", extraValue = gameId) { error ->
             Log.e(TAG, "Failed to open watch screen for sync prompt: $gameId", error)
         }
-    }
-
-    private fun acquireWakeLock(powerManager: PowerManager?) {
-        if (powerManager == null) return
-        @Suppress("DEPRECATION")
-        val wakeLock = powerManager.newWakeLock(
-            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
-                PowerManager.ACQUIRE_CAUSES_WAKEUP or
-                PowerManager.ON_AFTER_RELEASE,
-            "$TAG:EventWakeLock"
-        )
-        wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
     }
 
     private fun launchMainActivity(

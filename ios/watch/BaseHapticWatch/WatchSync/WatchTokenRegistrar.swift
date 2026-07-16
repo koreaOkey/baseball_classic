@@ -52,7 +52,7 @@ enum WatchTokenRegistrar {
     static func register(gameId: String, myTeam: String) async {
         guard let token = UserDefaults.standard.string(forKey: "watch_apns_device_token"),
               !token.isEmpty else {
-            print("⌚ [WatchTokenRegistrar] No watch APNs token available")
+            wlog("⌚ [WatchTokenRegistrar] No watch APNs token available")
             return
         }
 
@@ -76,9 +76,9 @@ enum WatchTokenRegistrar {
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            print("⌚ [WatchTokenRegistrar] Registered: \(statusCode)")
+            wlog("⌚ [WatchTokenRegistrar] Registered: \(statusCode)")
         } catch {
-            print("⌚ [WatchTokenRegistrar] Register failed: \(error.localizedDescription)")
+            wlog("⌚ [WatchTokenRegistrar] Register failed: \(error.localizedDescription)")
         }
     }
 
@@ -94,9 +94,9 @@ enum WatchTokenRegistrar {
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            print("⌚ [WatchTokenRegistrar] Unregistered: \(statusCode)")
+            wlog("⌚ [WatchTokenRegistrar] Unregistered: \(statusCode)")
         } catch {
-            print("⌚ [WatchTokenRegistrar] Unregister failed: \(error.localizedDescription)")
+            wlog("⌚ [WatchTokenRegistrar] Unregister failed: \(error.localizedDescription)")
         }
     }
 }

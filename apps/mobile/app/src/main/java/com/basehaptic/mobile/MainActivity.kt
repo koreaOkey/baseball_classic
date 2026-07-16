@@ -1530,7 +1530,7 @@ fun BaseHapticApp(
     }
 }
 
-private fun BackendGamesRepository.GameWeatherHourly.toGameStartWeatherSummary(): GameWeatherSummary? {
+internal fun BackendGamesRepository.GameWeatherHourly.toGameStartWeatherSummary(): GameWeatherSummary? {
     val item = items.firstOrNull { it.isGameStartForecast } ?: items.firstOrNull() ?: return null
     val timeLabel = item.timeLabel.ifBlank { gameStartTime.orEmpty() }.ifBlank { null }
     val condition = item.condition.ifBlank { "예보" }

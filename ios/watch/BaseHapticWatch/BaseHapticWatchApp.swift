@@ -228,6 +228,9 @@ struct WatchContentView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 connectivity.clearExpiredGameData()
+                startGamePollerIfNeeded()
+            } else {
+                WatchGamePoller.shared.stopPolling()
             }
         }
     }

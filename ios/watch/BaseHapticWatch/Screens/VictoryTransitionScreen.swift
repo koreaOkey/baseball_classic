@@ -27,7 +27,7 @@ struct VictoryTransitionScreen: View {
         }
         .task {
             for i in 0...min(Self.prefetchAhead, Self.frameCount - 1) {
-                cache[i] = UIImage(named: Self.frameNames[i])
+                cache[i] = await AnimationFrameLoader.loadFrame(named: Self.frameNames[i])
             }
 
             for i in 1..<Self.frameCount {
@@ -37,7 +37,7 @@ struct VictoryTransitionScreen: View {
 
                 let next = i + Self.prefetchAhead
                 if next < Self.frameCount {
-                    cache[next] = UIImage(named: Self.frameNames[next])
+                    cache[next] = await AnimationFrameLoader.loadFrame(named: Self.frameNames[next])
                 }
                 cache.removeValue(forKey: i - 1)
             }

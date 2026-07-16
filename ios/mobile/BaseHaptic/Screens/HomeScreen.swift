@@ -398,7 +398,34 @@ struct HomeScreen: View {
             upcomingGames = []
             return
         }
-        upcomingGames = await BackendGamesRepository.shared.fetchUpcomingMyTeamGames(selectedTeam: selectedTeam) ?? []
+        let fetched = await BackendGamesRepository.shared.fetchUpcomingMyTeamGames(selectedTeam: selectedTeam) ?? []
+        upcomingGames = await hydrateUpcomingGameWeather(fetched)
+    }
+
+    /// 다가오는 경기 목록은 일정 캐시(최대 6시간)를 그대로 그리므로, 날씨 없는 스냅샷이
+    /// 저장돼 있으면 카드에 예보가 계속 빠진다. 예보 지원 범위(+3일) 안의 경기인데
+    /// weather 가 비어 있으면 시간별 예보로 직접 채운다. 카드가 최대 3장이라 요청도 최대 3회.
+    private func hydrateUpcomingGameWeather(_ items: [UpcomingGameSchedule]) async -> [UpcomingGameSchedule] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let forecastLimit = calendar.date(byAdding: .day, value: 3, to: today) else { return items }
+        var hydrated: [UpcomingGameSchedule] = []
+        hydrated.reserveCapacity(items.count)
+        for item in items {
+            guard item.game.status == .scheduled,
+                  item.game.weather == nil,
+                  item.gameDate <= forecastLimit,
+                  let forecast = await BackendGamesRepository.shared.fetchGameHourlyWeather(
+                    gameId: item.game.id,
+                    targetDate: item.gameDate
+                  ),
+                  let weather = gameStartWeatherSummary(from: forecast) else {
+                hydrated.append(item)
+                continue
+            }
+            hydrated.append(UpcomingGameSchedule(gameDate: item.gameDate, game: gameWithWeather(item.game, weather: weather)))
+        }
+        return hydrated
     }
 
     @MainActor

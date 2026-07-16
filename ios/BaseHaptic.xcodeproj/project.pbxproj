@@ -28,10 +28,13 @@
 		2BE5DAB3C3841537A2B42622 /* BackgroundStreamManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2C36AE9775B75183F468F0 /* BackgroundStreamManager.swift */; };
 		2CE2482EE1940F973BD02827 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A4B68491596CE6E203408073 /* Assets.xcassets */; };
 		2D0ECD50E2CF9899B886E607 /* MyTeamScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48CAEC1ACB1D95BABD8620BB /* MyTeamScreen.swift */; };
+		2E0B97913CAE0CBB9A1D0910 /* WatchLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E157F9CAD8AE371FF038B8CA /* WatchLog.swift */; };
 		2E75C724CD95802AA0187E81 /* WatchColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6341FE954BB080F791122E81 /* WatchColors.swift */; };
+		2FAB3486106F5D7C5374917A /* AnimationFrameLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EC5A0CD5D7779408E0C2021 /* AnimationFrameLoader.swift */; };
 		3BA9752C23FFD502E30BA326 /* ReleaseNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3E6C583697B070DEE30918 /* ReleaseNotes.swift */; };
 		3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */; };
 		3DE65F4E9A3DB6A352F7A80E /* WatchGameSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */; };
+		3FB5184C8CB3A05447E9ABAB /* LiveViewSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B32062362FC0BBF4B29D99E /* LiveViewSessionManager.swift */; };
 		40CE82F4504D0B2B7E49063E /* WatchAppRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53BA5C62F0AE8C59D23DBEDD /* WatchAppRadius.swift */; };
 		43F2517F07441AFA5683601C /* EventFilterOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7DB48D1BF0FE3066A791F6 /* EventFilterOption.swift */; };
 		4445D7D4D16681FE3A7B1490 /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8023EA4247935305BCC333F5 /* AuthManager.swift */; };
@@ -66,7 +69,6 @@
 		A0C9662CE8593BB55A41E683 /* StadiumCheerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1FA6639ABE5D86E35AA452 /* StadiumCheerScreen.swift */; };
 		A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C0734BB3B091847ABD41DA /* Colors.swift */; };
 		A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */; };
-		A6D1F9B43C20E7A98B5512D0 /* LiveViewSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43B9A2610D574BE8A2F1193 /* LiveViewSessionManager.swift */; };
 		A870EA84A0BF7DFA4457DC0B /* 루나 시그널.png in Resources */ = {isa = PBXBuildFile; fileRef = 92808772D1756216D41279FD /* 루나 시그널.png */; };
 		A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF14835688DCF81CAB8F7F1 /* GameData.swift */; };
 		A8F8716965E7875ADD434E35 /* WatchAppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */; };
@@ -89,6 +91,7 @@
 		DBFDA134B4D3AC7821DD9E74 /* AppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 937C6644F186143AF57CB796 /* AppSpacing.swift */; };
 		E3C6597B53C3B8B474817DD4 /* WatchCompanionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41CC2CFDE4FC0C2521D0F42 /* WatchCompanionStatus.swift */; };
 		E59B8908D6EE113ABCE14285 /* DoublePlayTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BD360BFA65BD1D45DBFC4E /* DoublePlayTransitionScreen.swift */; };
+		E5C6A37AABAFC452BDD21CAF /* AnimationFrames in Resources */ = {isa = PBXBuildFile; fileRef = 6C2E0263C05C684AC3B73BAF /* AnimationFrames */; };
 		E6F6938ABF1DBA468AF35E3E /* AtBatGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36D5CDAAFA66985C30C764B /* AtBatGroup.swift */; };
 		E894D3A8481A10B7FE77F3BA /* WatchInstallLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D040C86855336A1EE816D5F /* WatchInstallLauncher.swift */; };
 		F12E146A8B5209368A57DCF0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8419E3A8AD866D20F930D497 /* Assets.xcassets */; };
@@ -170,13 +173,16 @@
 		59AA2B30AEA401A1C811ACF4 /* WatchTokenRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTokenRegistrar.swift; sourceTree = "<group>"; };
 		5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍2.png"; sourceTree = "<group>"; };
 		5DB8E76083CCB66D81D3DDB0 /* WatchGamePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGamePoller.swift; sourceTree = "<group>"; };
+		5EC5A0CD5D7779408E0C2021 /* AnimationFrameLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationFrameLoader.swift; sourceTree = "<group>"; };
 		5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppSpacing.swift; sourceTree = "<group>"; };
 		625600428E676A827A087776 /* WatchInstallCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchInstallCard.swift; sourceTree = "<group>"; };
 		6341FE954BB080F791122E81 /* WatchColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchColors.swift; sourceTree = "<group>"; };
 		63548DB487284CE07D17CA3C /* 코퍼 더스크.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "코퍼 더스크.png"; sourceTree = "<group>"; };
 		6A10C95C891E577F029B1F21 /* 멍멍1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍1.png"; sourceTree = "<group>"; };
 		6B00FE3A8F64F89794DD742A /* AppRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRadius.swift; sourceTree = "<group>"; };
+		6B32062362FC0BBF4B29D99E /* LiveViewSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveViewSessionManager.swift; sourceTree = "<group>"; };
 		6C1FA6639ABE5D86E35AA452 /* StadiumCheerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StadiumCheerScreen.swift; sourceTree = "<group>"; };
+		6C2E0263C05C684AC3B73BAF /* AnimationFrames */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AnimationFrames; path = watch/BaseHapticWatch/AnimationFrames; sourceTree = SOURCE_ROOT; };
 		725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGameSyncManager.swift; sourceTree = "<group>"; };
 		745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveGameScreen.swift; sourceTree = "<group>"; };
 		760CF04AF7F17385A9704989 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -208,7 +214,6 @@
 		B7CB78FA5792AFDC17056B15 /* RewardedAdManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardedAdManager.swift; sourceTree = "<group>"; };
 		B7DA9E7CF2523E80A298664E /* LiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveGameScreen.swift; sourceTree = "<group>"; };
 		BF37AA1FE0710EF24B0F226C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		C43B9A2610D574BE8A2F1193 /* LiveViewSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveViewSessionManager.swift; sourceTree = "<group>"; };
 		C7F73397A462741B40912C00 /* WatchTestScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTestScreen.swift; sourceTree = "<group>"; };
 		C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamTheme.swift; sourceTree = "<group>"; };
 		CA2BDD4EB0C675A029499451 /* ThemeStoreScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeStoreScreen.swift; sourceTree = "<group>"; };
@@ -222,6 +227,7 @@
 		DC7DB48D1BF0FE3066A791F6 /* EventFilterOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventFilterOption.swift; sourceTree = "<group>"; };
 		DF71089F8D26EDAE6F6EEE32 /* BaseHapticLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticLiveActivityWidget.swift; sourceTree = "<group>"; };
 		E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VictoryTransitionScreen.swift; sourceTree = "<group>"; };
+		E157F9CAD8AE371FF038B8CA /* WatchLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLog.swift; sourceTree = "<group>"; };
 		E33FC438234BE3E181D2293C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E499DB66D4A9838EB01A1F3B /* WatchTeamTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTeamTheme.swift; sourceTree = "<group>"; };
 		E721EEBEAA513CB8E3DAEF00 /* TeamLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamLogo.swift; sourceTree = "<group>"; };
@@ -285,7 +291,7 @@
 			children = (
 				8023EA4247935305BCC333F5 /* AuthManager.swift */,
 				EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */,
-				C43B9A2610D574BE8A2F1193 /* LiveViewSessionManager.swift */,
+				6B32062362FC0BBF4B29D99E /* LiveViewSessionManager.swift */,
 				07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */,
 				2E937F5BCECEABDBDF2D9E4C /* ThemeRepository.swift */,
 			);
@@ -295,10 +301,12 @@
 		20915E22D05CA394389242BE /* BaseHapticWatch */ = {
 			isa = PBXGroup;
 			children = (
+				5EC5A0CD5D7779408E0C2021 /* AnimationFrameLoader.swift */,
 				8419E3A8AD866D20F930D497 /* Assets.xcassets */,
 				0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */,
 				87621A22EC5F286B844C8BF8 /* Info.plist */,
 				B2F9F64B1BCDE6F8078E00C2 /* WatchAppDelegate.swift */,
+				E157F9CAD8AE371FF038B8CA /* WatchLog.swift */,
 				BB880C3C558A6C2B56770CFF /* Models */,
 				894EEEC31BF0A5B9E4A165D4 /* Screens */,
 				70C2F968A384BCA87AD58FBE /* Theme */,
@@ -410,6 +418,7 @@
 		956AFB35DA99A531C890EC99 = {
 			isa = PBXGroup;
 			children = (
+				6C2E0263C05C684AC3B73BAF /* AnimationFrames */,
 				8D5799526ED6A138B7CA8433 /* BaseHaptic */,
 				C739E277C7817150EF8B4D64 /* BaseHapticLiveActivity */,
 				A374C6DDCD437AA662A94960 /* BaseHapticShared */,
@@ -599,6 +608,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5C6A37AABAFC452BDD21CAF /* AnimationFrames in Resources */,
 				F12E146A8B5209368A57DCF0 /* Assets.xcassets in Resources */,
 				A870EA84A0BF7DFA4457DC0B /* 루나 시그널.png in Resources */,
 				C758F6A2853A48FAB4B17CCD /* 멍멍.png in Resources */,
@@ -659,7 +669,7 @@
 				FF04F10F375D614182ACC91E /* HomeScreen.swift in Sources */,
 				835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */,
 				5149C6E8A8F4998C32890151 /* LiveGameScreen.swift in Sources */,
-				A6D1F9B43C20E7A98B5512D0 /* LiveViewSessionManager.swift in Sources */,
+				3FB5184C8CB3A05447E9ABAB /* LiveViewSessionManager.swift in Sources */,
 				2D0ECD50E2CF9899B886E607 /* MyTeamScreen.swift in Sources */,
 				3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */,
 				15AE36C23A5E7E394F13C981 /* PhoneConnectivityManager.swift in Sources */,
@@ -693,6 +703,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2FAB3486106F5D7C5374917A /* AnimationFrameLoader.swift in Sources */,
 				9FB7676A5E7D8C388D1C59AC /* BaseHapticWatchApp.swift in Sources */,
 				E59B8908D6EE113ABCE14285 /* DoublePlayTransitionScreen.swift in Sources */,
 				A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */,
@@ -709,6 +720,7 @@
 				667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */,
 				20BB5AEADC66CAB9F84293FA /* WatchGamePoller.swift in Sources */,
 				80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */,
+				2E0B97913CAE0CBB9A1D0910 /* WatchLog.swift in Sources */,
 				D8BA20E9208A4DEA2D40597A /* WatchNoGameScreen.swift in Sources */,
 				835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */,
 				57DBAF95E3B3874B7F31D3DD /* WatchTokenRegistrar.swift in Sources */,

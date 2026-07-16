@@ -79,6 +79,11 @@ targets:
     platform: watchOS
     sources:
       - path: watch/BaseHapticWatch
+        excludes:
+          - AnimationFrames
+      - path: watch/BaseHapticWatch/AnimationFrames
+        type: folder
+        buildPhase: resources
     settings:
       base:
         INFOPLIST_FILE: watch/BaseHapticWatch/Info.plist

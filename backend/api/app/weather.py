@@ -20,7 +20,9 @@ FORECAST_FAILURE_TTL_SECONDS = 60
 FORECAST_REQUEST_TIMEOUT_SECONDS = 12
 SUPPORTED_FORECAST_DAYS = 3
 BASE_TIMES = ("0200", "0500", "0800", "1100", "1400", "1700", "2000", "2300")
-FORECAST_ROWS = 1000
+# 단기예보는 시간당 12개 카테고리 × 최대 +3일(~70여 시간) ≈ 900행을 넘을 수 있어
+# 1000행이면 +3일차 저녁 슬롯이 잘릴 수 있다. 여유를 두고 요청한다.
+FORECAST_ROWS = 1500
 logger = logging.getLogger(__name__)
 
 SKY_LABELS = {

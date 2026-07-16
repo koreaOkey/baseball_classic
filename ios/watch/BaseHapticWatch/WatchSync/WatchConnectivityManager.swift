@@ -44,15 +44,16 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self
         WCSession.default.activate()
+        Self.removeOngoingLiveScoreNotification()
     }
 
     // MARK: - WCSessionDelegate
 
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         if let error = error {
-            print("[WatchConnectivity] Activation failed: \(error.localizedDescription)")
+            wlog("[WatchConnectivity] Activation failed: \(error.localizedDescription)")
         } else {
-            print("[WatchConnectivity] Activated: \(activationState.rawValue)")
+            wlog("[WatchConnectivity] Activated: \(activationState.rawValue)")
         }
 
         // 활성화 전에 보류된 워치 APNs 토큰이 있으면 재전송 (transferUserInfo로 큐잉되어 전달 보장)
@@ -75,14 +76,18 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         // applicationContext에서 테마 복원
         if let teamName = ctx["my_team"] as? String, !teamName.isEmpty {
             DispatchQueue.main.async {
-                self.syncedTeamName = teamName
+                if self.syncedTeamName != teamName {
+                    self.syncedTeamName = teamName
+                }
             }
         }
 
         // applicationContext에서 상점 테마 복원
         if let themeId = ctx["theme_id"] as? String {
             DispatchQueue.main.async {
-                self.storeThemeId = themeId
+                if self.storeThemeId != themeId {
+                    self.storeThemeId = themeId
+                }
                 UserDefaults.standard.set(themeId, forKey: "store_theme_id")
             }
         }
@@ -170,7 +175,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         )
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("[WatchConnectivity] ongoing live score notification post failed: \(error.localizedDescription)")
+                wlog("[WatchConnectivity] ongoing live score notification post failed: \(error.localizedDescription)")
             }
         }
     }
@@ -213,7 +218,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             handleMessage(applicationContext)
         } else if let teamName = applicationContext["my_team"] as? String, !teamName.isEmpty {
             DispatchQueue.main.async {
-                self.syncedTeamName = teamName
+                if self.syncedTeamName != teamName {
+                    self.syncedTeamName = teamName
+                }
             }
         }
     }
@@ -287,7 +294,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             return inning
         }()
 
-        gameData = GameData(
+        let newGameData = GameData(
             gameId: message["game_id"] as? String ?? "",
             homeTeam: message["home_team"] as? String ?? "",
             awayTeam: message["away_team"] as? String ?? "",
@@ -312,6 +319,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             scoreDiff: 0,
             myTeamName: message["my_team"] as? String ?? ""
         )
+        if gameData != newGameData {
+            gameData = newGameData
+        }
         if let updatedAt = message["updated_at"] as? TimeInterval {
             gameDataUpdatedAt = Date(timeIntervalSince1970: updatedAt)
         } else {
@@ -326,7 +336,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         }
 
         // 테마 동기화
-        if let myTeam = message["my_team"] as? String, !myTeam.isEmpty {
+        if let myTeam = message["my_team"] as? String, !myTeam.isEmpty, myTeam != syncedTeamName {
             syncedTeamName = myTeam
         }
 
@@ -351,51 +361,51 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         // Long notification으로 경기 진행상황을 보는 기능은 임시 비활성화.
         // if !isFinished, let updated = gameData, incomingEventAllowed {
         //     Self.postOngoingLiveScoreNotification(gameData: updated, latestEventType: latestEventType)
-        // } else if isFinished {
-        //     Self.removeOngoingLiveScoreNotification()
         // }
-        Self.removeOngoingLiveScoreNotification()
 
         // 경기가 LIVE이면 Extended Session 시작, 종료되면 정지
         if !isFinished {
             startExtendedSession()
         } else {
+            Self.removeOngoingLiveScoreNotification()
             stopExtendedSession()
         }
     }
 
     private func handleThemeUpdate(_ message: [String: Any]) {
-        if let teamName = message["my_team"] as? String, !teamName.isEmpty {
+        if let teamName = message["my_team"] as? String, !teamName.isEmpty, teamName != syncedTeamName {
             syncedTeamName = teamName
         }
     }
 
     private func handleStoreThemeUpdate(_ message: [String: Any]) {
         if let themeId = message["theme_id"] as? String {
-            storeThemeId = themeId
+            if storeThemeId != themeId {
+                storeThemeId = themeId
+            }
             UserDefaults.standard.set(themeId, forKey: "store_theme_id")
-            print("[WatchConnectivity] Store theme updated: \(themeId)")
+            wlog("[WatchConnectivity] Store theme updated: \(themeId)")
         }
     }
 
     private func handleSettingsUpdate(_ message: [String: Any]) {
         if let enabled = message["event_video_enabled"] as? Bool {
             UserDefaults.standard.set(enabled, forKey: "event_video_enabled")
-            print("[WatchConnectivity] event_video_enabled = \(enabled)")
+            wlog("[WatchConnectivity] event_video_enabled = \(enabled)")
         }
         if let enabled = message["live_haptic_enabled"] as? Bool {
             UserDefaults.standard.set(enabled, forKey: "live_haptic_enabled")
-            print("[WatchConnectivity] live_haptic_enabled = \(enabled)")
+            wlog("[WatchConnectivity] live_haptic_enabled = \(enabled)")
         }
         if let style = message["team_display_name_style"] as? String {
             let normalizedStyle = TeamDisplayNameStyle.fromString(style).rawValue
             UserDefaults.standard.set(normalizedStyle, forKey: "team_display_name_style")
-            print("[WatchConnectivity] team_display_name_style = \(normalizedStyle)")
+            wlog("[WatchConnectivity] team_display_name_style = \(normalizedStyle)")
         }
         for filterKey in Self.eventFilterPrefKeys {
             if let enabled = message[filterKey] as? Bool {
                 UserDefaults.standard.set(enabled, forKey: filterKey)
-                print("[WatchConnectivity] \(filterKey) = \(enabled)")
+                wlog("[WatchConnectivity] \(filterKey) = \(enabled)")
             }
         }
     }
@@ -414,12 +424,12 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         // 오래된 이벤트는 햅틱 무시
         if let eventTimestamp = message["timestamp"] as? TimeInterval,
            Date().timeIntervalSince1970 - eventTimestamp > Self.staleEventThreshold {
-            print("[WatchConnectivity] Skipping stale haptic event: \(eventType)")
+            wlog("[WatchConnectivity] Skipping stale haptic event: \(eventType)")
             return
         }
 
         guard Self.isEventTypeAllowedByFilter(eventType) else {
-            print("[WatchConnectivity] event filter blocked: \(eventType)")
+            wlog("[WatchConnectivity] event filter blocked: \(eventType)")
             return
         }
 
@@ -444,7 +454,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             awayTeam: Self.displayTeamName(message["away_team"] as? String ?? "", style: displayStyle)
         )
 
-        if let myTeam = message["my_team"] as? String, !myTeam.isEmpty {
+        if let myTeam = message["my_team"] as? String, !myTeam.isEmpty, myTeam != syncedTeamName {
             syncedTeamName = myTeam
         }
     }
@@ -454,11 +464,11 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     /// APNs push에서 직접 받은 햅틱 이벤트 처리
     func handleDirectPushHapticEvent(eventType: String) {
         let upper = eventType.uppercased()
-        print("⌚ [WatchConn] Direct push haptic: \(upper) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
+        wlog("⌚ [WatchConn] Direct push haptic: \(upper) | extendedSession=\(extendedSession?.state.rawValue ?? -1)")
         // 필터에 걸린 이벤트는 latestEventType도 갱신하지 않는다 (handleHapticEvent와 동일).
         // 갱신하면 차단된 이벤트가 전체 화면 애니메이션으로 노출됨.
         guard Self.isEventTypeAllowedByFilter(eventType) else {
-            print("⌚ [WatchConn] event filter blocked push haptic: \(upper)")
+            wlog("⌚ [WatchConn] event filter blocked push haptic: \(upper)")
             return
         }
         latestEventType = upper
@@ -468,7 +478,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
     /// APNs push에서 직접 받은 게임 데이터 처리
     func handleDirectPushGameData(_ message: [String: Any]) {
-        print("⌚ [WatchConn] Direct push game_data")
+        wlog("⌚ [WatchConn] Direct push game_data")
         handleGameData(message)
     }
 
@@ -482,7 +492,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         guard WCSession.default.activationState == .activated else {
             // 토큰을 버리지 않고 보류 → 활성화 완료 시 재전송
             pendingWatchPushToken = token
-            print("⌚ [WatchConn] Session not activated, deferring watch token send")
+            wlog("⌚ [WatchConn] Session not activated, deferring watch token send")
             return
         }
         pendingWatchPushToken = nil
@@ -494,13 +504,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
         if WCSession.default.isReachable {
             WCSession.default.sendMessage(message, replyHandler: nil) { error in
-                print("⌚ [WatchConn] sendMessage failed for watch token, using transferUserInfo: \(error.localizedDescription)")
+                wlog("⌚ [WatchConn] sendMessage failed for watch token, using transferUserInfo: \(error.localizedDescription)")
                 WCSession.default.transferUserInfo(message)
             }
         } else {
             WCSession.default.transferUserInfo(message)
         }
-        print("⌚ [WatchConn] Watch push token sent to iPhone")
+        wlog("⌚ [WatchConn] Watch push token sent to iPhone")
     }
 
     // MARK: - Send Watch Sync Response
@@ -513,7 +523,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 
         if WCSession.default.isReachable {
             WCSession.default.sendMessage(response, replyHandler: nil) { error in
-                print("[WatchConnectivity] sendMessage failed, falling back to transferUserInfo: \(error.localizedDescription)")
+                wlog("[WatchConnectivity] sendMessage failed, falling back to transferUserInfo: \(error.localizedDescription)")
                 WCSession.default.transferUserInfo(response)
             }
         } else {
@@ -549,29 +559,30 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         session.delegate = self
         extendedSession = session
         session.start()
-        print("[WatchConnectivity] Extended runtime session started")
+        wlog("[WatchConnectivity] Extended runtime session started")
     }
 
     /// 경기 동기화가 종료되면 Extended Runtime Session을 종료합니다.
     func stopExtendedSession() {
         extendedSessionRetryCount = 0
-        guard let session = extendedSession, session.state == .running else {
-            extendedSession = nil
-            return
-        }
-        session.invalidate()
+        guard let session = extendedSession else { return }
         extendedSession = nil
-        print("[WatchConnectivity] Extended runtime session stopped")
+        if session.state != .invalid {
+            session.invalidate()
+        }
+        wlog("[WatchConnectivity] Extended runtime session stopped")
     }
 
     // MARK: - Haptic Feedback (Apple Watch Taptic Engine)
+    private var victoryHapticTask: Task<Void, Never>?
+
     private func triggerHaptic(eventType: String) {
         let upper = eventType.uppercased()
         // 중복 채널(APNs + WatchConnectivity) 이중 햅틱 방지
         if let lastEvent = lastTriggeredEvent, lastEvent == upper,
            let lastTime = lastTriggeredAt,
            Date().timeIntervalSince(lastTime) < Self.deduplicationWindow {
-            print("⌚ [WatchConn] Skipping duplicate haptic: \(upper)")
+            wlog("⌚ [WatchConn] Skipping duplicate haptic: \(upper)")
             return
         }
         lastTriggeredEvent = upper
@@ -582,8 +593,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         switch eventType.uppercased() {
         case "VICTORY":
             // 4초간 반복 진동 (0.3초 간격, 13회)
-            for i in 0..<13 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.3) {
+            victoryHapticTask?.cancel()
+            victoryHapticTask = Task { @MainActor in
+                for i in 0..<13 {
+                    if i > 0 {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                    }
+                    guard !Task.isCancelled else { return }
                     device.play(.notification)
                 }
             }
@@ -644,9 +660,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     /// 팀 비교/표시 양쪽에서 사용 — 멱등.
     /// 3out 시 워치에서 이닝을 즉시 전진. 9회말은 그대로 두고 백엔드 판정 대기.
     /// "N회초" → "N회말", "N회말" (N<9) → "(N+1)회초". 그 외(9회초/9회말/연장/형식 불일치)는 원본 유지.
+    private static let inningRegex = try? NSRegularExpression(pattern: "^([0-9]+)회(초|말)$")
+
     static func advanceInningBeforeNinth(_ inning: String) -> String {
-        let pattern = "^([0-9]+)회(초|말)$"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return inning }
+        guard let regex = inningRegex else { return inning }
         let range = NSRange(inning.startIndex..<inning.endIndex, in: inning)
         guard let match = regex.firstMatch(in: inning, range: range), match.numberOfRanges == 3,
               let numberRange = Range(match.range(at: 1), in: inning),
@@ -703,13 +720,13 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
 // MARK: - WKExtendedRuntimeSessionDelegate
 extension WatchConnectivityManager: WKExtendedRuntimeSessionDelegate {
     func extendedRuntimeSessionDidStart(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
-        print("[WatchConnectivity] Extended session running")
+        wlog("[WatchConnectivity] Extended session running")
         extendedSessionRetryCount = 0
     }
 
     func extendedRuntimeSessionWillExpire(_ extendedRuntimeSession: WKExtendedRuntimeSession) {
         // 세션 만료 임박 시 새 세션 시작
-        print("[WatchConnectivity] Extended session expiring, restarting...")
+        wlog("[WatchConnectivity] Extended session expiring, restarting...")
         extendedSession = nil
         extendedSessionRetryCount = 0
         if gameData?.isLive == true {
@@ -718,12 +735,12 @@ extension WatchConnectivityManager: WKExtendedRuntimeSessionDelegate {
     }
 
     func extendedRuntimeSession(_ extendedRuntimeSession: WKExtendedRuntimeSession, didInvalidateWith reason: WKExtendedRuntimeSessionInvalidationReason, error: (any Error)?) {
-        print("[WatchConnectivity] Extended session invalidated: \(reason.rawValue), error: \(error?.localizedDescription ?? "none")")
+        wlog("[WatchConnectivity] Extended session invalidated: \(reason.rawValue), error: \(error?.localizedDescription ?? "none")")
         extendedSession = nil
         extendedSessionRetryCount += 1
         // 재시도 횟수 초과 시 포기 (APNs push가 앱을 깨워줌)
         guard extendedSessionRetryCount <= Self.maxExtendedSessionRetries else {
-            print("[WatchConnectivity] Extended session retry limit reached, relying on APNs push")
+            wlog("[WatchConnectivity] Extended session retry limit reached, relying on APNs push")
             return
         }
         // 경기가 진행 중이면 세션 재시작

@@ -64,7 +64,7 @@ final class WatchGamePoller: ObservableObject {
 
                 if myGames.isEmpty {
                     // 내 팀 경기 없음 → 편성 변경 가능성이 있으니 주기적으로 일정 재확인
-                    print("⌚ [WatchPoller] 오늘 내 팀 경기 없음, \(Int(scheduleRefreshInterval / 60))분 후 일정 재확인")
+                    wlog("⌚ [WatchPoller] 오늘 내 팀 경기 없음, \(Int(scheduleRefreshInterval / 60))분 후 일정 재확인")
                     try? await Task.sleep(nanoseconds: UInt64(scheduleRefreshInterval * 1_000_000_000))
                     continue
                 }
@@ -75,7 +75,7 @@ final class WatchGamePoller: ObservableObject {
                     let waitUntil = startTime.addingTimeInterval(-5 * 60)
                     let waitSeconds = waitUntil.timeIntervalSinceNow
                     if waitSeconds > 0 {
-                        print("⌚ [WatchPoller] 내 팀 경기 \(startTime)까지 대기 중 (\(Int(waitSeconds))초 후 폴링 시작)")
+                        wlog("⌚ [WatchPoller] 내 팀 경기 \(startTime)까지 대기 중 (\(Int(waitSeconds))초 후 폴링 시작)")
                         try? await Task.sleep(nanoseconds: UInt64(min(waitSeconds, scheduleRefreshInterval) * 1_000_000_000))
                         if waitSeconds > scheduleRefreshInterval { continue } // 아직 멀었음 → 일정 재조회
                     }
@@ -83,10 +83,16 @@ final class WatchGamePoller: ObservableObject {
                 // 시작 시간을 모르면 (startTime 파싱 실패) 바로 폴링 시작
 
                 // 2) 30초 간격 폴링 (일정 갱신 주기마다 일정 재조회로 복귀)
-                print("⌚ [WatchPoller] 폴링 시작")
+                // 초기 일정 조회에서 파악한 gameId만 단건 조회 — 전체 목록 재조회는 일정 갱신 시에만
+                let myGameIds = myGames.compactMap { $0["id"] as? String }.filter { !$0.isEmpty }
+                wlog("⌚ [WatchPoller] 폴링 시작")
                 let pollingStartedAt = Date()
                 while !Task.isCancelled {
-                    await self.pollOnce(myTeam: myTeam, onGameLive: onGameLive)
+                    if myGameIds.isEmpty {
+                        await self.pollOnce(myTeam: myTeam, onGameLive: onGameLive)
+                    } else {
+                        await self.pollGames(gameIds: myGameIds, onGameLive: onGameLive)
+                    }
                     try? await Task.sleep(nanoseconds: 30_000_000_000)
                     if Date().timeIntervalSince(pollingStartedAt) > scheduleRefreshInterval { break }
                 }
@@ -122,11 +128,42 @@ final class WatchGamePoller: ObservableObject {
         var delay: TimeInterval = 15
         while !Task.isCancelled {
             if let games = await fetchTodayGames() { return games }
-            print("⌚ [WatchPoller] 경기 목록 조회 실패, \(Int(delay))초 후 재시도")
+            wlog("⌚ [WatchPoller] 경기 목록 조회 실패, \(Int(delay))초 후 재시도")
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             delay = min(delay * 2, 60)
         }
         return nil
+    }
+
+    /// 단일 경기 조회 — /games 목록 요소와 동일한 GameSummaryOut 형태
+    private func fetchGame(gameId: String) async -> [String: Any]? {
+        let endpoint = "\(baseURL.trimmingSuffix("/"))/games/\(gameId)"
+
+        guard let url = URL(string: endpoint) else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
+              let game = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return game
+    }
+
+    private func pollGames(gameIds: [String], onGameLive: @escaping (String, String, String) -> Void) async {
+        for gameId in gameIds {
+            guard !promptedGameIds.contains(gameId) else { continue }
+            // 일시적 조회 실패면 이번 tick만 건너뛰고 다음 폴링에서 재시도
+            guard let game = await fetchGame(gameId: gameId) else { continue }
+
+            let statusStr = (game["status"] as? String ?? "").uppercased()
+            guard statusStr == "LIVE" || statusStr == "IN_PROGRESS" else { continue }
+            promptedGameIds.insert(gameId)
+
+            await MainActor.run {
+                onGameLive(gameId, game["homeTeam"] as? String ?? "", game["awayTeam"] as? String ?? "")
+            }
+        }
     }
 
     private func pollOnce(myTeam: String, onGameLive: @escaping (String, String, String) -> Void) async {
@@ -178,11 +215,15 @@ final class WatchGamePoller: ObservableObject {
         return calendar.date(from: components)
     }
 
-    private static func todayDateString() -> String {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = kst
-        return formatter.string(from: Date())
+        return formatter
+    }()
+
+    private static func todayDateString() -> String {
+        dateFormatter.string(from: Date())
     }
 
     private static func normalizeTeamName(_ name: String) -> String {

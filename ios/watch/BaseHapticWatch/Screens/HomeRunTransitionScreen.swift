@@ -29,7 +29,7 @@ struct HomeRunTransitionScreen: View {
         .task {
             // 초기 prefetch
             for i in 0...min(Self.prefetchAhead, Self.frameCount - 1) {
-                cache[i] = UIImage(named: Self.frameNames[i])
+                cache[i] = await AnimationFrameLoader.loadFrame(named: Self.frameNames[i])
             }
 
             for i in 1..<Self.frameCount {
@@ -40,7 +40,7 @@ struct HomeRunTransitionScreen: View {
                 // 다음 프레임 prefetch
                 let next = i + Self.prefetchAhead
                 if next < Self.frameCount {
-                    cache[next] = UIImage(named: Self.frameNames[next])
+                    cache[next] = await AnimationFrameLoader.loadFrame(named: Self.frameNames[next])
                 }
                 // 사용 끝난 프레임 해제
                 cache.removeValue(forKey: i - 1)

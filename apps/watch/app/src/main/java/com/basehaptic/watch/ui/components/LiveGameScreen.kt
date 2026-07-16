@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,9 +94,11 @@ fun LiveGameScreen(
     ) {
         // 테마 배경: 이미지 > 그라데이션 > 기본색
         val bgImageName = watchTheme.backgroundImage
-        val bgResId = bgImageName?.let {
-            context.resources.getIdentifier(it, "drawable", context.packageName)
-        }?.takeIf { it != 0 }
+        val bgResId = remember(bgImageName) {
+            bgImageName?.let {
+                context.resources.getIdentifier(it, "drawable", context.packageName)
+            }?.takeIf { it != 0 }
+        }
 
         if (bgResId != null) {
             Image(

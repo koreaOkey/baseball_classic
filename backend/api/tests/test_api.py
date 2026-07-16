@@ -1426,6 +1426,38 @@ def test_list_games_uses_cached_weather_only() -> None:
     assert False in allow_network_values
 
 
+def test_weather_prewarm_warms_forecast_range_games_with_network() -> None:
+    """프리워밍은 예보 지원 범위의 경기들에 대해 allow_network=True 로 요약을 계산한다."""
+    with TestClient(app) as client:
+        payload = sample_snapshot()
+        today = datetime.now(main_module.KST).date()
+        payload["gameDate"] = today.isoformat()
+        payload["status"] = "SCHEDULED"
+        payload["inning"] = "18:30"
+        payload["startTime"] = "18:30"
+
+        game_id = f"{today.strftime('%Y%m%d')}PREWARM01"
+        ingest = client.post(
+            f"/internal/crawler/games/{game_id}/snapshot",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+        assert ingest.status_code == 200
+
+        calls: list[tuple[str, bool | None]] = []
+
+        def fake_weather_summary(game, **kwargs):
+            calls.append((game.id, kwargs.get("allow_network")))
+            return {"stadiumCode": "JAMSIL"}
+
+        with patch.object(main_module, "build_weather_summary", side_effect=fake_weather_summary):
+            with patch.object(main_module.settings, "weather_service_key", "test-weather-key"):
+                warmed = main_module._prewarm_weather_forecasts()
+
+    assert warmed >= 1
+    assert any(gid == game_id and allow is True for gid, allow in calls)
+
+
 def test_weather_summary_dome_fallback_without_external_api_key() -> None:
     game = Game(
         id="20260616DOME001",

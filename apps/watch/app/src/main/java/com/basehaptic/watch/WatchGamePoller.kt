@@ -6,10 +6,13 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -34,6 +37,7 @@ object WatchGamePoller {
     private const val TAG = "WatchGamePoller"
     private const val TIMEOUT_MS = 10_000
     private const val POLL_INTERVAL_MS = 30_000L
+    private const val AMBIENT_POLL_INTERVAL_MS = 180_000L
 
     // 조회 실패 시 백오프 (30초 → 1분 → 2분 → 5분 유지)
     private val failureBackoffMs = listOf(30_000L, 60_000L, 120_000L, 300_000L)
@@ -46,9 +50,27 @@ object WatchGamePoller {
     private var promptedDate: String = ""
     private val kst = TimeZone.getTimeZone("Asia/Seoul")
 
+    // 앰비언트 모드에서는 폴링 간격을 3분으로 늘리고, 복귀 시 즉시 1회 폴링
+    @Volatile
+    private var isAmbient = false
+    private val ambientExitSignal = Channel<Unit>(Channel.CONFLATED)
+
+    // 목록 응답에서 내 팀 경기를 특정한 뒤에는 단일 경기 엔드포인트로 폴링
+    @Volatile
+    private var targetGameId: String? = null
+
+    fun setAmbient(ambient: Boolean) {
+        val wasAmbient = isAmbient
+        isAmbient = ambient
+        if (wasAmbient && !ambient) {
+            ambientExitSignal.trySend(Unit)
+        }
+    }
+
     fun startPolling(context: Context, myTeam: String) {
         stopPolling()
         if (myTeam.isBlank() || myTeam == "DEFAULT") return
+        targetGameId = null
         // 같은 날 재무장 시 이미 안내한 경기 팝업이 반복되지 않도록 날짜가 바뀔 때만 초기화
         val today = todayDateString()
         if (promptedDate != today) {
@@ -62,6 +84,7 @@ object WatchGamePoller {
             // 1) 경기 목록 조회
             val games = fetchTodayGames()
             val myGames = games.orEmpty().filter { isMyTeamGame(it, myTeam) }
+            updateTargetGame(myGames)
 
             // 이미 LIVE인 경기가 있으면 즉시 처리
             for (game in myGames) {
@@ -119,7 +142,7 @@ object WatchGamePoller {
                     }
                     PollResult.CONTINUE -> {
                         failureStreak = 0
-                        delay(POLL_INTERVAL_MS)
+                        pollDelay()
                     }
                 }
             }
@@ -137,9 +160,40 @@ object WatchGamePoller {
         return myGames.all { (it["status"] ?: "").uppercase() in finalStatuses }
     }
 
+    private fun isFinalStatus(game: Map<String, String>): Boolean {
+        return (game["status"] ?: "").uppercase() in finalStatuses
+    }
+
+    private fun updateTargetGame(myGames: List<Map<String, String>>) {
+        targetGameId = myGames.firstOrNull { !isFinalStatus(it) }
+            ?.get("id")
+            ?.takeIf { it.isNotBlank() }
+    }
+
+    /** 앰비언트 모드에서는 3분 간격, 복귀 시 즉시 폴링 재개 */
+    private suspend fun pollDelay() {
+        val interval = if (isAmbient) AMBIENT_POLL_INTERVAL_MS else POLL_INTERVAL_MS
+        withTimeoutOrNull(interval) { ambientExitSignal.receive() }
+    }
+
     private suspend fun pollOnce(context: Context, myTeam: String): PollResult {
-        val games = fetchTodayGames() ?: return PollResult.FETCH_FAILED
-        val myGames = games.filter { isMyTeamGame(it, myTeam) }
+        val trackedId = targetGameId
+        val myGames: List<Map<String, String>>
+        if (trackedId != null) {
+            val game = fetchGame(trackedId) ?: return PollResult.FETCH_FAILED
+            if (isFinalStatus(game)) {
+                // 추적 경기 종료 → 더블헤더 등 남은 경기 확인 위해 목록 폴링으로 복귀
+                val games = fetchTodayGames() ?: return PollResult.FETCH_FAILED
+                myGames = games.filter { isMyTeamGame(it, myTeam) }
+                updateTargetGame(myGames)
+            } else {
+                myGames = listOf(game)
+            }
+        } else {
+            val games = fetchTodayGames() ?: return PollResult.FETCH_FAILED
+            myGames = games.filter { isMyTeamGame(it, myTeam) }
+            updateTargetGame(myGames)
+        }
         for (game in myGames) {
             val gameId = game["id"] ?: ""
             if (gameId.isBlank()) continue
@@ -160,8 +214,8 @@ object WatchGamePoller {
             Context.MODE_PRIVATE
         )
         // 이미 해당 경기 데이터를 수신 중이면 무시
-        val currentGameId = prefs.getString("game_id", "") ?: ""
-        val isLive = prefs.getBoolean("is_live", false)
+        val currentGameId = prefs.getString(DataLayerListenerService.KEY_GAME_ID, "") ?: ""
+        val isLive = prefs.getBoolean(DataLayerListenerService.KEY_IS_LIVE, false)
         if (currentGameId == gameId && isLive) return
 
         // 이미 같은 경기 팝업이 떠있으면 무시
@@ -188,42 +242,61 @@ object WatchGamePoller {
         try {
             val dateStr = todayDateString()
             val baseUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
-            val url = URL("$baseUrl/games?date=$dateStr&limit=100")
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = TIMEOUT_MS
-                readTimeout = TIMEOUT_MS
-                setRequestProperty("Accept", "application/json")
-            }
-
-            val responseCode = connection.responseCode
-            if (responseCode != 200) {
-                connection.disconnect()
-                return@withContext null
-            }
-
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
-            connection.disconnect()
+            val body = fetchBody(URL("$baseUrl/games?date=$dateStr&limit=100"))
+                ?: return@withContext null
 
             val array = JSONArray(body)
             val result = mutableListOf<Map<String, String>>()
             for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                result.add(
-                    mapOf(
-                        "id" to obj.optString("id", ""),
-                        "homeTeam" to obj.optString("homeTeam", ""),
-                        "awayTeam" to obj.optString("awayTeam", ""),
-                        "status" to obj.optString("status", ""),
-                        "startTime" to obj.optString("startTime", ""),
-                    )
-                )
+                result.add(gameToMap(array.getJSONObject(i)))
             }
             result
         } catch (e: Exception) {
             Log.w(TAG, "경기 목록 조회 실패: ${e.message}")
             null
         }
+    }
+
+    /** 단일 경기 조회 (목록 응답의 한 원소와 동일한 JSON 형태), 실패 시 null */
+    private suspend fun fetchGame(gameId: String): Map<String, String>? = withContext(Dispatchers.IO) {
+        try {
+            val baseUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
+            val body = fetchBody(URL("$baseUrl/games/$gameId"))
+                ?: return@withContext null
+            gameToMap(JSONObject(body))
+        } catch (e: Exception) {
+            Log.w(TAG, "경기 조회 실패($gameId): ${e.message}")
+            null
+        }
+    }
+
+    private fun fetchBody(url: URL): String? {
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = TIMEOUT_MS
+            readTimeout = TIMEOUT_MS
+            setRequestProperty("Accept", "application/json")
+        }
+
+        val responseCode = connection.responseCode
+        if (responseCode != 200) {
+            connection.disconnect()
+            return null
+        }
+
+        val body = connection.inputStream.bufferedReader().use { it.readText() }
+        connection.disconnect()
+        return body
+    }
+
+    private fun gameToMap(obj: JSONObject): Map<String, String> {
+        return mapOf(
+            "id" to obj.optString("id", ""),
+            "homeTeam" to obj.optString("homeTeam", ""),
+            "awayTeam" to obj.optString("awayTeam", ""),
+            "status" to obj.optString("status", ""),
+            "startTime" to obj.optString("startTime", ""),
+        )
     }
 
     // MARK: - Helpers

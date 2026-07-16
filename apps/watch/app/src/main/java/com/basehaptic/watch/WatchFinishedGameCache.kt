@@ -43,6 +43,7 @@ object WatchFinishedGameCache {
             .remove(DataLayerListenerService.KEY_LAST_EVENT_AT)
             .remove(DataLayerListenerService.KEY_LAST_EVENT_CURSOR)
             .remove(DataLayerListenerService.KEY_GAME_UPDATED_AT)
+            .remove(DataLayerListenerService.KEY_IS_LIVE)
             .apply()
     }
 }
