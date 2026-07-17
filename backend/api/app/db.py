@@ -43,7 +43,11 @@ GAME_EVENT_TYPE_VALUES = (
 
 is_sqlite = settings.database_url.startswith("sqlite")
 # Supavisor Transaction 모드 풀러(6543)는 prepared statement 캐시와 충돌하므로
-# 클라이언트 풀을 끄고(NullPool) psycopg prepared statement 를 비활성화한다.
+# psycopg prepared statement 를 비활성화한다. 서버 측이 트랜잭션 단위로 연결을
+# 다중화하므로 클라이언트 커넥션 풀은 유지해도 안전하며, 매 요청 재접속 비용
+# (원거리 DB 기준 TLS+인증 ~600ms)을 피하기 위해 기본 QueuePool 을 사용한다.
+# 풀 유지가 문제를 일으키면 BASEHAPTIC_DB_FORCE_NULL_POOL=true 로 이전 동작
+# (요청마다 새 연결)으로 되돌릴 수 있다.
 is_transaction_pooler = (not is_sqlite) and (":6543" in settings.database_url)
 
 if is_sqlite:
@@ -61,7 +65,7 @@ engine_kwargs: dict[str, Any] = {
     "pool_recycle": max(60, settings.db_pool_recycle_sec),
 }
 
-if is_transaction_pooler:
+if (not is_sqlite) and settings.db_force_null_pool:
     engine_kwargs["poolclass"] = NullPool
 elif not is_sqlite:
     engine_kwargs.update(
