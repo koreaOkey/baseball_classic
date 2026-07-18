@@ -192,9 +192,17 @@ private fun openLiveScoreNotificationSettings(context: Context) {
 }
 
 private fun loadSavedGameId(context: Context, key: String): String? {
-    return context.getSharedPreferences(USER_PREFS_NAME, Context.MODE_PRIVATE)
-        .getString(key, null)
-        ?.takeIf { it.isNotBlank() }
+    val prefs = context.getSharedPreferences(USER_PREFS_NAME, Context.MODE_PRIVATE)
+    val saved = prefs.getString(key, null)?.takeIf { it.isNotBlank() } ?: return null
+    // 게임 ID 는 YYYYMMDD 로 시작한다. 지난 날짜 경기의 관람 상태가 앱 재시작 때
+    // 복원되면 워치 동기화 service 가 되살아나 "관람 중" 알림이 반복 표시되므로
+    // 오늘 경기만 복원하고 나머지는 폐기한다.
+    val todayPrefix = LocalDate.now().format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
+    if (!saved.startsWith(todayPrefix)) {
+        prefs.edit().remove(key).apply()
+        return null
+    }
+    return saved
 }
 
 class MainActivity : ComponentActivity() {

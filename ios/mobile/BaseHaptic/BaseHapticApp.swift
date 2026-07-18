@@ -330,6 +330,14 @@ struct ContentView: View {
         guard let value = UserDefaults.standard.string(forKey: key), !value.isEmpty else {
             return nil
         }
+        // 게임 ID 는 YYYYMMDD 로 시작한다. 지난 날짜 경기의 관람 상태가 앱 재시작 때
+        // 복원되면 종료된 경기의 워치 동기화·스트리밍이 되살아나므로 오늘 경기만 복원한다.
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        guard value.hasPrefix(formatter.string(from: Date())) else {
+            UserDefaults.standard.set("", forKey: key)
+            return nil
+        }
         return value
     }
 

@@ -12,4 +12,4 @@
 ## 3. 검증
 - [x] 3.1 backend 97 tests passed
 - [x] 3.2 풀 클래스 3시나리오 확인 (6543=QueuePool, force=NullPool, 5432=QueuePool, prepare_threshold=None 유지)
-- [ ] 3.3 배포 후 Railway `http_response_time` 재측정 (p50 ~200ms대 기대) + 에러 로그에 pooler 연결 오류 없는지 확인
+- [x] 3.3 배포 후 재측정 완료 (2026-07-18 08:55 KST): p50 692→312ms, p95 1460→833ms. `/app-config` 610→~225ms, `/games` 미스 690→~310ms. 에러 로그 없음, 워커 2개 정상 기동. 잔여 ~225ms는 도쿄 DB 왕복(RTT×2) — 리전 이동 없이는 하한.

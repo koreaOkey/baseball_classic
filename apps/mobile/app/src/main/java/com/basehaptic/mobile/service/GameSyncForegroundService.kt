@@ -148,6 +148,14 @@ class GameSyncForegroundService : Service() {
         syncedGameId = null
         streamingJob?.cancel()
         streamingJob = null
+        // 경기 종료·최대 가동 시간 등으로 service 가 스스로 꺼질 때 저장된 관람 상태도
+        // 함께 지운다. 남겨두면 다음 앱 실행 때 MainActivity 가 복원해 service 를
+        // 재시작하고 "관람 중" 알림이 반복 표시된다.
+        getSharedPreferences("basehaptic_user_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .remove("synced_game_id")
+            .remove("active_live_score_game_id")
+            .apply()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
