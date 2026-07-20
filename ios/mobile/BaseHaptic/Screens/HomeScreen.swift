@@ -47,11 +47,38 @@ struct HomeScreen: View {
 
     private var games: [Game] {
         let sortedGames = sortHomeGames(todayGames)
+        #if DEBUG
+        // 분풀이 모드 확인용: 마이팀이 설정돼 있고 완료된 마이팀 경기가 없으면
+        // 마이팀 패배 완료 경기(목업) 하나를 홈 상단에 주입한다.
+        if VentingFeatureFlag.isEnabled, selectedTeam != .none,
+           !sortedGames.contains(where: { $0.status == .finished && $0.isMyTeam }) {
+            return [ventingMockFinishedGame(selectedTeam: selectedTeam)] + sortedGames
+        }
+        #endif
         if showUpdateHighlights && sortedGames.isEmpty {
             return [updateHighlightSampleGame(selectedTeam: selectedTeam)]
         }
         return sortedGames
     }
+
+    #if DEBUG
+    /// 분풀이 확인용 마이팀 패배 완료 경기 (목업 JSON의 1:7 스코어와 일치).
+    private func ventingMockFinishedGame(selectedTeam: Team) -> Game {
+        let awayTeam: Team = selectedTeam == .ssg ? .lg : .ssg
+        return Game(
+            id: "venting-mock-finished-game",
+            homeTeam: selectedTeam.teamName,
+            awayTeam: awayTeam.teamName,
+            homeTeamId: selectedTeam,
+            awayTeamId: awayTeam,
+            homeScore: 1,
+            awayScore: 7,
+            inning: "경기 종료",
+            status: .finished,
+            isMyTeam: true
+        )
+    }
+    #endif
 
     private var updateHighlightStep: UpdateHighlightStep? {
         guard showUpdateHighlights else { return nil }

@@ -105,6 +105,10 @@ struct VentingHomeCardContainer: View {
                         onClose: { showVentingFlow = false }
                     )
                 }
+            } else {
+                // LazyVStack이 이 뷰를 lazy 렌더하고 .task를 실행하도록 최소 자리를 확보한다.
+                // (컨텍스트가 없을 때 EmptyView면 높이 0이라 렌더·task가 영영 실행되지 않는다.)
+                Color.clear.frame(height: 1)
             }
         }
         .task {
