@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 // MARK: - VentingDestroyedScreen
@@ -159,4 +160,5 @@ private extension VentingRoomViewModel {
         UserDefaults.standard.bool(forKey: "venting_first_destruction_\(gameContext.gameId)")
     }
 }
+#endif
 #endif

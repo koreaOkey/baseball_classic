@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - RegretCandidateProviding
@@ -11,3 +12,4 @@ protocol RegretCandidateProviding {
     /// 오픈 조건 미충족이거나 데이터 없는 경우 `nil` 반환.
     func fetchVentingContext() async -> VentingGameContext?
 }
+#endif

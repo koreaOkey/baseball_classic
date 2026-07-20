@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - AlwaysAllowGate
@@ -17,3 +18,4 @@ final class AlwaysAllowGate: VentingGateProviding {
         return true
     }
 }
+#endif

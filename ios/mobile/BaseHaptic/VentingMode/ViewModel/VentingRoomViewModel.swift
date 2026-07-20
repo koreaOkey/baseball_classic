@@ -1,14 +1,25 @@
+#if DEBUG
 import SwiftUI
 import UIKit
 
 // MARK: - VentingRoomViewModel
 
 /// 분풀이 룸 뷰모델.
-/// `DestructionStateMachine`을 SwiftUI 바인딩에 연결하고 햅틱을 구동한다.
 ///
-/// - 탭 처리: `recordTap()` → 게이지 증가 → 단계 전환 시 자동 중햅틱
-/// - 완파 감지: `stage == .destroyed` 시 `isDestroyed` 가 true
-/// - 재도전: `reset()` 으로 게이지를 초기화한다 (UserDefaults 기록은 유지)
+/// `DestructionStateMachine` 을 SwiftUI 바인딩에 연결하고,
+/// `VentingHapticPlaying` 인터페이스를 통해 단계별 햅틱을 구동한다.
+///
+/// **햅틱 결속 규칙** (AC 4.1)
+/// | 이벤트                    | 호출                                    |
+/// |--------------------------|----------------------------------------|
+/// | 탭 (stage 전이 없음)      | `hapticPlayer.playTapFeedback()`        |
+/// | idle → cracked 전이       | `hapticPlayer.playStageTransition(.cracked)` |
+/// | cracked → burst 전이      | `hapticPlayer.playStageTransition(.burst)`   |
+/// | burst → destroyed 전이    | `hapticPlayer.playStageTransition(.destroyed)` |
+/// | 완파 후 탭                | (무시 — guard 로 차단)                  |
+///
+/// - `hapticPlayer` 는 생성자 주입: 실기기 → `UIKitVentingHapticPlayer`,
+///   테스트·프리뷰 → `MockVentingHapticPlayer`.
 @MainActor
 final class VentingRoomViewModel: ObservableObject {
 
@@ -26,35 +37,42 @@ final class VentingRoomViewModel: ObservableObject {
     let selectedTarget: VentingTarget
     let gate: any VentingGateProviding
 
-    // MARK: - Haptics
+    /// 햅틱 재생 추상 인터페이스.
+    /// 실기기: `UIKitVentingHapticPlayer`, 테스트: `MockVentingHapticPlayer`.
+    private let hapticPlayer: any VentingHapticPlaying
 
-    private let lightFeedback = UIImpactFeedbackGenerator(style: .light)
-    private let mediumFeedback = UIImpactFeedbackGenerator(style: .medium)
-    private let notificationFeedback = UINotificationFeedbackGenerator()
+    // MARK: - Throttle
 
-    // Throttle: 탭 햅틱은 최소 50ms 간격
+    /// 탭 경햅틱 최소 간격 (50ms). 스로틀은 tapFeedback 에만 적용.
     private var lastTapHapticTime: TimeInterval = 0
 
     // MARK: - Init
 
+    /// - Parameters:
+    ///   - gameContext: 현재 경기 컨텍스트.
+    ///   - selectedTarget: 사용자가 선택한 분풀이 대상.
+    ///   - gate: 재도전 허용 게이트 (Phase 1: `AlwaysAllowGate`).
+    ///   - hapticPlayer: 햅틱 재생 구현체 (기본값: `UIKitVentingHapticPlayer`).
     init(
         gameContext: VentingGameContext,
         selectedTarget: VentingTarget,
-        gate: any VentingGateProviding
+        gate: any VentingGateProviding,
+        hapticPlayer: (any VentingHapticPlaying)? = nil
     ) {
         self.gameContext = gameContext
         self.selectedTarget = selectedTarget
         self.gate = gate
         self.machine = DestructionStateMachine(gameID: gameContext.gameId)
-
-        lightFeedback.prepare()
-        mediumFeedback.prepare()
-        notificationFeedback.prepare()
+        self.hapticPlayer = hapticPlayer ?? UIKitVentingHapticPlayer()
     }
 
     // MARK: - Actions
 
     /// 탭 1회 처리.
+    ///
+    /// 완파 상태에서는 즉시 반환하며, 어떤 햅틱도 발생하지 않는다.
+    /// stage 전이 발생 시 `hapticPlayer.playStageTransition(_:)` 을 호출한다.
+    /// stage 전이 없는 탭은 `hapticPlayer.playTapFeedback()` 을 호출한다(스로틀 50ms).
     func recordTap() {
         guard !isDestroyed else { return }
 
@@ -62,23 +80,18 @@ final class VentingRoomViewModel: ObservableObject {
         gauge = machine.gauge
         stage = machine.stage
 
-        // 탭 경햅틱 (스로틀 50ms)
-        let now = Date().timeIntervalSince1970
-        if now - lastTapHapticTime >= 0.05 {
-            lightFeedback.impactOccurred(intensity: 0.6)
-            lastTapHapticTime = now
-        }
-
-        // 단계 전환
-        if let newStage {
-            if newStage == .destroyed {
-                // 완파: 성공 패턴
-                notificationFeedback.notificationOccurred(.success)
-                mediumFeedback.impactOccurred(intensity: 1.0)
+        if let transitioned = newStage {
+            // destruction_stage 전이: 단계별 햅틱 (결속 규칙 AC 4.1)
+            hapticPlayer.playStageTransition(transitioned)
+            if transitioned == .destroyed {
                 isDestroyed = true
-            } else {
-                // 단계 전환 중햅틱
-                mediumFeedback.impactOccurred(intensity: 0.8)
+            }
+        } else {
+            // 전이 없는 일반 탭: 경햅틱 (스로틀 50ms)
+            let now = Date().timeIntervalSince1970
+            if now - lastTapHapticTime >= 0.05 {
+                hapticPlayer.playTapFeedback()
+                lastTapHapticTime = now
             }
         }
 
@@ -146,3 +159,4 @@ enum VentingTarget: Equatable {
         }
     }
 }
+#endif

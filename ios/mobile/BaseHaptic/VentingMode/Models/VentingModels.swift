@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - RegretCandidate (아쉬운 순간 후보)
@@ -50,3 +51,4 @@ struct VentingGameContext: Codable, Equatable {
     /// 감독 선택지 사건 문구
     let managerEventDescription: String
 }
+#endif

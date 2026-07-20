@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - DestructionStage
@@ -28,3 +29,4 @@ enum DestructionStage: String, Equatable, CaseIterable {
         }
     }
 }
+#endif

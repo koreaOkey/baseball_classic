@@ -21,6 +21,11 @@ struct BaseHapticApp: App {
     @State private var promptedUpdateVersion = ""
     @Environment(\.scenePhase) private var scenePhase
     private let isExistingUserAtLaunch: Bool
+    #if DEBUG
+    /// 분풀이 디버그 딥링크로 직접 표시할 화면 이름.
+    /// com.basehaptic.app://venting-debug?screen=<name>
+    @State private var ventingDebugScreenName: String?
+    #endif
 
     init() {
         let savedTeam = UserDefaults.standard.string(forKey: "selected_team") ?? Team.none.rawValue
@@ -55,6 +60,11 @@ struct BaseHapticApp: App {
         // DEBUG 빌드에서 분풀이 모드를 기본 활성화 (시뮬레이터 테스트용)
         #if DEBUG
         VentingFeatureFlag.setEnabled(true)
+        // --venting-force-show 인자: 한화 팀 미설정 시 자동 선택 (E2E 스크린샷 캡처용)
+        if CommandLine.arguments.contains("--venting-force-show") &&
+           (UserDefaults.standard.string(forKey: "selected_team") ?? "NONE") == "NONE" {
+            UserDefaults.standard.set("HANWHA", forKey: "selected_team")
+        }
         #endif
     }
 
@@ -239,8 +249,31 @@ struct BaseHapticApp: App {
                 }
             }
             .onOpenURL { url in
+                #if DEBUG
+                // 분풀이 디버그 딥링크: com.basehaptic.app://venting-debug?screen=<name>
+                if url.host == "venting-debug",
+                   let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                   let screen = comps.queryItems?.first(where: { $0.name == "screen" })?.value {
+                    ventingDebugScreenName = screen
+                    return
+                }
+                #endif
                 authManager.handleOpenURL(url)
             }
+            #if DEBUG
+            .fullScreenCover(isPresented: Binding(
+                get: { ventingDebugScreenName != nil },
+                set: { if !$0 { ventingDebugScreenName = nil } }
+            )) {
+                if let screenName = ventingDebugScreenName {
+                    VentingDebugNavigator(
+                        screenName: screenName,
+                        onClose: { ventingDebugScreenName = nil }
+                    )
+                    .preferredColorScheme(.dark)
+                }
+            }
+            #endif
         }
         .onChange(of: scenePhase) { _, newPhase in
             switch newPhase {

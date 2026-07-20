@@ -82,7 +82,7 @@ struct HomeScreen: View {
 
                         gamesListHeader
                         #if DEBUG
-                        VentingHomeCardContainer(myTeamId: selectedTeam.rawValue)
+                        VentingHomeCardContainer(myTeamId: selectedTeam.kboTeamId ?? "")
                         #endif
                         if let checkinStadium {
                             CheerCheckinCard(

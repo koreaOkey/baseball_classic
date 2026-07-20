@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 // MARK: - VentingTargetSelectionScreen
@@ -190,6 +191,7 @@ struct VentingTargetSelectionScreen: View {
 
     private func teamDisplayName(_ teamId: String) -> String {
         switch teamId.uppercased() {
+        // KBO team codes (Phase 2 backend format)
         case "HH": return "한화"
         case "LG": return "LG"
         case "OB": return "두산"
@@ -200,6 +202,14 @@ struct VentingTargetSelectionScreen: View {
         case "KT": return "KT"
         case "HT": return "KIA"
         case "NC": return "NC"
+        // Team rawValue format (Phase 1 mock format)
+        case "HANWHA": return "한화"
+        case "DOOSAN": return "두산"
+        case "KIWOOM": return "키움"
+        case "SAMSUNG": return "삼성"
+        case "LOTTE": return "롯데"
+        case "SSG": return "SSG"
+        case "KIA": return "KIA"
         default: return teamId
         }
     }
@@ -272,4 +282,5 @@ private struct TargetRow: View {
 private extension AppColors {
     static let red300 = Color(hex: 0xFCA5A5)
 }
+#endif
 #endif

@@ -1,5 +1,7 @@
 import Foundation
 
+#if DEBUG
+
 // MARK: - DestructionConstants
 
 /// 분풀이 룸 파괴 상태머신의 상수 모음.
@@ -18,3 +20,5 @@ struct DestructionConstants {
 
     private init() {}
 }
+
+#endif

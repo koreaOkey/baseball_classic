@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 // MARK: - VentingHomeCard
@@ -93,4 +94,5 @@ struct VentingHomeCard: View {
         .padding(.vertical, 6)
     }
 }
+#endif
 #endif

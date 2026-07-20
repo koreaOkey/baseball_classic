@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 // MARK: - VentingRoomScreen
@@ -389,4 +390,5 @@ struct VentingRoomScreen: View {
         .buttonStyle(.plain)
     }
 }
+#endif
 #endif

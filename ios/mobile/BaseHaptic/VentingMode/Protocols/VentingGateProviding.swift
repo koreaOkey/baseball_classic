@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - VentingGateProviding
@@ -14,3 +15,4 @@ protocol VentingGateProviding {
     /// 재도전을 요청한다. 광고 시청 등 선행 작업을 수행하고 허용 여부를 반환한다.
     func requestRetry(gameId: String) async -> Bool
 }
+#endif

@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 // MARK: - MockRegretProvider
@@ -28,3 +29,4 @@ final class MockRegretProvider: RegretCandidateProviding {
         }
     }
 }
+#endif
