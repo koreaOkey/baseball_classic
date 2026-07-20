@@ -26,6 +26,9 @@ struct SettingsScreen: View {
     @State private var showDeleteConfirm = false
     @State private var manuallyOpenedReleaseNote: ReleaseNote?
     @State private var isDeletingAccount = false
+    #if DEBUG
+    @State private var ventingModeEnabled = VentingFeatureFlag.isEnabled
+    #endif
 
     var body: some View {
         ScrollView {
@@ -209,6 +212,22 @@ struct SettingsScreen: View {
                 .onChange(of: eventVideoEnabled) { _, newValue in
                     WatchThemeSyncManager.syncEventVideoEnabledToWatch(enabled: newValue)
                 }
+
+                #if DEBUG
+                // DEBUG 섹션
+                Spacer().frame(height: AppSpacing.lg)
+                SettingsSection(title: "DEBUG")
+
+                SettingsItemWithToggle(
+                    icon: "squirrel.fill",
+                    title: "분풀이 모드",
+                    subtitle: "DEBUG 전용 피처",
+                    isOn: $ventingModeEnabled
+                )
+                .onChange(of: ventingModeEnabled) { _, newValue in
+                    VentingFeatureFlag.setEnabled(newValue)
+                }
+                #endif
 
                 // 정보 섹션
                 Spacer().frame(height: AppSpacing.lg)

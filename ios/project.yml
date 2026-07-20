@@ -25,6 +25,10 @@ targets:
     platform: iOS
     sources:
       - path: mobile/BaseHaptic
+        excludes:
+          - VentingMode/**
+      - path: mobile/BaseHaptic/VentingMode
+        # VentingMode is Debug-only to ensure Release builds have no venting symbols
       - path: shared/BaseHapticShared
     settings:
       base:
