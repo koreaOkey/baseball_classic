@@ -52,6 +52,10 @@ struct BaseHapticApp: App {
             "team_display_name_style": TeamDisplayNameStyle.team.rawValue,
             "team_display_name_prompt_seen": false,
         ])
+        // DEBUG 빌드에서 분풀이 모드를 기본 활성화 (시뮬레이터 테스트용)
+        #if DEBUG
+        VentingFeatureFlag.setEnabled(true)
+        #endif
     }
 
     private var selectedTeam: Team {

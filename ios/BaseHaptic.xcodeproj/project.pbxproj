@@ -100,6 +100,23 @@
 		F8F011ADF82EF27818A238E9 /* AppRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B00FE3A8F64F89794DD742A /* AppRadius.swift */; };
 		FD3779F6DF3FD699477A9E47 /* HomeRunTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0BFD94627C9204BFDBCF7A /* HomeRunTransitionScreen.swift */; };
 		FF04F10F375D614182ACC91E /* HomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34253CBAC793835241B2ED99 /* HomeScreen.swift */; };
+		AB11223344556677889900AB /* VentingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11223344556677889900AA /* VentingModels.swift */; };
+		BC11223344556677889900BC /* RegretCandidateProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11223344556677889900BB /* RegretCandidateProviding.swift */; };
+		CD11223344556677889900CD /* VentingGateProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11223344556677889900CC /* VentingGateProviding.swift */; };
+		DE11223344556677889900DE /* VentingOpenConditionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD11223344556677889900DD /* VentingOpenConditionChecker.swift */; };
+		EF11223344556677889900EF /* VentingFeatureFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE11223344556677889900EE /* VentingFeatureFlag.swift */; };
+		FA11223344556677889900FA /* MockRegretProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF11223344556677889900FF /* MockRegretProvider.swift */; };
+		AB22334455667788990011AB /* AlwaysAllowGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA22334455667788990011AA /* AlwaysAllowGate.swift */; };
+		BC22334455667788990011BC /* mock_regret_candidates.json in Resources */ = {isa = PBXBuildFile; fileRef = BB22334455667788990011BB /* mock_regret_candidates.json */; };
+		5645000200000000000000F1 /* DestructionConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F1 /* DestructionConstants.swift */; };
+		5645000200000000000000F2 /* DestructionStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F2 /* DestructionStage.swift */; };
+		5645000200000000000000F3 /* DestructionStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F3 /* DestructionStateMachine.swift */; };
+		5645000200000000000000F4 /* VentingRoomViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F4 /* VentingRoomViewModel.swift */; };
+		5645000200000000000000F5 /* VentingHomeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F5 /* VentingHomeCard.swift */; };
+		5645000200000000000000F6 /* VentingTargetSelectionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F6 /* VentingTargetSelectionScreen.swift */; };
+		5645000200000000000000F7 /* VentingRoomScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F7 /* VentingRoomScreen.swift */; };
+		5645000200000000000000F8 /* VentingDestroyedScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F8 /* VentingDestroyedScreen.swift */; };
+		5645000200000000000000F9 /* VentingFlowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5645000100000000000000F9 /* VentingFlowCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -239,6 +256,23 @@
 		F7D19ECB7357CFF94EE0DCCC /* 홈런 임팩트.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "홈런 임팩트.png"; sourceTree = "<group>"; };
 		F8BCEDEF5F6EAC1E19BA575A /* PhoneConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneConnectivityManager.swift; sourceTree = "<group>"; };
 		FC3E6C583697B070DEE30918 /* ReleaseNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotes.swift; sourceTree = "<group>"; };
+		AA11223344556677889900AA /* VentingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingModels.swift; sourceTree = "<group>"; };
+		BB11223344556677889900BB /* RegretCandidateProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegretCandidateProviding.swift; sourceTree = "<group>"; };
+		CC11223344556677889900CC /* VentingGateProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingGateProviding.swift; sourceTree = "<group>"; };
+		DD11223344556677889900DD /* VentingOpenConditionChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingOpenConditionChecker.swift; sourceTree = "<group>"; };
+		EE11223344556677889900EE /* VentingFeatureFlag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingFeatureFlag.swift; sourceTree = "<group>"; };
+		FF11223344556677889900FF /* MockRegretProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockRegretProvider.swift; sourceTree = "<group>"; };
+		AA22334455667788990011AA /* AlwaysAllowGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlwaysAllowGate.swift; sourceTree = "<group>"; };
+		BB22334455667788990011BB /* mock_regret_candidates.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = mock_regret_candidates.json; sourceTree = "<group>"; };
+		5645000100000000000000F1 /* DestructionConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructionConstants.swift; sourceTree = "<group>"; };
+		5645000100000000000000F2 /* DestructionStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructionStage.swift; sourceTree = "<group>"; };
+		5645000100000000000000F3 /* DestructionStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructionStateMachine.swift; sourceTree = "<group>"; };
+		5645000100000000000000F4 /* VentingRoomViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingRoomViewModel.swift; sourceTree = "<group>"; };
+		5645000100000000000000F5 /* VentingHomeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingHomeCard.swift; sourceTree = "<group>"; };
+		5645000100000000000000F6 /* VentingTargetSelectionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingTargetSelectionScreen.swift; sourceTree = "<group>"; };
+		5645000100000000000000F7 /* VentingRoomScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingRoomScreen.swift; sourceTree = "<group>"; };
+		5645000100000000000000F8 /* VentingDestroyedScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingDestroyedScreen.swift; sourceTree = "<group>"; };
+		5645000100000000000000F9 /* VentingFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingFlowCoordinator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -409,6 +443,7 @@
 				21888E54F84B3869253B319D /* Screens */,
 				06AE25D9C67EDA6264BA7467 /* Stadium */,
 				578BF075E2FD9C2A4821192E /* Theme */,
+				AC11223344556677889900AC /* VentingMode */,
 				097D61D492C9F37250B9C7D6 /* WatchSync */,
 			);
 			name = BaseHaptic;
@@ -492,6 +527,86 @@
 				0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		AC11223344556677889900AC /* VentingMode */ = {
+			isa = PBXGroup;
+			children = (
+				BD11223344556677889900BD /* Protocols */,
+				CE11223344556677889900CE /* Models */,
+				DF11223344556677889900DF /* Data */,
+				EA11223344556677889900EA /* Mock */,
+				FB11223344556677889900FB /* Resources */,
+				564500030000000000000001 /* ViewModel */,
+				564500030000000000000002 /* Screens */,
+				5645000100000000000000F1 /* DestructionConstants.swift */,
+				5645000100000000000000F2 /* DestructionStage.swift */,
+				5645000100000000000000F3 /* DestructionStateMachine.swift */,
+			);
+			path = VentingMode;
+			sourceTree = "<group>";
+		};
+		564500030000000000000001 /* ViewModel */ = {
+			isa = PBXGroup;
+			children = (
+				5645000100000000000000F4 /* VentingRoomViewModel.swift */,
+			);
+			path = ViewModel;
+			sourceTree = "<group>";
+		};
+		564500030000000000000002 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				5645000100000000000000F5 /* VentingHomeCard.swift */,
+				5645000100000000000000F6 /* VentingTargetSelectionScreen.swift */,
+				5645000100000000000000F7 /* VentingRoomScreen.swift */,
+				5645000100000000000000F8 /* VentingDestroyedScreen.swift */,
+				5645000100000000000000F9 /* VentingFlowCoordinator.swift */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+		BD11223344556677889900BD /* Protocols */ = {
+			isa = PBXGroup;
+			children = (
+				BB11223344556677889900BB /* RegretCandidateProviding.swift */,
+				CC11223344556677889900CC /* VentingGateProviding.swift */,
+			);
+			path = Protocols;
+			sourceTree = "<group>";
+		};
+		CE11223344556677889900CE /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AA11223344556677889900AA /* VentingModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		DF11223344556677889900DF /* Data */ = {
+			isa = PBXGroup;
+			children = (
+				DD11223344556677889900DD /* VentingOpenConditionChecker.swift */,
+				EE11223344556677889900EE /* VentingFeatureFlag.swift */,
+			);
+			path = Data;
+			sourceTree = "<group>";
+		};
+		EA11223344556677889900EA /* Mock */ = {
+			isa = PBXGroup;
+			children = (
+				FF11223344556677889900FF /* MockRegretProvider.swift */,
+				AA22334455667788990011AA /* AlwaysAllowGate.swift */,
+			);
+			path = Mock;
+			sourceTree = "<group>";
+		};
+		FB11223344556677889900FB /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				BB22334455667788990011BB /* mock_regret_candidates.json */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -638,6 +753,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CE2482EE1940F973BD02827 /* Assets.xcassets in Resources */,
+				BC22334455667788990011BC /* mock_regret_candidates.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -696,6 +812,22 @@
 				BE593BBCE538DC9615518D92 /* WatchTestScreen.swift in Sources */,
 				62E56EC524620B79ECF0BA61 /* WatchThemeSyncManager.swift in Sources */,
 				113A6130C41D5E2FACA82247 /* WhatsNewSheet.swift in Sources */,
+				AB11223344556677889900AB /* VentingModels.swift in Sources */,
+				BC11223344556677889900BC /* RegretCandidateProviding.swift in Sources */,
+				CD11223344556677889900CD /* VentingGateProviding.swift in Sources */,
+				DE11223344556677889900DE /* VentingOpenConditionChecker.swift in Sources */,
+				EF11223344556677889900EF /* VentingFeatureFlag.swift in Sources */,
+				FA11223344556677889900FA /* MockRegretProvider.swift in Sources */,
+				AB22334455667788990011AB /* AlwaysAllowGate.swift in Sources */,
+				5645000200000000000000F1 /* DestructionConstants.swift in Sources */,
+				5645000200000000000000F2 /* DestructionStage.swift in Sources */,
+				5645000200000000000000F3 /* DestructionStateMachine.swift in Sources */,
+				5645000200000000000000F4 /* VentingRoomViewModel.swift in Sources */,
+				5645000200000000000000F5 /* VentingHomeCard.swift in Sources */,
+				5645000200000000000000F6 /* VentingTargetSelectionScreen.swift in Sources */,
+				5645000200000000000000F7 /* VentingRoomScreen.swift in Sources */,
+				5645000200000000000000F8 /* VentingDestroyedScreen.swift in Sources */,
+				5645000200000000000000F9 /* VentingFlowCoordinator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

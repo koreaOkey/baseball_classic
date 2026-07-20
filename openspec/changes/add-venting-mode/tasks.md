@@ -7,10 +7,10 @@
 
 ## 2. 데이터·상태 계층 (백엔드 미수정)
 
-- [ ] 2.1 RegretCandidateProviding / VentingGateProviding 프로토콜 정의 + MockRegretProvider(번들 JSON: 경기 날짜·결과·후보 5명·감독) + AlwaysAllowGate 구현
-- [ ] 2.2 오픈 조건 판정 로직(마이팀 패배 + 당일 KST + 무승부/취소 제외) 실제 코드로 구현, 목업 입력으로 단위 테스트
-- [ ] 2.3 파괴 상태머신(게이지 0…1, 임계값 상수 struct {0.33, 0.66, 1.0}, 탭당 증가량 상수) + 경기당 첫 완파 UserDefaults 기록
-- [ ] 2.4 DEBUG 전용 피처 플래그(venting_mode_enabled) 이중 게이트 — 릴리즈 빌드 미포함 확인
+- [x] 2.1 RegretCandidateProviding / VentingGateProviding 프로토콜 정의 + MockRegretProvider(번들 JSON: 경기 날짜·결과·후보 5명·감독) + AlwaysAllowGate 구현
+- [x] 2.2 오픈 조건 판정 로직(마이팀 패배 + 당일 KST + 무승부/취소 제외) 실제 코드로 구현, 목업 입력으로 단위 테스트
+- [x] 2.3 파괴 상태머신(게이지 0…1, 임계값 상수 struct {0.33, 0.66, 1.0}, 탭당 증가량 상수) + 경기당 첫 완파 UserDefaults 기록
+- [x] 2.4 DEBUG 전용 피처 플래그(venting_mode_enabled) 이중 게이트 — 릴리즈 빌드 미포함 확인
 
 ## 3. 화면 구현 (DESIGN_SPEC 기준)
 
@@ -25,6 +25,6 @@
 
 ## 5. 검증
 
-- [ ] 5.1 단위 테스트: 오픈 조건 판정(패배/무승부/자정 경과/미설정), 상태머신 임계값 전환, 첫 완파 기록
+- [x] 5.1 단위 테스트: 오픈 조건 판정(패배/무승부/자정 경과/미설정), 상태머신 임계값 전환, 첫 완파 기록
 - [ ] 5.2 시뮬레이터 E2E: 홈카드 → 선택 → 룸 40탭 완파 → 재도전 플로우 + 화면 4장 스크린샷 캡처
 - [ ] 5.3 릴리즈 구성 빌드에서 분풀이 코드 미노출 확인, DEBUG 빌드 회귀(기존 홈카드 구성 무영향) 확인

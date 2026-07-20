@@ -81,6 +81,9 @@ struct HomeScreen: View {
                             .padding(.vertical, AppSpacing.md)
 
                         gamesListHeader
+                        #if DEBUG
+                        VentingHomeCardContainer(myTeamId: selectedTeam.rawValue)
+                        #endif
                         if let checkinStadium {
                             CheerCheckinCard(
                                 stadiumName: checkinStadium.name,
