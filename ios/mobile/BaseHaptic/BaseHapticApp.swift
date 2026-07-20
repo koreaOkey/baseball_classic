@@ -208,6 +208,16 @@ struct BaseHapticApp: App {
             .preferredColorScheme(.dark)
             .onAppear {
                 connectivityManager.activate()
+                #if DEBUG
+                // 스크린샷 캡처용: --venting-screen <name> 인자로 분풀이 화면 직접 표시
+                if let flagIndex = CommandLine.arguments.firstIndex(of: "--venting-screen"),
+                   flagIndex + 1 < CommandLine.arguments.count {
+                    let target = CommandLine.arguments[flagIndex + 1]
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        ventingDebugScreenName = target
+                    }
+                }
+                #endif
                 // 워치에 사용자 설정 초기 동기화 (영상 알림 토글 등)
                 WatchThemeSyncManager.syncEventVideoEnabledToWatch(
                     enabled: UserDefaults.standard.bool(forKey: "event_video_enabled")

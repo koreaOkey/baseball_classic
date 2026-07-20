@@ -28,5 +28,15 @@ enum DestructionStage: String, Equatable, CaseIterable {
             self = .idle
         }
     }
+
+    /// 단계별 펭귄 인형 스프라이트 애셋 이름 (익명 인형 — 선수 정보 없음).
+    var dollImageName: String {
+        switch self {
+        case .idle:      return "VentingDollNormal"
+        case .cracked:   return "VentingDollCrack"
+        case .burst:     return "VentingDollBurst"
+        case .destroyed: return "VentingDollDestroyed"
+        }
+    }
 }
 #endif

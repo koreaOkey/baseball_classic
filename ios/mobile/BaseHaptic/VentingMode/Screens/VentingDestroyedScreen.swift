@@ -43,9 +43,11 @@ struct VentingDestroyedScreen: View {
 
                 // 완파 연출
                 VStack(spacing: AppSpacing.xl) {
-                    // 완파 이모지
-                    Text("💥")
-                        .font(.system(size: 80))
+                    // 완파된 인형 (익명 펭귄 스프라이트)
+                    Image(DestructionStage.destroyed.dollImageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 180, height: 180)
                         .scaleEffect(showConfetti ? 1.0 : 0.5)
                         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: showConfetti)
 

@@ -148,61 +148,30 @@ struct VentingRoomScreen: View {
 
     private var dollView: some View {
         ZStack {
-            // 파괴 상태별 연출 색상
-            let dollColor = stageDollColor
-
-            // 인형 외형: 도형으로만 구성, 이름·등번호 없음
-            VStack(spacing: -4) {
-                // 머리
-                ZStack {
-                    Circle()
-                        .fill(dollColor)
-                        .frame(width: 80, height: 80)
-
-                    // 단계별 이미지 표시
-                    Text(stageEmoji)
-                        .font(.system(size: 40))
-
-                    // 균열 오버레이
-                    if viewModel.stage == .cracked {
-                        crackOverlay
-                            .frame(width: 80, height: 80)
-                    } else if viewModel.stage == .burst {
-                        burstOverlay
-                            .frame(width: 80, height: 80)
+            // 익명 팀 유니폼 펭귄 인형: 단계별 스프라이트 (이름·등번호·실제 외형 없음)
+            Image(viewModel.stage.dollImageName)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 220, height: 220)
+                .overlay(alignment: .center) {
+                    // 단계별 데미지 퍼센트 표시
+                    if viewModel.stage != .destroyed {
+                        Text("\(Int(viewModel.gauge * 100))%")
+                            .font(AppFont.h5Bold)
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.6), radius: 3)
+                            .offset(y: 40)
                     }
                 }
-
-                // 몸통
-                RoundedRectangle(cornerRadius: AppRadius.sm)
-                    .fill(dollColor)
-                    .frame(width: 70, height: 90)
-                    .overlay(
-                        // 단계별 숫자 게이지 표시
-                        Text("\(Int(viewModel.gauge * 100))%")
-                            .font(AppFont.captionBold)
-                            .foregroundColor(.white.opacity(0.8))
-                    )
-
-                // 다리
-                HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(dollColor)
-                        .frame(width: 28, height: 40)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(dollColor)
-                        .frame(width: 28, height: 40)
-                }
-            }
-            .shadow(
-                color: stageShadowColor.opacity(0.5),
-                radius: viewModel.stage == .destroyed ? 30 : 10,
-                x: 0,
-                y: 0
-            )
-            .scaleEffect(viewModel.stage == .destroyed ? 0.8 : 1.0)
-            .opacity(viewModel.stage == .destroyed ? 0.4 : 1.0)
-            .animation(.easeInOut(duration: 0.3), value: viewModel.stage)
+                .shadow(
+                    color: stageShadowColor.opacity(0.5),
+                    radius: viewModel.stage == .destroyed ? 30 : 12,
+                    x: 0,
+                    y: 0
+                )
+                .scaleEffect(viewModel.stage == .destroyed ? 0.85 : 1.0)
+                .opacity(viewModel.stage == .destroyed ? 0.5 : 1.0)
+                .animation(.easeInOut(duration: 0.3), value: viewModel.stage)
         }
     }
 
