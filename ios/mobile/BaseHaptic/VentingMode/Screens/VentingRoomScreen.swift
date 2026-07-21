@@ -47,6 +47,7 @@ struct VentingRoomScreen: View {
         static let swingDuration: Double = 0.08   // 회전 스윙 (가속)
         static let hitStopDuration: Double = 0.07 // 접촉 순간 정지
         static let recoverDuration: Double = 0.12 // 복원·퇴장
+        static let hitEffectLinger: Double = 0.22 // 히트 이펙트가 추가로 머무는 시간
     }
 
     var body: some View {
@@ -288,8 +289,8 @@ struct VentingRoomScreen: View {
             strikeAngle = StrikeMotion.windupAngle
             dollSquash = 1.0
             dollPushDown = 0
+            showHitEffect = false
         }
-        showHitEffect = false
 
         // 2) 스윙: 가속 회전으로 내려침
         withAnimation(.easeIn(duration: StrikeMotion.swingDuration)) {
@@ -308,7 +309,7 @@ struct VentingRoomScreen: View {
             }
         }
 
-        // 4) 히트스톱 종료 후 복원·퇴장
+        // 4) 히트스톱 종료 후 복원·퇴장 (히트 이펙트는 남겨둔다)
         let recoverAt = StrikeMotion.swingDuration + StrikeMotion.hitStopDuration
         DispatchQueue.main.asyncAfter(deadline: .now() + recoverAt) {
             withAnimation(.spring(response: 0.18, dampingFraction: 0.55)) {
@@ -318,7 +319,13 @@ struct VentingRoomScreen: View {
             withAnimation(.easeOut(duration: StrikeMotion.recoverDuration)) {
                 strikeVisible = false
             }
-            showHitEffect = false
+        }
+
+        // 5) 히트 이펙트는 눈에 보이게 잠시 머문 뒤 서서히 사라짐
+        DispatchQueue.main.asyncAfter(deadline: .now() + recoverAt + StrikeMotion.hitEffectLinger) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                showHitEffect = false
+            }
         }
     }
 
