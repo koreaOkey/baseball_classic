@@ -45,10 +45,10 @@ enum VentingTool: String, CaseIterable, Identifiable {
     var strikeBaseRotation: Double {
         switch self {
         case .fist: return 135      // 주먹 끝(오른쪽) → 좌하단
-        case .hammer: return 180    // 헤드(위) → 아래
-        case .bat: return 180       // 배럴(우상단) → 좌하단
-        case .slipper: return 15    // (좌우 반전 후) 바닥·앞코를 인형 쪽으로
-        case .frypan: return 15     // 팬 바닥(좌하단)을 인형 쪽으로
+        case .hammer: return 150    // 헤드(위) → 아래 (반시계 30도 보정)
+        case .bat: return 150       // 배럴(우상단) → 좌하단 (반시계 30도 보정)
+        case .slipper: return -15   // (좌우 반전 후) 바닥·앞코를 인형 쪽으로 (반시계 30도 보정)
+        case .frypan: return -45    // 팬 바닥(좌하단)을 인형 쪽으로 (반시계 60도 보정)
         }
     }
 
