@@ -36,6 +36,8 @@ struct VentingRoomScreen: View {
         static let windupAngle: Double = -60
         // 임팩트: 앞으로 꽂힘
         static let impactAngle: Double = 8
+        // 충돌 반동: 부딪힌 직후 반작용으로 튕겨 오르는 각도
+        static let reboundAngle: Double = -14
         // 도구 스프라이트 전체 방향 보정: 왼쪽(반시계) 90도
         static let orientationAdjust: Double = -90
         // 도구 고정 위치: 와인드업→임팩트 사이 도구 중심 이동 거리(≈95pt)만큼
@@ -294,12 +296,15 @@ struct VentingRoomScreen: View {
             strikeAngle = StrikeMotion.impactAngle
         }
 
-        // 3) 임팩트: 도구는 히트스톱으로 정지, 인형은 눌리고 이펙트 발동
+        // 3) 임팩트: 인형은 눌리고 이펙트 발동, 도구는 충돌 반작용으로 살짝 튕겨 오름
         DispatchQueue.main.asyncAfter(deadline: .now() + StrikeMotion.swingDuration) {
             withAnimation(.easeOut(duration: 0.05)) {
                 showHitEffect = true
                 dollSquash = 0.85
                 dollPushDown = 8
+            }
+            withAnimation(.spring(response: 0.14, dampingFraction: 0.5)) {
+                strikeAngle = StrikeMotion.impactAngle + StrikeMotion.reboundAngle
             }
         }
 

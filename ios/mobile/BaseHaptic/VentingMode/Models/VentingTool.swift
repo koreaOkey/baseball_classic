@@ -48,7 +48,7 @@ enum VentingTool: String, CaseIterable, Identifiable {
         case .hammer: return 150    // 헤드(위) → 아래 (반시계 30도 보정)
         case .bat: return 120       // 배럴(우상단) → 좌하단 (반시계 60도 보정)
         case .slipper: return -45   // (좌우 반전 후) 바닥·앞코를 인형 쪽으로 (반시계 60도 보정)
-        case .frypan: return -105   // (상하 반전 후) 팬 바닥을 인형 쪽으로 (반시계 120도 보정)
+        case .frypan: return -195   // (상하 반전 후) 팬 바닥을 인형 쪽으로 (반시계 210도 보정)
         }
     }
 
