@@ -46,9 +46,9 @@ enum VentingTool: String, CaseIterable, Identifiable {
         switch self {
         case .fist: return 135      // 주먹 끝(오른쪽) → 좌하단
         case .hammer: return 150    // 헤드(위) → 아래 (반시계 30도 보정)
-        case .bat: return 150       // 배럴(우상단) → 좌하단 (반시계 30도 보정)
-        case .slipper: return -15   // (좌우 반전 후) 바닥·앞코를 인형 쪽으로 (반시계 30도 보정)
-        case .frypan: return -45    // 팬 바닥(좌하단)을 인형 쪽으로 (반시계 60도 보정)
+        case .bat: return 120       // 배럴(우상단) → 좌하단 (반시계 60도 보정)
+        case .slipper: return -45   // (좌우 반전 후) 바닥·앞코를 인형 쪽으로 (반시계 60도 보정)
+        case .frypan: return -75    // (상하 반전 후) 팬 바닥을 인형 쪽으로 (반시계 90도 보정)
         }
     }
 
@@ -57,6 +57,13 @@ enum VentingTool: String, CaseIterable, Identifiable {
     /// 반전해야 바닥면이 인형 쪽을 향한다.
     var strikeFlipsHorizontally: Bool {
         self == .slipper
+    }
+
+    /// 타격 연출 시 상하 반전 여부.
+    /// 프라이팬 스프라이트는 팬 입구(내부)가 위를 향해 있어,
+    /// 뒤집어야 내려칠 때 바닥이 보이는 자연스러운 자세가 된다.
+    var strikeFlipsVertically: Bool {
+        self == .frypan
     }
 
     /// 타격 히트 이펙트 스프라이트 (별·충격파, 투명 배경).

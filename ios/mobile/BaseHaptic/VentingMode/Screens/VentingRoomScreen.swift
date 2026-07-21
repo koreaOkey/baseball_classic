@@ -254,7 +254,10 @@ struct VentingRoomScreen: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: 120, height: 120)
-            .scaleEffect(x: selectedTool.strikeFlipsHorizontally ? -1 : 1, y: 1)
+            .scaleEffect(
+                x: selectedTool.strikeFlipsHorizontally ? -1 : 1,
+                y: selectedTool.strikeFlipsVertically ? -1 : 1
+            )
             .rotationEffect(.degrees(selectedTool.strikeBaseRotation + StrikeMotion.orientationAdjust))
             .rotationEffect(.degrees(strikeAngle), anchor: .bottomLeading)
             .offset(StrikeMotion.toolOffset)
