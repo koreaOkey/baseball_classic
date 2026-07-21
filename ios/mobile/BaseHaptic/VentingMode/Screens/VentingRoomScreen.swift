@@ -40,7 +40,7 @@ struct VentingRoomScreen: View {
         static let orientationAdjust: Double = -90
         // 도구 고정 위치: 와인드업→임팩트 사이 도구 중심 이동 거리(≈95pt)만큼
         // 우상단(105)에서 왼쪽으로 옮긴 위치
-        static let toolOffset = CGSize(width: -15, height: -120)
+        static let toolOffset = CGSize(width: -40, height: -120)
         // 타이밍
         static let swingDuration: Double = 0.08   // 회전 스윙 (가속)
         static let hitStopDuration: Double = 0.07 // 접촉 순간 정지
