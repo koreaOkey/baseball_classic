@@ -5,9 +5,11 @@ import SwiftUI
 
 /// 분풀이 룸 화면.
 ///
-/// - 펭귄 인형(도형 기반 플레이스홀더) + 데미지 게이지를 표시한다.
+/// - 펭귄 인형 스프라이트 + 데미지 게이지 + 하단 도구 트레이를 표시한다.
 /// - 인형에 선수 이름·등번호·실제 외형 표기 없음.
-/// - 탭 연타로 게이지 증가, 3단계 연출(idle/cracked/burst/destroyed).
+/// - 하단 트레이에서 도구(맨손/뿅망치/야구방망이/슬리퍼/프라이팬)를 선택하고,
+///   **인형을 직접 탭**하면 선택한 도구가 인형을 내려치는 연출 + 히트 이펙트가 재생된다.
+///   (캐릭터가 스윙하는 모션 없음 — 도구 오브젝트만 등장)
 /// - 탭 경햅틱·단계 전환 중햅틱·완파 성공 햅틱 — VentingRoomViewModel이 구동.
 #if DEBUG
 struct VentingRoomScreen: View {
@@ -16,7 +18,14 @@ struct VentingRoomScreen: View {
     let onBack: () -> Void
     let onDestroyed: () -> Void
 
-    @State private var showDestroyedTransition = false
+    // 도구 선택 (기본: 뿅망치)
+    @State private var selectedTool: VentingTool = .hammer
+
+    // 타격 연출 상태
+    @State private var strikeVisible = false
+    @State private var strikeAngle: Double = -60
+    @State private var showHitEffect = false
+    @State private var dollSquash: CGFloat = 1.0
 
     var body: some View {
         ZStack {
@@ -36,7 +45,7 @@ struct VentingRoomScreen: View {
                     // 대상 표시 (역할+사건 문구, 이름/등번호 없음)
                     targetLabel
 
-                    // 인형
+                    // 인형 (직접 탭 = 타격)
                     dollView
                         .offset(x: viewModel.tapShakeOffset)
                         .animation(.easeOut(duration: 0.05), value: viewModel.tapShakeOffset)
@@ -47,16 +56,25 @@ struct VentingRoomScreen: View {
 
                 Spacer()
 
-                // 게이지 + 탭 버튼
+                // 게이지 + 도구 트레이
                 VStack(spacing: AppSpacing.xl) {
                     gaugeBar
-                    tapButton
+                    toolTray
                 }
                 .padding(.horizontal, AppSpacing.xxl)
                 .padding(.bottom, AppSpacing.xxxl)
             }
         }
         .navigationBarHidden(true)
+        .onAppear {
+            // 캡처용: 타격 연출 프레임 고정 (시뮬레이터 스크린샷 검증)
+            if CommandLine.arguments.contains("--venting-strike-freeze") {
+                strikeVisible = true
+                strikeAngle = 8
+                showHitEffect = true
+                dollSquash = 0.92
+            }
+        }
         .onChange(of: viewModel.isDestroyed) { _, destroyed in
             if destroyed {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
@@ -144,7 +162,7 @@ struct VentingRoomScreen: View {
         }
     }
 
-    // MARK: - Doll (도형 기반 플레이스홀더 - 실제 외형 없음)
+    // MARK: - Doll
 
     private var dollView: some View {
         ZStack {
@@ -153,6 +171,7 @@ struct VentingRoomScreen: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 220, height: 220)
+                .scaleEffect(dollSquash)
                 .overlay(alignment: .center) {
                     // 단계별 데미지 퍼센트 표시
                     if viewModel.stage != .destroyed {
@@ -172,15 +191,74 @@ struct VentingRoomScreen: View {
                 .scaleEffect(viewModel.stage == .destroyed ? 0.85 : 1.0)
                 .opacity(viewModel.stage == .destroyed ? 0.5 : 1.0)
                 .animation(.easeInOut(duration: 0.3), value: viewModel.stage)
+
+            // 히트 이펙트 (별·충격파, 타격 순간에만) — 도구가 닿는 우상단 접점에 표시
+            if showHitEffect {
+                Image(VentingTool.hitEffectImageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 130, height: 130)
+                    .offset(x: 45, y: -60)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
+        // 선택한 도구가 인형을 내려치는 연출 (도구 오브젝트만, 캐릭터 없음)
+        .overlay(alignment: .topTrailing) {
+            strikeToolView
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            strike()
         }
     }
 
-    private var stageDollColor: Color {
-        switch viewModel.stage {
-        case .idle: return Color(hex: 0x4A90E2) // 파란 펭귄
-        case .cracked: return Color(hex: 0xD4763A) // 균열 - 갈색
-        case .burst: return Color(hex: 0xC0392B) // 터짐 - 빨간
-        case .destroyed: return Color(hex: 0x7F1D1D) // 완파 - 어두운 빨간
+    /// 타격 시 잠깐 나타나는 도구 오브젝트.
+    /// 손잡이 끝(좌하단)을 축으로 들어올렸다가 내려친다.
+    private var strikeToolView: some View {
+        Image(selectedTool.imageName)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 120, height: 120)
+            .rotationEffect(.degrees(strikeAngle), anchor: .bottomLeading)
+            .offset(x: 55, y: -70)
+            .opacity(strikeVisible ? 1 : 0)
+            .allowsHitTesting(false)
+    }
+
+    // MARK: - Strike
+
+    /// 인형 탭 1회 = 타격 1회.
+    /// 게이지·햅틱은 viewModel.recordTap()이 처리하고,
+    /// 여기서는 도구 내려치기 + 히트 이펙트 + 인형 찌그러짐 연출만 담당한다.
+    private func strike() {
+        guard !viewModel.isDestroyed else { return }
+        viewModel.recordTap()
+
+        // 도구를 들어올린 상태로 리셋 후 내려치기
+        strikeVisible = true
+        strikeAngle = -60
+        withAnimation(.easeIn(duration: 0.08)) {
+            strikeAngle = 8
+        }
+
+        // 타격 순간: 인형 찌그러짐 + 히트 이펙트
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.easeOut(duration: 0.06)) {
+                dollSquash = 0.92
+                showHitEffect = true
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            withAnimation(.easeOut(duration: 0.1)) {
+                dollSquash = 1.0
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeOut(duration: 0.12)) {
+                strikeVisible = false
+                showHitEffect = false
+            }
         }
     }
 
@@ -191,47 +269,6 @@ struct VentingRoomScreen: View {
         case .burst: return AppColors.red500
         case .destroyed: return AppColors.red400
         }
-    }
-
-    private var stageEmoji: String {
-        switch viewModel.stage {
-        case .idle: return "🐧"
-        case .cracked: return "😤"
-        case .burst: return "😡"
-        case .destroyed: return "💥"
-        }
-    }
-
-    // MARK: - Crack Overlays (도형 기반)
-
-    private var crackOverlay: some View {
-        Canvas { context, size in
-            let w = size.width
-            let h = size.height
-            var path = Path()
-            path.move(to: CGPoint(x: w * 0.5, y: 0))
-            path.addLine(to: CGPoint(x: w * 0.45, y: h * 0.4))
-            path.addLine(to: CGPoint(x: w * 0.55, y: h * 0.5))
-            path.addLine(to: CGPoint(x: w * 0.4, y: h))
-            context.stroke(path, with: .color(.white.opacity(0.5)), lineWidth: 2)
-        }
-        .clipShape(Circle())
-    }
-
-    private var burstOverlay: some View {
-        Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            for angle in stride(from: 0.0, to: 360.0, by: 45.0) {
-                let rad = angle * .pi / 180
-                let endX = center.x + cos(rad) * size.width * 0.45
-                let endY = center.y + sin(rad) * size.height * 0.45
-                var path = Path()
-                path.move(to: center)
-                path.addLine(to: CGPoint(x: endX, y: endY))
-                context.stroke(path, with: .color(AppColors.red400.opacity(0.7)), lineWidth: 2)
-            }
-        }
-        .clipShape(Circle())
     }
 
     // MARK: - Stage Label
@@ -245,7 +282,7 @@ struct VentingRoomScreen: View {
 
     private var stageLabelText: String {
         switch viewModel.stage {
-        case .idle: return "인형을 탭해서 분풀이하세요!"
+        case .idle: return "도구를 골라 인형을 때리세요!"
         case .cracked: return "💢 균열이 생겼습니다!"
         case .burst: return "🔥 터지기 직전입니다!"
         case .destroyed: return "💥 완파!"
@@ -325,38 +362,55 @@ struct VentingRoomScreen: View {
         }
     }
 
-    // MARK: - Tap Button
+    // MARK: - Tool Tray
 
-    private var tapButton: some View {
-        Button {
-            viewModel.recordTap()
+    /// 하단 가로 도구 트레이 (A안).
+    /// 선택된 도구는 레드 하이라이트, 비선택 도구는 그레이 톤.
+    private var toolTray: some View {
+        HStack(spacing: AppSpacing.sm) {
+            ForEach(VentingTool.allCases) { tool in
+                toolTrayItem(tool)
+            }
+        }
+        .padding(AppSpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.lg)
+                .fill(AppColors.gray900)
+        )
+    }
+
+    private func toolTrayItem(_ tool: VentingTool) -> some View {
+        let isSelected = tool == selectedTool
+        return Button {
+            selectedTool = tool
         } label: {
             VStack(spacing: AppSpacing.xs) {
-                Text("💢")
-                    .font(.system(size: 32))
-                Text("탭!")
-                    .font(AppFont.bodyLgBold)
-                    .foregroundColor(.white)
+                Image(tool.imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 42, height: 42)
+                    .saturation(isSelected ? 1 : 0)
+                    .opacity(isSelected ? 1 : 0.55)
+
+                Text(tool.label)
+                    .font(AppFont.captionBold)
+                    .foregroundColor(isSelected ? .white : AppColors.gray500)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, AppSpacing.xl)
+            .padding(.vertical, AppSpacing.md)
             .background(
-                Group {
-                    if viewModel.isDestroyed {
-                        AppColors.gray800
-                    } else {
-                        LinearGradient(
-                            colors: [AppColors.red500, AppColors.red500.opacity(0.8)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    }
-                }
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .fill(isSelected ? AppColors.red500.opacity(0.22) : AppColors.gray800)
             )
-            .cornerRadius(AppRadius.lg)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppRadius.md)
+                    .stroke(isSelected ? AppColors.red500 : Color.clear, lineWidth: 2)
+            )
         }
-        .disabled(viewModel.isDestroyed)
         .buttonStyle(.plain)
+        .disabled(viewModel.isDestroyed)
     }
 }
 #endif

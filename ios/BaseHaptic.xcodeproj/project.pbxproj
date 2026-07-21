@@ -93,6 +93,7 @@
 		BE593BBCE538DC9615518D92 /* WatchTestScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F73397A462741B40912C00 /* WatchTestScreen.swift */; };
 		BF822DCC3FA606EEBB63F946 /* ScoreTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55132F6EEEC4572A9184368B /* ScoreTransitionScreen.swift */; };
 		BF9B72D69A48D151B784CAD9 /* VentingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17FC246EA4A0E3191CE1CDD5 /* VentingModels.swift */; };
+		C5B4A3928170F6E5D4C3B2A1 /* VentingTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* VentingTool.swift */; };
 		C68C35184F116A2F2B5B7498 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */; };
 		C84D18600ACFA569E6F21D98 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 760CF04AF7F17385A9704989 /* Assets.xcassets */; };
 		C8B36C2D3E97C80788435AA8 /* DestructionConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729C2673CBFFDDA8B25071AE /* DestructionConstants.swift */; };
@@ -175,6 +176,7 @@
 		1769B29DC0491AE37BCB336B /* WhatsNewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewSheet.swift; sourceTree = "<group>"; };
 		17F8E0B33E80A18F6316F22E /* AlwaysAllowGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlwaysAllowGate.swift; sourceTree = "<group>"; };
 		17FC246EA4A0E3191CE1CDD5 /* VentingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingModels.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* VentingTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingTool.swift; sourceTree = "<group>"; };
 		1C6E8F275BE7E82E840FFF79 /* 멍멍.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍.png"; sourceTree = "<group>"; };
 		1C98E8AC48570ED64EC6CE77 /* TeamCheckinRankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamCheckinRankingView.swift; sourceTree = "<group>"; };
 		24DA21746BC301A1935CFEBD /* 피치 펄스.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "피치 펄스.png"; sourceTree = "<group>"; };
@@ -590,6 +592,7 @@
 			isa = PBXGroup;
 			children = (
 				17FC246EA4A0E3191CE1CDD5 /* VentingModels.swift */,
+				A1B2C3D4E5F60718293A4B5C /* VentingTool.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -829,6 +832,7 @@
 				D52D97B7AE156BEB764A1EC4 /* VentingHapticPlaying.swift in Sources */,
 				6A9EA505EA8AAEA1CF2E8668 /* VentingHomeCard.swift in Sources */,
 				BF9B72D69A48D151B784CAD9 /* VentingModels.swift in Sources */,
+				C5B4A3928170F6E5D4C3B2A1 /* VentingTool.swift in Sources */,
 				37D04C0E7E98A740EEF2DD47 /* VentingOpenConditionChecker.swift in Sources */,
 				A969609CE86D971793AE8CB7 /* VentingRoomScreen.swift in Sources */,
 				AA6C6F56CD8FD044106D99D4 /* VentingRoomViewModel.swift in Sources */,
