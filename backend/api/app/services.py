@@ -1566,6 +1566,7 @@ def to_boxscore_out(
             battingOrder=row.batting_order,
             playerName=row.player_name,
             position=row.primary_position,
+            plateAppearances=row.plate_appearances,
             atBats=row.at_bats,
             hits=row.hits,
             rbi=row.rbi,

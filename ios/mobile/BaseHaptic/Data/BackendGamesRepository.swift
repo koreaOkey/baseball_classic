@@ -202,6 +202,8 @@ struct BoxscoreBatterLine {
     let battingOrder: Int?
     let playerName: String
     let position: String?
+    /// 구버전 백엔드는 미노출 — nil 이면 클라이언트에서 ab+bb 로 근사.
+    let plateAppearances: Int?
     let atBats: Int
     let hits: Int
     let rbi: Int
@@ -984,6 +986,7 @@ final class BackendGamesRepository {
                 battingOrder: jsonInt(item["battingOrder"]),
                 playerName: name,
                 position: cleanOptionalString(item["position"]),
+                plateAppearances: jsonInt(item["plateAppearances"]),
                 atBats: jsonInt(item["atBats"]) ?? 0,
                 hits: jsonInt(item["hits"]) ?? 0,
                 rbi: jsonInt(item["rbi"]) ?? 0,

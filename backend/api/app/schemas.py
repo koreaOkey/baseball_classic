@@ -356,6 +356,7 @@ class BoxscoreBatterOut(BaseModel):
     playerName: str
     # GameBatterStat.primary_position 을 그대로 노출 (예: "좌익수", "대타").
     position: str | None = None
+    plateAppearances: int = 0
     atBats: int = 0
     hits: int = 0
     rbi: int = 0

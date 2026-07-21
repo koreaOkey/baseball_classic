@@ -130,7 +130,8 @@ struct LiveGameScreen: View {
                                         group: group,
                                         awayTeamName: state.awayTeamId.displayName(style: teamDisplayNameStyle),
                                         homeTeamName: state.homeTeamId.displayName(style: teamDisplayNameStyle),
-                                        highlightScoreOutcome: isScoreFilterActive
+                                        highlightScoreOutcome: isScoreFilterActive,
+                                        boxscoreLine: boxscoreBatterLine(for: group)
                                     )
                                 }
                             }
@@ -140,11 +141,6 @@ struct LiveGameScreen: View {
                                 boxscore: boxscore,
                                 isLoading: isBoxscoreLoading
                             )
-                            // 탭이 보이는 동안만 살아있는 task — 탭 전환/화면 이탈 시 자동 취소.
-                            // 첫 진입 시 즉시 fetch, LIVE 인 동안 30초 주기 갱신.
-                            .task(id: gameId) {
-                                await runBoxscoreRefreshLoop()
-                            }
                         }
 
                         Spacer().frame(height: AppSpacing.bottomSafeSpacer)
@@ -156,6 +152,10 @@ struct LiveGameScreen: View {
         .background(AppColors.gray950)
         .task(id: gameId) {
             await startLiveStream()
+        }
+        // 박스스코어는 중계 탭의 타석 카드(타자 오늘 성적 폴백)에서도 쓰므로 화면 수준에서 로드.
+        .task(id: gameId) {
+            await runBoxscoreRefreshLoop()
         }
         .onChange(of: gameState?.inning) { _, newValue in
             guard !hasManualInningSelection, let inning = newValue else { return }
@@ -304,10 +304,10 @@ struct LiveGameScreen: View {
     }
 
     // MARK: - Boxscore
-    /// 박스스코어 탭이 보이는 동안 실행되는 루프.
+    /// 화면이 보이는 동안 실행되는 루프. 박스스코어 탭과 중계 탭 타석 카드(오늘 성적 폴백)가 공유.
     /// - 데이터가 없을 때만 스피너 (isBoxscoreLoading)
     /// - 갱신 실패 시 마지막 데이터 유지
-    /// - LIVE 가 아니면 1회 조회 후 종료, LIVE 면 30초 주기 갱신
+    /// - LIVE 가 아니면 1회 조회 후 종료, LIVE(또는 상태 미수신) 면 30초 주기 갱신
     private func runBoxscoreRefreshLoop() async {
         guard let gameId = gameId, !gameId.isEmpty else { return }
 
@@ -320,9 +320,28 @@ struct LiveGameScreen: View {
             }
             isBoxscoreLoading = false
 
-            guard gameState?.status == .live else { break }
+            // 첫 fetch 시점엔 startLiveStream 이 아직 state 를 못 받았을 수 있어 nil 은 계속 대기.
+            guard gameState == nil || gameState?.status == .live else { break }
             try? await Task.sleep(nanoseconds: 30_000_000_000)
         }
+    }
+
+    /// 타석 그룹의 타자를 박스스코어 타자 라인과 이름으로 조인.
+    /// 이닝의 초/말로 공격팀을 골라 동명이인(양 팀에 같은 이름) 오매칭을 피한다.
+    private func boxscoreBatterLine(for group: AtBatGroup) -> BoxscoreBatterLine? {
+        guard let boxscore,
+              let name = group.batter?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty else { return nil }
+        guard let inning = group.inning else { return nil }
+        let batters: [BoxscoreBatterLine]
+        if inning.contains("말") {
+            batters = boxscore.homeBatters
+        } else if inning.contains("초") {
+            batters = boxscore.awayBatters
+        } else {
+            return nil
+        }
+        return batters.first { $0.playerName == name }
     }
 
     private func fetchEventPages(
@@ -1658,6 +1677,9 @@ private struct AtBatCard: View {
     let awayTeamName: String
     let homeTeamName: String
     let highlightScoreOutcome: Bool
+    /// 박스스코어의 해당 타자 라인 — batterRecord 미제공 타석의 "오늘 성적" 폴백.
+    /// (네이버 relay 는 각 이닝 선두타자에게만 batterRecord 를 붙여준다.)
+    let boxscoreLine: BoxscoreBatterLine?
 
     /// SCORE outcome 그룹의 정확한 시점 누적 스코어 라인 ("LG 1 : 3 두산" 형태).
     /// 백엔드 GameEventOut.homeScoreAfter/awayScoreAfter 가 노출된 경우에만 만들어짐.
@@ -1702,6 +1724,46 @@ private struct AtBatCard: View {
         group.pitches.reversed().compactMap { $0.batterRecord }.first
     }
 
+    /// 타석 소개 이벤트("3번타자 안현민")에서 타순 추출 — 타석 시점 기준이라 가장 정확.
+    private var introBattingOrder: Int? {
+        for event in group.pitches {
+            if let range = event.description.range(of: #"(\d+)번\s?타자"#, options: .regularExpression) {
+                let digits = event.description[range].prefix { $0.isNumber }
+                return Int(digits)
+            }
+        }
+        return nil
+    }
+
+    /// 헤더/스탯 그리드에 쓸 최종 레코드.
+    /// 1순위: relay batterRecord (타순 누락 시 소개 텍스트 타순 보강)
+    /// 2순위: 박스스코어 라인으로 합성 (타순·오늘 성적 — 시즌 타율은 미제공이라 생략)
+    private var resolvedRecord: [String: Any]? {
+        if var record = batterRecord {
+            if batterRecordInt(record, keys: ["batOrder", "battingOrder"]) == nil,
+               let order = introBattingOrder {
+                record["batOrder"] = order
+            }
+            return record
+        }
+        guard let line = boxscoreLine else { return nil }
+        var record: [String: Any] = [
+            "name": line.playerName,
+            "pa": line.plateAppearances ?? (line.atBats + line.walks),
+            "ab": line.atBats,
+            "hit": line.hits,
+            "run": line.runs,
+            "rbi": line.rbi,
+            "hr": line.homeRuns,
+            "bb": line.walks,
+            "so": line.strikeouts
+        ]
+        if let order = introBattingOrder ?? line.battingOrder {
+            record["batOrder"] = order
+        }
+        return record
+    }
+
     private var pitchDetailEvents: [LiveEvent] {
         group.pitches
             .filter { event in
@@ -1716,17 +1778,17 @@ private struct AtBatCard: View {
     }
 
     private var showsNaverStyleDetails: Bool {
-        !isScoreOutcome && (batterRecord != nil || !pitchDetailEvents.isEmpty)
+        !isScoreOutcome && (resolvedRecord != nil || !pitchDetailEvents.isEmpty)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
             if showsNaverStyleDetails {
                 AtBatBatterHeader(
-                    batterName: batterRecordString(batterRecord, keys: ["name"]) ?? group.batter ?? headerText,
+                    batterName: batterRecordString(resolvedRecord, keys: ["name"]) ?? group.batter ?? headerText,
                     pitcherName: group.pitcher,
                     inning: group.inning,
-                    record: batterRecord
+                    record: resolvedRecord
                 )
             } else {
                 HStack(alignment: .firstTextBaseline) {
