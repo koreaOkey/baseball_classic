@@ -1051,10 +1051,9 @@ private struct LineScoreCard: View {
     private var headerRow: some View {
         HStack(spacing: 0) {
             ForEach(1...totalInnings, id: \.self) { inning in
-                let isCurrent = inning == currentInningNumber
                 Text("\(inning)")
-                    .font(isCurrent ? AppFont.microBold : AppFont.micro)
-                    .foregroundColor(isCurrent ? AppColors.orange500 : AppColors.gray500)
+                    .font(AppFont.micro)
+                    .foregroundColor(AppColors.gray500)
                     .frame(width: inningCellWidth, height: rowHeight)
             }
             totalHeaderCell("R")
@@ -1088,10 +1087,10 @@ private struct LineScoreCard: View {
                     .frame(width: inningCellWidth, height: rowHeight)
             }
 
-            // R — 현재 스코어 (공격팀 LIVE 강조)
+            // R — 현재 스코어
             Text("\(isHome ? state.homeScore : state.awayScore)")
                 .font(AppFont.microBold)
-                .foregroundColor(isBattingNow ? AppColors.orange500 : .white)
+                .foregroundColor(.white)
                 .frame(width: totalCellWidth, height: rowHeight)
             // H — 안타 합계 (미제공 시 "-")
             Text((isHome ? state.homeHits : state.awayHits).map { "\($0)" } ?? "-")
