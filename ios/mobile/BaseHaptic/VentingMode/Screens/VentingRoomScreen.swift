@@ -21,11 +21,27 @@ struct VentingRoomScreen: View {
     // 도구 선택 (기본: 뿅망치)
     @State private var selectedTool: VentingTool = .hammer
 
-    // 타격 연출 상태
+    // 타격 연출 상태 (아크 내려찍기: 와인드업 → 원호 이동 스윙 → 히트스톱 임팩트)
     @State private var strikeVisible = false
-    @State private var strikeAngle: Double = -60
+    @State private var strikeAngle: Double = StrikeMotion.windupAngle
+    @State private var strikeOffset: CGSize = StrikeMotion.windupOffset
     @State private var showHitEffect = false
     @State private var dollSquash: CGFloat = 1.0
+    @State private var dollPushDown: CGFloat = 0
+
+    /// 아크 내려찍기 모션 상수
+    private enum StrikeMotion {
+        // 와인드업: 인형 우상단 높은 위치, 뒤로 젖힘
+        static let windupAngle: Double = -75
+        static let windupOffset = CGSize(width: 155, height: -140)
+        // 임팩트: 인형 머리 위까지 이동, 앞으로 꽂힘
+        static let impactAngle: Double = 20
+        static let impactOffset = CGSize(width: 18, height: -52)
+        // 타이밍
+        static let swingDuration: Double = 0.09   // 가속 스윙
+        static let hitStopDuration: Double = 0.07 // 접촉 순간 정지
+        static let recoverDuration: Double = 0.12 // 복원·퇴장
+    }
 
     var body: some View {
         ZStack {
@@ -72,12 +88,20 @@ struct VentingRoomScreen: View {
                let tool = VentingTool(rawValue: String(arg.dropFirst("--venting-tool=".count))) {
                 selectedTool = tool
             }
-            // 캡처용: 타격 연출 프레임 고정 (시뮬레이터 스크린샷 검증)
+            // 캡처용: 타격 임팩트 프레임 고정 (시뮬레이터 스크린샷 검증)
             if CommandLine.arguments.contains("--venting-strike-freeze") {
                 strikeVisible = true
-                strikeAngle = 8
+                strikeAngle = StrikeMotion.impactAngle
+                strikeOffset = StrikeMotion.impactOffset
                 showHitEffect = true
-                dollSquash = 0.92
+                dollSquash = 0.85
+                dollPushDown = 8
+            }
+            // 캡처용: 와인드업 프레임 고정
+            if CommandLine.arguments.contains("--venting-windup-freeze") {
+                strikeVisible = true
+                strikeAngle = StrikeMotion.windupAngle
+                strikeOffset = StrikeMotion.windupOffset
             }
         }
         .onChange(of: viewModel.isDestroyed) { _, destroyed in
@@ -176,7 +200,9 @@ struct VentingRoomScreen: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 220, height: 220)
-                .scaleEffect(dollSquash)
+                // 임팩트: 세로로 눌리고 가로로 살짝 퍼지는 만화식 스쿼시 (바닥 기준)
+                .scaleEffect(x: 1.0 + (1.0 - dollSquash) * 0.6, y: dollSquash, anchor: .bottom)
+                .offset(y: dollPushDown)
                 .overlay(alignment: .center) {
                     // 단계별 데미지 퍼센트 표시
                     if viewModel.stage != .destroyed {
@@ -197,19 +223,19 @@ struct VentingRoomScreen: View {
                 .opacity(viewModel.stage == .destroyed ? 0.5 : 1.0)
                 .animation(.easeInOut(duration: 0.3), value: viewModel.stage)
 
-            // 히트 이펙트 (별·충격파, 타격 순간에만) — 도구가 닿는 우상단 접점에 표시
+            // 히트 이펙트 (별·충격파, 타격 순간에만) — 도구 임팩트 접점에 표시
             if showHitEffect {
                 Image(VentingTool.hitEffectImageName)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 130, height: 130)
-                    .offset(x: 45, y: -60)
+                    .offset(x: 30, y: -65)
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
                     .allowsHitTesting(false)
             }
         }
         // 선택한 도구가 인형을 내려치는 연출 (도구 오브젝트만, 캐릭터 없음)
-        .overlay(alignment: .topTrailing) {
+        .overlay {
             strikeToolView
         }
         .contentShape(Rectangle())
@@ -219,8 +245,8 @@ struct VentingRoomScreen: View {
     }
 
     /// 타격 시 잠깐 나타나는 도구 오브젝트.
-    /// 스프라이트별 기본 회전으로 타격면이 인형을 향하게 한 뒤,
-    /// 프레임 좌하단을 축으로 들어올렸다가 내려친다.
+    /// 스프라이트별 기본 회전·반전으로 타격면이 인형을 향하게 한 뒤,
+    /// 와인드업 위치에서 원호 궤적(회전+이동)으로 인형까지 내려찍는다.
     private var strikeToolView: some View {
         Image(selectedTool.imageName)
             .resizable()
@@ -229,44 +255,62 @@ struct VentingRoomScreen: View {
             .scaleEffect(x: selectedTool.strikeFlipsHorizontally ? -1 : 1, y: 1)
             .rotationEffect(.degrees(selectedTool.strikeBaseRotation))
             .rotationEffect(.degrees(strikeAngle), anchor: .bottomLeading)
-            .offset(x: 55, y: -70)
+            .offset(strikeOffset)
             .opacity(strikeVisible ? 1 : 0)
             .allowsHitTesting(false)
     }
 
     // MARK: - Strike
 
-    /// 인형 탭 1회 = 타격 1회.
-    /// 게이지·햅틱은 viewModel.recordTap()이 처리하고,
-    /// 여기서는 도구 내려치기 + 히트 이펙트 + 인형 찌그러짐 연출만 담당한다.
+    /// 인형 탭 1회 = 타격 1회 (아크 내려찍기).
+    ///
+    /// 게이지·햅틱은 viewModel.recordTap()이 처리하고, 여기서는 연출만 담당:
+    /// 1. 와인드업 포즈로 등장 (우상단 높은 위치, 뒤로 젖힘)
+    /// 2. 가속(easeIn)하며 회전+이동을 동시에 → 원호 궤적으로 인형 머리까지
+    /// 3. 임팩트: 히트스톱(도구 정지) + 히트 이펙트 + 인형 세로 스쿼시·눌림
+    /// 4. 복원: 인형 원상복구, 도구 퇴장
     private func strike() {
         guard !viewModel.isDestroyed else { return }
         viewModel.recordTap()
 
-        // 도구를 들어올린 상태로 리셋 후 내려치기
-        strikeVisible = true
-        strikeAngle = -60
-        withAnimation(.easeIn(duration: 0.08)) {
-            strikeAngle = 8
+        // 1) 와인드업 포즈로 즉시 리셋 (연타 시에도 매번 처음부터 스윙)
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            strikeVisible = true
+            strikeAngle = StrikeMotion.windupAngle
+            strikeOffset = StrikeMotion.windupOffset
+            dollSquash = 1.0
+            dollPushDown = 0
+        }
+        showHitEffect = false
+
+        // 2) 스윙: 가속하며 원호 궤적으로 임팩트 지점까지
+        withAnimation(.easeIn(duration: StrikeMotion.swingDuration)) {
+            strikeAngle = StrikeMotion.impactAngle
+            strikeOffset = StrikeMotion.impactOffset
         }
 
-        // 타격 순간: 인형 찌그러짐 + 히트 이펙트
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            withAnimation(.easeOut(duration: 0.06)) {
-                dollSquash = 0.92
+        // 3) 임팩트: 도구는 히트스톱으로 정지, 인형은 눌리고 이펙트 발동
+        DispatchQueue.main.asyncAfter(deadline: .now() + StrikeMotion.swingDuration) {
+            withAnimation(.easeOut(duration: 0.05)) {
                 showHitEffect = true
+                dollSquash = 0.85
+                dollPushDown = 8
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
-            withAnimation(.easeOut(duration: 0.1)) {
+
+        // 4) 히트스톱 종료 후 복원·퇴장
+        let recoverAt = StrikeMotion.swingDuration + StrikeMotion.hitStopDuration
+        DispatchQueue.main.asyncAfter(deadline: .now() + recoverAt) {
+            withAnimation(.spring(response: 0.18, dampingFraction: 0.55)) {
                 dollSquash = 1.0
+                dollPushDown = 0
             }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeOut(duration: 0.12)) {
+            withAnimation(.easeOut(duration: StrikeMotion.recoverDuration)) {
                 strikeVisible = false
-                showHitEffect = false
             }
+            showHitEffect = false
         }
     }
 
