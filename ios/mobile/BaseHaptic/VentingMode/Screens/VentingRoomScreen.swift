@@ -21,25 +21,25 @@ struct VentingRoomScreen: View {
     // 도구 선택 (기본: 뿅망치)
     @State private var selectedTool: VentingTool = .hammer
 
-    // 타격 연출 상태 (아크 내려찍기: 와인드업 → 원호 이동 스윙 → 히트스톱 임팩트)
+    // 타격 연출 상태 (제자리 회전 내려치기: 와인드업 → 회전 스윙 → 히트스톱 임팩트)
     @State private var strikeVisible = false
     @State private var strikeAngle: Double = StrikeMotion.windupAngle
-    @State private var strikeOffset: CGSize = StrikeMotion.windupOffset
     @State private var showHitEffect = false
     @State private var dollSquash: CGFloat = 1.0
     @State private var dollPushDown: CGFloat = 0
 
-    /// 장작패기(오버헤드 촙) 모션 상수:
-    /// 도구가 인형 정수리 바로 위에 치켜들렸다가 수직으로 내리꽂힌다.
+    /// 제자리 회전 내려치기 모션 상수 (초기 버전 스타일):
+    /// 도구가 인형 우상단 고정 위치에서 손잡이 끝(좌하단)을 축으로
+    /// 뒤로 젖혀졌다가 회전하며 내려친다. 위치 이동은 없다.
     private enum StrikeMotion {
-        // 와인드업: 인형 머리 바로 위 높은 위치, 도끼처럼 살짝 뒤로 젖힘
-        static let windupAngle: Double = -18
-        static let windupOffset = CGSize(width: 25, height: -215)
-        // 임팩트: 수직 낙하해 정수리에 꽂힘 (회전은 거의 없음)
-        static let impactAngle: Double = 4
-        static let impactOffset = CGSize(width: 12, height: -58)
+        // 와인드업: 뒤로 젖힘
+        static let windupAngle: Double = -60
+        // 임팩트: 앞으로 꽂힘
+        static let impactAngle: Double = 8
+        // 도구 고정 위치 (인형 중심 기준 우상단)
+        static let toolOffset = CGSize(width: 105, height: -120)
         // 타이밍
-        static let swingDuration: Double = 0.08   // 수직 낙하 (가속)
+        static let swingDuration: Double = 0.08   // 회전 스윙 (가속)
         static let hitStopDuration: Double = 0.07 // 접촉 순간 정지
         static let recoverDuration: Double = 0.12 // 복원·퇴장
     }
@@ -93,7 +93,6 @@ struct VentingRoomScreen: View {
             if CommandLine.arguments.contains("--venting-strike-freeze") {
                 strikeVisible = true
                 strikeAngle = StrikeMotion.impactAngle
-                strikeOffset = StrikeMotion.impactOffset
                 showHitEffect = true
                 dollSquash = 0.85
                 dollPushDown = 8
@@ -102,7 +101,6 @@ struct VentingRoomScreen: View {
             if CommandLine.arguments.contains("--venting-windup-freeze") {
                 strikeVisible = true
                 strikeAngle = StrikeMotion.windupAngle
-                strikeOffset = StrikeMotion.windupOffset
             }
         }
         .onChange(of: viewModel.isDestroyed) { _, destroyed in
@@ -230,7 +228,7 @@ struct VentingRoomScreen: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 130, height: 130)
-                    .offset(x: 15, y: -80)
+                    .offset(x: 45, y: -60)
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
                     .allowsHitTesting(false)
             }
@@ -247,7 +245,7 @@ struct VentingRoomScreen: View {
 
     /// 타격 시 잠깐 나타나는 도구 오브젝트.
     /// 스프라이트별 기본 회전·반전으로 타격면이 인형을 향하게 한 뒤,
-    /// 와인드업 위치에서 원호 궤적(회전+이동)으로 인형까지 내려찍는다.
+    /// 우상단 고정 위치에서 손잡이 끝(좌하단)을 축으로 회전하며 내려친다.
     private var strikeToolView: some View {
         Image(selectedTool.imageName)
             .resizable()
@@ -256,18 +254,18 @@ struct VentingRoomScreen: View {
             .scaleEffect(x: selectedTool.strikeFlipsHorizontally ? -1 : 1, y: 1)
             .rotationEffect(.degrees(selectedTool.strikeBaseRotation))
             .rotationEffect(.degrees(strikeAngle), anchor: .bottomLeading)
-            .offset(strikeOffset)
+            .offset(StrikeMotion.toolOffset)
             .opacity(strikeVisible ? 1 : 0)
             .allowsHitTesting(false)
     }
 
     // MARK: - Strike
 
-    /// 인형 탭 1회 = 타격 1회 (아크 내려찍기).
+    /// 인형 탭 1회 = 타격 1회 (제자리 회전 내려치기).
     ///
     /// 게이지·햅틱은 viewModel.recordTap()이 처리하고, 여기서는 연출만 담당:
-    /// 1. 와인드업 포즈로 등장 (우상단 높은 위치, 뒤로 젖힘)
-    /// 2. 가속(easeIn)하며 회전+이동을 동시에 → 원호 궤적으로 인형 머리까지
+    /// 1. 와인드업 포즈로 등장 (우상단 고정 위치, 뒤로 젖힘)
+    /// 2. 가속(easeIn) 회전으로 내려침 (위치 이동 없음)
     /// 3. 임팩트: 히트스톱(도구 정지) + 히트 이펙트 + 인형 세로 스쿼시·눌림
     /// 4. 복원: 인형 원상복구, 도구 퇴장
     private func strike() {
@@ -280,16 +278,14 @@ struct VentingRoomScreen: View {
         withTransaction(t) {
             strikeVisible = true
             strikeAngle = StrikeMotion.windupAngle
-            strikeOffset = StrikeMotion.windupOffset
             dollSquash = 1.0
             dollPushDown = 0
         }
         showHitEffect = false
 
-        // 2) 스윙: 가속하며 원호 궤적으로 임팩트 지점까지
+        // 2) 스윙: 가속 회전으로 내려침
         withAnimation(.easeIn(duration: StrikeMotion.swingDuration)) {
             strikeAngle = StrikeMotion.impactAngle
-            strikeOffset = StrikeMotion.impactOffset
         }
 
         // 3) 임팩트: 도구는 히트스톱으로 정지, 인형은 눌리고 이펙트 발동
