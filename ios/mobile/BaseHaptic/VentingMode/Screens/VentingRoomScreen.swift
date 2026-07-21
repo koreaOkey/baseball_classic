@@ -36,8 +36,11 @@ struct VentingRoomScreen: View {
         static let windupAngle: Double = -60
         // 임팩트: 앞으로 꽂힘
         static let impactAngle: Double = 8
-        // 도구 고정 위치 (인형 중심 기준 우상단)
-        static let toolOffset = CGSize(width: 105, height: -120)
+        // 도구 스프라이트 전체 방향 보정: 왼쪽(반시계) 90도
+        static let orientationAdjust: Double = -90
+        // 도구 고정 위치: 와인드업→임팩트 사이 도구 중심 이동 거리(≈95pt)만큼
+        // 우상단(105)에서 왼쪽으로 옮긴 위치
+        static let toolOffset = CGSize(width: 10, height: -120)
         // 타이밍
         static let swingDuration: Double = 0.08   // 회전 스윙 (가속)
         static let hitStopDuration: Double = 0.07 // 접촉 순간 정지
@@ -252,7 +255,7 @@ struct VentingRoomScreen: View {
             .aspectRatio(contentMode: .fit)
             .frame(width: 120, height: 120)
             .scaleEffect(x: selectedTool.strikeFlipsHorizontally ? -1 : 1, y: 1)
-            .rotationEffect(.degrees(selectedTool.strikeBaseRotation))
+            .rotationEffect(.degrees(selectedTool.strikeBaseRotation + StrikeMotion.orientationAdjust))
             .rotationEffect(.degrees(strikeAngle), anchor: .bottomLeading)
             .offset(StrikeMotion.toolOffset)
             .opacity(strikeVisible ? 1 : 0)
