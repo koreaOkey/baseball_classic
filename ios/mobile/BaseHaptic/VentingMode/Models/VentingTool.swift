@@ -40,15 +40,16 @@ enum VentingTool: String, CaseIterable, Identifiable {
 
     /// 타격 연출 시 스프라이트에 적용하는 기본 회전(도).
     ///
-    /// 스프라이트 원본 방향이 도구마다 달라서, 타격면(주먹 끝·망치 헤드·
-    /// 배트 배럴·슬리퍼 바닥·팬 바닥)이 좌하단의 인형을 향하도록 보정한다.
+    /// 장작패기(수직 내리찍기) 모션 기준: 스프라이트 원본 방향이 도구마다
+    /// 달라서, 타격면(주먹 끝·망치 헤드·배트 배럴·슬리퍼 바닥·팬 바닥)이
+    /// 바로 아래의 인형 정수리를 향하도록 보정한다.
     var strikeBaseRotation: Double {
         switch self {
-        case .fist: return 135      // 주먹 끝(오른쪽) → 좌하단
+        case .fist: return 90       // 주먹 끝(오른쪽) → 아래
         case .hammer: return 180    // 헤드(위) → 아래
-        case .bat: return 180       // 배럴(우상단) → 좌하단
-        case .slipper: return 15    // (좌우 반전 후) 바닥·앞코를 인형 쪽으로
-        case .frypan: return 15     // 팬 바닥(좌하단)을 인형 쪽으로
+        case .bat: return 135       // 배럴(우상단 대각) → 아래
+        case .slipper: return 10    // (좌우 반전 후) 바닥이 아래
+        case .frypan: return 10     // 팬 바닥이 아래
         }
     }
 

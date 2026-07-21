@@ -29,16 +29,17 @@ struct VentingRoomScreen: View {
     @State private var dollSquash: CGFloat = 1.0
     @State private var dollPushDown: CGFloat = 0
 
-    /// 아크 내려찍기 모션 상수
+    /// 장작패기(오버헤드 촙) 모션 상수:
+    /// 도구가 인형 정수리 바로 위에 치켜들렸다가 수직으로 내리꽂힌다.
     private enum StrikeMotion {
-        // 와인드업: 인형 우상단 높은 위치, 뒤로 젖힘
-        static let windupAngle: Double = -75
-        static let windupOffset = CGSize(width: 155, height: -140)
-        // 임팩트: 인형 머리 위까지 이동, 앞으로 꽂힘
-        static let impactAngle: Double = 20
-        static let impactOffset = CGSize(width: 18, height: -52)
+        // 와인드업: 인형 머리 바로 위 높은 위치, 도끼처럼 살짝 뒤로 젖힘
+        static let windupAngle: Double = -18
+        static let windupOffset = CGSize(width: 25, height: -215)
+        // 임팩트: 수직 낙하해 정수리에 꽂힘 (회전은 거의 없음)
+        static let impactAngle: Double = 4
+        static let impactOffset = CGSize(width: 12, height: -58)
         // 타이밍
-        static let swingDuration: Double = 0.09   // 가속 스윙
+        static let swingDuration: Double = 0.08   // 수직 낙하 (가속)
         static let hitStopDuration: Double = 0.07 // 접촉 순간 정지
         static let recoverDuration: Double = 0.12 // 복원·퇴장
     }
@@ -229,7 +230,7 @@ struct VentingRoomScreen: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 130, height: 130)
-                    .offset(x: 30, y: -65)
+                    .offset(x: 15, y: -80)
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
                     .allowsHitTesting(false)
             }
