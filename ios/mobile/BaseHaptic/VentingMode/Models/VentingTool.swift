@@ -38,6 +38,27 @@ enum VentingTool: String, CaseIterable, Identifiable {
         }
     }
 
+    /// 타격 연출 시 스프라이트에 적용하는 기본 회전(도).
+    ///
+    /// 스프라이트 원본 방향이 도구마다 달라서, 타격면(주먹 끝·망치 헤드·
+    /// 배트 배럴·슬리퍼 바닥·팬 바닥)이 좌하단의 인형을 향하도록 보정한다.
+    var strikeBaseRotation: Double {
+        switch self {
+        case .fist: return 135      // 주먹 끝(오른쪽) → 좌하단
+        case .hammer: return 180    // 헤드(위) → 아래
+        case .bat: return 180       // 배럴(우상단) → 좌하단
+        case .slipper: return 15    // (좌우 반전 후) 바닥·앞코를 인형 쪽으로
+        case .frypan: return 15     // 팬 바닥(좌하단)을 인형 쪽으로
+        }
+    }
+
+    /// 타격 연출 시 좌우 반전 여부.
+    /// 슬리퍼 스프라이트는 발등(장식 면)이 좌하단을 향해 있어,
+    /// 반전해야 바닥면이 인형 쪽을 향한다.
+    var strikeFlipsHorizontally: Bool {
+        self == .slipper
+    }
+
     /// 타격 히트 이펙트 스프라이트 (별·충격파, 투명 배경).
     static let hitEffectImageName = "VentingHitEffect"
 }

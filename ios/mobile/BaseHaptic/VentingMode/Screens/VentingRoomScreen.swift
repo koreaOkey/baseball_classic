@@ -67,6 +67,11 @@ struct VentingRoomScreen: View {
         }
         .navigationBarHidden(true)
         .onAppear {
+            // 캡처용: 특정 도구 선택 (--venting-tool=frypan 등)
+            if let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--venting-tool=") }),
+               let tool = VentingTool(rawValue: String(arg.dropFirst("--venting-tool=".count))) {
+                selectedTool = tool
+            }
             // 캡처용: 타격 연출 프레임 고정 (시뮬레이터 스크린샷 검증)
             if CommandLine.arguments.contains("--venting-strike-freeze") {
                 strikeVisible = true
@@ -214,12 +219,15 @@ struct VentingRoomScreen: View {
     }
 
     /// 타격 시 잠깐 나타나는 도구 오브젝트.
-    /// 손잡이 끝(좌하단)을 축으로 들어올렸다가 내려친다.
+    /// 스프라이트별 기본 회전으로 타격면이 인형을 향하게 한 뒤,
+    /// 프레임 좌하단을 축으로 들어올렸다가 내려친다.
     private var strikeToolView: some View {
         Image(selectedTool.imageName)
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: 120, height: 120)
+            .scaleEffect(x: selectedTool.strikeFlipsHorizontally ? -1 : 1, y: 1)
+            .rotationEffect(.degrees(selectedTool.strikeBaseRotation))
             .rotationEffect(.degrees(strikeAngle), anchor: .bottomLeading)
             .offset(x: 55, y: -70)
             .opacity(strikeVisible ? 1 : 0)
