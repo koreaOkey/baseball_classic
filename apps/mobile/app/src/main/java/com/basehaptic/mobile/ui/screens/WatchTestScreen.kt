@@ -236,6 +236,15 @@ fun WatchTestScreen(
     var isLiveScorePreviewActive by remember { mutableStateOf(false) }
     var pendingLiveScorePreviewAlert by remember { mutableStateOf<Boolean?>(null) }
     var simIndex by remember { mutableIntStateOf(0) }
+    var promotedIconMode by remember {
+        mutableStateOf(
+            context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+                .getString(
+                    LiveScoreNotificationManager.KEY_PROMOTED_ICON_MODE,
+                    LiveScoreNotificationManager.PROMOTED_ICON_MODE_COMPOSITE
+                ) ?: LiveScoreNotificationManager.PROMOTED_ICON_MODE_COMPOSITE
+        )
+    }
 
     fun addLog(msg: String) {
         logMessages = (listOf(msg) + logMessages).take(30)
@@ -373,6 +382,34 @@ fun WatchTestScreen(
                 else -> "[LIVE_SCORE] 알림 권한이 없어 게시하지 못함"
             }
         )
+    }
+
+    fun togglePromotedIconMode() {
+        val next = if (promotedIconMode == LiveScoreNotificationManager.PROMOTED_ICON_MODE_COMPOSITE) {
+            LiveScoreNotificationManager.PROMOTED_ICON_MODE_DIAMOND_ONLY
+        } else {
+            LiveScoreNotificationManager.PROMOTED_ICON_MODE_COMPOSITE
+        }
+        context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putString(LiveScoreNotificationManager.KEY_PROMOTED_ICON_MODE, next)
+            .apply()
+        promotedIconMode = next
+        val label = if (next == LiveScoreNotificationManager.PROMOTED_ICON_MODE_COMPOSITE) {
+            "합성(다이아몬드+BSO)"
+        } else {
+            "다이아몬드 전용 + BSO 이모지"
+        }
+        addLog("[PROMOTED] 아이콘 모드 전환: $label")
+        if (isLiveScorePreviewActive) {
+            val posted = postLiveScorePreviewState(
+                state = gameState,
+                eventType = null,
+                eventText = null,
+                highlight = false
+            )
+            if (posted) addLog("[PROMOTED] 미리보기 알림에 새 모드 즉시 반영")
+        }
     }
 
     fun hasNotificationPostPermission(): Boolean {
@@ -628,6 +665,48 @@ fun WatchTestScreen(
                             shape = AppShapes.sm
                         ) {
                             Text("Live Score 종료", color = Color.White, style = AppFont.bodyBold)
+                        }
+                    }
+                }
+            }
+
+            item {
+                Surface(
+                    shape = AppShapes.md,
+                    color = Gray900,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                        Text("잠금화면 고정 (Android 16+)", style = AppFont.bodyBold, color = Gray300)
+                        Spacer(Modifier.height(AppSpacing.xs))
+                        val promotedSupported = Build.VERSION.SDK_INT >= 36
+                        Text(
+                            if (promotedSupported) {
+                                "이 기기는 promoted Live Update를 지원합니다. 위의 Live Score 시작 버튼이 잠금화면 최상단 고정 카드 + 상태바 칩으로 표시됩니다."
+                            } else {
+                                "이 기기(API ${Build.VERSION.SDK_INT})는 Android 16 미만이라 기존 커스텀 카드로 표시됩니다."
+                            },
+                            style = AppFont.caption,
+                            color = Gray500
+                        )
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        val modeLabel = if (promotedIconMode == LiveScoreNotificationManager.PROMOTED_ICON_MODE_COMPOSITE) {
+                            "합성 (다이아몬드+BSO 아이콘)"
+                        } else {
+                            "다이아몬드 전용 + BSO 이모지"
+                        }
+                        Text("아이콘 모드: $modeLabel", style = AppFont.caption, color = Gray400)
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        Button(
+                            onClick = { togglePromotedIconMode() },
+                            enabled = promotedSupported,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(AppSpacing.buttonHeight),
+                            colors = ButtonDefaults.buttonColors(containerColor = teamTheme.primary),
+                            shape = AppShapes.sm
+                        ) {
+                            Text("아이콘 모드 전환", style = AppFont.bodyBold)
                         }
                     }
                 }

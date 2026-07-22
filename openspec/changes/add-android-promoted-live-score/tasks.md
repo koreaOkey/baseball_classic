@@ -12,6 +12,7 @@
 - [x] 2.2 LiveScoreNotificationManager.post() API 36 분기 (BigText + largeIcon + shortCriticalText + requestPromotedOngoing)
 - [x] 2.3 아이콘 모드 전환 스위치 (SharedPreferences promoted_icon_mode)
 - [x] 2.4 API 35 이하 기존 커스텀 카드 경로 보존
+- [x] 2.5 워치 테스트 화면에 "잠금화면 고정 (Android 16+)" 섹션 — 기기 지원 여부 표시 + 아이콘 모드 전환 버튼(미리보기 활성 시 즉시 재게시)
 
 ## 3. 검증
 
