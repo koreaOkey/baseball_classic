@@ -97,10 +97,13 @@ object LiveScoreNotificationManager {
 
         // 삼성 One UI 8.0처럼 API 36이어도 서드파티 승격을 막아둔 기기가 있다.
         // 승격이 안 되는 기기에서 promoted 스타일을 쓰면 기존 리치 커스텀 카드만 잃으므로 런타임 확인.
+        // 삼성은 promoted를 Now Bar로 표현하는데 Now Bar 노출은 제품 결정상 쓰지 않기로 해서
+        // 제조사 단위로 제외한다 (되돌리려면 이 조건 한 줄만 제거).
         val canPromote = Build.VERSION.SDK_INT >= 36 &&
+            !Build.MANUFACTURER.equals("samsung", ignoreCase = true) &&
             NotificationManagerCompat.from(context).canPostPromotedNotifications()
         if (canPromote) {
-            applyPromotedStyle(context, builder, state)
+            applyPromotedStyle(context, builder, state, eventLabel, latestEventDescription)
         } else {
             val compactView = buildCompactRemoteViews(
                 context = context,
@@ -143,21 +146,24 @@ object LiveScoreNotificationManager {
     }
 
     // Android 16+ promoted Live Update: 커스텀 뷰가 금지되어 시스템 템플릿 + largeIcon 비트맵으로 구성.
-    // 잠금화면 최상단 고정 + 상태바 칩(스코어) + 삼성 Now Bar 노출 대상.
-    // largeIcon = 베이스 다이아몬드. 기본 노출은 BSO 줄, 타자/투수는 확장 시 둘째 줄로.
+    // 잠금화면 최상단 고정 + 상태바 칩(스코어) 노출 대상.
+    // largeIcon = 베이스 다이아몬드. 최근 이벤트가 있으면 그 설명이 첫 줄, BSO·타자/투수는 아랫줄.
     private fun applyPromotedStyle(
         context: Context,
         builder: NotificationCompat.Builder,
-        state: LiveGameState
+        state: LiveGameState,
+        eventLabel: String,
+        eventDescription: String?
     ) {
+        val eventLine = eventDescription?.trim()?.takeIf { it.isNotBlank() }?.take(42)
+            ?: eventLabel.takeIf { it.isNotBlank() }
         val bsoLine = shrunk(bsoEmojiLine(state))
         val playersLine = "타자 ${state.batter.ifBlank { "-" }} · 투수 ${state.pitcher.ifBlank { "-" }}"
         val expandedText = SpannableStringBuilder()
-            .append(bsoLine)
-            .append("\n")
-            .append(playersLine)
+        eventLine?.let { expandedText.append(it).append("\n") }
+        expandedText.append(bsoLine).append("\n").append(playersLine)
         builder.setSubText(state.inning.ifBlank { "라이브" })
-            .setContentText(bsoLine)
+            .setContentText(eventLine ?: bsoLine)
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
             .setLargeIcon(LiveScorePromotedIconRenderer.render(state))
             .setShortCriticalText("${state.awayScore}:${state.homeScore}")
