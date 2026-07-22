@@ -36,15 +36,18 @@ object LiveScorePromotedIconRenderer {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
         paint.color = BG_COLOR
-        canvas.drawRoundRect(RectF(0f, 0f, SIZE, SIZE), SIZE * 0.2f, SIZE * 0.2f, paint)
+        canvas.drawRoundRect(RectF(0f, 0f, SIZE, SIZE), SIZE * 0.14f, SIZE * 0.14f, paint)
 
+        // 표시 영역(~48dp)이 작으므로 여백을 최소화해 도형이 캔버스를 최대한 채우게 한다.
+        // centerY 는 1·3루(가운데 행) 기준. 회전 사각형의 대각 확장(half*√2)까지 포함해
+        // 상단(2루 꼭짓점)과 하단이 캔버스 안에 들어오도록 계산된 값.
         when (mode) {
             Mode.COMPOSITE -> {
-                drawDiamond(canvas, paint, state, centerY = SIZE * 0.38f, baseSize = SIZE * 0.24f)
+                drawDiamond(canvas, paint, state, centerY = SIZE * 0.46f, baseSize = SIZE * 0.30f)
                 drawCountDots(canvas, paint, state, centerY = SIZE * 0.82f)
             }
             Mode.DIAMOND_ONLY -> {
-                drawDiamond(canvas, paint, state, centerY = SIZE * 0.5f, baseSize = SIZE * 0.34f)
+                drawDiamond(canvas, paint, state, centerY = SIZE * 0.62f, baseSize = SIZE * 0.33f)
             }
         }
         return bitmap
@@ -58,7 +61,7 @@ object LiveScorePromotedIconRenderer {
         baseSize: Float
     ) {
         val cx = SIZE / 2f
-        val spread = baseSize * 0.82f
+        val spread = baseSize * 0.76f
         drawBase(canvas, paint, cx, centerY - spread, baseSize, state.baseSecond)
         drawBase(canvas, paint, cx + spread, centerY, baseSize, state.baseFirst)
         drawBase(canvas, paint, cx - spread, centerY, baseSize, state.baseThird)
@@ -86,9 +89,9 @@ object LiveScorePromotedIconRenderer {
     }
 
     private fun drawCountDots(canvas: Canvas, paint: Paint, state: LiveGameState, centerY: Float) {
-        val radius = SIZE * 0.040f
-        val innerGap = SIZE * 0.036f
-        val groupGap = SIZE * 0.078f
+        val radius = SIZE * 0.050f
+        val innerGap = SIZE * 0.026f
+        val groupGap = SIZE * 0.058f
         val groups = listOf(
             Triple(3, state.ball, DOT_BALL),
             Triple(2, state.strike, DOT_STRIKE),
