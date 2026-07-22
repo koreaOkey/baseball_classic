@@ -8,17 +8,17 @@
 
 ## 2. Promoted 노티
 
-- [x] 2.1 LiveScorePromotedIconRenderer 신규 (COMPOSITE / DIAMOND_ONLY 2모드)
-- [x] 2.2 LiveScoreNotificationManager.post() API 36 분기 (BigText + largeIcon + shortCriticalText + requestPromotedOngoing)
-- [x] 2.3 아이콘 모드 전환 스위치 (SharedPreferences promoted_icon_mode)
+- [x] 2.1 LiveScorePromotedIconRenderer 신규 (다이아몬드 아이콘, 투명 배경)
+- [x] 2.2 LiveScoreNotificationManager.post() API 36 분기 (BigText 2줄 + largeIcon + shortCriticalText + requestPromotedOngoing)
+- [x] 2.3 BSO 본문 별도 줄 이모지 표시
 - [x] 2.4 API 35 이하 기존 커스텀 카드 경로 보존
-- [x] 2.5 워치 테스트 화면에 "잠금화면 고정 (Android 16+)" 섹션 — 기기 지원 여부 표시 + 아이콘 모드 전환 버튼(미리보기 활성 시 즉시 재게시)
+- [x] 2.5 워치 테스트 화면 "잠금화면 고정 (Android 16+)" 지원 여부 안내 + 설정 "테스트 도구" 진입점(워치 무관)
 
 ## 3. 검증
 
 - [x] 3.1 :app:assembleDebug 빌드 통과
 - [x] 3.2 :app:testDebugUnitTest 통과
-- [ ] 3.3 Android 16 실기기/에뮬레이터에서 promoted 고정·칩 표시 확인
-- [ ] 3.4 COMPOSITE 아이콘 BSO 점 실기기 가독성 판정 → 모드 확정 (미달 시 diamond_only 전환)
+- [x] 3.3 Android 16 실기기(Z Fold6, One UI 8.0)에서 promoted 표시 확인
+- [x] 3.4 아이콘 가독성 실기기 판정 → 다이아몬드 전용 + BSO 텍스트 줄로 확정, 모드 스위치 제거
 - [ ] 3.5 삼성 One UI 8 기기 Now Bar 노출 확인
 - [ ] 3.6 Android 15 이하 기기 회귀 확인 (기존 카드 동일 동작)

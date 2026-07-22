@@ -19,11 +19,6 @@ import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 object LiveScoreNotificationManager {
     const val KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED = "lock_screen_live_score_enabled"
 
-    // 실기기 가독성 검증용 전환 스위치: composite(다이아몬드+BSO 아이콘) ↔ diamond_only(아이콘은 다이아몬드 전용, BSO는 본문 이모지)
-    const val KEY_PROMOTED_ICON_MODE = "promoted_icon_mode"
-    const val PROMOTED_ICON_MODE_COMPOSITE = "composite"
-    const val PROMOTED_ICON_MODE_DIAMOND_ONLY = "diamond_only"
-
     private const val NOTIFICATION_ID = 1002
     private const val PREFS_NAME = "basehaptic_user_prefs"
     private const val KEY_TEAM_DISPLAY_NAME_STYLE = "team_display_name_style"
@@ -142,34 +137,20 @@ object LiveScoreNotificationManager {
 
     // Android 16+ promoted Live Update: 커스텀 뷰가 금지되어 시스템 템플릿 + largeIcon 비트맵으로 구성.
     // 잠금화면 최상단 고정 + 상태바 칩(스코어) + 삼성 Now Bar 노출 대상.
+    // largeIcon = 베이스 다이아몬드, 본문 = 타자/투수 줄 + BSO 이모지 줄 (BigText 2줄).
     private fun applyPromotedStyle(
         context: Context,
         builder: NotificationCompat.Builder,
         state: LiveGameState
     ) {
-        val mode = promotedIconMode(context)
         val playersLine = "타자 ${state.batter.ifBlank { "-" }} · 투수 ${state.pitcher.ifBlank { "-" }}"
-        val contentLine = if (mode == LiveScorePromotedIconRenderer.Mode.DIAMOND_ONLY) {
-            "$playersLine · ${bsoEmojiLine(state)}"
-        } else {
-            playersLine
-        }
+        val expandedText = "$playersLine\n${bsoEmojiLine(state)}"
         builder.setSubText(state.inning.ifBlank { "라이브" })
-            .setContentText(contentLine)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(contentLine))
-            .setLargeIcon(LiveScorePromotedIconRenderer.render(state, mode))
+            .setContentText(playersLine)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
+            .setLargeIcon(LiveScorePromotedIconRenderer.render(state))
             .setShortCriticalText("${state.awayScore}:${state.homeScore}")
             .setRequestPromotedOngoing(true)
-    }
-
-    private fun promotedIconMode(context: Context): LiveScorePromotedIconRenderer.Mode {
-        val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_PROMOTED_ICON_MODE, PROMOTED_ICON_MODE_COMPOSITE)
-        return if (raw == PROMOTED_ICON_MODE_DIAMOND_ONLY) {
-            LiveScorePromotedIconRenderer.Mode.DIAMOND_ONLY
-        } else {
-            LiveScorePromotedIconRenderer.Mode.COMPOSITE
-        }
     }
 
     private fun bsoEmojiLine(state: LiveGameState): String {
