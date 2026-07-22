@@ -146,13 +146,14 @@ object LiveScoreNotificationManager {
         builder: NotificationCompat.Builder,
         state: LiveGameState
     ) {
+        val bsoLine = shrunk(bsoEmojiLine(state))
         val playersLine = "타자 ${state.batter.ifBlank { "-" }} · 투수 ${state.pitcher.ifBlank { "-" }}"
         val expandedText = SpannableStringBuilder()
-            .append(shrunk(bsoMultiLine(state)))
+            .append(bsoLine)
             .append("\n")
             .append(playersLine)
         builder.setSubText(state.inning.ifBlank { "라이브" })
-            .setContentText(shrunk(bsoSingleLine(state)))
+            .setContentText(bsoLine)
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
             .setLargeIcon(LiveScorePromotedIconRenderer.render(state))
             .setShortCriticalText("${state.awayScore}:${state.homeScore}")
@@ -167,23 +168,14 @@ object LiveScoreNotificationManager {
         }
     }
 
-    // 빈 슬롯은 이모지가 아닌 텍스트 글리프 ○(U+25CB) — 속이 투명해 카드 배경이 비치고
-    // 테두리는 본문 텍스트 색을 따른다. 이모지 원 세트에는 테두리만 있는 중립색이 없다.
-    private fun bsoSlots(filled: Int, total: Int, emoji: String): String {
-        val active = filled.coerceIn(0, total)
-        return emoji.repeat(active) + "○".repeat(total - active)
-    }
-
-    // 접힘/요약 표면용 한 줄 버전
-    private fun bsoSingleLine(state: LiveGameState): String {
-        return "B ${bsoSlots(state.ball, 3, "🟢")} S ${bsoSlots(state.strike, 2, "🟡")} O ${bsoSlots(state.out, 2, "🔴")}"
-    }
-
-    // 펼침 본문용 세 줄 버전 (전광판처럼 세로 정렬)
-    private fun bsoMultiLine(state: LiveGameState): String {
-        return "B ${bsoSlots(state.ball, 3, "🟢")}\n" +
-            "S ${bsoSlots(state.strike, 2, "🟡")}\n" +
-            "O ${bsoSlots(state.out, 2, "🔴")}"
+    private fun bsoEmojiLine(state: LiveGameState): String {
+        fun slots(filled: Int, total: Int, emoji: String): String {
+            val active = filled.coerceIn(0, total)
+            // 빈 슬롯은 이모지가 아닌 텍스트 글리프 ○(U+25CB) — 속이 투명해 카드 배경이 비치고
+            // 테두리는 본문 텍스트 색을 따른다. 이모지 원 세트에는 테두리만 있는 중립색이 없다.
+            return emoji.repeat(active) + "○".repeat(total - active)
+        }
+        return "B ${slots(state.ball, 3, "🟢")} S ${slots(state.strike, 2, "🟡")} O ${slots(state.out, 2, "🔴")}"
     }
 
     private fun eventTypeToKorean(type: String?): String {
