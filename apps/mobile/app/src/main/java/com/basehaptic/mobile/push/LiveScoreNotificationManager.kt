@@ -95,7 +95,11 @@ object LiveScoreNotificationManager {
             .setVibrate(if (shouldHighlight) longArrayOf(0, 180, 80, 180) else null)
             .setContentIntent(pendingIntent)
 
-        if (Build.VERSION.SDK_INT >= 36) {
+        // 삼성 One UI 8.0처럼 API 36이어도 서드파티 승격을 막아둔 기기가 있다.
+        // 승격이 안 되는 기기에서 promoted 스타일을 쓰면 기존 리치 커스텀 카드만 잃으므로 런타임 확인.
+        val canPromote = Build.VERSION.SDK_INT >= 36 &&
+            NotificationManagerCompat.from(context).canPostPromotedNotifications()
+        if (canPromote) {
             applyPromotedStyle(context, builder, state)
         } else {
             val compactView = buildCompactRemoteViews(
