@@ -4,6 +4,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.RelativeSizeSpan
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -137,20 +140,32 @@ object LiveScoreNotificationManager {
 
     // Android 16+ promoted Live Update: 커스텀 뷰가 금지되어 시스템 템플릿 + largeIcon 비트맵으로 구성.
     // 잠금화면 최상단 고정 + 상태바 칩(스코어) + 삼성 Now Bar 노출 대상.
-    // largeIcon = 베이스 다이아몬드, 본문 = 타자/투수 줄 + BSO 이모지 줄 (BigText 2줄).
+    // largeIcon = 베이스 다이아몬드. 기본 노출은 BSO 줄, 타자/투수는 확장 시 둘째 줄로.
     private fun applyPromotedStyle(
         context: Context,
         builder: NotificationCompat.Builder,
         state: LiveGameState
     ) {
+        val bsoLine = shrunk(bsoEmojiLine(state))
         val playersLine = "타자 ${state.batter.ifBlank { "-" }} · 투수 ${state.pitcher.ifBlank { "-" }}"
-        val expandedText = "$playersLine\n${bsoEmojiLine(state)}"
+        val expandedText = SpannableStringBuilder()
+            .append(bsoLine)
+            .append("\n")
+            .append(playersLine)
         builder.setSubText(state.inning.ifBlank { "라이브" })
-            .setContentText(playersLine)
+            .setContentText(bsoLine)
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
             .setLargeIcon(LiveScorePromotedIconRenderer.render(state))
             .setShortCriticalText("${state.awayScore}:${state.homeScore}")
             .setRequestPromotedOngoing(true)
+    }
+
+    // 이모지 원이 텍스트 폰트 크기를 그대로 따라 커 보여서 한 단계 줄인다.
+    // 크기 span을 무시하는 기기에서는 원래 크기로 표시될 뿐 깨지지 않는다.
+    private fun shrunk(text: String): CharSequence {
+        return SpannableStringBuilder(text).apply {
+            setSpan(RelativeSizeSpan(0.8f), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
     }
 
     private fun bsoEmojiLine(state: LiveGameState): String {
