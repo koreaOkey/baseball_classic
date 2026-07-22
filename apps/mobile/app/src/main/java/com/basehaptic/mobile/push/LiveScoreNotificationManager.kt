@@ -3,6 +3,7 @@ package com.basehaptic.mobile.push
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -17,6 +18,11 @@ import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 
 object LiveScoreNotificationManager {
     const val KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED = "lock_screen_live_score_enabled"
+
+    // 실기기 가독성 검증용 전환 스위치: composite(다이아몬드+BSO 아이콘) ↔ diamond_only(아이콘은 다이아몬드 전용, BSO는 본문 이모지)
+    const val KEY_PROMOTED_ICON_MODE = "promoted_icon_mode"
+    const val PROMOTED_ICON_MODE_COMPOSITE = "composite"
+    const val PROMOTED_ICON_MODE_DIAMOND_ONLY = "diamond_only"
 
     private const val NOTIFICATION_ID = 1002
     private const val PREFS_NAME = "basehaptic_user_prefs"
@@ -70,12 +76,6 @@ object LiveScoreNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val compactView = buildCompactRemoteViews(
-            context = context,
-            state = state,
-            awayName = awayName,
-            homeName = homeName
-        )
         val shouldHighlight = highlightEvent &&
             EventFilterGate.isAllowed(context, latestEventType, EventNotificationChannel.LOCK_SCREEN)
         val channelId = if (shouldHighlight) {
@@ -83,27 +83,10 @@ object LiveScoreNotificationManager {
         } else {
             NotificationChannels.LIVE_SCORE_ID
         }
-        val expandedView = buildExpandedRemoteViews(
-            context = context,
-            state = state,
-            awayName = awayName,
-            homeName = homeName,
-            statusText = statusText,
-            eventType = latestEventType,
-            eventLabel = eventLabel,
-            latestEventDescription = latestEventDescription,
-            highlightEvent = shouldHighlight
-        )
 
-        val notification = NotificationCompat.Builder(context, channelId)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText(text)
-            .setSubText("라이브 스코어")
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(compactView)
-            .setCustomBigContentView(expandedView)
-            .setCustomHeadsUpContentView(expandedView)
             .setOngoing(true)
             .setOnlyAlertOnce(!shouldHighlight)
             .setShowWhen(false)
@@ -113,7 +96,36 @@ object LiveScoreNotificationManager {
             .setDefaults(if (shouldHighlight) NotificationCompat.DEFAULT_ALL else 0)
             .setVibrate(if (shouldHighlight) longArrayOf(0, 180, 80, 180) else null)
             .setContentIntent(pendingIntent)
-            .build()
+
+        if (Build.VERSION.SDK_INT >= 36) {
+            applyPromotedStyle(context, builder, state)
+        } else {
+            val compactView = buildCompactRemoteViews(
+                context = context,
+                state = state,
+                awayName = awayName,
+                homeName = homeName
+            )
+            val expandedView = buildExpandedRemoteViews(
+                context = context,
+                state = state,
+                awayName = awayName,
+                homeName = homeName,
+                statusText = statusText,
+                eventType = latestEventType,
+                eventLabel = eventLabel,
+                latestEventDescription = latestEventDescription,
+                highlightEvent = shouldHighlight
+            )
+            builder.setContentText(text)
+                .setSubText("라이브 스코어")
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+                .setCustomContentView(compactView)
+                .setCustomBigContentView(expandedView)
+                .setCustomHeadsUpContentView(expandedView)
+        }
+
+        val notification = builder.build()
 
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
@@ -126,6 +138,46 @@ object LiveScoreNotificationManager {
 
     fun remove(context: Context) {
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+    }
+
+    // Android 16+ promoted Live Update: 커스텀 뷰가 금지되어 시스템 템플릿 + largeIcon 비트맵으로 구성.
+    // 잠금화면 최상단 고정 + 상태바 칩(스코어) + 삼성 Now Bar 노출 대상.
+    private fun applyPromotedStyle(
+        context: Context,
+        builder: NotificationCompat.Builder,
+        state: LiveGameState
+    ) {
+        val mode = promotedIconMode(context)
+        val playersLine = "타자 ${state.batter.ifBlank { "-" }} · 투수 ${state.pitcher.ifBlank { "-" }}"
+        val contentLine = if (mode == LiveScorePromotedIconRenderer.Mode.DIAMOND_ONLY) {
+            "$playersLine · ${bsoEmojiLine(state)}"
+        } else {
+            playersLine
+        }
+        builder.setSubText(state.inning.ifBlank { "라이브" })
+            .setContentText(contentLine)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(contentLine))
+            .setLargeIcon(LiveScorePromotedIconRenderer.render(state, mode))
+            .setShortCriticalText("${state.awayScore}:${state.homeScore}")
+            .setRequestPromotedOngoing(true)
+    }
+
+    private fun promotedIconMode(context: Context): LiveScorePromotedIconRenderer.Mode {
+        val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_PROMOTED_ICON_MODE, PROMOTED_ICON_MODE_COMPOSITE)
+        return if (raw == PROMOTED_ICON_MODE_DIAMOND_ONLY) {
+            LiveScorePromotedIconRenderer.Mode.DIAMOND_ONLY
+        } else {
+            LiveScorePromotedIconRenderer.Mode.COMPOSITE
+        }
+    }
+
+    private fun bsoEmojiLine(state: LiveGameState): String {
+        fun slots(filled: Int, total: Int, emoji: String): String {
+            val active = filled.coerceIn(0, total)
+            return emoji.repeat(active) + "⚪".repeat(total - active)
+        }
+        return "B${slots(state.ball, 3, "🟢")} S${slots(state.strike, 2, "🟡")} O${slots(state.out, 2, "🔴")}"
     }
 
     private fun eventTypeToKorean(type: String?): String {

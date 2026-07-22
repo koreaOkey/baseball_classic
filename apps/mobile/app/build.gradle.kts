@@ -74,7 +74,7 @@ rootProject.file("keystore.properties").let { file ->
 
 android {
     namespace = "com.basehaptic.mobile"
-    compileSdk = 35
+    compileSdk = 36
 
     signingConfigs {
         create("release") {
@@ -142,7 +142,7 @@ android {
 
 dependencies {
     // Core Android
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.activity:activity-compose:1.9.2")
     
