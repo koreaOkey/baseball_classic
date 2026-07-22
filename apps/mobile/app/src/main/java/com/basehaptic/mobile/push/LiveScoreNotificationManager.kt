@@ -171,7 +171,7 @@ object LiveScoreNotificationManager {
     private fun bsoEmojiLine(state: LiveGameState): String {
         fun slots(filled: Int, total: Int, emoji: String): String {
             val active = filled.coerceIn(0, total)
-            return emoji.repeat(active) + "⚪".repeat(total - active)
+            return emoji.repeat(active) + "⚫".repeat(total - active)
         }
         return "B${slots(state.ball, 3, "🟢")} S${slots(state.strike, 2, "🟡")} O${slots(state.out, 2, "🔴")}"
     }
