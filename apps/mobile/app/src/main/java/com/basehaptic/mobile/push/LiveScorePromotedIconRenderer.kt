@@ -35,19 +35,25 @@ object LiveScorePromotedIconRenderer {
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        paint.color = BG_COLOR
-        canvas.drawRoundRect(RectF(0f, 0f, SIZE, SIZE), SIZE * 0.14f, SIZE * 0.14f, paint)
-
         // 표시 영역(~48dp)이 작으므로 여백을 최소화해 도형이 캔버스를 최대한 채우게 한다.
         // centerY 는 1·3루(가운데 행) 기준. 회전 사각형의 대각 확장(half*√2)까지 포함해
         // 상단(2루 꼭짓점)과 하단이 캔버스 안에 들어오도록 계산된 값.
         when (mode) {
             Mode.COMPOSITE -> {
+                paint.color = BG_COLOR
+                canvas.drawRoundRect(RectF(0f, 0f, SIZE, SIZE), SIZE * 0.14f, SIZE * 0.14f, paint)
                 drawDiamond(canvas, paint, state, centerY = SIZE * 0.46f, baseSize = SIZE * 0.30f)
                 drawCountDots(canvas, paint, state, centerY = SIZE * 0.82f)
             }
             Mode.DIAMOND_ONLY -> {
-                drawDiamond(canvas, paint, state, centerY = SIZE * 0.62f, baseSize = SIZE * 0.33f)
+                // 배경판 없이 투명 배경 — 아이콘이 "상자 속 그림"으로 축소되어 보이는 것을 방지.
+                // spread 를 좁혀 베이스끼리 맞닿게 하고 베이스 자체를 키운다 (가로가 한계 축).
+                drawDiamond(
+                    canvas, paint, state,
+                    centerY = SIZE * 0.62f,
+                    baseSize = SIZE * 0.36f,
+                    spreadFactor = 0.68f
+                )
             }
         }
         return bitmap
@@ -58,10 +64,11 @@ object LiveScorePromotedIconRenderer {
         paint: Paint,
         state: LiveGameState,
         centerY: Float,
-        baseSize: Float
+        baseSize: Float,
+        spreadFactor: Float = 0.76f
     ) {
         val cx = SIZE / 2f
-        val spread = baseSize * 0.76f
+        val spread = baseSize * spreadFactor
         drawBase(canvas, paint, cx, centerY - spread, baseSize, state.baseSecond)
         drawBase(canvas, paint, cx + spread, centerY, baseSize, state.baseFirst)
         drawBase(canvas, paint, cx - spread, centerY, baseSize, state.baseThird)
