@@ -175,7 +175,7 @@ object LiveScoreNotificationManager {
             // 테두리는 본문 텍스트 색을 따른다. 이모지 원 세트에는 테두리만 있는 중립색이 없다.
             return emoji.repeat(active) + "○".repeat(total - active)
         }
-        return "B${slots(state.ball, 3, "🟢")} S${slots(state.strike, 2, "🟡")} O${slots(state.out, 2, "🔴")}"
+        return "B ${slots(state.ball, 3, "🟢")} S ${slots(state.strike, 2, "🟡")} O ${slots(state.out, 2, "🔴")}"
     }
 
     private fun eventTypeToKorean(type: String?): String {
