@@ -18,7 +18,7 @@
 
 - [x] 3.1 :app:assembleDebug 빌드 통과
 - [x] 3.2 :app:testDebugUnitTest 통과
-- [x] 3.3 Android 16 실기기(Z Fold6, One UI 8.0)에서 promoted 표시 확인
+- [x] 3.3 promoted 승격 검증 — 순정 Android 17 에뮬레이터(Pixel_8)에서 FLAG_PROMOTED_ONGOING + 잠금화면 고정 다중줄 카드 + 상태바 칩 확인 (appop POST_PROMOTED_NOTIFICATIONS allow 필요)
 - [x] 3.4 아이콘 가독성 실기기 판정 → 다이아몬드 전용 + BSO 텍스트 줄로 확정, 모드 스위치 제거
-- [ ] 3.5 삼성 One UI 8 기기 Now Bar 노출 확인
+- [x] 3.5 삼성 Z Fold6(One UI 8.0) 판정 — `ui_rich_ongoing` 렌더링 플래그 부재로 서드파티 승격 미지원(일반 카드 폴백 정상). One UI 8.5/9 개방 대기, 앱 수정 불필요
 - [ ] 3.6 Android 15 이하 기기 회귀 확인 (기존 카드 동일 동작)
