@@ -180,7 +180,9 @@ class DataLayerListenerService : WearableListenerService() {
         }
 
         val eventType = dataMap.getString(KEY_EVENT_TYPE, "")
-        if (eventType.isNotBlank()) {
+        // 필터 차단 이벤트는 최신 이벤트로 저장하지 않는다 — 햅틱뿐 아니라
+        // 전체화면 애니메이션·오버레이·ongoing 칩 라벨까지 함께 차단 (iOS 와 동일 동작).
+        if (eventType.isNotBlank() && isEventTypeAllowedByFilter(eventType)) {
             // 오래된 이벤트는 햅틱 무시 (워치 재시작 시 이벤트 폭주 방지)
             val isStale = if (dataMap.containsKey("updated_at")) {
                 System.currentTimeMillis() - dataMap.getLong("updated_at", 0L) > STALE_EVENT_THRESHOLD_MS
@@ -264,6 +266,12 @@ class DataLayerListenerService : WearableListenerService() {
             }
         }
 
+        // 필터 차단 이벤트는 저장·햅틱·브로드캐스트 모두 skip — 애니메이션·오버레이·
+        // ongoing 칩 라벨까지 함께 차단 (iOS 와 동일 동작).
+        if (!isEventTypeAllowedByFilter(eventType)) {
+            Log.d(TAG, "event filter blocked (no save): $eventType")
+            return
+        }
         saveLatestEvent(eventType, eventCursor.takeIf { it > 0L })
         triggerHapticFeedback(eventType)
         sendBroadcast(Intent(ACTION_GAME_UPDATED).setPackage(packageName))
