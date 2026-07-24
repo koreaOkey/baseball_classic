@@ -496,7 +496,7 @@ class MainActivity : ComponentActivity() {
             var teamDisplayNameStyle by remember { mutableStateOf(initialTeamDisplayNameStyle) }
             var teamDisplayNamePromptSeen by remember { mutableStateOf(initialTeamDisplayNamePromptSeen) }
             var showOnboarding by remember { mutableStateOf(initialShowOnboarding) }
-            
+
             BaseHapticTheme(
                 selectedTeam = selectedTeam,
                 teamDisplayNameStyle = teamDisplayNameStyle
@@ -706,6 +706,7 @@ fun BaseHapticApp(
             if (shouldNavigate && currentView != Screen.LiveGame) {
                 navigateTo(Screen.LiveGame)
             }
+            android.widget.Toast.makeText(context, "워치와 동기화되었습니다", android.widget.Toast.LENGTH_SHORT).show()
         }
 
         if (WatchSyncAdLedger.hasViewed(context, gameId)) {
@@ -1596,7 +1597,7 @@ fun BottomNavigationBar(
     onNavigate: (Screen) -> Unit
 ) {
     val teamTheme = LocalTeamTheme.current
-    
+
     NavigationBar(
         containerColor = Gray900,
         tonalElevation = 0.dp,

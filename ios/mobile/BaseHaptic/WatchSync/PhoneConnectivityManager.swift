@@ -1,4 +1,6 @@
 import Foundation
+import UIKit
+import UserNotifications
 import WatchConnectivity
 
 /// WatchConnectivity 세션 관리 및 워치에서 오는 응답 처리
@@ -93,6 +95,13 @@ final class PhoneConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
             let accepted = message["accepted"] as? Bool ?? false
             DispatchQueue.main.async {
                 self.watchSyncResponse = WatchSyncResponse(gameId: gameId, accepted: accepted)
+                // 워치에서 수락 시에도 보상형 광고 게이트를 통과해야 한다.
+                // iOS 는 워치가 폰 앱을 포그라운드로 띄울 수 없으므로, 앱이 비활성이면
+                // 로컬 알림을 게시하고 사용자가 탭해 진입할 때 광고 플로우로 잇는다.
+                // (Android 의 MobileDataLayerListenerService.notifyPhoneAdRequired 대응)
+                if accepted, UIApplication.shared.applicationState != .active {
+                    Self.postAdRequiredNotification()
+                }
             }
         case "watch_push_token":
             if let token = message["watch_token"] as? String, !token.isEmpty {
@@ -115,6 +124,32 @@ final class PhoneConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
     func consumePendingResponse() -> WatchSyncResponse? {
         let response = watchSyncResponse
         watchSyncResponse = nil
+        if response != nil {
+            Self.removeAdRequiredNotification()
+        }
         return response
+    }
+
+    // MARK: - 광고 확인 로컬 알림
+
+    static let adRequiredNotificationId = "watch-sync-ad-required"
+
+    private static func postAdRequiredNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "워치 관람 광고 확인"
+        content.body = "탭하여 광고 관람 후 워치 관람이 시작됩니다."
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: adRequiredNotificationId,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private static func removeAdRequiredNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.removeDeliveredNotifications(withIdentifiers: [adRequiredNotificationId])
+        center.removePendingNotificationRequests(withIdentifiers: [adRequiredNotificationId])
     }
 }

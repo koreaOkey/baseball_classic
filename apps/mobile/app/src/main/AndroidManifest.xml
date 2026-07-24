@@ -45,6 +45,15 @@
                     android:scheme="com.basehaptic.mobile"
                     android:host="login-callback" />
             </intent-filter>
+            <!-- 워치 동기화 수락 시 워치(RemoteActivityHelper)가 원격 실행하는 딥링크 — 광고 플로우 진입 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="basehaptic"
+                    android:host="watch-sync" />
+            </intent-filter>
         </activity>
 
         <service

@@ -438,6 +438,9 @@ struct ContentView: View {
 
     @ObservedObject private var connectivity = PhoneConnectivityManager.shared
     @Environment(\.teamTheme) private var teamTheme
+    @Environment(\.scenePhase) private var mainScenePhase
+    // 워치 동기화 완료 시 잠시 노출되는 상단 배너
+    @State private var showWatchSyncedNotice = false
 
     var body: some View {
         ZStack {
@@ -473,7 +476,15 @@ struct ContentView: View {
             }
         }
         .onChange(of: connectivity.watchSyncResponse?.gameId) {
+            // 백그라운드 수신 시엔 광고를 띄울 수 없으므로 보류 —
+            // PhoneConnectivityManager 가 로컬 알림을 게시했고, 활성화 시점에 소비한다.
+            guard mainScenePhase == .active else { return }
             consumePendingWatchSyncResponse()
+        }
+        .onChange(of: mainScenePhase) { _, newPhase in
+            if newPhase == .active {
+                consumePendingWatchSyncResponse()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openLiveGameRequested)) { notification in
             guard let gameId = notification.userInfo?["game_id"] as? String, !gameId.isEmpty else { return }
@@ -859,6 +870,19 @@ struct ContentView: View {
         .alert("경기 시작 전입니다", isPresented: $showGameNotStartedAlert) {
             Button("확인", role: .cancel) {}
         }
+        .overlay(alignment: .top) {
+            if showWatchSyncedNotice {
+                Text("워치와 동기화되었습니다")
+                    .font(AppFont.captionBold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, AppSpacing.lg)
+                    .padding(.vertical, AppSpacing.md)
+                    .background(AppColors.gray800)
+                    .clipShape(Capsule())
+                    .padding(.top, AppSpacing.xl)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .onAppear {
             activateStadiumCheer()
         }
@@ -1117,6 +1141,7 @@ struct ContentView: View {
             if shouldNavigate && currentView != .home {
                 navigateTo(.home)
             }
+            presentWatchSyncedNotice()
         }
 
         if WatchSyncAdLedger.hasViewed(gameId: gameId) {
@@ -1156,6 +1181,18 @@ struct ContentView: View {
                 format: format,
                 onComplete: onComplete
             )
+        }
+    }
+
+    /// "워치와 동기화되었습니다" 상단 배너를 잠시 노출.
+    private func presentWatchSyncedNotice() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            showWatchSyncedNotice = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showWatchSyncedNotice = false
+            }
         }
     }
 

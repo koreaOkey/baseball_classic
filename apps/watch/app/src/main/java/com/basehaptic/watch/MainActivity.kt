@@ -267,6 +267,8 @@ fun WatchApp(isAmbient: Boolean = false) {
     var gameData by remember { mutableStateOf(readGameDataFromPrefs(context)) }
     var latestEvent by remember { mutableStateOf(readLatestEventFromPrefs(context)) }
     var watchSyncPrompt by remember { mutableStateOf(readWatchSyncPromptFromPrefs(context)) }
+    // 동기화 수락 직후 "폰에서 확인하세요" 안내 (광고는 폰에서 진행)
+    var checkPhoneNoticeToken by remember { mutableStateOf<Long?>(null) }
     var isHomeRunTransitionVisible by remember { mutableStateOf(false) }
     var homeRunTransitionToken by remember { mutableStateOf<Long?>(null) }
     var isHitTransitionVisible by remember { mutableStateOf(false) }
@@ -607,8 +609,11 @@ fun WatchApp(isAmbient: Boolean = false) {
                                 gameId = prompt.gameId,
                                 accepted = true
                             )
+                            // 광고 게이트는 폰에서 진행 — 폰 앱을 원격 실행하고 안내 표시
+                            PhoneAppLauncher.launchForWatchSyncAd(context)
                             clearWatchSyncPrompt(context)
                             watchSyncPrompt = null
+                            checkPhoneNoticeToken = System.currentTimeMillis()
                         },
                         onDecline = {
                             WatchSyncResponseSender.send(
@@ -620,6 +625,18 @@ fun WatchApp(isAmbient: Boolean = false) {
                             watchSyncPrompt = null
                         }
                     )
+                }
+
+                // 수락 직후 안내 — 광고 진행을 위해 폰 확인 유도 (4초 후 자동 사라짐)
+                val noticeToken = checkPhoneNoticeToken
+                if (noticeToken != null) {
+                    LaunchedEffect(noticeToken) {
+                        delay(4000)
+                        if (checkPhoneNoticeToken == noticeToken) {
+                            checkPhoneNoticeToken = null
+                        }
+                    }
+                    CheckPhoneNoticeCard()
                 }
             }
         }
@@ -807,6 +824,43 @@ private fun WatchEventOverlay(latestEvent: WatchEventInfo?, hideTypes: Set<Strin
     }
 }
 
+/** 동기화 수락 직후 표시 — 광고는 폰에서 진행되므로 폰 확인을 유도한다. */
+@Composable
+private fun CheckPhoneNoticeCard() {
+    val uiProfile = rememberWatchUiProfile()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.78f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = uiProfile.promptOuterHorizontalPaddingDp.dp)
+                .background(
+                    color = Color(0xFF1A1A1A),
+                    shape = RoundedCornerShape(uiProfile.promptCardCornerDp.dp)
+                )
+                .padding(horizontal = 12.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "폰에서 확인하세요",
+                color = Color.White,
+                fontSize = uiProfile.promptQuestionSp.sp
+            )
+            Text(
+                text = "광고 관람 후 관람이 시작됩니다",
+                color = Color.White.copy(alpha = 0.72f),
+                fontSize = (uiProfile.promptQuestionSp - 2).sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+}
+
 @Composable
 private fun WatchSyncPromptDialog(
     prompt: WatchSyncPrompt,
@@ -833,12 +887,12 @@ private fun WatchSyncPromptDialog(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "경기를 관람하겠습니까?",
+                text = "관람하시겠습니까?",
                 color = Color.White,
                 fontSize = uiProfile.promptQuestionSp.sp
             )
             Text(
-                text = "휴대폰에서 광고 확인 후 자동 관람됩니다.",
+                text = "폰에서 광고 관람 후 이용 가능합니다.",
                 color = Color.White.copy(alpha = 0.72f),
                 fontSize = (uiProfile.promptQuestionSp - 2).sp,
                 modifier = Modifier.padding(top = 4.dp)
@@ -863,13 +917,13 @@ private fun WatchSyncPromptDialog(
                     onClick = onAccept,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("확인")
+                    Text("예")
                 }
                 Button(
                     onClick = onDecline,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("취소")
+                    Text("아니오")
                 }
             }
         }

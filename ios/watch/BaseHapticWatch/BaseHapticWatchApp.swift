@@ -45,6 +45,8 @@ struct WatchContentView: View {
     @State private var isVictoryVisible = false
     @State private var pendingEventType: String?
     @State private var pendingEventTimestamp: Date?
+    // 동기화 수락 직후 "폰에서 확인하세요" 안내 (광고는 폰에서 진행)
+    @State private var showCheckPhoneNotice = false
     // 비디오 재생 중 새 이벤트로 화면이 끊기지 않도록 하는 가드.
     // true 인 동안은 후속 이벤트를 전부 무시. 각 영상 onFinished 에서 false
     // 로 복구하고, 혹시 onFinished 가 누락돼도 watchdog 타이머로 자동 해제.
@@ -129,6 +131,7 @@ struct WatchContentView: View {
                         onAccept: {
                             connectivity.sendSyncResponse(gameId: prompt.gameId, accepted: true)
                             connectivity.clearSyncPrompt()
+                            presentCheckPhoneNotice()
                             // 워치에서 직접 백엔드에 APNs 토큰 등록 → 폰 앱 없이도 push 수신
                             Task {
                                 await WatchTokenRegistrar.register(
@@ -142,6 +145,12 @@ struct WatchContentView: View {
                             connectivity.clearSyncPrompt()
                         }
                     )
+                }
+
+                // 수락 직후 안내 — 광고 진행을 위해 폰 확인 유도
+                if showCheckPhoneNotice {
+                    CheckPhoneNoticeView()
+                        .transition(.opacity)
                 }
             }
 
@@ -231,6 +240,18 @@ struct WatchContentView: View {
                 startGamePollerIfNeeded()
             } else {
                 WatchGamePoller.shared.stopPolling()
+            }
+        }
+    }
+
+    /// 동기화 수락 직후 "폰에서 확인하세요" 안내를 잠시 표시.
+    private func presentCheckPhoneNotice() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            showCheckPhoneNotice = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showCheckPhoneNotice = false
             }
         }
     }
@@ -363,6 +384,29 @@ struct WatchEventOverlay: View {
     }
 }
 
+// MARK: - Check Phone Notice
+/// 동기화 수락 직후 표시 — 광고는 폰에서 진행되므로 폰 확인을 유도한다.
+struct CheckPhoneNoticeView: View {
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: "iphone")
+                .font(.system(size: 18))
+                .foregroundColor(.white)
+            Text("폰에서 확인하세요")
+                .foregroundColor(.white)
+                .font(.system(size: 13, weight: .semibold))
+            Text("광고 관람 후 관람이 시작됩니다")
+                .foregroundColor(.white.opacity(0.72))
+                .font(.system(size: 11))
+        }
+        .padding(.horizontal, WatchAppSpacing.md)
+        .padding(.vertical, 12)
+        .background(WatchColors.gray900)
+        .cornerRadius(WatchAppRadius.lg)
+        .padding(.horizontal, WatchAppSpacing.md)
+    }
+}
+
 // MARK: - Watch Sync Prompt
 struct WatchSyncPromptView: View {
     let prompt: WatchConnectivityManager.WatchSyncPrompt
@@ -376,12 +420,12 @@ struct WatchSyncPromptView: View {
 
             VStack(spacing: 0) {
                 // Reason: 워치 프롬프트 고정 사이즈 (spec 허용)
-                Text("경기를 관람하겠습니까?")
+                Text("관람하시겠습니까?")
                     .foregroundColor(.white)
                     .font(.system(size: 13))
                     .multilineTextAlignment(.center)
 
-                Text("휴대폰에서 광고 확인 후 자동 관람됩니다.")
+                Text("폰에서 광고 관람 후 이용 가능합니다.")
                     .foregroundColor(.white.opacity(0.72))
                     .font(.system(size: 11))
                     .multilineTextAlignment(.center)
@@ -398,9 +442,9 @@ struct WatchSyncPromptView: View {
                 }
 
                 HStack(spacing: WatchAppSpacing.sm) {
-                    Button("확인") { onAccept() }
+                    Button("예") { onAccept() }
                         .buttonStyle(.borderedProminent)
-                    Button("취소") { onDecline() }
+                    Button("아니오") { onDecline() }
                         .buttonStyle(.bordered)
                 }
                 // Reason: 버튼 상단 간격 미세 조정 (10pt)

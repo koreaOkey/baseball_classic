@@ -50,3 +50,6 @@ log/
 
 # Local sqlite databases (backend runtime/test artifacts)
 backend/api/**/*.db
+
+# Claude Code 병렬 워크트리 (로컬 전용)
+.claude/worktrees/

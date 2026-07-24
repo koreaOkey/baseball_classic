@@ -93,6 +93,8 @@ dependencies {
     
     // Wear OS specific
     implementation("androidx.wear:wear:1.3.0")
+    // 워치 → 폰 앱 원격 실행 ("Open on phone" — 동기화 수락 시 광고 플로우 자동 진입)
+    implementation("androidx.wear:wear-remote-interactions:1.0.0")
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
     
     // Compose for Wear OS
