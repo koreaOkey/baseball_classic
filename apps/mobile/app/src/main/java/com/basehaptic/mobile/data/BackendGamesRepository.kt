@@ -122,6 +122,8 @@ object BackendGamesRepository {
         val battingOrder: Int?,
         val playerName: String,
         val position: String?,
+        /** 구버전 백엔드는 미노출 — null 이면 클라이언트에서 ab+bb 로 근사. */
+        val plateAppearances: Int?,
         val atBats: Int,
         val hits: Int,
         val rbi: Int,
@@ -1112,6 +1114,7 @@ object BackendGamesRepository {
                         battingOrder = row.optNullableInt("battingOrder"),
                         playerName = name,
                         position = row.optCleanString("position"),
+                        plateAppearances = row.optNullableInt("plateAppearances"),
                         atBats = row.optInt("atBats", 0),
                         hits = row.optInt("hits", 0),
                         rbi = row.optInt("rbi", 0),

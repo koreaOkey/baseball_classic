@@ -25,7 +25,7 @@
 - `ios/mobile/BaseHaptic/Screens/LiveGameScreen.swift` — AtBatCard 폴백 레코드, boxscoreBatterLine 조인, 박스스코어 task 승격.
 - `ios/mobile/BaseHaptic/Data/BackendGamesRepository.swift` — `BoxscoreBatterLine.plateAppearances` 추가.
 - `backend/api/app/schemas.py`, `services.py` — `plateAppearances` 노출 (additive, 배포 전에도 iOS 폴백 동작).
-- Android 동등성은 별도 후속 PR.
+- Android 동등성 적용 완료 (2026-07-24): `apps/mobile/.../ui/screens/LiveGameScreen.kt`, `data/BackendGamesRepository.kt` — iOS 와 동일 로직 (라인스코어 하이라이트는 Android 가 원래 원하는 동작이라 변경 없음).
 
 ## Verification
 

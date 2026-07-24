@@ -295,11 +295,10 @@ fun LiveGameScreen(
         }
     }
 
-    // 박스스코어 탭이 열려 있는 동안만 조회. 최초 1회 + LIVE 경기면 30초 주기 갱신.
-    // 탭 이탈/화면 백그라운드 시 코루틴이 취소되어 폴링도 함께 멈춘다.
-    LaunchedEffect(gameId, selectedDetailTab) {
+    // 화면이 보이는 동안 조회 — 박스스코어 탭과 중계 탭 타석 카드(오늘 성적 폴백)가 공유.
+    // 최초 1회 + LIVE 경기면 30초 주기 갱신. 화면 백그라운드 시 코루틴이 취소되어 폴링도 함께 멈춘다.
+    LaunchedEffect(gameId) {
         val targetGameId = gameId?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
-        if (selectedDetailTab != LiveDetailTab.BOXSCORE) return@LaunchedEffect
         if (BuildConfig.DEBUG && targetGameId == "debug-watch-sync-test") {
             // 디버그 더미 경기는 백엔드 조회 없이 빈 상태 노출
             boxscoreFetchAttempted = true
@@ -316,8 +315,10 @@ fun LiveGameScreen(
                 // 갱신 실패 시 마지막 데이터 유지 (fetched == null 이면 덮어쓰지 않음)
                 if (fetched != null) boxscore = fetched
                 boxscoreFetchAttempted = true
+                // 첫 fetch 시점엔 라이브 스트림이 아직 state 를 못 받았을 수 있어 null 은 계속 대기.
                 // LIVE 가 아니면 1회 조회로 종료 (포그라운드 복귀 시 repeatOnLifecycle 이 재조회)
-                if (gameState?.status != GameStatus.LIVE) break
+                val status = gameState?.status
+                if (status != null && status != GameStatus.LIVE) break
                 delay(30_000)
             }
         }
@@ -476,6 +477,7 @@ fun LiveGameScreen(
                                 awayTeamName = state.awayTeamId.displayName(teamDisplayNameStyle),
                                 homeTeamName = state.homeTeamId.displayName(teamDisplayNameStyle),
                                 highlightScoreOutcome = isScoreFilterActive,
+                                boxscoreLine = boxscoreBatterLine(boxscore, group),
                             )
                         }
                     }
@@ -1971,6 +1973,11 @@ private fun AtBatCard(
     awayTeamName: String,
     homeTeamName: String,
     highlightScoreOutcome: Boolean,
+    /**
+     * 박스스코어의 해당 타자 라인 — batterRecord 미제공 타석의 "오늘 성적" 폴백.
+     * (네이버 relay 는 각 이닝 선두타자에게만 batterRecord 를 붙여준다.)
+     */
+    boxscoreLine: BackendGamesRepository.BoxscoreBatter?,
 ) {
     val outcomeType = group.outcome?.type?.uppercase() ?: ""
     val isScoreOutcome = outcomeType == "SCORE" || outcomeType == "SAC_FLY_SCORE"
@@ -1995,6 +2002,7 @@ private fun AtBatCard(
         "$awayTeamName ${outcome.awayScoreAfter} : ${outcome.homeScoreAfter} $homeTeamName"
     } else null
     val batterRecord = group.pitches.reversed().firstNotNullOfOrNull { it.batterRecord }
+    val resolvedRecord = resolveBatterRecord(batterRecord, boxscoreLine, group)
     val pitchDetailEvents = group.pitches
         .filter { event ->
             event.pitchNum != null ||
@@ -2002,7 +2010,7 @@ private fun AtBatCard(
                 !event.pitchStuff.isNullOrEmpty()
         }
         .sortedByDescending { it.pitchNum ?: it.seqno ?: it.cursor.toInt() }
-    val showsNaverStyleDetails = !isScoreOutcome && (batterRecord != null || pitchDetailEvents.isNotEmpty())
+    val showsNaverStyleDetails = !isScoreOutcome && (resolvedRecord != null || pitchDetailEvents.isNotEmpty())
 
     Card(
         modifier = Modifier
@@ -2018,10 +2026,10 @@ private fun AtBatCard(
         ) {
             if (showsNaverStyleDetails) {
                 AtBatBatterHeader(
-                    batterName = batterRecordString(batterRecord, "name") ?: group.batter ?: headerText,
+                    batterName = batterRecordString(resolvedRecord, "name") ?: group.batter ?: headerText,
                     pitcherName = group.pitcher,
                     inning = group.inning,
-                    record = batterRecord,
+                    record = resolvedRecord,
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.xs)) {
@@ -2395,6 +2403,70 @@ private fun pitchCountText(event: BackendGamesRepository.LiveEvent): String {
     val ball = event.ballAfter ?: return "-"
     val strike = event.strikeAfter ?: return "-"
     return "$ball-$strike"
+}
+
+/** 타석 소개 이벤트("3번타자 안현민")에서 타순 추출 — 타석 시점 기준이라 가장 정확. */
+private val introBattingOrderRegex = Regex("""(\d+)번\s?타자""")
+
+private fun introBattingOrder(group: AtBatGroup): Int? {
+    for (event in group.pitches) {
+        val match = introBattingOrderRegex.find(event.description) ?: continue
+        return match.groupValues[1].toIntOrNull()
+    }
+    return null
+}
+
+/**
+ * 헤더/스탯 그리드에 쓸 최종 레코드.
+ * 1순위: relay batterRecord (타순 누락 시 소개 텍스트 타순 보강)
+ * 2순위: 박스스코어 라인으로 합성 (타순·오늘 성적 — 시즌 타율은 미제공이라 생략)
+ */
+private fun resolveBatterRecord(
+    batterRecord: Map<String, Any?>?,
+    boxscoreLine: BackendGamesRepository.BoxscoreBatter?,
+    group: AtBatGroup,
+): Map<String, Any?>? {
+    if (batterRecord != null) {
+        if (batterRecordInt(batterRecord, "batOrder", "battingOrder") == null) {
+            introBattingOrder(group)?.let { order ->
+                return batterRecord + ("batOrder" to order)
+            }
+        }
+        return batterRecord
+    }
+    val line = boxscoreLine ?: return null
+    return buildMap {
+        put("name", line.playerName)
+        put("pa", line.plateAppearances ?: (line.atBats + line.walks))
+        put("ab", line.atBats)
+        put("hit", line.hits)
+        put("run", line.runs)
+        put("rbi", line.rbi)
+        put("hr", line.homeRuns)
+        put("bb", line.walks)
+        put("so", line.strikeouts)
+        (introBattingOrder(group) ?: line.battingOrder)?.let { put("batOrder", it) }
+    }
+}
+
+/**
+ * 타석 그룹의 타자를 박스스코어 타자 라인과 이름으로 조인.
+ * 이닝의 초/말로 공격팀을 골라 동명이인(양 팀에 같은 이름) 오매칭을 피한다.
+ */
+private fun boxscoreBatterLine(
+    boxscore: BackendGamesRepository.GameBoxscore?,
+    group: AtBatGroup,
+): BackendGamesRepository.BoxscoreBatter? {
+    if (boxscore == null) return null
+    val name = group.batter?.trim().orEmpty()
+    if (name.isEmpty()) return null
+    val inning = group.inning ?: return null
+    val batters = when {
+        inning.contains("말") -> boxscore.homeBatters
+        inning.contains("초") -> boxscore.awayBatters
+        else -> return null
+    }
+    return batters.firstOrNull { it.playerName == name }
 }
 
 private fun batterMetaText(record: Map<String, Any?>?): String {
