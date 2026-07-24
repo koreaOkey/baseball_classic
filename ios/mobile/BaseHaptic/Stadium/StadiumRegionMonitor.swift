@@ -34,6 +34,16 @@ final class StadiumRegionMonitor: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// 기능 비활성 시 잔존 지오펜스 정리. 이전 버전에서 등록한 region 은
+    /// CoreLocation 에 앱 재실행 후에도 보존되므로 명시적으로 제거해야 한다.
+    func stopAndClear() {
+        for region in locationManager.monitoredRegions {
+            locationManager.stopMonitoring(for: region)
+        }
+        locationManager.stopUpdatingLocation()
+        didStart = false
+    }
+
     func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
         guard let stadium = StadiumDirectory.byCode(region.identifier) else { return }
         onEnterStadium?(stadium)

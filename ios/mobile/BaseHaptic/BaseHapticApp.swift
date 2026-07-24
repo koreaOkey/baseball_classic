@@ -1177,7 +1177,16 @@ struct ContentView: View {
     }
 
     // MARK: - Stadium Cheer
+    /// 구장 체크인/경기장 응원 기능 스위치. 아직 미오픈 — Android(SHOW_STADIUM_CHEER_TOGGLE=false)와
+    /// 동일하게 양 플랫폼 숨김 상태를 유지한다. 기능 오픈 시 true 로 전환.
+    private static let stadiumCheerFeatureEnabled = false
+
     private func activateStadiumCheer() {
+        guard Self.stadiumCheerFeatureEnabled else {
+            // 이전 버전에서 등록된 지오펜스·백그라운드 위치 갱신 잔존 정리
+            StadiumRegionMonitor.shared.stopAndClear()
+            return
+        }
         guard UserDefaults.standard.bool(forKey: "stadium_cheer_enabled") else { return }
         StadiumRegionMonitor.shared.onEnterStadium = { stadium in
             Task { @MainActor in
