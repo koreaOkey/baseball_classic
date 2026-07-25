@@ -501,6 +501,7 @@ class MainActivity : ComponentActivity() {
                 selectedTeam = selectedTeam,
                 teamDisplayNameStyle = teamDisplayNameStyle
             ) {
+                androidx.compose.foundation.layout.Box {
                 BaseHapticApp(
                     selectedTeam = selectedTeam,
                     onTeamChanged = { team ->
@@ -540,8 +541,11 @@ class MainActivity : ComponentActivity() {
                     onPersistLastSeenFeatureGuideVersion = ::persistLastSeenFeatureGuideVersion,
                     loadLastNotificationSettingsCheckVersion = ::loadLastNotificationSettingsCheckVersion,
                     onPersistLastNotificationSettingsCheckVersion = ::persistLastNotificationSettingsCheckVersion,
-                    onRequestNotificationPermission = { PushSetup.requestNotificationPermission(this) },
+                    onRequestNotificationPermission = { PushSetup.requestNotificationPermission(this@MainActivity) },
                 )
+                // 보상형 광고 로드 대기 안내 — 모든 광고 유닛(워치·잠금화면·테마) 공통
+                com.basehaptic.mobile.ui.components.RewardedAdLoadingOverlay()
+                }
             }
         }
     }

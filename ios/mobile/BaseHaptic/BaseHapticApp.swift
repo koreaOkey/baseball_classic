@@ -883,6 +883,27 @@ struct ContentView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        // 보상형 광고 로드 대기 안내 — 로드 완료 직전(isLoading 해제)에 자동으로 사라진다.
+        .overlay {
+            if rewardedAdManager.isLoading {
+                ZStack {
+                    Color.black.opacity(0.45)
+                        .ignoresSafeArea()
+                    VStack(spacing: AppSpacing.md) {
+                        ProgressView()
+                            .tint(.white)
+                        Text("곧 광고가 시작됩니다")
+                            .font(AppFont.captionBold)
+                            .foregroundColor(.white)
+                    }
+                    .padding(AppSpacing.xl)
+                    .background(AppColors.gray800)
+                    .cornerRadius(AppRadius.lg)
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: rewardedAdManager.isLoading)
         .onAppear {
             activateStadiumCheer()
         }
