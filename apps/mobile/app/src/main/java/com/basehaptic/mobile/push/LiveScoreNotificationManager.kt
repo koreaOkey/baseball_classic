@@ -21,6 +21,7 @@ import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 
 object LiveScoreNotificationManager {
     const val KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED = "lock_screen_live_score_enabled"
+    const val KEY_PROMOTED_STYLE_ENABLED = "live_score_promoted_style_enabled"
 
     private const val NOTIFICATION_ID = 1002
     private const val PREFS_NAME = "basehaptic_user_prefs"
@@ -29,6 +30,18 @@ object LiveScoreNotificationManager {
     fun isLockScreenCardEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, true)
+    }
+
+    fun isPromotedStyleEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_PROMOTED_STYLE_ENABLED, true)
+    }
+
+    // 설정 UI 노출 판단용: OS/제조사 조건만 본다.
+    // canPostPromotedNotifications()는 시스템 설정에서 사용자가 끌 수 있어 노출 조건에 넣지 않는다.
+    fun isPromotedStyleSupportedOnDevice(): Boolean {
+        return Build.VERSION.SDK_INT >= 36 &&
+            !Build.MANUFACTURER.equals("samsung", ignoreCase = true)
     }
 
     fun post(
@@ -99,9 +112,10 @@ object LiveScoreNotificationManager {
         // 승격이 안 되는 기기에서 promoted 스타일을 쓰면 기존 리치 커스텀 카드만 잃으므로 런타임 확인.
         // 삼성은 promoted를 Now Bar로 표현하는데 Now Bar 노출은 제품 결정상 쓰지 않기로 해서
         // 제조사 단위로 제외한다 (되돌리려면 이 조건 한 줄만 제거).
-        val canPromote = Build.VERSION.SDK_INT >= 36 &&
-            !Build.MANUFACTURER.equals("samsung", ignoreCase = true) &&
-            NotificationManagerCompat.from(context).canPostPromotedNotifications()
+        // 마지막 조건: 설정 탭에서 사용자가 이전(리치 카드) 스타일을 선택할 수 있다.
+        val canPromote = isPromotedStyleSupportedOnDevice() &&
+            NotificationManagerCompat.from(context).canPostPromotedNotifications() &&
+            isPromotedStyleEnabled(context)
         if (canPromote) {
             applyPromotedStyle(context, builder, state, eventLabel, latestEventDescription)
         } else {

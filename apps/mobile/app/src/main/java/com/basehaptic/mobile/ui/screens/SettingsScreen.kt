@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Icon
@@ -52,6 +53,7 @@ import com.basehaptic.mobile.data.model.EventFilterOption
 import com.basehaptic.mobile.data.model.EventNotificationChannel
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
+import com.basehaptic.mobile.push.LiveScoreNotificationManager
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.components.WatchInstallCard
 import com.basehaptic.mobile.wear.WatchCompanionStatus
@@ -376,6 +378,38 @@ fun SettingsScreen(
 
         item {
             EventFilterMatrix()
+        }
+
+        // promoted 스타일이 불가능한 기기(API<36·삼성)에서는 어차피 이전 카드만 나오므로 선택지를 숨긴다.
+        if (LiveScoreNotificationManager.isPromotedStyleSupportedOnDevice()) {
+            item {
+                Spacer(modifier = Modifier.height(AppSpacing.lg))
+                SettingsSection(title = "잠금화면 라이브 스코어")
+            }
+
+            item {
+                val context = LocalContext.current
+                val prefs = remember {
+                    context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+                }
+                var promotedStyleEnabled by remember {
+                    mutableStateOf(
+                        prefs.getBoolean(LiveScoreNotificationManager.KEY_PROMOTED_STYLE_ENABLED, true)
+                    )
+                }
+                SettingsItemWithSwitch(
+                    icon = Icons.Default.Lock,
+                    title = "새 잠금화면 스코어",
+                    subtitle = "끄면 이전 버전 라이브 스코어 카드로 표시",
+                    checked = promotedStyleEnabled,
+                    onCheckedChange = {
+                        promotedStyleEnabled = it
+                        prefs.edit()
+                            .putBoolean(LiveScoreNotificationManager.KEY_PROMOTED_STYLE_ENABLED, it)
+                            .apply()
+                    }
+                )
+            }
         }
 
         // TODO(stadium-cheer): Android 활성화 시 SHOW_STADIUM_CHEER_TOGGLE=true로 전환해 UI 노출.
