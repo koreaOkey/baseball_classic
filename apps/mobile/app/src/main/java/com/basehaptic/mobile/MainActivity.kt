@@ -89,7 +89,10 @@ import com.basehaptic.mobile.ui.components.RewardedAdResult
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.RequestConfiguration
 import java.time.LocalDate
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 
 private const val REQUEST_CODE_IN_APP_UPDATE = 9001
@@ -1006,11 +1009,16 @@ fun BaseHapticApp(
             }
         }.getOrNull()
         if (freshGames != null) {
-            todayGamesSnapshot = hydrateMissingGameWeather(
+            // 날씨 하이드레이션(경기당 네트워크 호출, KMA 지연 시 수 초)을 기다리지 않고
+            // 경기 데이터를 먼저 페인트한다. 이전 스냅샷의 날씨는 동기적으로 보존.
+            val paintedGames = mergePreservedGameWeather(
                 games = freshGames,
                 previousGames = todayGamesSnapshot
             )
+            todayGamesSnapshot = paintedGames
             todayGamesLoadedDate = LocalDate.now()
+
+            todayGamesSnapshot = hydrateMissingGameWeather(paintedGames)
         }
     }
 
@@ -1571,28 +1579,41 @@ internal fun BackendGamesRepository.GameWeatherHourly.toGameStartWeatherSummary(
     )
 }
 
-private suspend fun hydrateMissingGameWeather(
+private fun mergePreservedGameWeather(
     games: List<Game>,
     previousGames: List<Game>
-): List<Game> = withContext(Dispatchers.IO) {
+): List<Game> {
     val previousWeatherByGameId = previousGames
         .mapNotNull { game -> game.weather?.let { weather -> game.id to weather } }
         .toMap()
 
-    games.map { game ->
-        if (game.weather != null || (game.status != GameStatus.SCHEDULED && game.status != GameStatus.LIVE)) {
-            game
+    return games.map { game ->
+        if (game.weather == null) {
+            previousWeatherByGameId[game.id]?.let { game.copy(weather = it) } ?: game
         } else {
-            val preservedWeather = previousWeatherByGameId[game.id]
-            val fetchedWeather = preservedWeather ?: runCatching {
-                BackendGamesRepository.fetchGameHourlyWeather(
-                    gameId = game.id,
-                    targetDate = LocalDate.now()
-                )?.toGameStartWeatherSummary()
-            }.getOrNull()
-            if (fetchedWeather != null) game.copy(weather = fetchedWeather) else game
+            game
         }
     }
+}
+
+private suspend fun hydrateMissingGameWeather(
+    games: List<Game>
+): List<Game> = withContext(Dispatchers.IO) {
+    games.map { game ->
+        if (game.weather != null || (game.status != GameStatus.SCHEDULED && game.status != GameStatus.LIVE)) {
+            CompletableDeferred(game)
+        } else {
+            async {
+                val fetchedWeather = runCatching {
+                    BackendGamesRepository.fetchGameHourlyWeather(
+                        gameId = game.id,
+                        targetDate = LocalDate.now()
+                    )?.toGameStartWeatherSummary()
+                }.getOrNull()
+                if (fetchedWeather != null) game.copy(weather = fetchedWeather) else game
+            }
+        }
+    }.awaitAll()
 }
 
 @Composable
