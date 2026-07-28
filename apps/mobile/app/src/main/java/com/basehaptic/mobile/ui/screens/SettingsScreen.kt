@@ -380,7 +380,7 @@ fun SettingsScreen(
             EventFilterMatrix()
         }
 
-        // promoted 스타일이 불가능한 기기(API<36·삼성)에서는 어차피 이전 카드만 나오므로 선택지를 숨긴다.
+        // promoted 스타일이 불가능한 기기(API<36)에서는 어차피 이전 카드만 나오므로 선택지를 숨긴다.
         if (LiveScoreNotificationManager.isPromotedStyleSupportedOnDevice()) {
             item {
                 Spacer(modifier = Modifier.height(AppSpacing.lg))
@@ -393,14 +393,12 @@ fun SettingsScreen(
                     context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
                 }
                 var promotedStyleEnabled by remember {
-                    mutableStateOf(
-                        prefs.getBoolean(LiveScoreNotificationManager.KEY_PROMOTED_STYLE_ENABLED, true)
-                    )
+                    mutableStateOf(LiveScoreNotificationManager.isPromotedStyleEnabled(context))
                 }
                 SettingsItemWithSwitch(
                     icon = Icons.Default.Lock,
-                    title = "새 잠금화면 스코어",
-                    subtitle = "끄면 이전 버전 라이브 스코어 카드로 표시",
+                    title = "잠금화면 고정 스코어 (promoted)",
+                    subtitle = "끄면 이전 버전(ongoing) 라이브 스코어 카드로 표시",
                     checked = promotedStyleEnabled,
                     onCheckedChange = {
                         promotedStyleEnabled = it

@@ -27,21 +27,26 @@ object LiveScoreNotificationManager {
     private const val PREFS_NAME = "basehaptic_user_prefs"
     private const val KEY_TEAM_DISPLAY_NAME_STYLE = "team_display_name_style"
 
+    // 테스트 도구에서 승격 조건과 무관하게 특정 스타일을 강제 게시할 때 사용.
+    enum class Style { PROMOTED, CLASSIC }
+
     fun isLockScreenCardEnabled(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, true)
     }
 
+    // 삼성은 promoted가 Now Bar로 표현되는데 Now Bar 노출은 기본으로 쓰지 않기로 한
+    // 제품 결정이 있어, 하드 블록 대신 기본값만 OFF로 두고 사용자가 켤 수 있게 한다.
     fun isPromotedStyleEnabled(context: Context): Boolean {
+        val defaultEnabled = !Build.MANUFACTURER.equals("samsung", ignoreCase = true)
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_PROMOTED_STYLE_ENABLED, true)
+            .getBoolean(KEY_PROMOTED_STYLE_ENABLED, defaultEnabled)
     }
 
-    // 설정 UI 노출 판단용: OS/제조사 조건만 본다.
+    // 설정 UI 노출 판단용: OS 조건만 본다.
     // canPostPromotedNotifications()는 시스템 설정에서 사용자가 끌 수 있어 노출 조건에 넣지 않는다.
     fun isPromotedStyleSupportedOnDevice(): Boolean {
-        return Build.VERSION.SDK_INT >= 36 &&
-            !Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+        return Build.VERSION.SDK_INT >= 36
     }
 
     fun post(
@@ -49,7 +54,8 @@ object LiveScoreNotificationManager {
         state: LiveGameState,
         latestEventType: String? = state.lastEventType,
         latestEventDescription: String? = null,
-        highlightEvent: Boolean = false
+        highlightEvent: Boolean = false,
+        forceStyle: Style? = null
     ): Boolean {
         if (!isLockScreenCardEnabled(context)) {
             remove(context)
@@ -110,12 +116,16 @@ object LiveScoreNotificationManager {
 
         // 삼성 One UI 8.0처럼 API 36이어도 서드파티 승격을 막아둔 기기가 있다.
         // 승격이 안 되는 기기에서 promoted 스타일을 쓰면 기존 리치 커스텀 카드만 잃으므로 런타임 확인.
-        // 삼성은 promoted를 Now Bar로 표현하는데 Now Bar 노출은 제품 결정상 쓰지 않기로 해서
-        // 제조사 단위로 제외한다 (되돌리려면 이 조건 한 줄만 제거).
-        // 마지막 조건: 설정 탭에서 사용자가 이전(리치 카드) 스타일을 선택할 수 있다.
-        val canPromote = isPromotedStyleSupportedOnDevice() &&
-            NotificationManagerCompat.from(context).canPostPromotedNotifications() &&
-            isPromotedStyleEnabled(context)
+        // 마지막 조건: 설정 탭에서 사용자가 promoted/이전 카드 스타일을 선택할 수 있다(삼성 기본 OFF).
+        // forceStyle은 테스트 도구 전용 — 승격 불가 기기에서 PROMOTED를 강제하면
+        // 승격 없는 시스템 템플릿(BigText) 형태로만 보인다.
+        val canPromote = when (forceStyle) {
+            Style.PROMOTED -> true
+            Style.CLASSIC -> false
+            null -> isPromotedStyleSupportedOnDevice() &&
+                NotificationManagerCompat.from(context).canPostPromotedNotifications() &&
+                isPromotedStyleEnabled(context)
+        }
         if (canPromote) {
             applyPromotedStyle(context, builder, state, eventLabel, latestEventDescription)
         } else {

@@ -7,10 +7,13 @@ Android 16 promoted Live Update 잠금화면 스코어(`add-android-promoted-liv
 ## What Changes
 
 - `LiveScoreNotificationManager`:
-  - 신규 pref `live_score_promoted_style_enabled` (기본 true = 새 스타일).
+  - 신규 pref `live_score_promoted_style_enabled` (기본: 비삼성 true / 삼성 false).
+  - **삼성 하드 블록 제거** — Now Bar 미노출 제품 결정은 삼성 기본값 OFF로 유지하되, 사용자가 켜는 것은 허용. (One UI 8.0은 어차피 `canPostPromotedNotifications()=false`라 켜도 이전 카드 폴백.)
   - `canPromote` 분기에 `isPromotedStyleEnabled()` 조건 추가 — 꺼져 있으면 API 36+ 기기에서도 기존 리치 커스텀 카드로 렌더링.
-  - `isPromotedStyleSupportedOnDevice()` 신설 — 설정 UI 노출 판단용(API 36+ && 비삼성). `canPostPromotedNotifications()`는 시스템 설정에 따라 변할 수 있어 노출 조건에서 제외.
-- `SettingsScreen`: "알림 이벤트" 매트릭스 아래 신규 섹션 "잠금화면 라이브 스코어" + 스위치 "새 잠금화면 스코어"(끄면 이전 버전 카드). promoted 미지원 기기(API<36·삼성)에서는 섹션 자체를 숨김(어차피 이전 카드만 동작).
+  - `isPromotedStyleSupportedOnDevice()` 신설 — 설정 UI 노출 판단용(API 36+). `canPostPromotedNotifications()`는 시스템 설정에 따라 변할 수 있어 노출 조건에서 제외.
+  - `post(forceStyle: Style?)` — 테스트 도구 전용. PROMOTED/CLASSIC을 승격 조건·설정과 무관하게 강제 게시(승격 미지원 기기의 PROMOTED는 비승격 시스템 템플릿으로만 표시).
+- `SettingsScreen`: "알림 이벤트" 매트릭스 아래 신규 섹션 "잠금화면 라이브 스코어" + 스위치 "잠금화면 고정 스코어 (promoted)"(끄면 이전 ongoing 카드). API<36 기기에서는 섹션 숨김.
+- `WatchTestScreen`: 라이브 스코어 미리보기 카드에 "Promoted 버전"/"Ongoing 버전" 강제 테스트 버튼 추가(기존 "Live Score 시작"은 설정 토글을 따름).
 
 ## Capabilities
 

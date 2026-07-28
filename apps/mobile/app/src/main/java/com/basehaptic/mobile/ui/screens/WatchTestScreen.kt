@@ -235,6 +235,9 @@ fun WatchTestScreen(
     var isSimulating by remember { mutableStateOf(false) }
     var isLiveScorePreviewActive by remember { mutableStateOf(false) }
     var pendingLiveScorePreviewAlert by remember { mutableStateOf<Boolean?>(null) }
+    var pendingLiveScorePreviewStyle by remember {
+        mutableStateOf<LiveScoreNotificationManager.Style?>(null)
+    }
     var simIndex by remember { mutableIntStateOf(0) }
 
     fun addLog(msg: String) {
@@ -296,7 +299,8 @@ fun WatchTestScreen(
         state: SimGameState,
         eventType: String?,
         eventText: String?,
-        highlight: Boolean
+        highlight: Boolean,
+        forceStyle: LiveScoreNotificationManager.Style? = null
     ): Boolean {
         val homeTeam = Team.fromString(state.homeTeam).takeIf { it != Team.NONE } ?: Team.KIA
         val awayTeam = Team.fromString(state.awayTeam).takeIf { it != Team.NONE } ?: Team.SSG
@@ -326,11 +330,15 @@ fun WatchTestScreen(
             state = previewState,
             latestEventType = eventType,
             latestEventDescription = eventText,
-            highlightEvent = highlight
+            highlightEvent = highlight,
+            forceStyle = forceStyle
         )
     }
 
-    fun postLiveScorePreview(alert: Boolean = false) {
+    fun postLiveScorePreview(
+        alert: Boolean = false,
+        forceStyle: LiveScoreNotificationManager.Style? = null
+    ) {
         context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
             .edit()
             .putBoolean(LiveScoreNotificationManager.KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, true)
@@ -364,13 +372,18 @@ fun WatchTestScreen(
             state = nextState,
             eventType = eventType,
             eventText = eventText,
-            highlight = alert
+            highlight = alert,
+            forceStyle = forceStyle
         )
         addLog(
             when {
-                posted && alert -> "[LIVE_SCORE] 득점 강조 알림 갱신"
-                posted -> "[LIVE_SCORE] 알림 미리보기 시작 · 자동 시뮬레이션과 함께 갱신"
-                else -> "[LIVE_SCORE] 알림 권한이 없어 게시하지 못함"
+                !posted -> "[LIVE_SCORE] 알림 권한이 없어 게시하지 못함"
+                forceStyle == LiveScoreNotificationManager.Style.PROMOTED ->
+                    "[LIVE_SCORE] promoted 버전 강제 미리보기 (승격 미지원 기기는 시스템 템플릿으로만 표시)"
+                forceStyle == LiveScoreNotificationManager.Style.CLASSIC ->
+                    "[LIVE_SCORE] 이전 ongoing 카드 강제 미리보기"
+                alert -> "[LIVE_SCORE] 득점 강조 알림 갱신"
+                else -> "[LIVE_SCORE] 알림 미리보기 시작 · 자동 시뮬레이션과 함께 갱신"
             }
         )
     }
@@ -387,20 +400,26 @@ fun WatchTestScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         val alert = pendingLiveScorePreviewAlert ?: false
+        val forceStyle = pendingLiveScorePreviewStyle
         pendingLiveScorePreviewAlert = null
+        pendingLiveScorePreviewStyle = null
         if (granted) {
-            postLiveScorePreview(alert = alert)
+            postLiveScorePreview(alert = alert, forceStyle = forceStyle)
         } else {
             addLog("[LIVE_SCORE] 알림 권한이 거부되어 미리보기를 표시하지 못함")
         }
     }
 
-    fun requestOrPostLiveScorePreview(alert: Boolean) {
+    fun requestOrPostLiveScorePreview(
+        alert: Boolean,
+        forceStyle: LiveScoreNotificationManager.Style? = null
+    ) {
         if (hasNotificationPostPermission()) {
-            postLiveScorePreview(alert = alert)
+            postLiveScorePreview(alert = alert, forceStyle = forceStyle)
             return
         }
         pendingLiveScorePreviewAlert = alert
+        pendingLiveScorePreviewStyle = forceStyle
         addLog("[LIVE_SCORE] 알림 권한 요청")
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
@@ -613,6 +632,38 @@ fun WatchTestScreen(
                                 shape = AppShapes.sm
                             ) {
                                 Text("득점 강조", color = Color.Black, style = AppFont.bodyBold)
+                            }
+                        }
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        // 설정 토글·승격 조건과 무관하게 각 스타일을 강제 게시해 비교하는 버튼.
+                        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
+                            OutlinedButton(
+                                onClick = {
+                                    requestOrPostLiveScorePreview(
+                                        alert = false,
+                                        forceStyle = LiveScoreNotificationManager.Style.PROMOTED
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(AppSpacing.buttonHeight),
+                                shape = AppShapes.sm
+                            ) {
+                                Text("Promoted 버전", color = Color.White, style = AppFont.bodyBold)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    requestOrPostLiveScorePreview(
+                                        alert = false,
+                                        forceStyle = LiveScoreNotificationManager.Style.CLASSIC
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(AppSpacing.buttonHeight),
+                                shape = AppShapes.sm
+                            ) {
+                                Text("Ongoing 버전", color = Color.White, style = AppFont.bodyBold)
                             }
                         }
                         Spacer(Modifier.height(AppSpacing.sm))
