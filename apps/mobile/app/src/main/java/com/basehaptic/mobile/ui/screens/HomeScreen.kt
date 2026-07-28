@@ -52,6 +52,8 @@ import com.basehaptic.mobile.data.model.*
 import com.basehaptic.mobile.toGameStartWeatherSummary
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.*
+import com.basehaptic.mobile.venting.VentingFeatureFlag
+import com.basehaptic.mobile.venting.ui.VentingHomeCardContainer
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -79,15 +81,25 @@ fun HomeScreen(
     onSelectGame: (Game) -> Unit
 ) {
     val teamDisplayNameStyle = LocalTeamDisplayNameStyle.current
+    val context = LocalContext.current
     val games = remember(todayGames, selectedTeam, showUpdateHighlights) {
         val sortedGames = sortHomeGames(todayGames)
-        if (showUpdateHighlights && sortedGames.isEmpty()) {
-            listOf(updateHighlightSampleGame(selectedTeam))
+        // 분풀이 모드 확인용 (DEBUG 토글): 마이팀이 설정돼 있고 완료된 마이팀 경기가 없으면
+        // 마이팀 패배 완료 경기(목업) 하나를 홈 상단에 주입한다 (iOS HomeScreen 동일).
+        val withVentingMock = if (
+            VentingFeatureFlag.isEnabled(context) && selectedTeam != Team.NONE &&
+            sortedGames.none { it.status == GameStatus.FINISHED && it.isMyTeam }
+        ) {
+            listOf(ventingMockFinishedGame(selectedTeam)) + sortedGames
         } else {
             sortedGames
         }
+        if (showUpdateHighlights && withVentingMock.isEmpty()) {
+            listOf(updateHighlightSampleGame(selectedTeam))
+        } else {
+            withVentingMock
+        }
     }
-    val context = LocalContext.current
     var teamRecordStats by remember(selectedTeam) {
         mutableStateOf<BackendGamesRepository.TeamRecordStats?>(null)
     }
@@ -558,6 +570,11 @@ fun HomeScreen(
                     color = Color.White
                 )
             }
+        }
+
+        // \uBD84\uD480\uC774 \uBAA8\uB4DC \uD648\uCE74\uB4DC (DEBUG + \uD1A0\uAE00 + \uB9C8\uC774\uD300 \uD328\uBC30 \uB2F9\uC77C\uC5D0\uB9CC \uB80C\uB354\uB9C1, iOS \uB3D9\uC77C \uC704\uCE58)
+        item {
+            VentingHomeCardContainer(myTeam = selectedTeam)
         }
 
         // Games List
@@ -1877,6 +1894,23 @@ private enum class UpdateHighlightStep(
     SCORE(
         title = "점수 보기",
         body = "경기 카드에서 최신 점수와 진행 상황을 바로 확인할 수 있어요."
+    )
+}
+
+/** 분풀이 확인용 마이팀 패배 완료 경기 (목업 컨텍스트의 3:7 스코어와 일치). */
+private fun ventingMockFinishedGame(selectedTeam: Team): Game {
+    val awayTeam = if (selectedTeam == Team.SSG) Team.LG else Team.SSG
+    return Game(
+        id = "venting-mock-finished-game",
+        homeTeam = selectedTeam.teamName,
+        awayTeam = awayTeam.teamName,
+        homeTeamId = selectedTeam,
+        awayTeamId = awayTeam,
+        homeScore = 3,
+        awayScore = 7,
+        inning = "경기 종료",
+        status = GameStatus.FINISHED,
+        isMyTeam = true
     )
 }
 

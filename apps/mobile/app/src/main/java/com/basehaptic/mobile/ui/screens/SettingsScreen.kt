@@ -461,6 +461,30 @@ fun SettingsScreen(
             )
         }
 
+        if (BuildConfig.DEBUG) {
+            item {
+                Spacer(modifier = Modifier.height(AppSpacing.lg))
+                SettingsSection(title = "DEBUG")
+            }
+
+            item {
+                val context = LocalContext.current
+                var ventingModeEnabled by remember {
+                    mutableStateOf(com.basehaptic.mobile.venting.VentingFeatureFlag.isEnabled(context))
+                }
+                SettingsItemWithSwitch(
+                    icon = Icons.Default.Build,
+                    title = "분풀이 모드",
+                    subtitle = "DEBUG 전용 피처",
+                    checked = ventingModeEnabled,
+                    onCheckedChange = {
+                        ventingModeEnabled = it
+                        com.basehaptic.mobile.venting.VentingFeatureFlag.setEnabled(context, it)
+                    }
+                )
+            }
+        }
+
         item {
             Spacer(modifier = Modifier.height(AppSpacing.lg))
             SettingsSection(title = "정보")
