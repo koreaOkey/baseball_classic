@@ -3,6 +3,10 @@ package com.basehaptic.mobile.push
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.RelativeSizeSpan
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -70,12 +74,6 @@ object LiveScoreNotificationManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val compactView = buildCompactRemoteViews(
-            context = context,
-            state = state,
-            awayName = awayName,
-            homeName = homeName
-        )
         val shouldHighlight = highlightEvent &&
             EventFilterGate.isAllowed(context, latestEventType, EventNotificationChannel.LOCK_SCREEN)
         val channelId = if (shouldHighlight) {
@@ -83,27 +81,10 @@ object LiveScoreNotificationManager {
         } else {
             NotificationChannels.LIVE_SCORE_ID
         }
-        val expandedView = buildExpandedRemoteViews(
-            context = context,
-            state = state,
-            awayName = awayName,
-            homeName = homeName,
-            statusText = statusText,
-            eventType = latestEventType,
-            eventLabel = eventLabel,
-            latestEventDescription = latestEventDescription,
-            highlightEvent = shouldHighlight
-        )
 
-        val notification = NotificationCompat.Builder(context, channelId)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText(text)
-            .setSubText("라이브 스코어")
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(compactView)
-            .setCustomBigContentView(expandedView)
-            .setCustomHeadsUpContentView(expandedView)
             .setOngoing(true)
             .setOnlyAlertOnce(!shouldHighlight)
             .setShowWhen(false)
@@ -113,7 +94,43 @@ object LiveScoreNotificationManager {
             .setDefaults(if (shouldHighlight) NotificationCompat.DEFAULT_ALL else 0)
             .setVibrate(if (shouldHighlight) longArrayOf(0, 180, 80, 180) else null)
             .setContentIntent(pendingIntent)
-            .build()
+
+        // 삼성 One UI 8.0처럼 API 36이어도 서드파티 승격을 막아둔 기기가 있다.
+        // 승격이 안 되는 기기에서 promoted 스타일을 쓰면 기존 리치 커스텀 카드만 잃으므로 런타임 확인.
+        // 삼성은 promoted를 Now Bar로 표현하는데 Now Bar 노출은 제품 결정상 쓰지 않기로 해서
+        // 제조사 단위로 제외한다 (되돌리려면 이 조건 한 줄만 제거).
+        val canPromote = Build.VERSION.SDK_INT >= 36 &&
+            !Build.MANUFACTURER.equals("samsung", ignoreCase = true) &&
+            NotificationManagerCompat.from(context).canPostPromotedNotifications()
+        if (canPromote) {
+            applyPromotedStyle(context, builder, state, eventLabel, latestEventDescription)
+        } else {
+            val compactView = buildCompactRemoteViews(
+                context = context,
+                state = state,
+                awayName = awayName,
+                homeName = homeName
+            )
+            val expandedView = buildExpandedRemoteViews(
+                context = context,
+                state = state,
+                awayName = awayName,
+                homeName = homeName,
+                statusText = statusText,
+                eventType = latestEventType,
+                eventLabel = eventLabel,
+                latestEventDescription = latestEventDescription,
+                highlightEvent = shouldHighlight
+            )
+            builder.setContentText(text)
+                .setSubText("라이브 스코어")
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+                .setCustomContentView(compactView)
+                .setCustomBigContentView(expandedView)
+                .setCustomHeadsUpContentView(expandedView)
+        }
+
+        val notification = builder.build()
 
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
@@ -126,6 +143,49 @@ object LiveScoreNotificationManager {
 
     fun remove(context: Context) {
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+    }
+
+    // Android 16+ promoted Live Update: 커스텀 뷰가 금지되어 시스템 템플릿 + largeIcon 비트맵으로 구성.
+    // 잠금화면 최상단 고정 + 상태바 칩(스코어) 노출 대상.
+    // largeIcon = 베이스 다이아몬드. 최근 이벤트가 있으면 그 설명이 첫 줄, BSO·타자/투수는 아랫줄.
+    private fun applyPromotedStyle(
+        context: Context,
+        builder: NotificationCompat.Builder,
+        state: LiveGameState,
+        eventLabel: String,
+        eventDescription: String?
+    ) {
+        val eventLine = eventDescription?.trim()?.takeIf { it.isNotBlank() }?.take(42)
+            ?: eventLabel.takeIf { it.isNotBlank() }
+        val bsoLine = shrunk(bsoEmojiLine(state))
+        val playersLine = "타자 ${state.batter.ifBlank { "-" }} · 투수 ${state.pitcher.ifBlank { "-" }}"
+        val expandedText = SpannableStringBuilder()
+        eventLine?.let { expandedText.append(it).append("\n") }
+        expandedText.append(bsoLine).append("\n").append(playersLine)
+        builder.setSubText(state.inning.ifBlank { "라이브" })
+            .setContentText(eventLine ?: bsoLine)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
+            .setLargeIcon(LiveScorePromotedIconRenderer.render(state))
+            .setShortCriticalText("${state.awayScore}:${state.homeScore}")
+            .setRequestPromotedOngoing(true)
+    }
+
+    // 이모지 원이 텍스트 폰트 크기를 그대로 따라 커 보여서 한 단계 줄인다.
+    // 크기 span을 무시하는 기기에서는 원래 크기로 표시될 뿐 깨지지 않는다.
+    private fun shrunk(text: String): CharSequence {
+        return SpannableStringBuilder(text).apply {
+            setSpan(RelativeSizeSpan(0.8f), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
+    private fun bsoEmojiLine(state: LiveGameState): String {
+        fun slots(filled: Int, total: Int, emoji: String): String {
+            val active = filled.coerceIn(0, total)
+            // 빈 슬롯은 이모지가 아닌 텍스트 글리프 ○(U+25CB) — 속이 투명해 카드 배경이 비치고
+            // 테두리는 본문 텍스트 색을 따른다. 이모지 원 세트에는 테두리만 있는 중립색이 없다.
+            return emoji.repeat(active) + "○".repeat(total - active)
+        }
+        return "B ${slots(state.ball, 3, "🟢")} S ${slots(state.strike, 2, "🟡")} O ${slots(state.out, 2, "🔴")}"
     }
 
     private fun eventTypeToKorean(type: String?): String {

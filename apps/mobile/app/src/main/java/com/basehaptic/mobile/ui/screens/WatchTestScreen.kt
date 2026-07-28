@@ -640,6 +640,33 @@ fun WatchTestScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                        Text("잠금화면 고정 (Android 16+)", style = AppFont.bodyBold, color = Gray300)
+                        Spacer(Modifier.height(AppSpacing.xs))
+                        val canPromote = Build.VERSION.SDK_INT >= 36 &&
+                            NotificationManagerCompat.from(context).canPostPromotedNotifications()
+                        Text(
+                            when {
+                                canPromote ->
+                                    "이 기기는 promoted Live Update를 지원합니다. 위의 Live Score 시작 버튼이 잠금화면 최상단 고정 카드 + 상태바 칩으로 표시됩니다."
+                                Build.VERSION.SDK_INT >= 36 ->
+                                    "Android 16 기기지만 시스템이 이 앱의 승격을 허용하지 않아(제조사 미개방 또는 설정 꺼짐) 기존 커스텀 카드로 표시됩니다."
+                                else ->
+                                    "이 기기(API ${Build.VERSION.SDK_INT})는 Android 16 미만이라 기존 커스텀 카드로 표시됩니다."
+                            },
+                            style = AppFont.caption,
+                            color = Gray500
+                        )
+                    }
+                }
+            }
+
+            item {
+                Surface(
+                    shape = AppShapes.md,
+                    color = Gray900,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
                         Text("현장 응원 테스트", style = AppFont.bodyBold, color = Gray300)
                         Spacer(Modifier.height(AppSpacing.xs))
                         Text(

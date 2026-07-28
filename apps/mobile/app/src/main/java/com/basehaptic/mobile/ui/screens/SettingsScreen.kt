@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Group
@@ -446,6 +447,16 @@ fun SettingsScreen(
                             null
                         }
                 }
+            )
+        }
+
+        item {
+            // 워치 미연결 상태에서도 테스트 화면(잠금화면 알림·이벤트 시뮬레이션)에 들어갈 수 있는 진입점
+            SettingsItem(
+                icon = Icons.Default.Build,
+                title = "테스트 도구",
+                subtitle = "개발자용 · 워치/잠금화면 알림 테스트",
+                onClick = onOpenWatchTest
             )
         }
 
