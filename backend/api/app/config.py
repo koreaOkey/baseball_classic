@@ -47,6 +47,9 @@ class Settings(BaseSettings):
 
     # FCM (Firebase Cloud Messaging)
     fcm_service_account_json: str | None = None  # Service Account JSON 전체를 문자열로
+    # 시도당 HTTP 타임아웃. SDK 기본(120초)은 구글 방면 네트워크 장애 시
+    # 내부 재시도까지 겹쳐 스레드를 분 단위로 점유하므로 짧게 제한한다.
+    fcm_http_timeout_sec: int = 10
 
     # Public Data Portal / KMA short-term forecast
     weather_service_key: str = ""

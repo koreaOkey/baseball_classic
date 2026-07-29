@@ -46,7 +46,10 @@ def _ensure_initialized() -> bool:
             cred_dict = json.loads(raw)
             cred = credentials.Certificate(cred_dict)
             if not firebase_admin._apps:
-                firebase_admin.initialize_app(cred)
+                firebase_admin.initialize_app(
+                    cred,
+                    options={"httpTimeout": max(1, settings.fcm_http_timeout_sec)},
+                )
             _initialized = True
             logger.info("[FCM] firebase_admin initialized project=%s", cred_dict.get("project_id"))
             return True
