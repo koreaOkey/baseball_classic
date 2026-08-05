@@ -69,6 +69,7 @@ import com.basehaptic.mobile.ui.theme.Green400
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Red400
 import com.basehaptic.mobile.ui.theme.Yellow400
+import com.basehaptic.mobile.ui.theme.Red500
 import com.basehaptic.mobile.wear.WearGameSyncManager
 import com.basehaptic.mobile.push.NotificationChannels
 import androidx.core.app.NotificationCompat
@@ -735,6 +736,43 @@ fun WatchTestScreen(
                             shape = AppShapes.sm
                         ) {
                             Text("응원 화면 테스트", style = AppFont.bodyBold)
+                        }
+                    }
+                }
+            }
+
+            item {
+                Surface(
+                    shape = AppShapes.md,
+                    color = Gray900,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(AppSpacing.lg)) {
+                        Text("워치 분풀이 테스트", style = AppFont.bodyBold, color = Gray300)
+                        Spacer(Modifier.height(AppSpacing.xs))
+                        Text(
+                            text = "워치에 분풀이 룸(탭·베젤 연타로 인형 완파)을 즉시 띄웁니다. 워치 앱이 꺼져 있으면 자동 실행을 시도합니다.",
+                            style = AppFont.caption,
+                            color = Gray500
+                        )
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        Button(
+                            onClick = {
+                                WearGameSyncManager.sendVentingTrigger(
+                                    context = context,
+                                    gameId = "test_venting",
+                                    targetLabel = "감독",
+                                    eventDescription = "지금까지의 경기 운영 아쉬움"
+                                )
+                                addLog("[VENTING] 워치 분풀이 룸 트리거 전송")
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(AppSpacing.buttonHeight),
+                            colors = ButtonDefaults.buttonColors(containerColor = Red500),
+                            shape = AppShapes.sm
+                        ) {
+                            Text("워치 분풀이 룸 열기", style = AppFont.bodyBold)
                         }
                     }
                 }

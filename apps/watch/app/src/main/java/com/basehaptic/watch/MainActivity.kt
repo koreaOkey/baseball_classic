@@ -74,6 +74,8 @@ import com.basehaptic.watch.ui.components.NoGameScreen
 import com.basehaptic.watch.ui.StadiumCheerOverlayCoordinator
 import com.basehaptic.watch.ui.StadiumCheerScreen
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
+import com.basehaptic.watch.venting.WatchVentingRequest
+import com.basehaptic.watch.venting.WatchVentingScreen
 import com.basehaptic.watch.ui.theme.Gray950
 import com.basehaptic.watch.ui.theme.WatchTeamTheme
 import com.basehaptic.watch.ui.theme.WatchTeamThemes
@@ -267,6 +269,7 @@ fun WatchApp(isAmbient: Boolean = false) {
     var gameData by remember { mutableStateOf(readGameDataFromPrefs(context)) }
     var latestEvent by remember { mutableStateOf(readLatestEventFromPrefs(context)) }
     var watchSyncPrompt by remember { mutableStateOf(readWatchSyncPromptFromPrefs(context)) }
+    var ventingRequest by remember { mutableStateOf(readPendingVentingRequest(context)) }
     // 동기화 수락 직후 "폰에서 확인하세요" 안내 (광고는 폰에서 진행)
     var checkPhoneNoticeToken by remember { mutableStateOf<Long?>(null) }
     var isHomeRunTransitionVisible by remember { mutableStateOf(false) }
@@ -323,6 +326,7 @@ fun WatchApp(isAmbient: Boolean = false) {
             addAction(DataLayerListenerService.ACTION_GAME_UPDATED)
             addAction(DataLayerListenerService.ACTION_WATCH_SYNC_PROMPT)
             addAction(DataLayerListenerService.ACTION_SETTINGS_UPDATED)
+            addAction(DataLayerListenerService.ACTION_VENTING_TRIGGER)
         }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -347,6 +351,9 @@ fun WatchApp(isAmbient: Boolean = false) {
                     }
                     DataLayerListenerService.ACTION_WATCH_SYNC_PROMPT -> {
                         watchSyncPrompt = readWatchSyncPromptFromPrefs(context)
+                    }
+                    DataLayerListenerService.ACTION_VENTING_TRIGGER -> {
+                        ventingRequest = readPendingVentingRequest(context)
                     }
                     DataLayerListenerService.ACTION_SETTINGS_UPDATED -> {
                         eventVideoEnabled = settingsPrefs.getBoolean(
@@ -627,6 +634,18 @@ fun WatchApp(isAmbient: Boolean = false) {
                     )
                 }
 
+                // 분풀이 룸 오버레이 — 폰 테스트 도구 트리거로 열림 (최상위)
+                val venting = ventingRequest
+                if (venting != null) {
+                    WatchVentingScreen(
+                        request = venting,
+                        onClose = {
+                            clearPendingVentingRequest(context)
+                            ventingRequest = null
+                        }
+                    )
+                }
+
                 // 수락 직후 안내 — 광고 진행을 위해 폰 확인 유도 (4초 후 자동 사라짐)
                 val noticeToken = checkPhoneNoticeToken
                 if (noticeToken != null) {
@@ -768,6 +787,36 @@ private fun clearWatchSyncPrompt(context: Context) {
         .remove(DataLayerListenerService.KEY_PENDING_SYNC_HOME_TEAM)
         .remove(DataLayerListenerService.KEY_PENDING_SYNC_AWAY_TEAM)
         .remove(DataLayerListenerService.KEY_PENDING_SYNC_MY_TEAM)
+        .apply()
+}
+
+/** 유효 시간(10분) 이내의 pending 분풀이 트리거만 반환 — 뒤늦게 앱을 열었을 때 낡은 룸이 뜨는 것 방지. */
+private fun readPendingVentingRequest(context: Context): WatchVentingRequest? {
+    val prefs = context.getSharedPreferences(
+        DataLayerListenerService.GAME_PREFS_NAME,
+        Context.MODE_PRIVATE
+    )
+    val gameId = prefs.getString(DataLayerListenerService.KEY_PENDING_VENTING_GAME_ID, "") ?: ""
+    if (gameId.isBlank()) return null
+    val requestedAt = prefs.getLong(DataLayerListenerService.KEY_PENDING_VENTING_AT, 0L)
+    if (System.currentTimeMillis() - requestedAt > 10 * 60 * 1000L) return null
+    return WatchVentingRequest(
+        gameId = gameId,
+        targetLabel = prefs.getString(DataLayerListenerService.KEY_PENDING_VENTING_TARGET_LABEL, "감독") ?: "감독",
+        eventDescription = prefs.getString(DataLayerListenerService.KEY_PENDING_VENTING_EVENT_DESC, "") ?: "",
+        requestedAtMs = requestedAt
+    )
+}
+
+private fun clearPendingVentingRequest(context: Context) {
+    context.getSharedPreferences(
+        DataLayerListenerService.GAME_PREFS_NAME,
+        Context.MODE_PRIVATE
+    ).edit()
+        .remove(DataLayerListenerService.KEY_PENDING_VENTING_GAME_ID)
+        .remove(DataLayerListenerService.KEY_PENDING_VENTING_TARGET_LABEL)
+        .remove(DataLayerListenerService.KEY_PENDING_VENTING_EVENT_DESC)
+        .remove(DataLayerListenerService.KEY_PENDING_VENTING_AT)
         .apply()
 }
 

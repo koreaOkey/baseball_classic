@@ -64,6 +64,10 @@
                     android:scheme="wear"
                     android:host="*"
                     android:pathPrefix="/watch/prompt" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/venting" />
             </intent-filter>
         </service>
 

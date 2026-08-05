@@ -13,6 +13,7 @@ object WearGameSyncManager {
     private const val PATH_WATCH_PROMPT = "/watch/prompt/current"
     // TODO(stadium-cheer): 활성화 시 워치측 DataLayerListenerService에서 동일 path 핸들러 등록 주석 해제
     private const val PATH_CHEER_TRIGGER = "/cheer/trigger"
+    private const val PATH_VENTING_TRIGGER = "/venting/trigger"
     private const val KEY_UPDATED_AT = "updated_at"
     private const val CACHE_PREFS = "basehaptic_user_prefs"
     private const val KEY_LAST_GAME_DATA = "last_watch_game_data"
@@ -221,6 +222,29 @@ object WearGameSyncManager {
                 Log.d(TAG, "Watch sync prompt sent for game: $gameId")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to send watch sync prompt", e)
+            }
+        }.start()
+    }
+
+    /** 워치 분풀이 룸 트리거 (테스트 도구 전용). 워치측 /venting 핸들러가 룸을 연다. */
+    fun sendVentingTrigger(
+        context: Context,
+        gameId: String,
+        targetLabel: String,
+        eventDescription: String
+    ) {
+        Thread {
+            try {
+                val request = PutDataMapRequest.create(PATH_VENTING_TRIGGER).apply {
+                    dataMap.putString("game_id", gameId)
+                    dataMap.putString("target_label", targetLabel)
+                    dataMap.putString("event_description", eventDescription)
+                    dataMap.putLong(KEY_UPDATED_AT, System.currentTimeMillis())
+                }.asPutDataRequest().setUrgent()
+                Tasks.await(Wearable.getDataClient(context).putDataItem(request))
+                Log.d(TAG, "Venting trigger sent: $gameId ($targetLabel)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send venting trigger", e)
             }
         }.start()
     }

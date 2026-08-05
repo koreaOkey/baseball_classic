@@ -56,6 +56,13 @@ class DataLayerListenerService : WearableListenerService() {
         const val PATH_SETTINGS = "/settings"
         // TODO(stadium-cheer): 활성화 시 phone WearGameSyncManager.PATH_CHEER_TRIGGER 와 일치 유지.
         const val PATH_CHEER_TRIGGER = "/cheer/trigger"
+
+        const val PATH_VENTING = "/venting"
+        const val ACTION_VENTING_TRIGGER = "com.basehaptic.watch.ACTION_VENTING_TRIGGER"
+        const val KEY_PENDING_VENTING_GAME_ID = "pending_venting_game_id"
+        const val KEY_PENDING_VENTING_TARGET_LABEL = "pending_venting_target_label"
+        const val KEY_PENDING_VENTING_EVENT_DESC = "pending_venting_event_desc"
+        const val KEY_PENDING_VENTING_AT = "pending_venting_at"
         
         const val KEY_GAME_ID = "game_id"
         const val KEY_HOME_TEAM = "home_team"
@@ -102,6 +109,7 @@ class DataLayerListenerService : WearableListenerService() {
                     path?.startsWith(PATH_WATCH_PROMPT) == true -> handleWatchSyncPrompt(item)
                     path?.startsWith(PATH_SETTINGS) == true -> handleSettingsUpdate(item)
                     path?.startsWith(PATH_CHEER_TRIGGER) == true -> handleCheerTrigger(item)
+                    path?.startsWith(PATH_VENTING) == true -> handleVentingTrigger(item)
                 }
             }
         }
@@ -313,6 +321,33 @@ class DataLayerListenerService : WearableListenerService() {
 
         sendBroadcast(Intent(ACTION_WATCH_SYNC_PROMPT).setPackage(packageName))
         wakeScreenForPrompt(gameId)
+    }
+
+    /**
+     * 분풀이 테스트 트리거 수신 (폰 테스트 도구 발송) →
+     * pending 상태 저장 + 브로드캐스트 + 화면 기동. 앱이 꺼져 있으면
+     * launchMainActivity 로 열고, 실패해도 pending pref 로 다음 실행 시 룸이 뜬다.
+     */
+    private fun handleVentingTrigger(item: DataItem) {
+        val dataMap = DataMapItem.fromDataItem(item).dataMap
+        val gameId = dataMap.getString(KEY_GAME_ID, "")
+        if (gameId.isBlank()) return
+        val targetLabel = dataMap.getString("target_label", "감독")
+        val eventDescription = dataMap.getString("event_description", "")
+
+        getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_PENDING_VENTING_GAME_ID, gameId)
+            .putString(KEY_PENDING_VENTING_TARGET_LABEL, targetLabel)
+            .putString(KEY_PENDING_VENTING_EVENT_DESC, eventDescription)
+            .putLong(KEY_PENDING_VENTING_AT, System.currentTimeMillis())
+            .apply()
+
+        sendBroadcast(Intent(ACTION_VENTING_TRIGGER).setPackage(packageName))
+        launchMainActivity(extraKey = "venting_request_game_id", extraValue = gameId) { error ->
+            Log.e(TAG, "Failed to open watch screen for venting trigger: $gameId", error)
+        }
+        Log.d(TAG, "Venting trigger received: $gameId ($targetLabel)")
     }
 
     /**
