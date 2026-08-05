@@ -28,6 +28,9 @@ struct VentingRoomScreen: View {
     @State private var dollSquash: CGFloat = 1.0
     @State private var dollPushDown: CGFloat = 0
 
+    // 흔들기 연타: 룸이 보이는 동안만 센서 점유 (세기 비례 데미지)
+    @State private var shakeDetector: VentingShakeDetector?
+
     /// 제자리 회전 내려치기 모션 상수 (초기 버전 스타일):
     /// 도구가 인형 우상단 고정 위치에서 손잡이 끝(좌하단)을 축으로
     /// 뒤로 젖혀졌다가 회전하며 내려친다. 위치 이동은 없다.
@@ -108,6 +111,17 @@ struct VentingRoomScreen: View {
                 strikeVisible = true
                 strikeAngle = StrikeMotion.windupAngle
             }
+            // 흔들기 연타 감지 시작 (룸이 보이는 동안만)
+            let detector = VentingShakeDetector { hits in
+                guard !viewModel.isDestroyed else { return }
+                viewModel.recordShake(hits: hits)
+            }
+            detector.start()
+            shakeDetector = detector
+        }
+        .onDisappear {
+            shakeDetector?.stop()
+            shakeDetector = nil
         }
         .onChange(of: viewModel.isDestroyed) { _, destroyed in
             if destroyed {
@@ -200,6 +214,10 @@ struct VentingRoomScreen: View {
 
     private var dollView: some View {
         ZStack {
+            // 인형(220pt)의 56% 크기·가슴 위치 — 실루엣 뒤에 거의 숨는 채움광
+            VentingDollSpotlight(diameter: 124)
+                .offset(y: 24)
+
             // 익명 팀 유니폼 펭귄 인형: 단계별 스프라이트 (이름·등번호·실제 외형 없음)
             Image(viewModel.stage.dollImageName)
                 .resizable()
@@ -341,10 +359,17 @@ struct VentingRoomScreen: View {
     // MARK: - Stage Label
 
     private var stageLabel: some View {
-        Text(stageLabelText)
-            .font(AppFont.h5Bold)
-            .foregroundColor(stageLabelColor)
-            .animation(.easeInOut(duration: 0.2), value: viewModel.stage)
+        VStack(spacing: AppSpacing.sm) {
+            Text(stageLabelText)
+                .font(AppFont.h5Bold)
+                .foregroundColor(stageLabelColor)
+                .animation(.easeInOut(duration: 0.2), value: viewModel.stage)
+            if !viewModel.isDestroyed {
+                Text("폰을 꽉 잡고 흔들어도 데미지! 세게 흔들수록 아파요")
+                    .font(AppFont.micro)
+                    .foregroundColor(AppColors.gray500)
+            }
+        }
     }
 
     private var stageLabelText: String {
@@ -478,6 +503,34 @@ struct VentingRoomScreen: View {
         }
         .buttonStyle(.plain)
         .disabled(viewModel.isDestroyed)
+    }
+}
+
+// MARK: - VentingDollSpotlight
+
+/// 인형 뒤 글로우 — 스프라이트의 투명 유니폼 몸판이 흰옷으로 읽히게 하는 채움용 광원.
+///
+/// 디자이너 스프라이트는 흰 배경 기준으로 제작되어 유니폼 몸판 일부가 투명 구멍인데,
+/// 어두운 룸에서 그대로 쓰면 "검은 옷"으로 보인다. 인형(가슴 위치)보다 작게 깔아
+/// 실루엣 뒤에 거의 숨긴다 — 조명 "연출"이 아니라 구멍 메움이 목적 (2026-08-05 톤 다운).
+struct VentingDollSpotlight: View {
+    let diameter: CGFloat
+
+    var body: some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    stops: [
+                        .init(color: Color(hex: 0xFAF6EE), location: 0),
+                        .init(color: Color(hex: 0xFAF6EE).opacity(0.95), location: 0.55),
+                        .init(color: Color(hex: 0xFAF6EE).opacity(0), location: 1)
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: diameter / 2
+                )
+            )
+            .frame(width: diameter, height: diameter)
     }
 }
 #endif

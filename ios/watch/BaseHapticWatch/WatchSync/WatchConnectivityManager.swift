@@ -250,10 +250,22 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 self.handleWatchSyncPrompt(message)
             case "stadium_cheer_trigger":
                 self.handleStadiumCheerTrigger(message)
+            case "venting_trigger":
+                self.handleVentingTrigger(message)
             default:
                 break
             }
         }
+    }
+
+    private func handleVentingTrigger(_ message: [String: Any]) {
+        guard let gameId = message["game_id"] as? String, !gameId.isEmpty else { return }
+        let request = WatchVentingRequest(
+            gameId: gameId,
+            targetLabel: (message["target_label"] as? String) ?? "감독",
+            eventDescription: (message["event_description"] as? String) ?? ""
+        )
+        WatchVentingCoordinator.shared.dispatch(request)
     }
 
     private func handleStadiumCheerTrigger(_ message: [String: Any]) {

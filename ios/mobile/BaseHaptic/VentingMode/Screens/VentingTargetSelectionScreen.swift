@@ -15,9 +15,18 @@ struct VentingTargetSelectionScreen: View {
     let context: VentingGameContext
     let gate: any VentingGateProviding
     let onBack: () -> Void
+    var backLabel: String = "홈"
     let onSelectTarget: (VentingTarget) -> Void
 
     @State private var selectedTarget: VentingTarget?
+    @State private var customName: String = ""
+
+    private var isLive: Bool { context.inningLabel != nil }
+
+    private var isCustomSelected: Bool {
+        if case .custom = selectedTarget { return true }
+        return false
+    }
 
     private var managerOption: VentingManagerOption {
         VentingManagerOption(eventDescription: context.managerEventDescription)
@@ -38,12 +47,20 @@ struct VentingTargetSelectionScreen: View {
                             .padding(.top, AppSpacing.lg)
 
                         // 안내 문구
-                        Text("오늘의 아쉬운 순간 TOP\(min(context.candidates.count, 5))")
+                        Text(isLive ? "지금까지의 아쉬운 순간" : "오늘의 아쉬운 순간 TOP\(min(context.candidates.count, 5))")
                             .font(AppFont.h5Bold)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, AppSpacing.xxl)
                             .padding(.top, AppSpacing.lg)
+
+                        if context.candidates.isEmpty {
+                            Text("아직 집계된 아쉬운 순간이 없어요.\n감독을 고르거나 직접 입력으로 지목해보세요.")
+                                .font(AppFont.caption)
+                                .foregroundColor(AppColors.gray500)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, AppSpacing.xxl)
+                        }
 
                         // 선수 후보 목록
                         VStack(spacing: AppSpacing.sm) {
@@ -68,6 +85,26 @@ struct VentingTargetSelectionScreen: View {
                                 isSelected: selectedTarget == .manager(managerOption),
                                 onTap: {
                                     selectedTarget = .manager(managerOption)
+                                }
+                            )
+
+                            // 직접 입력 — 입력값은 표시 전용, 저장·전송하지 않는다.
+                            CustomTargetRow(
+                                name: $customName,
+                                isSelected: isCustomSelected,
+                                onNameChange: { name in
+                                    let trimmed = name.trimmingCharacters(in: .whitespaces)
+                                    if !trimmed.isEmpty {
+                                        selectedTarget = .custom(trimmed)
+                                    } else if isCustomSelected {
+                                        selectedTarget = nil
+                                    }
+                                },
+                                onTap: {
+                                    let trimmed = customName.trimmingCharacters(in: .whitespaces)
+                                    if !trimmed.isEmpty {
+                                        selectedTarget = .custom(trimmed)
+                                    }
                                 }
                             )
                         }
@@ -114,7 +151,7 @@ struct VentingTargetSelectionScreen: View {
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "chevron.left")
                         .font(AppFont.bodyLgBold)
-                    Text("홈")
+                    Text(backLabel)
                         .font(AppFont.bodyMedium)
                 }
                 .foregroundColor(.white)
@@ -152,7 +189,7 @@ struct VentingTargetSelectionScreen: View {
             }
             .frame(maxWidth: .infinity)
 
-            Text("최종")
+            Text(context.inningLabel ?? "최종")
                 .font(AppFont.micro)
                 .foregroundColor(AppColors.gray500)
 
@@ -273,6 +310,68 @@ private struct TargetRow: View {
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
+}
+#endif
+
+// MARK: - CustomTargetRow (직접 입력)
+
+/// 선수명 직접 입력 행. 입력 즉시 `VentingTarget.custom`으로 선택되며,
+/// 입력값을 지우면 선택도 해제된다.
+#if DEBUG
+private struct CustomTargetRow: View {
+    @Binding var name: String
+    let isSelected: Bool
+    let onNameChange: (String) -> Void
+    let onTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: AppSpacing.md) {
+            Image(systemName: "pencil")
+                .font(AppFont.captionBold)
+                .foregroundColor(isSelected ? AppColors.red400 : AppColors.gray500)
+                .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text("직접 입력")
+                    .font(AppFont.captionBold)
+                    .foregroundColor(isSelected ? .white : AppColors.gray300)
+                TextField(
+                    "",
+                    text: $name,
+                    prompt: Text("화풀이할 선수명을 입력하세요")
+                        .font(AppFont.body)
+                        .foregroundColor(AppColors.gray500)
+                )
+                .font(AppFont.body)
+                .foregroundColor(isSelected ? AppColors.red300Input : .white)
+                .tint(AppColors.red400)
+                .autocorrectionDisabled()
+                .onChange(of: name) { newValue in
+                    onNameChange(newValue)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(AppFont.bodyLg)
+                .foregroundColor(isSelected ? AppColors.red500 : AppColors.gray700)
+        }
+        .padding(AppSpacing.lg)
+        .background(isSelected ? AppColors.red500.opacity(0.12) : AppColors.gray900)
+        .cornerRadius(AppRadius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: AppRadius.md)
+                .stroke(isSelected ? AppColors.red500.opacity(0.5) : AppColors.gray800, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
+    }
+}
+
+private extension AppColors {
+    static let red300Input = Color(hex: 0xFCA5A5)
 }
 #endif
 

@@ -21,6 +21,7 @@ struct VentingFlowCoordinator: View {
 
     let context: VentingGameContext
     let onClose: () -> Void
+    var backLabel: String = "홈"
 
     // 의존성 — Phase 2에서 교체 가능
     private let gate: any VentingGateProviding = AlwaysAllowGate()
@@ -34,6 +35,7 @@ struct VentingFlowCoordinator: View {
                 context: context,
                 gate: gate,
                 onBack: onClose,
+                backLabel: backLabel,
                 onSelectTarget: { target in
                     let vm = VentingRoomViewModel(
                         gameContext: context,

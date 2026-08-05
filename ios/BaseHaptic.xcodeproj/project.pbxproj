@@ -8,23 +8,24 @@
 
 /* Begin PBXBuildFile section */
 		031CBE1792B2ECF2FF3D79CC /* BaseballGameAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3EA44A3C91ACC0AF7EAD4A7 /* BaseballGameAttributes.swift */; };
-		03B4F41B3368B26C45202A06 /* 코퍼 더스크.png in Resources */ = {isa = PBXBuildFile; fileRef = 33EDD6D7191D4B748F543694 /* 코퍼 더스크.png */; };
 		0A2EE9240C436B71C1B1997C /* Game.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE96A677E34F2CC49DE538E /* Game.swift */; };
 		0D302E8DEB5BA5C927CFA47F /* CheerSignalsLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1293C9C9C3EAC95E9B948A48 /* CheerSignalsLoader.swift */; };
 		0D6A47E4F1A834887215F7A8 /* VictoryTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */; };
+		0E61EFD2AD4A689A845F476D /* 코퍼 더스크.png in Resources */ = {isa = PBXBuildFile; fileRef = 63548DB487284CE07D17CA3C /* 코퍼 더스크.png */; };
 		113A6130C41D5E2FACA82247 /* WhatsNewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1769B29DC0491AE37BCB336B /* WhatsNewSheet.swift */; };
+		119A8E7829300FDB07C77669 /* WatchVentingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EDE824094DE189DD3544098 /* WatchVentingScreen.swift */; };
 		14873E1D18DE8D20672749A4 /* VentingFlowCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A05EAAF9A034270ED3E2125 /* VentingFlowCoordinator.swift */; };
 		153DE3C62F9BB2C42C8B6793 /* BaseHapticLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF71089F8D26EDAE6F6EEE32 /* BaseHapticLiveActivityWidget.swift */; };
 		15887FB643D106BB387CDCB9 /* BaseHapticApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */; };
 		15AE36C23A5E7E394F13C981 /* PhoneConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8BCEDEF5F6EAC1E19BA575A /* PhoneConnectivityManager.swift */; };
-		1741F5FBFA5AB5AAE829F52A /* 피치 펄스.png in Resources */ = {isa = PBXBuildFile; fileRef = 24DA21746BC301A1935CFEBD /* 피치 펄스.png */; };
 		17EDDCE4B419ECA41B8F9FD6 /* TeamTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9976F2A7E7B2D3E3AD6F3EF /* TeamTheme.swift */; };
+		1E0A04A3013768D7045D2F95 /* 홈런 임팩트.png in Resources */ = {isa = PBXBuildFile; fileRef = F7D19ECB7357CFF94EE0DCCC /* 홈런 임팩트.png */; };
 		1E120905C9B17E2723F00E1F /* TeamLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E721EEBEAA513CB8E3DAEF00 /* TeamLogo.swift */; };
 		1E51833A4C28758DAA401501 /* WatchInstallInstructionsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9FB6A01714F11B6DD1FCA70 /* WatchInstallInstructionsSheet.swift */; };
 		20BB5AEADC66CAB9F84293FA /* WatchGamePoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB8E76083CCB66D81D3DDB0 /* WatchGamePoller.swift */; };
 		22CFCDF93CC60785D2F9D976 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = FC794738F764F7DB7F7E02DF /* Supabase */; };
-		24D2AE7B79021AC841567979 /* 베이스볼 별자리.png in Resources */ = {isa = PBXBuildFile; fileRef = 37A93152BCB7E42148E852C5 /* 베이스볼 별자리.png */; };
 		2628F2E5B7BB9B737C94E2EA /* WatchAppEventColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFFFFE904FF5F1FBB6C5F14B /* WatchAppEventColors.swift */; };
+		279D2E522D405D251DE06B59 /* 베이스볼 별자리.png in Resources */ = {isa = PBXBuildFile; fileRef = 8CAC57AC50E0583972CB7B3D /* 베이스볼 별자리.png */; };
 		2B38367BDC8E2EF23B0FC911 /* BannerAdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556231CCAAECD9A8FC9EF363 /* BannerAdView.swift */; };
 		2BE5DAB3C3841537A2B42622 /* BackgroundStreamManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2C36AE9775B75183F468F0 /* BackgroundStreamManager.swift */; };
 		2CE2482EE1940F973BD02827 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A4B68491596CE6E203408073 /* Assets.xcassets */; };
@@ -33,7 +34,6 @@
 		2E75C724CD95802AA0187E81 /* WatchColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6341FE954BB080F791122E81 /* WatchColors.swift */; };
 		2FAB3486106F5D7C5374917A /* AnimationFrameLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EC5A0CD5D7779408E0C2021 /* AnimationFrameLoader.swift */; };
 		31D2492344FEF4CAC5FA2D59 /* UIKitVentingHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C833BBE7121E6BB688505E2 /* UIKitVentingHapticPlayer.swift */; };
-		33A5182A8DBDB3FBF5F5038B /* 홈런 임팩트.png in Resources */ = {isa = PBXBuildFile; fileRef = 450208DB4A8BB4E7E814AC6C /* 홈런 임팩트.png */; };
 		36D8374A362761D8DAF4E29F /* VentingFeatureFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8457B0FF2D5731E437A0CD9 /* VentingFeatureFlag.swift */; };
 		37D04C0E7E98A740EEF2DD47 /* VentingOpenConditionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD10B6091D2BE290D8DF785 /* VentingOpenConditionChecker.swift */; };
 		3BA9752C23FFD502E30BA326 /* ReleaseNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3E6C583697B070DEE30918 /* ReleaseNotes.swift */; };
@@ -51,11 +51,11 @@
 		56D74FC315CEEEEB41530D70 /* ThemeRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E937F5BCECEABDBDF2D9E4C /* ThemeRepository.swift */; };
 		57DBAF95E3B3874B7F31D3DD /* WatchTokenRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59AA2B30AEA401A1C811ACF4 /* WatchTokenRegistrar.swift */; };
 		5C35221BA6986D70720B25D7 /* WatchUiProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E991C41C1A2E1BA5484914C /* WatchUiProfile.swift */; };
-		61DD606DFC133DA674161513 /* 야구의 밤.png in Resources */ = {isa = PBXBuildFile; fileRef = AB8F5D18E73440B513975E3F /* 야구의 밤.png */; };
 		62949C903DFFFC0E9B50F5AE /* VentingDestroyedScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68B10E77083FEAFBC2D90F27 /* VentingDestroyedScreen.swift */; };
 		62E56EC524620B79ECF0BA61 /* WatchThemeSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F152131C406034E1B3EF86E9 /* WatchThemeSyncManager.swift */; };
 		667F95C027A3276F6DA36A8F /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4270B039F29D5769A2532EA /* WatchConnectivityManager.swift */; };
 		6739CEFF7FF6E2D478640CB4 /* TeamCheckinRankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C98E8AC48570ED64EC6CE77 /* TeamCheckinRankingView.swift */; };
+		67F9E72E14C0B9495B3A502A /* 야구의 밤.png in Resources */ = {isa = PBXBuildFile; fileRef = 3CB394E5FE0AB0CE864FEB37 /* 야구의 밤.png */; };
 		6A9EA505EA8AAEA1CF2E8668 /* VentingHomeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 027FFA1DC56014006EC06152 /* VentingHomeCard.swift */; };
 		6C83A7D53BBC3ECE7ABBA223 /* RewardedAdManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CB78FA5792AFDC17056B15 /* RewardedAdManager.swift */; };
 		717442959BABBD4ADE5E26A6 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */; };
@@ -63,38 +63,42 @@
 		76C1FC1F239C44193D6A8385 /* VentingTargetSelectionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE7A4718327654535205A1B /* VentingTargetSelectionScreen.swift */; };
 		7741B30182CAE7D9B9C6C945 /* BaseHapticLiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D0ACB6A4519712EF7596BB6 /* BaseHapticLiveActivityBundle.swift */; };
 		7EF7EA0D5AD577F890C4E71A /* GameEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */; };
-		7F51EAAEC75123A552A1C573 /* 멍멍2.png in Resources */ = {isa = PBXBuildFile; fileRef = 87B5829AA26566F888E696C2 /* 멍멍2.png */; };
 		8073FF78A82DE637FB79DFFE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4700C8F4E6DAF0F281FB70B /* AppDelegate.swift */; };
 		80C6DB7791A5E41B3D19ABD2 /* WatchLiveGameScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */; };
 		835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44A3A560B1DD2E714A06DE2 /* LiveActivityManager.swift */; };
 		835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E499DB66D4A9838EB01A1F3B /* WatchTeamTheme.swift */; };
-		8A3DBF1845FC6A5D0C6BBFD4 /* 클린 베이스볼.png in Resources */ = {isa = PBXBuildFile; fileRef = 5F1678979DEAA4C058B0B399 /* 클린 베이스볼.png */; };
 		8C41D8D0834F7A17B0316920 /* ThemeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */; };
-		8F0216340AFC3D55B7D9CCCD /* 멍멍.png in Resources */ = {isa = PBXBuildFile; fileRef = 1C6E8F275BE7E82E840FFF79 /* 멍멍.png */; };
+		8DB04B37880799CA7F8AD85F /* 멍멍1.png in Resources */ = {isa = PBXBuildFile; fileRef = 6A10C95C891E577F029B1F21 /* 멍멍1.png */; };
 		907015EAE18498713E7F8480 /* AppEventColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96ADED84EFE3700C0719D8AA /* AppEventColors.swift */; };
 		90A9C96810B6F8C5485AB262 /* BaseHapticWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		94021B3CA9661B5B95C52778 /* VentingShakeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7A010FAFD964A786BC082A /* VentingShakeDetector.swift */; };
 		9AF51022D8BD38292A07DB21 /* AppFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEB3E15EEE97F3F80AF6CA1 /* AppFont.swift */; };
-		9BB76F9702773DD3C0ED8A02 /* 야구가 좋아.png in Resources */ = {isa = PBXBuildFile; fileRef = 6BAFE4FC1DDFA9F38EE69786 /* 야구가 좋아.png */; };
 		9FB7676A5E7D8C388D1C59AC /* BaseHapticWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */; };
+		A05D379C480DA13EDDA18706 /* 멍멍이 테마.png in Resources */ = {isa = PBXBuildFile; fileRef = 02B048B8F66719840C28B9D6 /* 멍멍이 테마.png */; };
 		A0B3889FA2840FDA0B6C8B89 /* PushTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8119EBAB8CA0381D5CB2E353 /* PushTokenManager.swift */; };
 		A0C9662CE8593BB55A41E683 /* StadiumCheerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1FA6639ABE5D86E35AA452 /* StadiumCheerScreen.swift */; };
+		A217C18F01157D1228B77518 /* VentingTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D2FE95FBF4D5FB9A863806 /* VentingTool.swift */; };
 		A5152CBC3F32FAF1ED030AED /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C0734BB3B091847ABD41DA /* Colors.swift */; };
 		A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC2E052F69D69923ADFD1D45 /* BackendGamesRepository.swift */; };
+		A68DF763191DCBD808FDEEE5 /* VentingLiveEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF6065006D97036C65F2C70 /* VentingLiveEntry.swift */; };
+		A870EA84A0BF7DFA4457DC0B /* 루나 시그널.png in Resources */ = {isa = PBXBuildFile; fileRef = 92808772D1756216D41279FD /* 루나 시그널.png */; };
 		A879068BB3DA72E9404B1CB5 /* GameData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FF14835688DCF81CAB8F7F1 /* GameData.swift */; };
 		A8F8716965E7875ADD434E35 /* WatchAppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */; };
 		A969609CE86D971793AE8CB7 /* VentingRoomScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89DEC897A299E2212058242 /* VentingRoomScreen.swift */; };
 		AA6C6F56CD8FD044106D99D4 /* VentingRoomViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E404DD8A4070EC7EB07986D8 /* VentingRoomViewModel.swift */; };
 		AD669D21D21BE6ED05C668EE /* Stadiums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A9E61F3C6F0555030D4ABB /* Stadiums.swift */; };
-		B3B421819C84BCC6411E5B64 /* 멍멍이 테마.png in Resources */ = {isa = PBXBuildFile; fileRef = F5F504DF3EA2E48367CD905D /* 멍멍이 테마.png */; };
+		AE7625904A416811149F4333 /* 멍멍2.png in Resources */ = {isa = PBXBuildFile; fileRef = 5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */; };
 		B467D204EE48FE539D883A8E /* CheerCheckinCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53716117F7CB8A7631F7CBB6 /* CheerCheckinCard.swift */; };
 		B9AF8B53B38C59F41F4A1818 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = DD6A2509BC62180FFDD9D703 /* GoogleMobileAds */; };
+		BA80BDE55FA0E15C35828602 /* 야구가 좋아.png in Resources */ = {isa = PBXBuildFile; fileRef = AA8986E8EB82F1698A53C4AA /* 야구가 좋아.png */; };
 		BB4BE01B4AC16AC208AF0A97 /* Team.swift in Sources */ = {isa = PBXBuildFile; fileRef = D59061C8B8CAB2114F761D19 /* Team.swift */; };
 		BCEE9E4446DDD495E71BA162 /* HitTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F02160EE92426CB6BBC5C5B0 /* HitTransitionScreen.swift */; };
 		BE593BBCE538DC9615518D92 /* WatchTestScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F73397A462741B40912C00 /* WatchTestScreen.swift */; };
 		BF822DCC3FA606EEBB63F946 /* ScoreTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55132F6EEEC4572A9184368B /* ScoreTransitionScreen.swift */; };
 		BF9B72D69A48D151B784CAD9 /* VentingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17FC246EA4A0E3191CE1CDD5 /* VentingModels.swift */; };
-		C5B4A3928170F6E5D4C3B2A1 /* VentingTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* VentingTool.swift */; };
+		C6190088ACFFB47FFE05AD0E /* 클린 베이스볼.png in Resources */ = {isa = PBXBuildFile; fileRef = 00AE1416F6CFEFA9B2D7D95C /* 클린 베이스볼.png */; };
 		C68C35184F116A2F2B5B7498 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */; };
+		C758F6A2853A48FAB4B17CCD /* 멍멍.png in Resources */ = {isa = PBXBuildFile; fileRef = 9766814FF4A79880FAA5FA35 /* 멍멍.png */; };
 		C84D18600ACFA569E6F21D98 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 760CF04AF7F17385A9704989 /* Assets.xcassets */; };
 		C8B36C2D3E97C80788435AA8 /* DestructionConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729C2673CBFFDDA8B25071AE /* DestructionConstants.swift */; };
 		C9CBE99594B9CF19481695B5 /* StadiumCheerThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81854AC725B2650C74AD594D /* StadiumCheerThemes.swift */; };
@@ -107,16 +111,16 @@
 		E59B8908D6EE113ABCE14285 /* DoublePlayTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BD360BFA65BD1D45DBFC4E /* DoublePlayTransitionScreen.swift */; };
 		E5C6A37AABAFC452BDD21CAF /* AnimationFrames in Resources */ = {isa = PBXBuildFile; fileRef = 6C2E0263C05C684AC3B73BAF /* AnimationFrames */; };
 		E6F6938ABF1DBA468AF35E3E /* AtBatGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36D5CDAAFA66985C30C764B /* AtBatGroup.swift */; };
+		E7276F81728AE337F95EB0D3 /* LiveRegretProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506110C58FB587CB361120D9 /* LiveRegretProvider.swift */; };
 		E88AF0112A7DFADE7454365E /* DestructionStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7FAF857AE9967BAAFEA2EE /* DestructionStage.swift */; };
 		E894D3A8481A10B7FE77F3BA /* WatchInstallLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D040C86855336A1EE816D5F /* WatchInstallLauncher.swift */; };
 		EBD95C4C91BD4F08671DB824 /* DestructionStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6655AA6FFD846E64239F21F /* DestructionStateMachine.swift */; };
-		ED51F8E576B65C30DCE33C98 /* 멍멍1.png in Resources */ = {isa = PBXBuildFile; fileRef = 4660E2EDD0E1239828958464 /* 멍멍1.png */; };
 		EFD914141D2D4AD6CA14D96C /* MockVentingHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367C84FBFDB3968D8D20D32 /* MockVentingHapticPlayer.swift */; };
-		F10F85F580A95593B9B45AC3 /* 루나 시그널.png in Resources */ = {isa = PBXBuildFile; fileRef = 65B5194CD0F421D33ECF9B3C /* 루나 시그널.png */; };
 		F12E146A8B5209368A57DCF0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8419E3A8AD866D20F930D497 /* Assets.xcassets */; };
 		F27D8F9A270EFDA8B34228FE /* mock_regret_candidates.json in Resources */ = {isa = PBXBuildFile; fileRef = 40F7EB0CAD7F31C01A2894AE /* mock_regret_candidates.json */; };
 		F40C89F218FF39FC41214EDC /* BaseHapticLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D1BB10D2F8F60D22C04298CB /* BaseHapticLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F6CBF646798EF1B409B9FADB /* MockRegretProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC933223A7CAA688E870C61 /* MockRegretProvider.swift */; };
+		F8341E6E8743A8070CE6E25C /* 피치 펄스.png in Resources */ = {isa = PBXBuildFile; fileRef = DABAAB834C102B94324210B1 /* 피치 펄스.png */; };
 		F8F011ADF82EF27818A238E9 /* AppRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B00FE3A8F64F89794DD742A /* AppRadius.swift */; };
 		FCB564B362777F3D2B12E394 /* RegretCandidateProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604524B5D6749F89F29F5AC6 /* RegretCandidateProviding.swift */; };
 		FD3779F6DF3FD699477A9E47 /* HomeRunTransitionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0BFD94627C9204BFDBCF7A /* HomeRunTransitionScreen.swift */; };
@@ -166,7 +170,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		00AE1416F6CFEFA9B2D7D95C /* 클린 베이스볼.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "클린 베이스볼.png"; sourceTree = "<group>"; };
 		027FFA1DC56014006EC06152 /* VentingHomeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingHomeCard.swift; sourceTree = "<group>"; };
+		02B048B8F66719840C28B9D6 /* 멍멍이 테마.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍이 테마.png"; sourceTree = "<group>"; };
+		04D2FE95FBF4D5FB9A863806 /* VentingTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingTool.swift; sourceTree = "<group>"; };
 		0684B69258B010069F8836B2 /* BaseHapticWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticWatchApp.swift; sourceTree = "<group>"; };
 		07BC9868A2B8518EE7D90A7C /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
 		0909310667F9AA0F1FC6A0F9 /* ThemeData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeData.swift; sourceTree = "<group>"; };
@@ -176,26 +183,22 @@
 		1769B29DC0491AE37BCB336B /* WhatsNewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewSheet.swift; sourceTree = "<group>"; };
 		17F8E0B33E80A18F6316F22E /* AlwaysAllowGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlwaysAllowGate.swift; sourceTree = "<group>"; };
 		17FC246EA4A0E3191CE1CDD5 /* VentingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingModels.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B5C /* VentingTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingTool.swift; sourceTree = "<group>"; };
-		1C6E8F275BE7E82E840FFF79 /* 멍멍.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍.png"; sourceTree = "<group>"; };
 		1C98E8AC48570ED64EC6CE77 /* TeamCheckinRankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamCheckinRankingView.swift; sourceTree = "<group>"; };
-		24DA21746BC301A1935CFEBD /* 피치 펄스.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "피치 펄스.png"; sourceTree = "<group>"; };
 		2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNoGameScreen.swift; sourceTree = "<group>"; };
 		2E937F5BCECEABDBDF2D9E4C /* ThemeRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeRepository.swift; sourceTree = "<group>"; };
 		2E991C41C1A2E1BA5484914C /* WatchUiProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchUiProfile.swift; sourceTree = "<group>"; };
-		33EDD6D7191D4B748F543694 /* 코퍼 더스크.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "코퍼 더스크.png"; sourceTree = "<group>"; };
 		34253CBAC793835241B2ED99 /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
 		351633B3FAFD947CDA357C7C /* VentingHapticPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingHapticPlaying.swift; sourceTree = "<group>"; };
 		355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BaseHapticWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		37A93152BCB7E42148E852C5 /* 베이스볼 별자리.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "베이스볼 별자리.png"; sourceTree = "<group>"; };
+		3BF6065006D97036C65F2C70 /* VentingLiveEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingLiveEntry.swift; sourceTree = "<group>"; };
+		3CB394E5FE0AB0CE864FEB37 /* 야구의 밤.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "야구의 밤.png"; sourceTree = "<group>"; };
 		40F7EB0CAD7F31C01A2894AE /* mock_regret_candidates.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = mock_regret_candidates.json; sourceTree = "<group>"; };
 		40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingScreen.swift; sourceTree = "<group>"; };
 		43A9E61F3C6F0555030D4ABB /* Stadiums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stadiums.swift; sourceTree = "<group>"; };
-		450208DB4A8BB4E7E814AC6C /* 홈런 임팩트.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "홈런 임팩트.png"; sourceTree = "<group>"; };
 		45C0734BB3B091847ABD41DA /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
-		4660E2EDD0E1239828958464 /* 멍멍1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍1.png"; sourceTree = "<group>"; };
 		47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEvent.swift; sourceTree = "<group>"; };
 		48CAEC1ACB1D95BABD8620BB /* MyTeamScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyTeamScreen.swift; sourceTree = "<group>"; };
+		506110C58FB587CB361120D9 /* LiveRegretProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRegretProvider.swift; sourceTree = "<group>"; };
 		5367C84FBFDB3968D8D20D32 /* MockVentingHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockVentingHapticPlayer.swift; sourceTree = "<group>"; };
 		53716117F7CB8A7631F7CBB6 /* CheerCheckinCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheerCheckinCard.swift; sourceTree = "<group>"; };
 		53BA5C62F0AE8C59D23DBEDD /* WatchAppRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppRadius.swift; sourceTree = "<group>"; };
@@ -203,22 +206,23 @@
 		556231CCAAECD9A8FC9EF363 /* BannerAdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BannerAdView.swift; sourceTree = "<group>"; };
 		56ED280ABA63C5182E6C6F03 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
 		59AA2B30AEA401A1C811ACF4 /* WatchTokenRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTokenRegistrar.swift; sourceTree = "<group>"; };
+		5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍2.png"; sourceTree = "<group>"; };
 		5A7FAF857AE9967BAAFEA2EE /* DestructionStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructionStage.swift; sourceTree = "<group>"; };
 		5DB8E76083CCB66D81D3DDB0 /* WatchGamePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGamePoller.swift; sourceTree = "<group>"; };
 		5DC933223A7CAA688E870C61 /* MockRegretProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockRegretProvider.swift; sourceTree = "<group>"; };
 		5EC5A0CD5D7779408E0C2021 /* AnimationFrameLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationFrameLoader.swift; sourceTree = "<group>"; };
-		5F1678979DEAA4C058B0B399 /* 클린 베이스볼.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "클린 베이스볼.png"; sourceTree = "<group>"; };
 		5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppSpacing.swift; sourceTree = "<group>"; };
 		604524B5D6749F89F29F5AC6 /* RegretCandidateProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegretCandidateProviding.swift; sourceTree = "<group>"; };
 		625600428E676A827A087776 /* WatchInstallCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchInstallCard.swift; sourceTree = "<group>"; };
 		6341FE954BB080F791122E81 /* WatchColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchColors.swift; sourceTree = "<group>"; };
-		65B5194CD0F421D33ECF9B3C /* 루나 시그널.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "루나 시그널.png"; sourceTree = "<group>"; };
+		63548DB487284CE07D17CA3C /* 코퍼 더스크.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "코퍼 더스크.png"; sourceTree = "<group>"; };
 		68B10E77083FEAFBC2D90F27 /* VentingDestroyedScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingDestroyedScreen.swift; sourceTree = "<group>"; };
+		6A10C95C891E577F029B1F21 /* 멍멍1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍1.png"; sourceTree = "<group>"; };
 		6B00FE3A8F64F89794DD742A /* AppRadius.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRadius.swift; sourceTree = "<group>"; };
 		6B32062362FC0BBF4B29D99E /* LiveViewSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveViewSessionManager.swift; sourceTree = "<group>"; };
-		6BAFE4FC1DDFA9F38EE69786 /* 야구가 좋아.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "야구가 좋아.png"; sourceTree = "<group>"; };
 		6C1FA6639ABE5D86E35AA452 /* StadiumCheerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StadiumCheerScreen.swift; sourceTree = "<group>"; };
 		6C2E0263C05C684AC3B73BAF /* AnimationFrames */ = {isa = PBXFileReference; lastKnownFileType = folder; name = AnimationFrames; path = watch/BaseHapticWatch/AnimationFrames; sourceTree = SOURCE_ROOT; };
+		6EDE824094DE189DD3544098 /* WatchVentingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchVentingScreen.swift; sourceTree = "<group>"; };
 		725D813F3C806F37555C5848 /* WatchGameSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGameSyncManager.swift; sourceTree = "<group>"; };
 		729C2673CBFFDDA8B25071AE /* DestructionConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructionConstants.swift; sourceTree = "<group>"; };
 		745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLiveGameScreen.swift; sourceTree = "<group>"; };
@@ -231,16 +235,18 @@
 		81854AC725B2650C74AD594D /* StadiumCheerThemes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StadiumCheerThemes.swift; sourceTree = "<group>"; };
 		8419E3A8AD866D20F930D497 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		87621A22EC5F286B844C8BF8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		87B5829AA26566F888E696C2 /* 멍멍2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍2.png"; sourceTree = "<group>"; };
+		8CAC57AC50E0583972CB7B3D /* 베이스볼 별자리.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "베이스볼 별자리.png"; sourceTree = "<group>"; };
 		92557ABFA815EF3A9E554EBA /* StadiumRegionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StadiumRegionMonitor.swift; sourceTree = "<group>"; };
+		92808772D1756216D41279FD /* 루나 시그널.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "루나 시그널.png"; sourceTree = "<group>"; };
 		937C6644F186143AF57CB796 /* AppSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSpacing.swift; sourceTree = "<group>"; };
 		96ADED84EFE3700C0719D8AA /* AppEventColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEventColors.swift; sourceTree = "<group>"; };
+		9766814FF4A79880FAA5FA35 /* 멍멍.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍.png"; sourceTree = "<group>"; };
 		9A05EAAF9A034270ED3E2125 /* VentingFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingFlowCoordinator.swift; sourceTree = "<group>"; };
 		9FF14835688DCF81CAB8F7F1 /* GameData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameData.swift; sourceTree = "<group>"; };
 		A4B68491596CE6E203408073 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A8457B0FF2D5731E437A0CD9 /* VentingFeatureFlag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingFeatureFlag.swift; sourceTree = "<group>"; };
 		A8B319F21D1FF9D25A280185 /* BaseHaptic.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BaseHaptic.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AB8F5D18E73440B513975E3F /* 야구의 밤.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "야구의 밤.png"; sourceTree = "<group>"; };
+		AA8986E8EB82F1698A53C4AA /* 야구가 좋아.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "야구가 좋아.png"; sourceTree = "<group>"; };
 		AF0BFD94627C9204BFDBCF7A /* HomeRunTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeRunTransitionScreen.swift; sourceTree = "<group>"; };
 		AF2C36AE9775B75183F468F0 /* BackgroundStreamManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundStreamManager.swift; sourceTree = "<group>"; };
 		AFFFFE904FF5F1FBB6C5F14B /* WatchAppEventColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppEventColors.swift; sourceTree = "<group>"; };
@@ -263,6 +269,7 @@
 		D4F779E21BD38A429AD86EFE /* BaseHapticApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticApp.swift; sourceTree = "<group>"; };
 		D59061C8B8CAB2114F761D19 /* Team.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Team.swift; sourceTree = "<group>"; };
 		D9FB6A01714F11B6DD1FCA70 /* WatchInstallInstructionsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchInstallInstructionsSheet.swift; sourceTree = "<group>"; };
+		DABAAB834C102B94324210B1 /* 피치 펄스.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "피치 펄스.png"; sourceTree = "<group>"; };
 		DC7DB48D1BF0FE3066A791F6 /* EventFilterOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventFilterOption.swift; sourceTree = "<group>"; };
 		DF71089F8D26EDAE6F6EEE32 /* BaseHapticLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BaseHapticLiveActivityWidget.swift; sourceTree = "<group>"; };
 		DFD10B6091D2BE290D8DF785 /* VentingOpenConditionChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingOpenConditionChecker.swift; sourceTree = "<group>"; };
@@ -277,10 +284,11 @@
 		F02160EE92426CB6BBC5C5B0 /* HitTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HitTransitionScreen.swift; sourceTree = "<group>"; };
 		F152131C406034E1B3EF86E9 /* WatchThemeSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchThemeSyncManager.swift; sourceTree = "<group>"; };
 		F4700C8F4E6DAF0F281FB70B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		F5F504DF3EA2E48367CD905D /* 멍멍이 테마.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍이 테마.png"; sourceTree = "<group>"; };
 		F6655AA6FFD846E64239F21F /* DestructionStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructionStateMachine.swift; sourceTree = "<group>"; };
+		F7D19ECB7357CFF94EE0DCCC /* 홈런 임팩트.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "홈런 임팩트.png"; sourceTree = "<group>"; };
 		F8BCEDEF5F6EAC1E19BA575A /* PhoneConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneConnectivityManager.swift; sourceTree = "<group>"; };
 		FC3E6C583697B070DEE30918 /* ReleaseNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseNotes.swift; sourceTree = "<group>"; };
+		FD7A010FAFD964A786BC082A /* VentingShakeDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingShakeDetector.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -343,9 +351,11 @@
 		207F7347D38D7591BD90E35D /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				506110C58FB587CB361120D9 /* LiveRegretProvider.swift */,
 				7C833BBE7121E6BB688505E2 /* UIKitVentingHapticPlayer.swift */,
 				A8457B0FF2D5731E437A0CD9 /* VentingFeatureFlag.swift */,
 				DFD10B6091D2BE290D8DF785 /* VentingOpenConditionChecker.swift */,
+				FD7A010FAFD964A786BC082A /* VentingShakeDetector.swift */,
 			);
 			path = Data;
 			sourceTree = "<group>";
@@ -431,6 +441,7 @@
 				68B10E77083FEAFBC2D90F27 /* VentingDestroyedScreen.swift */,
 				9A05EAAF9A034270ED3E2125 /* VentingFlowCoordinator.swift */,
 				027FFA1DC56014006EC06152 /* VentingHomeCard.swift */,
+				3BF6065006D97036C65F2C70 /* VentingLiveEntry.swift */,
 				C89DEC897A299E2212058242 /* VentingRoomScreen.swift */,
 				0CE7A4718327654535205A1B /* VentingTargetSelectionScreen.swift */,
 			);
@@ -440,18 +451,18 @@
 		70C2F968A384BCA87AD58FBE /* Theme */ = {
 			isa = PBXGroup;
 			children = (
-				65B5194CD0F421D33ECF9B3C /* 루나 시그널.png */,
-				1C6E8F275BE7E82E840FFF79 /* 멍멍.png */,
-				4660E2EDD0E1239828958464 /* 멍멍1.png */,
-				87B5829AA26566F888E696C2 /* 멍멍2.png */,
-				F5F504DF3EA2E48367CD905D /* 멍멍이 테마.png */,
-				37A93152BCB7E42148E852C5 /* 베이스볼 별자리.png */,
-				6BAFE4FC1DDFA9F38EE69786 /* 야구가 좋아.png */,
-				AB8F5D18E73440B513975E3F /* 야구의 밤.png */,
-				33EDD6D7191D4B748F543694 /* 코퍼 더스크.png */,
-				5F1678979DEAA4C058B0B399 /* 클린 베이스볼.png */,
-				24DA21746BC301A1935CFEBD /* 피치 펄스.png */,
-				450208DB4A8BB4E7E814AC6C /* 홈런 임팩트.png */,
+				92808772D1756216D41279FD /* 루나 시그널.png */,
+				9766814FF4A79880FAA5FA35 /* 멍멍.png */,
+				6A10C95C891E577F029B1F21 /* 멍멍1.png */,
+				5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */,
+				02B048B8F66719840C28B9D6 /* 멍멍이 테마.png */,
+				8CAC57AC50E0583972CB7B3D /* 베이스볼 별자리.png */,
+				AA8986E8EB82F1698A53C4AA /* 야구가 좋아.png */,
+				3CB394E5FE0AB0CE864FEB37 /* 야구의 밤.png */,
+				63548DB487284CE07D17CA3C /* 코퍼 더스크.png */,
+				00AE1416F6CFEFA9B2D7D95C /* 클린 베이스볼.png */,
+				DABAAB834C102B94324210B1 /* 피치 펄스.png */,
+				F7D19ECB7357CFF94EE0DCCC /* 홈런 임팩트.png */,
 				AFFFFE904FF5F1FBB6C5F14B /* WatchAppEventColors.swift */,
 				53BA5C62F0AE8C59D23DBEDD /* WatchAppRadius.swift */,
 				5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */,
@@ -483,6 +494,7 @@
 				E0F5F0A43D13A06FB43AC50F /* VictoryTransitionScreen.swift */,
 				745360B75FFD162B4B4031D4 /* WatchLiveGameScreen.swift */,
 				2C3876F3FD80D05BBEDB1FD6 /* WatchNoGameScreen.swift */,
+				6EDE824094DE189DD3544098 /* WatchVentingScreen.swift */,
 			);
 			path = Screens;
 			sourceTree = "<group>";
@@ -592,7 +604,7 @@
 			isa = PBXGroup;
 			children = (
 				17FC246EA4A0E3191CE1CDD5 /* VentingModels.swift */,
-				A1B2C3D4E5F60718293A4B5C /* VentingTool.swift */,
+				04D2FE95FBF4D5FB9A863806 /* VentingTool.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -738,18 +750,18 @@
 			files = (
 				E5C6A37AABAFC452BDD21CAF /* AnimationFrames in Resources */,
 				F12E146A8B5209368A57DCF0 /* Assets.xcassets in Resources */,
-				F10F85F580A95593B9B45AC3 /* 루나 시그널.png in Resources */,
-				8F0216340AFC3D55B7D9CCCD /* 멍멍.png in Resources */,
-				ED51F8E576B65C30DCE33C98 /* 멍멍1.png in Resources */,
-				7F51EAAEC75123A552A1C573 /* 멍멍2.png in Resources */,
-				B3B421819C84BCC6411E5B64 /* 멍멍이 테마.png in Resources */,
-				24D2AE7B79021AC841567979 /* 베이스볼 별자리.png in Resources */,
-				9BB76F9702773DD3C0ED8A02 /* 야구가 좋아.png in Resources */,
-				61DD606DFC133DA674161513 /* 야구의 밤.png in Resources */,
-				03B4F41B3368B26C45202A06 /* 코퍼 더스크.png in Resources */,
-				8A3DBF1845FC6A5D0C6BBFD4 /* 클린 베이스볼.png in Resources */,
-				1741F5FBFA5AB5AAE829F52A /* 피치 펄스.png in Resources */,
-				33A5182A8DBDB3FBF5F5038B /* 홈런 임팩트.png in Resources */,
+				A870EA84A0BF7DFA4457DC0B /* 루나 시그널.png in Resources */,
+				C758F6A2853A48FAB4B17CCD /* 멍멍.png in Resources */,
+				8DB04B37880799CA7F8AD85F /* 멍멍1.png in Resources */,
+				AE7625904A416811149F4333 /* 멍멍2.png in Resources */,
+				A05D379C480DA13EDDA18706 /* 멍멍이 테마.png in Resources */,
+				279D2E522D405D251DE06B59 /* 베이스볼 별자리.png in Resources */,
+				BA80BDE55FA0E15C35828602 /* 야구가 좋아.png in Resources */,
+				67F9E72E14C0B9495B3A502A /* 야구의 밤.png in Resources */,
+				0E61EFD2AD4A689A845F476D /* 코퍼 더스크.png in Resources */,
+				C6190088ACFFB47FFE05AD0E /* 클린 베이스볼.png in Resources */,
+				F8341E6E8743A8070CE6E25C /* 피치 펄스.png in Resources */,
+				1E0A04A3013768D7045D2F95 /* 홈런 임팩트.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -802,6 +814,7 @@
 				FF04F10F375D614182ACC91E /* HomeScreen.swift in Sources */,
 				835005B0CF50ED79B601D92C /* LiveActivityManager.swift in Sources */,
 				5149C6E8A8F4998C32890151 /* LiveGameScreen.swift in Sources */,
+				E7276F81728AE337F95EB0D3 /* LiveRegretProvider.swift in Sources */,
 				3FB5184C8CB3A05447E9ABAB /* LiveViewSessionManager.swift in Sources */,
 				F6CBF646798EF1B409B9FADB /* MockRegretProvider.swift in Sources */,
 				EFD914141D2D4AD6CA14D96C /* MockVentingHapticPlayer.swift in Sources */,
@@ -831,12 +844,14 @@
 				43ED0FE54795C259DBAF5F44 /* VentingGateProviding.swift in Sources */,
 				D52D97B7AE156BEB764A1EC4 /* VentingHapticPlaying.swift in Sources */,
 				6A9EA505EA8AAEA1CF2E8668 /* VentingHomeCard.swift in Sources */,
+				A68DF763191DCBD808FDEEE5 /* VentingLiveEntry.swift in Sources */,
 				BF9B72D69A48D151B784CAD9 /* VentingModels.swift in Sources */,
-				C5B4A3928170F6E5D4C3B2A1 /* VentingTool.swift in Sources */,
 				37D04C0E7E98A740EEF2DD47 /* VentingOpenConditionChecker.swift in Sources */,
 				A969609CE86D971793AE8CB7 /* VentingRoomScreen.swift in Sources */,
 				AA6C6F56CD8FD044106D99D4 /* VentingRoomViewModel.swift in Sources */,
+				94021B3CA9661B5B95C52778 /* VentingShakeDetector.swift in Sources */,
 				76C1FC1F239C44193D6A8385 /* VentingTargetSelectionScreen.swift in Sources */,
+				A217C18F01157D1228B77518 /* VentingTool.swift in Sources */,
 				E3C6597B53C3B8B474817DD4 /* WatchCompanionStatus.swift in Sources */,
 				3DE65F4E9A3DB6A352F7A80E /* WatchGameSyncManager.swift in Sources */,
 				CF91F1A57AE3DD19E9B34F93 /* WatchInstallCard.swift in Sources */,
@@ -874,6 +889,7 @@
 				835791004453C8D35682936F /* WatchTeamTheme.swift in Sources */,
 				57DBAF95E3B3874B7F31D3DD /* WatchTokenRegistrar.swift in Sources */,
 				5C35221BA6986D70720B25D7 /* WatchUiProfile.swift in Sources */,
+				119A8E7829300FDB07C77669 /* WatchVentingScreen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

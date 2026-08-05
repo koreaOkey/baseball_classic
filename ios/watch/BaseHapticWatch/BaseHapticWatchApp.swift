@@ -34,6 +34,7 @@ struct WatchContentView: View {
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var stadiumCheer = StadiumCheerCoordinator.shared
+    @StateObject private var venting = WatchVentingCoordinator.shared
 
     @State private var isEventOverlayVisible = false
     @State private var visibleEventType: String?
@@ -158,6 +159,16 @@ struct WatchContentView: View {
                 StadiumCheerScreen(payload: payload)
                     .transition(.opacity)
                     .zIndex(10)
+            }
+
+            // 분풀이 룸 — 폰 테스트 도구 트리거로 열림 (최상위)
+            if let ventingRequest = venting.current {
+                WatchVentingScreen(
+                    request: ventingRequest,
+                    onClose: { venting.dismiss() }
+                )
+                .transition(.opacity)
+                .zIndex(11)
             }
         }
         .onAppear {

@@ -61,6 +61,21 @@ struct LiveGameScreen: View {
     }
 
     var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            mainContent
+
+            // 분풀이 라이브 진입 (DEBUG + 피처 플래그 게이트, 마이팀 경기에서만 렌더링)
+            #if DEBUG
+            VentingLiveEntryOverlay(
+                gameState: gameState,
+                events: events,
+                boxscore: boxscore
+            )
+            #endif
+        }
+    }
+
+    private var mainContent: some View {
         VStack(spacing: 0) {
             DetailTopBar(
                 state: gameState,

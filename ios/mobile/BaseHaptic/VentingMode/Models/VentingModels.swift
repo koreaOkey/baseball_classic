@@ -30,6 +30,7 @@ enum VentingGameResult: String, Codable, Equatable {
     case draw       // 무승부
     case canceled   // 취소
     case postponed  // 연기
+    case inProgress // 경기 진행 중 (라이브 진입 전용 — 홈카드 오픈 조건에는 해당 없음)
 }
 
 // MARK: - VentingGameContext (경기 컨텍스트)
@@ -50,5 +51,7 @@ struct VentingGameContext: Codable, Equatable {
     let candidates: [RegretCandidate]
     /// 감독 선택지 사건 문구
     let managerEventDescription: String
+    /// 라이브 진입 시 현재 이닝 라벨 (예: "7회말"). nil이면 종료 경기("최종")로 표시.
+    var inningLabel: String? = nil
 }
 #endif

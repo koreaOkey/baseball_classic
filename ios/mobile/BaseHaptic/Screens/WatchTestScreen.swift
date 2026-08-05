@@ -190,6 +190,8 @@ struct WatchTestScreen: View {
                     manualEventCard
                     pushSimulationCard
                     cheerTestCard
+
+                    ventingTestCard
                     logCard
                     Spacer().frame(height: AppSpacing.bottomSafeSpacer)
                 }
@@ -617,6 +619,45 @@ struct WatchTestScreen: View {
         case "OUT": return "아웃 · \(score) · \(gameState.inning)"
         default: return score
         }
+    }
+
+    // MARK: - Venting Test
+
+    private var ventingTestCard: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("워치 분풀이 테스트")
+                .font(AppFont.bodyBold)
+                .foregroundColor(AppColors.gray300)
+
+            Text("워치에 분풀이 룸(탭·크라운 연타로 인형 완파)을 즉시 띄웁니다.")
+                .font(AppFont.caption)
+                .foregroundColor(AppColors.gray500)
+
+            Button {
+                WatchGameSyncManager.shared.sendVentingTrigger(
+                    gameId: "test_venting",
+                    targetLabel: "감독",
+                    eventDescription: "지금까지의 경기 운영 아쉬움"
+                )
+                addLog("[VENTING] 워치 분풀이 룸 트리거 전송")
+            } label: {
+                HStack(spacing: AppSpacing.xs) {
+                    Text("💢")
+                        .font(AppFont.body)
+                    Text("워치 분풀이 룸 열기")
+                        .font(AppFont.bodyBold)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: AppSpacing.buttonHeight)
+                .background(AppColors.red500)
+                .cornerRadius(AppRadius.sm)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(AppSpacing.lg)
+        .background(AppColors.gray900)
+        .cornerRadius(AppRadius.md)
     }
 
     // MARK: - Cheer Test

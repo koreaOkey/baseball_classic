@@ -99,6 +99,34 @@ final class VentingRoomViewModel: ObservableObject {
         triggerShake()
     }
 
+    /// 흔들기 버스트 1회 처리.
+    ///
+    /// 세기에 비례한 `hits`(1~3)만큼 탭 데미지를 주고, 햅틱은 버스트당 1회만
+    /// 재생한다(단계 전이 시엔 전이 햅틱이 우선). 스로틀 없음 — 감지기가 디바운스.
+    func recordShake(hits: Int) {
+        guard !isDestroyed else { return }
+
+        var lastTransition: DestructionStage?
+        for _ in 0..<max(1, min(hits, 3)) {
+            if let transitioned = machine.tap() {
+                lastTransition = transitioned
+            }
+        }
+        gauge = machine.gauge
+        stage = machine.stage
+
+        if let transitioned = lastTransition {
+            hapticPlayer.playStageTransition(transitioned)
+            if transitioned == .destroyed {
+                isDestroyed = true
+            }
+        } else {
+            hapticPlayer.playTapFeedback()
+        }
+
+        triggerShake()
+    }
+
     /// 게이지를 0으로 초기화한다. UserDefaults 기록은 유지된다.
     func reset() {
         machine.reset()
@@ -140,15 +168,19 @@ final class VentingRoomViewModel: ObservableObject {
 
 // MARK: - VentingTarget
 
-/// 선택된 분풀이 대상 (선수 후보 또는 감독).
+/// 선택된 분풀이 대상 (선수 후보, 감독, 또는 직접 입력).
 enum VentingTarget: Equatable {
     case player(RegretCandidate)
     case manager(VentingManagerOption)
+    /// 사용자가 이름을 직접 입력한 대상.
+    /// 입력값은 화면 표시 전용이며 어디에도 저장·전송하지 않는다(초상권 리스크 없음).
+    case custom(String)
 
     var roleLabel: String {
         switch self {
         case .player(let c): return c.roleLabel
         case .manager(let m): return m.label
+        case .custom(let name): return name
         }
     }
 
@@ -156,6 +188,7 @@ enum VentingTarget: Equatable {
         switch self {
         case .player(let c): return c.eventDescription
         case .manager(let m): return m.eventDescription
+        case .custom: return "직접 지목한 분풀이 대상"
         }
     }
 }

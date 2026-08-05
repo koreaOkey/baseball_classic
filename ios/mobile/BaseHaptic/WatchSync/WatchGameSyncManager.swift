@@ -146,6 +146,29 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Send Venting Trigger (테스트 도구 전용)
+
+    /// 워치 분풀이 룸 트리거. 워치측 handleMessage("venting_trigger")가 룸을 연다.
+    func sendVentingTrigger(gameId: String, targetLabel: String, eventDescription: String) {
+        guard WCSession.default.activationState == .activated else { return }
+
+        let message: [String: Any] = [
+            "type": "venting_trigger",
+            "game_id": gameId,
+            "target_label": targetLabel,
+            "event_description": eventDescription,
+            "updated_at": Date().timeIntervalSince1970
+        ]
+
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("[WatchGameSync] Failed to send venting trigger: \(error.localizedDescription)")
+            }
+        } else {
+            WCSession.default.transferUserInfo(message)
+        }
+    }
+
     // MARK: - Send Watch Sync Prompt
     func sendWatchSyncPrompt(gameId: String, homeTeam: String, awayTeam: String, myTeam: String) {
         guard WCSession.default.activationState == .activated else { return }
