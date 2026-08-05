@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -64,6 +66,7 @@ import com.basehaptic.mobile.ui.theme.Yellow400
 import com.basehaptic.mobile.venting.DestructionConstants
 import com.basehaptic.mobile.venting.DestructionStage
 import com.basehaptic.mobile.venting.VentingRoomState
+import com.basehaptic.mobile.venting.VentingShakeDetector
 import com.basehaptic.mobile.venting.VentingTool
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -87,6 +90,33 @@ private object StrikeMotion {
     const val HIT_STOP_MS = 70
     const val RECOVER_MS = 120
     const val HIT_EFFECT_LINGER_MS = 220
+}
+
+/**
+ * 인형 뒤 글로우 — 스프라이트의 투명 유니폼 몸판이 흰옷으로 읽히게 하는 채움용 광원.
+ *
+ * 디자이너 스프라이트는 흰 배경 기준으로 제작되어 유니폼 몸판 일부가 투명 구멍인데,
+ * 어두운 룸에서 그대로 쓰면 "검은 옷"으로 보인다. 인형(가슴 위치)보다 작게 깔아
+ * 실루엣 뒤에 거의 숨긴다 — 조명 "연출"이 아니라 구멍 메움이 목적 (2026-08-05 톤 다운).
+ */
+@Composable
+internal fun VentingDollSpotlight(
+    diameter: androidx.compose.ui.unit.Dp,
+    offsetY: androidx.compose.ui.unit.Dp = 0.dp
+) {
+    Box(
+        modifier = Modifier
+            .offset(y = offsetY)
+            .size(diameter)
+            .background(
+                Brush.radialGradient(
+                    0.0f to Color(0xFFFAF6EE),
+                    0.55f to Color(0xF2FAF6EE),
+                    1.0f to Color(0x00FAF6EE)
+                ),
+                androidx.compose.foundation.shape.CircleShape
+            )
+    )
 }
 
 /**
@@ -124,11 +154,8 @@ fun VentingRoomScreen(
         }
     }
 
-    fun strike() {
-        if (state.isDestroyed) return
-        state.recordTap()
-
-        // 인형 흔들림 (iOS VentingRoomViewModel.triggerShake)
+    // 인형 흔들림 연출 (탭 타격·흔들기 공용)
+    fun wobbleDoll() {
         shakeJob?.cancel()
         shakeJob = scope.launch {
             val distance = when (state.stage) {
@@ -140,6 +167,27 @@ fun VentingRoomScreen(
             shakeOffset.animateTo(-distance, tween(50))
             shakeOffset.animateTo(0f, tween(50))
         }
+    }
+
+    // 흔들기 연타: 룸이 보이는 동안만 센서 점유. 버스트마다 세기 비례 데미지 + 인형 흔들림.
+    val appContext = LocalContext.current.applicationContext
+    DisposableEffect(state) {
+        val detector = VentingShakeDetector(appContext) { hits ->
+            if (!state.isDestroyed) {
+                state.recordShake(hits)
+                wobbleDoll()
+            }
+        }
+        detector.start()
+        onDispose { detector.stop() }
+    }
+
+    fun strike() {
+        if (state.isDestroyed) return
+        state.recordTap()
+
+        // 인형 흔들림 (iOS VentingRoomViewModel.triggerShake)
+        wobbleDoll()
 
         // 타격 연출 (연타 시에도 매번 와인드업부터 다시 스윙)
         strikeJob?.cancel()
@@ -262,6 +310,8 @@ fun VentingRoomScreen(
             ) {
                 val destroyed = state.stage == DestructionStage.DESTROYED
                 Box(contentAlignment = Alignment.Center) {
+                    // 인형(220dp)의 56% 크기·가슴 위치 — 실루엣 뒤에 거의 숨는 채움광
+                    VentingDollSpotlight(diameter = 124.dp, offsetY = 24.dp)
                     Image(
                         painter = painterResource(id = state.stage.dollDrawableRes),
                         contentDescription = null,
@@ -337,6 +387,17 @@ fun VentingRoomScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (!state.isDestroyed) {
+                Spacer(modifier = Modifier.height(AppSpacing.sm))
+                Text(
+                    text = "폰을 꽉 잡고 흔들어도 데미지! 세게 흔들수록 아파요",
+                    style = AppFont.micro,
+                    color = Gray500,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Spacer(modifier = Modifier.weight(1f))
 

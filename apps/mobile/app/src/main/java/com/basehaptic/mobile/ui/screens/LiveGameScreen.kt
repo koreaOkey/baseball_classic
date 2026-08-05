@@ -106,6 +106,7 @@ import com.basehaptic.mobile.ui.theme.Orange500
 import com.basehaptic.mobile.ui.theme.Red500
 import com.basehaptic.mobile.ui.theme.Yellow400
 import com.basehaptic.mobile.ui.theme.Yellow500
+import com.basehaptic.mobile.venting.ui.VentingLiveEntryOverlay
 import java.util.Locale
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
@@ -361,11 +362,12 @@ fun LiveGameScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Gray950)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Gray950)
+        ) {
         DetailTopBar(
             state = gameState,
             gameId = gameId,
@@ -496,6 +498,15 @@ fun LiveGameScreen(
                 item { Spacer(modifier = Modifier.height(AppSpacing.bottomSafeSpacer)) }
             }
         }
+        }
+
+        // 분풀이 라이브 진입 (DEBUG + 피처 플래그 게이트, 마이팀 경기에서만 렌더링)
+        VentingLiveEntryOverlay(
+            state = gameState,
+            events = allEvents,
+            boxscore = boxscore,
+            modifier = Modifier.align(Alignment.BottomStart)
+        )
     }
 }
 

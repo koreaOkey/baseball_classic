@@ -546,6 +546,8 @@ class MainActivity : ComponentActivity() {
                     onPersistLastNotificationSettingsCheckVersion = ::persistLastNotificationSettingsCheckVersion,
                     onRequestNotificationPermission = { PushSetup.requestNotificationPermission(this@MainActivity) },
                 )
+                // 분풀이 플로우 풀스크린 오버레이 (홈카드·라이브 진입 공용, DEBUG 게이트)
+                com.basehaptic.mobile.venting.ui.VentingFlowHost()
                 // 보상형 광고 로드 대기 안내 — 모든 광고 유닛(워치·잠금화면·테마) 공통
                 com.basehaptic.mobile.ui.components.RewardedAdLoadingOverlay()
                 }

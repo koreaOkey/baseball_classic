@@ -23,7 +23,10 @@ data class VentingManagerOption(
 }
 
 enum class VentingGameResult {
-    WIN, LOSS, DRAW, CANCELED, POSTPONED
+    WIN, LOSS, DRAW, CANCELED, POSTPONED,
+
+    /** 경기 진행 중 (라이브 진입 전용 — 홈카드 오픈 조건에는 해당 없음) */
+    IN_PROGRESS
 }
 
 /**
@@ -42,24 +45,34 @@ data class VentingGameContext(
     /** 선수 후보 목록 (최대 5명, 부분 표시 허용) */
     val candidates: List<RegretCandidate>,
     /** 감독 선택지 사건 문구 */
-    val managerEventDescription: String
+    val managerEventDescription: String,
+    /** 라이브 진입 시 현재 이닝 라벨 (예: "7회말"). null이면 종료 경기("최종")로 표시. */
+    val inningLabel: String? = null
 )
 
-/** 선택된 분풀이 대상 (선수 후보 또는 감독). */
+/** 선택된 분풀이 대상 (선수 후보, 감독, 또는 직접 입력). */
 sealed class VentingTarget {
     data class Player(val candidate: RegretCandidate) : VentingTarget()
     data class Manager(val option: VentingManagerOption) : VentingTarget()
+
+    /**
+     * 사용자가 이름을 직접 입력한 대상.
+     * 입력값은 화면 표시 전용이며 어디에도 저장·전송하지 않는다(초상권 리스크 없음).
+     */
+    data class Custom(val name: String) : VentingTarget()
 
     val roleLabel: String
         get() = when (this) {
             is Player -> candidate.roleLabel
             is Manager -> option.label
+            is Custom -> name
         }
 
     val eventDescription: String
         get() = when (this) {
             is Player -> candidate.eventDescription
             is Manager -> option.eventDescription
+            is Custom -> "직접 지목한 분풀이 대상"
         }
 }
 

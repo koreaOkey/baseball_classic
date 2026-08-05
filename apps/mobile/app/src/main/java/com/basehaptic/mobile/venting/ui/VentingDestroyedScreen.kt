@@ -103,7 +103,7 @@ fun VentingDestroyedScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(AppSpacing.xl)
         ) {
-            // 완파된 인형 (익명 펭귄 스프라이트)
+            // 완파된 인형 (익명 펭귄 스프라이트) — 찢김 연출이 어두운 배경과 어울려 글로우 없음
             Image(
                 painter = painterResource(id = DestructionStage.DESTROYED.dollDrawableRes),
                 contentDescription = null,

@@ -17,10 +17,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Circle
@@ -36,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,9 +76,12 @@ private val Red300 = Color(0xFFFCA5A5)
 fun VentingTargetSelectionScreen(
     context: VentingGameContext,
     onBack: () -> Unit,
-    onSelectTarget: (VentingTarget) -> Unit
+    onSelectTarget: (VentingTarget) -> Unit,
+    backLabel: String = "홈"
 ) {
     var selectedTarget by remember { mutableStateOf<VentingTarget?>(null) }
+    var customName by remember { mutableStateOf("") }
+    val isLive = context.inningLabel != null
     val managerOption = remember(context) {
         VentingManagerOption(eventDescription = context.managerEventDescription)
     }
@@ -101,7 +109,7 @@ fun VentingTargetSelectionScreen(
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
-                Text(text = "홈", style = AppFont.bodyMedium, color = Color.White)
+                Text(text = backLabel, style = AppFont.bodyMedium, color = Color.White)
             }
             Text(
                 text = "분풀이 모드",
@@ -141,7 +149,7 @@ fun VentingTargetSelectionScreen(
                     )
                     Text(text = "${context.myScore}", style = AppFont.h2, color = Red400)
                 }
-                Text(text = "최종", style = AppFont.micro, color = Gray500)
+                Text(text = context.inningLabel ?: "최종", style = AppFont.micro, color = Gray500)
                 Column(
                     modifier = Modifier.weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -153,7 +161,11 @@ fun VentingTargetSelectionScreen(
             }
 
             Text(
-                text = "오늘의 아쉬운 순간 TOP${minOf(context.candidates.size, 5)}",
+                text = if (isLive) {
+                    "지금까지의 아쉬운 순간"
+                } else {
+                    "오늘의 아쉬운 순간 TOP${minOf(context.candidates.size, 5)}"
+                },
                 style = AppFont.h5Bold,
                 color = Color.White,
                 modifier = Modifier
@@ -161,6 +173,17 @@ fun VentingTargetSelectionScreen(
                     .padding(horizontal = AppSpacing.xxl)
                     .padding(top = AppSpacing.lg)
             )
+
+            if (context.candidates.isEmpty()) {
+                Text(
+                    text = "아직 집계된 아쉬운 순간이 없어요.\n감독을 고르거나 직접 입력으로 지목해보세요.",
+                    style = AppFont.caption,
+                    color = Gray500,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppSpacing.xxl)
+                )
+            }
 
             // 선수 후보 목록 + 감독 고정 6번째
             Column(
@@ -184,6 +207,27 @@ fun VentingTargetSelectionScreen(
                     eventDescription = managerOption.eventDescription,
                     isSelected = selectedTarget == managerTarget,
                     onTap = { selectedTarget = managerTarget }
+                )
+
+                // 직접 입력 — 입력값은 표시 전용, 저장·전송하지 않는다.
+                CustomTargetRow(
+                    name = customName,
+                    isSelected = selectedTarget is VentingTarget.Custom,
+                    onNameChange = { name ->
+                        customName = name
+                        val trimmed = name.trim()
+                        selectedTarget = if (trimmed.isNotEmpty()) {
+                            VentingTarget.Custom(trimmed)
+                        } else if (selectedTarget is VentingTarget.Custom) {
+                            null
+                        } else {
+                            selectedTarget
+                        }
+                    },
+                    onTap = {
+                        val trimmed = customName.trim()
+                        if (trimmed.isNotEmpty()) selectedTarget = VentingTarget.Custom(trimmed)
+                    }
                 )
             }
 
@@ -239,6 +283,79 @@ fun VentingTargetSelectionScreen(
                     .padding(vertical = AppSpacing.lg)
             )
         }
+    }
+}
+
+/**
+ * 선수명 직접 입력 행. 입력 즉시 [VentingTarget.Custom]으로 선택되며,
+ * 입력값을 지우면 선택도 해제된다.
+ */
+@Composable
+private fun CustomTargetRow(
+    name: String,
+    isSelected: Boolean,
+    onNameChange: (String) -> Unit,
+    onTap: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(AppShapes.md)
+            .background(if (isSelected) Red500.copy(alpha = 0.12f) else Gray900)
+            .border(
+                1.dp,
+                if (isSelected) Red500.copy(alpha = 0.5f) else Gray800,
+                AppShapes.md
+            )
+            .clickable { onTap() }
+            .padding(AppSpacing.lg),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.md)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Edit,
+            contentDescription = null,
+            tint = if (isSelected) Red400 else Gray500,
+            modifier = Modifier.size(24.dp)
+        )
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.xxs)
+        ) {
+            Text(
+                text = "직접 입력",
+                style = AppFont.captionBold,
+                color = if (isSelected) Color.White else Gray300
+            )
+            Box {
+                if (name.isEmpty()) {
+                    Text(
+                        text = "화풀이할 선수명을 입력하세요",
+                        style = AppFont.body,
+                        color = Gray500
+                    )
+                }
+                BasicTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    textStyle = AppFont.body.copy(
+                        color = if (isSelected) Red300 else Color.White
+                    ),
+                    cursorBrush = SolidColor(Red400),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        Icon(
+            imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Outlined.Circle,
+            contentDescription = null,
+            tint = if (isSelected) Red500 else Gray700,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 

@@ -56,6 +56,31 @@ class VentingRoomState(
         }
     }
 
+    /**
+     * 흔들기 버스트 1회를 처리한다. 세기에 비례한 [hits](1~3)만큼 탭 데미지를 주고,
+     * 진동은 버스트당 1회만 재생한다(단계 전환 시엔 전환 진동이 우선).
+     */
+    fun recordShake(hits: Int) {
+        if (isDestroyed) return
+
+        var lastTransition: DestructionStage? = null
+        repeat(hits.coerceIn(1, 3)) {
+            machine.tap()?.let { lastTransition = it }
+        }
+        gauge = machine.gauge
+        stage = machine.stage
+
+        val transition = lastTransition
+        if (transition != null) {
+            hapticPlayer.playStageTransition(transition)
+            if (transition == DestructionStage.DESTROYED) {
+                isDestroyed = true
+            }
+        } else {
+            hapticPlayer.playTapFeedback()
+        }
+    }
+
     /** 게이지를 0으로 초기화한다. SharedPreferences 기록은 유지된다. */
     fun reset() {
         machine.reset()

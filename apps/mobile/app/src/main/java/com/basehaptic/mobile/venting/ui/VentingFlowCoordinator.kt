@@ -1,16 +1,11 @@
 package com.basehaptic.mobile.venting.ui
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.venting.MockRegretProvider
 import com.basehaptic.mobile.venting.VentingFeatureFlag
@@ -34,7 +29,8 @@ private sealed class VentingFlowState {
 @Composable
 fun VentingFlowCoordinator(
     context: VentingGameContext,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    backLabel: String = "홈"
 ) {
     val appContext = LocalContext.current.applicationContext
     var flowState by remember { mutableStateOf<VentingFlowState>(VentingFlowState.Selection) }
@@ -43,6 +39,7 @@ fun VentingFlowCoordinator(
         is VentingFlowState.Selection -> VentingTargetSelectionScreen(
             context = context,
             onBack = onClose,
+            backLabel = backLabel,
             onSelectTarget = { target: VentingTarget ->
                 flowState = VentingFlowState.Room(
                     VentingRoomState(
@@ -77,12 +74,11 @@ fun VentingFlowCoordinator(
  * - 목업 경기 컨텍스트를 로드하고, 오픈 조건을 판정한다.
  * - 조건 미충족 시 아무것도 렌더링하지 않는다.
  * - DEBUG + venting_mode_enabled 이중 게이트 뒤에서만 동작한다.
- * - 진입 시 풀스크린 다이얼로그로 분풀이 플로우를 표시한다.
+ * - 진입 시 [VentingFlowController]로 루트 오버레이 플로우를 연다.
  */
 @Composable
 fun VentingHomeCardContainer(myTeam: Team) {
     val androidContext = LocalContext.current
-    var showVentingFlow by remember { mutableStateOf(false) }
 
     val ventingContext = remember(myTeam) {
         if (!VentingFeatureFlag.isEnabled(androidContext)) return@remember null
@@ -92,24 +88,6 @@ fun VentingHomeCardContainer(myTeam: Team) {
 
     VentingHomeCard(
         context = ventingContext,
-        onEnterVenting = { showVentingFlow = true }
+        onEnterVenting = { VentingFlowController.open(ventingContext) }
     )
-
-    if (showVentingFlow) {
-        Dialog(
-            onDismissRequest = { showVentingFlow = false },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnClickOutside = false
-            )
-        ) {
-            BackHandler { showVentingFlow = false }
-            androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
-                VentingFlowCoordinator(
-                    context = ventingContext,
-                    onClose = { showVentingFlow = false }
-                )
-            }
-        }
-    }
 }
