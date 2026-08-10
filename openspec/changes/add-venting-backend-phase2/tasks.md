@@ -2,7 +2,7 @@
 
 - [x] 1.1 `config.py`에 venting 설정군 추가: `venting_backend_enabled: bool = False`, `venting_llm_enabled: bool = False`, `venting_llm_api_key`(AliasChoices로 `OPENAI_API_KEY`도 허용), `venting_llm_model`, `venting_llm_base_url`, `venting_llm_timeout_sec: int = 20`, `venting_llm_max_concurrency: int = 2` — 전부 `BASEHAPTIC_` 프리픽스, 기본값이 기능 OFF
 - [x] 1.2 OpenAI 호환 LLM 클라이언트 래퍼(`venting._call_llm`, 타임아웃·키 미로깅). 키/모델 미설정 또는 `venting_llm_enabled=false`면 호출 스킵하고 규칙 폴백
-- [ ] 1.3 배포 후 플래그 OFF 상태에서 기존 endpoint·워커·헬스체크 회귀 없음 확인(다크 대기 검증) — 로컬 106 테스트 통과, 프로덕션 health 확인 대기
+- [x] 1.3 배포 후 플래그 OFF 다크 검증 완료(커밋 995e8dd6, origin/staging). 프로덕션 health 200, 신규 엔드포인트 200 빈 응답(team-ranking `ranking:[]`, regret-top5 `items:[]`, events `disabled`) — 기존 경로 무영향 확인
 
 ## 2. DB 마이그레이션 (전부 CREATE TABLE, 기존 테이블 무변경)
 
@@ -31,7 +31,7 @@
 
 - [x] 5.1 단위 테스트(`tests/test_venting.py`, 9건): 패배팀 산정/무승부·플래그OFF 스킵/재산정 방지/캐시 실명 미포함/감독 6번째/LLM 실패 폴백/지표+팀 랭킹/잘못된 타입 400. 전체 106 통과
 - [x] 5.2 커넥션 비점유 — LLM 호출은 `with SessionLocal()` 블록 밖(Phase2)에서 실행되도록 구조화(7/28 풀 고갈 패턴 회피)
-- [ ] 5.3 마이그레이션 적용 → 코드 배포(플래그 OFF) → 기존 트래픽 무영향 관찰 → `VENTING_BACKEND_ENABLED=true`(감독·지표·조회만) 관찰 → `VENTING_LLM_ENABLED=true` 순차 활성. 이상 시 플래그 OFF 롤백
+- [~] 5.3 코드 배포(플래그 OFF)·다크 무영향 관찰 완료. **잔여**: env(`VENTING_LLM_API_KEY/_MODEL`) 등록 확인 → 캐노니컬 RLS 마이그레이션 적용 → `VENTING_BACKEND_ENABLED=true`(감독·지표·조회) 관찰 → `VENTING_LLM_ENABLED=true` 순차 활성. 이상 시 플래그 OFF 롤백
 - [ ] 5.4 **BLOCKING(출시 전 게이트)**: 실명 표시는 KBOP 라이선스/법률 확인 완료 후에만 활성. 미승인 시 역할 레이블만으로 운영(클라이언트 표시 정책과 연동)
 
 ## 6. 후속(범위 밖, 참조용)
