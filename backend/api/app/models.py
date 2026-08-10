@@ -457,3 +457,94 @@ class UserCheckinSeason(Base):
     season: Mapped[str] = mapped_column(String(8), primary_key=True)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+# --- 분풀이(venting) 모드 백엔드 Phase 2 (다크: 플래그 OFF 시 미사용) ---
+
+
+class TeamManager(Base):
+    """팀별 감독 디렉터리(시즌 단위 수동 관리). 경질 시 새 행을 추가하고
+    이전 행의 effective_to 를 채운다. '현재 감독' = effective_to IS NULL 최신."""
+
+    __tablename__ = "team_manager"
+    __table_args__ = (
+        Index("idx_team_manager_team_season", "team_code", "season"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    team_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    manager_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    season: Mapped[str] = mapped_column(String(8), nullable=False)
+    effective_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class VentingRegretCache(Base):
+    """경기 종료 후 산정한 패배팀 관점 regret-top5 캐시.
+    items 에는 역할 레이블·타순·event 참조·사유문구만 저장하고 선수 실명은 저장하지 않는다
+    (실명은 클라이언트가 조회 시점에 박스스코어와 결합해 선택 화면에서만 표시)."""
+
+    __tablename__ = "venting_regret_cache"
+    __table_args__ = (
+        UniqueConstraint("game_id", "team_code", name="uq_venting_regret_cache_game_team"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    game_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    team_code: Mapped[str] = mapped_column(String(32), nullable=False)  # 패배팀
+    items: Mapped[Any] = mapped_column(JSON, nullable=False)  # 실명 없음
+    manager_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="rule_fallback")  # llm | rule_fallback
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class VentingEvent(Base):
+    """분풀이 지표 raw 이벤트. team(유저 응원팀) 필수 — 팀 랭킹 집계 기반."""
+
+    __tablename__ = "venting_event"
+    __table_args__ = (
+        Index("idx_venting_event_team_created", "team", "created_at"),
+        Index("idx_venting_event_type", "event_type"),
+    )
+
+    id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)  # room_enter|destroy_complete|retry_prompt_shown|retry_ad_start
+    entry_source: Mapped[str | None] = mapped_column(String(24), nullable=True)  # home_card|live_button|loss_prompt
+    team: Mapped[str] = mapped_column(String(32), nullable=False)  # 유저 응원팀
+    game_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    client_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class VentingTeamDaily(Base):
+    """팀별 일간 분풀이 방 실행 카운트 캐시(랭킹용)."""
+
+    __tablename__ = "venting_team_daily"
+    __table_args__ = (
+        Index("idx_venting_team_daily_date", "date"),
+    )
+
+    team: Mapped[str] = mapped_column(String(32), primary_key=True)
+    date: Mapped[str] = mapped_column(String(10), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class VentingTeamSeason(Base):
+    """팀별 시즌 누적 분풀이 방 실행 카운트 캐시(랭킹용)."""
+
+    __tablename__ = "venting_team_season"
+    __table_args__ = (
+        Index("idx_venting_team_season_count", "season", "count"),
+    )
+
+    team: Mapped[str] = mapped_column(String(32), primary_key=True)
+    season: Mapped[str] = mapped_column(String(8), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

@@ -461,7 +461,12 @@ def upsert_game_from_snapshot(db: Session, game_id: str, payload: CrawlerSnapsho
 
     if became_live:
         game.live_started_at = now_utc()
+    became_finished = (
+        next_status is GameStatus.FINISHED
+        and normalize_status(prev_status_value or "") is not GameStatus.FINISHED
+    )
     game._just_became_live = became_live  # type: ignore[attr-defined]
+    game._just_became_finished = became_finished  # type: ignore[attr-defined]
     game._snapshot_meaningful_changed = meaningful_changed  # type: ignore[attr-defined]
 
     db.flush()

@@ -92,6 +92,13 @@ from .services import (
 )
 from .weather import KST, SUPPORTED_FORECAST_DAYS, build_hourly_weather, build_weather_summary
 from .workers.cheer_validator import validate_pending_cheer_events
+from .venting import (
+    VALID_VENTING_EVENT_TYPES,
+    compute_regret_for_game_background,
+    get_regret_cache,
+    get_team_season_ranking,
+    record_venting_event,
+)
 
 
 settings = get_settings()
@@ -2249,6 +2256,11 @@ def _ingest_crawler_snapshot_locked(
             state_payload.get("awayTeam", "") or "",
         )
 
+    # 경기 종료(→FINISHED) 1회 한정 분풀이 regret-top5 산정 (out-of-band).
+    # 플래그 OFF 시 compute 진입점이 즉시 no-op → 기존 운영 경로 무영향.
+    if settings.venting_backend_enabled and getattr(game, "_just_became_finished", False):
+        background_tasks.add_task(compute_regret_for_game_background, game_id)
+
     # Live Activity push 전송 (잠금화면 실시간 업데이트)
     la_event = "end" if state_payload.get("status") == "FINISHED" else "update"
     if inserted_event_payload:
@@ -2592,6 +2604,102 @@ def validate_pending_cheer_events_now(
         raise HTTPException(status_code=401, detail="authorization header required")
     _extract_user_id_from_token(authorization)
     return {"updated": validate_pending_cheer_events(db, limit=limit)}
+
+
+# --------------------------------------------------------------------------- #
+# 분풀이(venting) 모드 — regret-top5 조회 / 지표 수집 / 팀 랭킹
+# 전부 BASEHAPTIC_VENTING_BACKEND_ENABLED 게이트(기본 OFF → 빈 응답, 기존 경로 무영향).
+# --------------------------------------------------------------------------- #
+
+
+@app.get("/games/{game_id}/venting/regret-top5")
+def get_venting_regret_top5(
+    game_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, Any]:
+    """패배팀 관점 regret-top5 조회. 캐시만 읽는다(LLM 미호출).
+
+    items 는 역할 레이블·타순·투수 등판순서·사유문구만 포함(실명 없음) — 클라이언트가
+    선택 화면에서 박스스코어와 결합해 실명을 표시한다. manager 는 6번째 고정 항목.
+    """
+    if not settings.venting_backend_enabled:
+        return {"gameId": game_id, "items": [], "manager": None, "source": None}
+
+    cache = get_regret_cache(db, game_id)
+    if cache is None:
+        return {"gameId": game_id, "items": [], "manager": None, "source": None}
+    return {
+        "gameId": game_id,
+        "teamCode": cache.team_code,
+        "items": cache.items or [],
+        "manager": cache.manager_name,
+        "source": cache.source,
+        "computedAt": cache.computed_at,
+    }
+
+
+@app.post("/venting/events")
+def post_venting_event(
+    payload: dict[str, Any],
+    db: Annotated[Session, Depends(get_db)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """분풀이 지표 수집(best-effort). event_type·team 필수, team 은 팀 랭킹 집계에 사용."""
+    if not settings.venting_backend_enabled:
+        return {"ok": False, "reason": "disabled"}
+
+    event_type = str(payload.get("event_type") or "").strip()
+    team = str(payload.get("team") or "").strip()
+    if event_type not in VALID_VENTING_EVENT_TYPES or not team:
+        raise HTTPException(status_code=400, detail="event_type (valid) and team required")
+
+    user_id: str | None = None
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            user_id = _extract_user_id_from_token(authorization)
+        except HTTPException:
+            user_id = None  # 지표는 인증 실패해도 비차단
+
+    client_ts: datetime | None = None
+    client_ts_raw = payload.get("client_ts")
+    if client_ts_raw:
+        try:
+            client_ts = datetime.fromisoformat(str(client_ts_raw).replace("Z", "+00:00"))
+        except ValueError:
+            client_ts = None
+
+    platform_raw = str(payload.get("platform") or "unknown").lower()
+    platform = platform_raw if platform_raw in ("ios", "android") else "unknown"
+
+    try:
+        event = record_venting_event(
+            db,
+            event_type=event_type,
+            team=team,
+            entry_source=payload.get("entry_source"),
+            game_id=payload.get("game_id"),
+            user_id=user_id,
+            client_ts=client_ts,
+            platform=platform,
+        )
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.warning("[venting] event insert failed type=%s team=%s", event_type, team)
+        return {"ok": False}  # best-effort: 사용자 플로우 비차단
+    return {"ok": True, "id": event.id}
+
+
+@app.get("/venting/team-ranking")
+def get_venting_team_ranking(
+    db: Annotated[Session, Depends(get_db)],
+    season: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """응원팀별 분풀이 방 실행 랭킹(집계 기반, 선수 미포함)."""
+    if not settings.venting_backend_enabled:
+        return {"season": season, "ranking": []}
+    resolved_season = season or str(datetime.now(KST).year)
+    return {"season": resolved_season, "ranking": get_team_season_ranking(db, resolved_season)}
 
 
 @app.get("/rankings/teams")

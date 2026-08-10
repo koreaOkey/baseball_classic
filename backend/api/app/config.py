@@ -55,6 +55,20 @@ class Settings(BaseSettings):
     weather_service_key: str = ""
     weather_api_base_url: str = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst"
 
+    # 분풀이(venting) 모드 백엔드 — Phase 2. 전부 기본 OFF (다크 배포: 코드는 올라가되
+    # 플래그를 켜기 전까지 워커·엔드포인트가 동작하지 않아 기존 운영 경로에 영향 0).
+    venting_backend_enabled: bool = False  # 마스터: regret 워커 + 조회/지표/감독 엔드포인트
+    venting_llm_enabled: bool = False  # LLM 산정만 별도 게이트 (off 시 규칙/WPA 폴백)
+    # OpenAI 호환 LLM. 관례상 OPENAI_API_KEY 도 허용(BASEHAPTIC_ 접두 alias와 병행).
+    venting_llm_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("BASEHAPTIC_VENTING_LLM_API_KEY", "OPENAI_API_KEY"),
+    )
+    venting_llm_model: str = ""  # 예: gpt-5.6-luna (정확한 ID는 env로 주입, 코드 무수정)
+    venting_llm_base_url: str = "https://api.openai.com/v1"
+    venting_llm_timeout_sec: int = 20  # LLM 호출 타임아웃 (초)
+    venting_llm_max_concurrency: int = 2  # 동시 regret 산정 상한 (버스트 종료 시 폭주 방지)
+
     @property
     def cors_origins(self) -> list[str]:
         raw = self.cors_allow_origins.strip()
