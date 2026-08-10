@@ -357,6 +357,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         let incomingEventType = (message["event_type"] as? String) ?? ""
         let incomingEventAllowed = incomingEventType.isEmpty
             || Self.isEventTypeAllowedByFilter(incomingEventType)
+        if !incomingEventType.isEmpty {
+            recordRegretEvent(eventType: incomingEventType)
+        }
         if !incomingEventType.isEmpty && incomingEventAllowed {
             latestEventType = incomingEventType.uppercased()
             latestEventTimestamp = Date()
@@ -448,6 +451,34 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         latestEventType = eventType.uppercased()
         latestEventTimestamp = Date()
         triggerHaptic(eventType: eventType)
+        recordRegretEvent(eventType: eventType)
+    }
+
+    /// 분풀이 후보 축적 — 현재 게임 상태 기준 공수 판정 후 트래커 위임.
+    /// 필터·햅틱 토글과 무관하게 기록한다 (실점/병살 등 부정 이벤트만 내부 선별).
+    private func recordRegretEvent(eventType: String) {
+        guard let game = gameData, !game.gameId.isEmpty else { return }
+        let my = Self.displayTeamName(game.myTeamName)
+        let home = Self.displayTeamName(game.homeTeam)
+        let away = Self.displayTeamName(game.awayTeam)
+        let isMyHome = !my.isEmpty && my == home
+        let isMyAway = !my.isEmpty && my == away
+        let myTeamBatting: Bool?
+        if !isMyHome && !isMyAway {
+            myTeamBatting = nil // 중립/테스트 → 트래커가 양쪽 다 기록
+        } else if game.inning.contains("말") {
+            myTeamBatting = isMyHome
+        } else if game.inning.contains("초") {
+            myTeamBatting = isMyAway
+        } else {
+            myTeamBatting = nil
+        }
+        WatchRegretTracker.record(
+            gameId: game.gameId,
+            eventType: eventType,
+            inning: game.inning,
+            myTeamBatting: myTeamBatting
+        )
     }
 
     private func handleWatchSyncPrompt(_ message: [String: Any]) {
@@ -486,6 +517,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         latestEventType = upper
         latestEventTimestamp = Date()
         triggerHaptic(eventType: eventType)
+        recordRegretEvent(eventType: eventType)
     }
 
     /// APNs push에서 직접 받은 게임 데이터 처리

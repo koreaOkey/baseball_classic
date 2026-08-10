@@ -74,8 +74,11 @@ import com.basehaptic.watch.ui.components.NoGameScreen
 import com.basehaptic.watch.ui.StadiumCheerOverlayCoordinator
 import com.basehaptic.watch.ui.StadiumCheerScreen
 import com.basehaptic.watch.ui.theme.BaseHapticWatchTheme
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.basehaptic.watch.venting.WatchVentingRequest
 import com.basehaptic.watch.venting.WatchVentingScreen
+import com.basehaptic.watch.venting.WatchVentingSelectionScreen
 import com.basehaptic.watch.ui.theme.Gray950
 import com.basehaptic.watch.ui.theme.WatchTeamTheme
 import com.basehaptic.watch.ui.theme.WatchTeamThemes
@@ -584,18 +587,46 @@ fun WatchApp(isAmbient: Boolean = false) {
                             "double_play",
                             "hit" -> PlayerTransitionScreen(eventPlayer)
                             else -> {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    if (gameData != null) {
-                                        LiveGameScreen(
-                                            gameData = gameData!!,
-                                            teamDisplayNameStyle = teamDisplayNameStyle
-                                        )
-                                    } else {
-                                        NoGameScreen()
+                                val game = gameData
+                                if (game != null) {
+                                    // 라이브 화면 ←스와이프→ 분풀이 선택 (버튼 대신 페이지 —
+                                    // 작은 화면에서 오터치 없이 화면 전체가 진입 제스처)
+                                    val ventingPagerState = rememberPagerState(pageCount = { 2 })
+                                    HorizontalPager(
+                                        state = ventingPagerState,
+                                        modifier = Modifier.fillMaxSize()
+                                    ) { page ->
+                                        if (page == 0) {
+                                            Box(modifier = Modifier.fillMaxSize()) {
+                                                LiveGameScreen(
+                                                    gameData = game,
+                                                    teamDisplayNameStyle = teamDisplayNameStyle
+                                                )
+                                                WatchEventOverlay(
+                                                    latestEvent = latestEvent
+                                                )
+                                            }
+                                        } else {
+                                            val myNorm = displayTeamName(game.myTeamName)
+                                            val isMyHome = myNorm.isNotEmpty() && myNorm == displayTeamName(game.homeTeam)
+                                            val isMyAway = myNorm.isNotEmpty() && myNorm == displayTeamName(game.awayTeam)
+                                            val myScore = if (isMyHome) game.homeScore else game.awayScore
+                                            val opponentScore = if (isMyHome) game.awayScore else game.homeScore
+                                            WatchVentingSelectionScreen(
+                                                gameId = game.gameId,
+                                                isFinished = !game.isLive,
+                                                isLoss = (isMyHome || isMyAway) && myScore < opponentScore,
+                                                onSelect = { request -> ventingRequest = request }
+                                            )
+                                        }
                                     }
-                                    WatchEventOverlay(
-                                        latestEvent = latestEvent
-                                    )
+                                } else {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        NoGameScreen()
+                                        WatchEventOverlay(
+                                            latestEvent = latestEvent
+                                        )
+                                    }
                                 }
                             }
                         }

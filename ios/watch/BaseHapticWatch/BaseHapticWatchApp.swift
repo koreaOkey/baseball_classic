@@ -113,9 +113,19 @@ struct WatchContentView: View {
                 })
                 .transition(.opacity)
             } else {
-                // Main content
+                // Main content — 마이팀 경기 중엔 라이브 ←스와이프→ 분풀이 선택 페이지
+                // (버튼 대신 페이지: 작은 화면에서 오터치 없이 화면 전체가 진입 제스처)
                 if let gameData = connectivity.gameData {
-                    WatchLiveGameScreen(gameData: gameData)
+                    TabView {
+                        WatchLiveGameScreen(gameData: gameData)
+                        WatchVentingSelectionView(
+                            gameData: gameData,
+                            onSelect: { request in
+                                WatchVentingCoordinator.shared.dispatch(request)
+                            }
+                        )
+                    }
+                    .tabViewStyle(.page)
                 } else {
                     WatchNoGameScreen()
                 }

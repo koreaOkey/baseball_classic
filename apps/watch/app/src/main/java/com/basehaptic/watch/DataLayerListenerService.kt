@@ -200,6 +200,17 @@ class DataLayerListenerService : WearableListenerService() {
                 triggerHapticFeedback(eventType)
             }
         }
+        // 분풀이 후보 축적 — 필터·햅틱 토글과 무관하게 기록 (실점/병살 등 부정 이벤트만 내부 선별)
+        if (eventType.isNotBlank() && !gameId.isNullOrBlank()) {
+            recordRegretEvent(
+                gameId = gameId,
+                eventType = eventType,
+                inning = incomingInning,
+                homeTeam = dataMap.getString(KEY_HOME_TEAM, "") ?: "",
+                awayTeam = dataMap.getString(KEY_AWAY_TEAM, "") ?: "",
+                myTeam = myTeam ?: ""
+            )
+        }
 
         if (isFinished) {
             GameForegroundService.stop(this)
@@ -282,6 +293,17 @@ class DataLayerListenerService : WearableListenerService() {
         }
         saveLatestEvent(eventType, eventCursor.takeIf { it > 0L })
         triggerHapticFeedback(eventType)
+
+        // 분풀이 후보 축적 — 현재 경기 상태(prefs) 기준 공수 판정
+        val gamePrefs = getSharedPreferences(GAME_PREFS_NAME, Context.MODE_PRIVATE)
+        recordRegretEvent(
+            gameId = gamePrefs.getString(KEY_GAME_ID, "") ?: "",
+            eventType = eventType,
+            inning = gamePrefs.getString(KEY_INNING, "") ?: "",
+            homeTeam = gamePrefs.getString(KEY_HOME_TEAM, "") ?: "",
+            awayTeam = gamePrefs.getString(KEY_AWAY_TEAM, "") ?: "",
+            myTeam = gamePrefs.getString(KEY_MY_TEAM, "") ?: ""
+        )
         sendBroadcast(Intent(ACTION_GAME_UPDATED).setPackage(packageName))
     }
 
@@ -321,6 +343,38 @@ class DataLayerListenerService : WearableListenerService() {
 
         sendBroadcast(Intent(ACTION_WATCH_SYNC_PROMPT).setPackage(packageName))
         wakeScreenForPrompt(gameId)
+    }
+
+    /**
+     * 분풀이 후보 기록용 공수 판정 + 트래커 위임.
+     * 팀명은 코드/전체명/마스코트 어느 형식이든 canonical 정규화 후 비교.
+     */
+    private fun recordRegretEvent(
+        gameId: String,
+        eventType: String,
+        inning: String,
+        homeTeam: String,
+        awayTeam: String,
+        myTeam: String
+    ) {
+        val my = displayTeamName(myTeam)
+        val home = displayTeamName(homeTeam)
+        val away = displayTeamName(awayTeam)
+        val isMyTeamHome = my.isNotEmpty() && my == home
+        val isMyTeamAway = my.isNotEmpty() && my == away
+        val myTeamBatting: Boolean? = when {
+            !isMyTeamHome && !isMyTeamAway -> null // 중립/테스트 → 트래커가 양쪽 다 기록
+            inning.contains("말") -> isMyTeamHome
+            inning.contains("초") -> isMyTeamAway
+            else -> null
+        }
+        com.basehaptic.watch.venting.WatchRegretTracker.record(
+            context = this,
+            gameId = gameId,
+            eventType = eventType,
+            inning = inning,
+            myTeamBatting = myTeamBatting
+        )
     }
 
     /**

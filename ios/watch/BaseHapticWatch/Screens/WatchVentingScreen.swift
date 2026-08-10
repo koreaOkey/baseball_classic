@@ -30,6 +30,159 @@ final class WatchVentingCoordinator: ObservableObject {
     }
 }
 
+// MARK: - WatchRegretTracker
+
+/// 워치 자체 "아쉬운 순간" 축적기 (Wear WatchRegretTracker 미러).
+///
+/// 워치는 중계 기록(타순·박스스코어·실명)이 없으므로, 라이브 중 수신하는 이벤트
+/// 타입 + 그 시점 이닝만으로 이닝 기반 역할 레이블("7회 병살 타자")을 만들어 쌓는다.
+/// 경기 중엔 최신순, 패배 확정 후엔 심각도(실점 3 > 병살 2 > 아웃 1) 가중 정렬.
+struct WatchRegretEntry: Codable, Equatable {
+    let label: String
+    let desc: String
+    let severity: Int
+    let atMs: Int64
+}
+
+enum WatchRegretTracker {
+
+    private static let gameIdKey = "venting_regret_game_id"
+    private static let entriesKey = "venting_regret_entries"
+    private static let maxStored = 12
+    private static let maxShown = 5
+
+    static func record(gameId: String, eventType: String, inning: String, myTeamBatting: Bool?) {
+        guard !gameId.isEmpty, let inningLabel = inningNumberLabel(inning) else { return }
+
+        let batting = myTeamBatting != false
+        let fielding = myTeamBatting != true
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let entry: WatchRegretEntry?
+        switch eventType.uppercased() {
+        case "DOUBLE_PLAY":
+            entry = batting ? WatchRegretEntry(label: "\(inningLabel) 병살 타자", desc: "\(inning) 병살타", severity: 2, atMs: nowMs) : nil
+        case "TRIPLE_PLAY":
+            entry = batting ? WatchRegretEntry(label: "\(inningLabel) 삼중살 타자", desc: "\(inning) 삼중살", severity: 2, atMs: nowMs) : nil
+        case "OUT":
+            entry = batting ? WatchRegretEntry(label: "\(inningLabel) 아웃 타자", desc: "\(inning) 아웃", severity: 1, atMs: nowMs) : nil
+        case "SCORE", "SAC_FLY_SCORE":
+            entry = fielding ? WatchRegretEntry(label: "\(inningLabel) 실점 투수", desc: "\(inning) 실점 허용", severity: 3, atMs: nowMs) : nil
+        case "HOMERUN":
+            entry = fielding ? WatchRegretEntry(label: "\(inningLabel) 피홈런 투수", desc: "\(inning) 홈런 허용", severity: 3, atMs: nowMs) : nil
+        default:
+            entry = nil
+        }
+        guard let entry else { return }
+
+        let defaults = UserDefaults.standard
+        var entries: [WatchRegretEntry] = []
+        if defaults.string(forKey: gameIdKey) == gameId,
+           let data = defaults.data(forKey: entriesKey),
+           let decoded = try? JSONDecoder().decode([WatchRegretEntry].self, from: data) {
+            entries = decoded
+        }
+        entries.append(entry)
+        while entries.count > maxStored { entries.removeFirst() }
+
+        defaults.set(gameId, forKey: gameIdKey)
+        defaults.set((try? JSONEncoder().encode(entries)) ?? Data(), forKey: entriesKey)
+    }
+
+    static func candidates(gameId: String, rankBySeverity: Bool) -> [WatchRegretEntry] {
+        let defaults = UserDefaults.standard
+        guard defaults.string(forKey: gameIdKey) == gameId,
+              let data = defaults.data(forKey: entriesKey),
+              let entries = try? JSONDecoder().decode([WatchRegretEntry].self, from: data) else { return [] }
+
+        let ordered: [WatchRegretEntry]
+        if rankBySeverity {
+            ordered = entries.sorted { ($0.severity, $0.atMs) > ($1.severity, $1.atMs) }
+        } else {
+            ordered = entries.sorted { $0.atMs > $1.atMs }
+        }
+        var seen = Set<String>()
+        var result: [WatchRegretEntry] = []
+        for entry in ordered where !seen.contains(entry.label) {
+            seen.insert(entry.label)
+            result.append(entry)
+            if result.count >= maxShown { break }
+        }
+        return result
+    }
+
+    private static func inningNumberLabel(_ inning: String) -> String? {
+        guard let range = inning.range(of: #"(\d+)회"#, options: .regularExpression) else { return nil }
+        return String(inning[range])
+    }
+}
+
+// MARK: - WatchVentingSelectionView
+
+/// 워치 분풀이 대상 선택 화면 (라이브 화면에서 옆으로 스와이프해 진입).
+/// 후보 + 감독 고정 마지막 항목. 탭 즉시 룸 진입 (워치는 확인 단계 생략).
+struct WatchVentingSelectionView: View {
+
+    let gameData: GameData
+    let onSelect: (WatchVentingRequest) -> Void
+
+    var body: some View {
+        let myNorm = WatchConnectivityManager.displayTeamName(gameData.myTeamName)
+        let isMyHome = !myNorm.isEmpty && myNorm == WatchConnectivityManager.displayTeamName(gameData.homeTeam)
+        let isMyAway = !myNorm.isEmpty && myNorm == WatchConnectivityManager.displayTeamName(gameData.awayTeam)
+        let myScore = isMyHome ? gameData.homeScore : gameData.awayScore
+        let opponentScore = isMyHome ? gameData.awayScore : gameData.homeScore
+        let isLoss = (isMyHome || isMyAway) && myScore < opponentScore
+        let rankBySeverity = !gameData.isLive && isLoss
+        let candidates = WatchRegretTracker.candidates(gameId: gameData.gameId, rankBySeverity: rankBySeverity)
+        let managerDescription = gameData.isLive ? "지금까지의 경기 운영 아쉬움" : "오늘 경기 운영 아쉬움"
+
+        ScrollView {
+            VStack(spacing: 6) {
+                Text("💢 분풀이")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Color(red: 0.97, green: 0.44, blue: 0.44))
+                Text(rankBySeverity ? "오늘의 아쉬운 순간" : (candidates.isEmpty ? "아직 집계된 순간이 없어요" : "지금까지의 아쉬운 순간"))
+                    .font(.system(size: 11))
+                    .foregroundColor(.gray)
+                    .padding(.bottom, 4)
+
+                ForEach(candidates, id: \.label) { entry in
+                    targetChip(label: entry.label, description: entry.desc)
+                }
+
+                targetChip(label: "감독", description: managerDescription)
+            }
+            .padding(.horizontal, 6)
+        }
+        .background(Color.black)
+    }
+
+    private func targetChip(label: String, description: String) -> some View {
+        Button {
+            onSelect(WatchVentingRequest(
+                gameId: gameData.gameId,
+                targetLabel: label,
+                eventDescription: description
+            ))
+        } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white)
+                Text(description)
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color(red: 0.11, green: 0.11, blue: 0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - WatchVentingStage
 
 /// 파괴 단계 (폰 DestructionStage 축소 포팅). 40히트 완파, 33%/66% 전환.
