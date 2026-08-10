@@ -26,7 +26,7 @@ rootProject.file("keystore.properties").let { file ->
 
 android {
     namespace = "com.basehaptic.watch"
-    compileSdk = 35
+    compileSdk = 36
 
     signingConfigs {
         create("release") {
@@ -40,7 +40,7 @@ android {
     defaultConfig {
         applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 30
         versionName = "1.1.7"
     }
