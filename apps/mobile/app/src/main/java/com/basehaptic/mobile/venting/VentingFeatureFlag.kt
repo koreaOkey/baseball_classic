@@ -13,7 +13,9 @@ import com.basehaptic.mobile.BuildConfig
 object VentingFeatureFlag {
 
     private const val PREFS_NAME = "basehaptic_user_prefs"
-    private const val KEY = "venting_mode_enabled"
+    // v2: 이전 테스트에서 저장된 stale false 값을 무시하기 위해 키를 올린다.
+    // (구 키 "venting_mode_enabled"에 false가 남아 DEBUG 기본 ON이 덮여 안 보이던 문제 회피)
+    private const val KEY = "venting_mode_enabled_v2"
 
     fun isEnabled(context: Context): Boolean {
         if (!BuildConfig.DEBUG) return false
