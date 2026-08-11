@@ -31,7 +31,12 @@
 
 - [x] 5.1 단위 테스트(`tests/test_venting.py`, 9건): 패배팀 산정/무승부·플래그OFF 스킵/재산정 방지/캐시 실명 미포함/감독 6번째/LLM 실패 폴백/지표+팀 랭킹/잘못된 타입 400. 전체 106 통과
 - [x] 5.2 커넥션 비점유 — LLM 호출은 `with SessionLocal()` 블록 밖(Phase2)에서 실행되도록 구조화(7/28 풀 고갈 패턴 회피)
-- [~] 5.3 코드 배포(플래그 OFF)·다크 무영향 관찰 완료. **잔여**: env(`VENTING_LLM_API_KEY/_MODEL`) 등록 확인 → 캐노니컬 RLS 마이그레이션 적용 → `VENTING_BACKEND_ENABLED=true`(감독·지표·조회) 관찰 → `VENTING_LLM_ENABLED=true` 순차 활성. 이상 시 플래그 OFF 롤백
+- [~] 5.3 단계별 활성화 진행 중:
+  - [x] 코드 배포(플래그 OFF)·다크 무영향 관찰 완료
+  - [x] env `VENTING_LLM_API_KEY`/`_MODEL`(gpt-5.6-luna)/`_BASE_URL` Railway 등록 확인
+  - [x] `VENTING_BACKEND_ENABLED=true` 적용·재배포·검증(2026-08-11): `events` ok:true, `team-ranking` 집계 동작, health 200. (검증용 `__healthcheck__` 더미 행은 정리 대상)
+  - [ ] 캐노니컬 RLS 마이그레이션 적용(`20260810_001`) — 클라 직접 read 붙기 전까지는 서비스롤 경유라 비차단
+  - [ ] `VENTING_LLM_ENABLED=true` — 감독·지표·조회 정상 관찰 후 순차 활성. 이상 시 플래그 OFF 롤백
 - [ ] 5.4 **BLOCKING(출시 전 게이트)**: 실명 표시는 KBOP 라이선스/법률 확인 완료 후에만 활성. 미승인 시 역할 레이블만으로 운영(클라이언트 표시 정책과 연동)
 
 ## 6. 후속(범위 밖, 참조용)
