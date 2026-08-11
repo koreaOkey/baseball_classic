@@ -273,7 +273,8 @@ def _call_llm(candidates: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
             {"role": "system", "content": _LLM_SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps({"candidates": llm_candidates}, ensure_ascii=False)},
         ],
-        "temperature": 0.4,
+        # gpt-5 계열(gpt-5.6-luna 등)은 temperature 기본값(1)만 허용 — 0.4 지정 시 400.
+        # 기본값 사용을 위해 temperature 미지정.
         "response_format": {"type": "json_object"},
     }
     url = settings.venting_llm_base_url.rstrip("/") + "/chat/completions"
