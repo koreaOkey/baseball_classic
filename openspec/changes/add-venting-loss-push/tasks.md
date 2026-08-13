@@ -7,9 +7,9 @@
 
 ## 2. iOS 딥링크 라우팅 (DEBUG)
 
-- [ ] 2.1 `AppDelegate.swift` `registerNotificationCategories()` 에 `OPEN_VENTING` 카테고리 등록
-- [ ] 2.2 `didReceive`(176)에서 `userInfo["kind"]=="venting_loss"` 분기 → 새 NotificationCenter 이벤트 post
-- [ ] 2.3 `BaseHapticApp.swift`(489 근처)에서 해당 이벤트 수신 → venting `openFlow()` 경로 호출(DEBUG 게이트 준수)
+- [x] 2.1 `AppDelegate.swift` `registerNotificationCategories()` 에 `OPEN_VENTING` 카테고리 등록
+- [x] 2.2 `didReceive`에서 `userInfo["kind"]=="venting_loss"` 분기(#if DEBUG) → `.openVentingRequested` post
+- [x] 2.3 `BaseHapticApp` `.onReceive(.openVentingRequested)`(#if DEBUG + 피처 플래그) → 서버 regret-top5(폴백 로컬)로 컨텍스트 빌드 → `fullScreenCover`로 `VentingFlowCoordinator`(entrySource="loss_push"). 시뮬 빌드 통과
 
 ## 3. Android 딥링크 라우팅 (DEBUG)
 

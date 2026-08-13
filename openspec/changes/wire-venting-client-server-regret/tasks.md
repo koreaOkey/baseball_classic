@@ -9,10 +9,14 @@
 
 ## 2. iOS (동등 구현)
 
-- [ ] 2.1 `RegretCandidate`(VentingModels.swift) 확장 + `BackendVentingProvider: RegretCandidateProviding`(fetchVentingContext = regret-top5) 신설, 화면 코드 무수정(프로토콜 시맨)
-- [ ] 2.2 스코어/결과/이닝은 `LiveGameState`와 병합, 박스스코어 실명 조인(선택 화면만)
-- [ ] 2.3 `VentingEventsReporter`(POST, LiveViewSessionManager 패턴, installId=user_key) + 지표 4종 호출
-- [ ] 2.4 시뮬 빌드 검증
+- [x] 2.1 `RegretCandidate`(VentingModels.swift) 확장 + `BackendVentingProvider: RegretCandidateProviding`(fetchVentingContext = regret-top5) 신설, 화면 코드 무수정(프로토콜 시맨)
+- [x] 2.2 스코어/결과/이닝은 `LiveGameState`와 병합, 박스스코어 실명 조인(선택 화면만)
+- [x] 2.3 `VentingEventsReporter`(POST, best-effort detached Task) + 지표 4종 호출, entrySource 배선
+- [x] 2.4 시뮬 빌드 검증(BaseHaptic Debug, xcodegen로 신규 2파일 pbxproj 편입 후)
+
+## 2b. 크로스플랫폼 정합 (백엔드)
+
+- [x] 2b.1 **팀 표기 불일치 수정**: iOS는 `myTeamId`에 kboTeamId("HH"), Android는 enum명("HANWHA")을 보냄 → 백엔드 `record_venting_event`에 `_canonical_team` 정규화 추가(코드/한글/enum명 → 표준 enum명)해 팀 랭킹이 쪼개지지 않게 함. 테스트 추가(HH+HANWHA→HANWHA 합산). iOS 표시 로직 무수정.
 
 ## 3. 검증·게이트
 

@@ -22,6 +22,8 @@ struct VentingFlowCoordinator: View {
     let context: VentingGameContext
     let onClose: () -> Void
     var backLabel: String = "홈"
+    /// 진입 경로 지표 (room_enter 등 6.1 metrics 의 entry_source).
+    var entrySource: String = "unknown"
 
     // 의존성 — Phase 2에서 교체 가능
     private let gate: any VentingGateProviding = AlwaysAllowGate()
@@ -37,6 +39,13 @@ struct VentingFlowCoordinator: View {
                 onBack: onClose,
                 backLabel: backLabel,
                 onSelectTarget: { target in
+                    // 6.1 지표: 룸 진입 순간 = room_enter
+                    VentingEventsReporter.report(
+                        eventType: "room_enter",
+                        team: context.myTeamId,
+                        entrySource: entrySource,
+                        gameId: context.gameId
+                    )
                     let vm = VentingRoomViewModel(
                         gameContext: context,
                         selectedTarget: target,
@@ -49,6 +58,7 @@ struct VentingFlowCoordinator: View {
         case .room(let vm):
             VentingRoomScreen(
                 viewModel: vm,
+                entrySource: entrySource,
                 onBack: {
                     flowState = .selection
                 },
@@ -60,6 +70,7 @@ struct VentingFlowCoordinator: View {
         case .destroyed(let vm):
             VentingDestroyedScreen(
                 viewModel: vm,
+                entrySource: entrySource,
                 onRetry: {
                     vm.reset()
                     flowState = .room(vm)
@@ -104,7 +115,8 @@ struct VentingHomeCardContainer: View {
                 .fullScreenCover(isPresented: $showVentingFlow) {
                     VentingFlowCoordinator(
                         context: context,
-                        onClose: { showVentingFlow = false }
+                        onClose: { showVentingFlow = false },
+                        entrySource: "home_card"
                     )
                 }
             } else {

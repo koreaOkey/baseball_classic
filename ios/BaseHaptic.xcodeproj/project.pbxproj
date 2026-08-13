@@ -86,6 +86,7 @@
 		A8F8716965E7875ADD434E35 /* WatchAppSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */; };
 		A969609CE86D971793AE8CB7 /* VentingRoomScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89DEC897A299E2212058242 /* VentingRoomScreen.swift */; };
 		AA6C6F56CD8FD044106D99D4 /* VentingRoomViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E404DD8A4070EC7EB07986D8 /* VentingRoomViewModel.swift */; };
+		AC147CC2C506E43C82FB8861 /* VentingEventsReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39BDCDFE97BFDA1971B13785 /* VentingEventsReporter.swift */; };
 		AD669D21D21BE6ED05C668EE /* Stadiums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A9E61F3C6F0555030D4ABB /* Stadiums.swift */; };
 		AE7625904A416811149F4333 /* 멍멍2.png in Resources */ = {isa = PBXBuildFile; fileRef = 5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */; };
 		B467D204EE48FE539D883A8E /* CheerCheckinCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53716117F7CB8A7631F7CBB6 /* CheerCheckinCard.swift */; };
@@ -119,6 +120,7 @@
 		F12E146A8B5209368A57DCF0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8419E3A8AD866D20F930D497 /* Assets.xcassets */; };
 		F27D8F9A270EFDA8B34228FE /* mock_regret_candidates.json in Resources */ = {isa = PBXBuildFile; fileRef = 40F7EB0CAD7F31C01A2894AE /* mock_regret_candidates.json */; };
 		F40C89F218FF39FC41214EDC /* BaseHapticLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D1BB10D2F8F60D22C04298CB /* BaseHapticLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F61A0A40EE4881BAA172DE29 /* BackendVentingProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A77FDA757C76078808E364D /* BackendVentingProvider.swift */; };
 		F6CBF646798EF1B409B9FADB /* MockRegretProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC933223A7CAA688E870C61 /* MockRegretProvider.swift */; };
 		F8341E6E8743A8070CE6E25C /* 피치 펄스.png in Resources */ = {isa = PBXBuildFile; fileRef = DABAAB834C102B94324210B1 /* 피치 펄스.png */; };
 		F8F011ADF82EF27818A238E9 /* AppRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B00FE3A8F64F89794DD742A /* AppRadius.swift */; };
@@ -190,6 +192,7 @@
 		34253CBAC793835241B2ED99 /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
 		351633B3FAFD947CDA357C7C /* VentingHapticPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingHapticPlaying.swift; sourceTree = "<group>"; };
 		355FEA622561056F9EC940C7 /* BaseHapticWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BaseHapticWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		39BDCDFE97BFDA1971B13785 /* VentingEventsReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingEventsReporter.swift; sourceTree = "<group>"; };
 		3BF6065006D97036C65F2C70 /* VentingLiveEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingLiveEntry.swift; sourceTree = "<group>"; };
 		3CB394E5FE0AB0CE864FEB37 /* 야구의 밤.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "야구의 밤.png"; sourceTree = "<group>"; };
 		40F7EB0CAD7F31C01A2894AE /* mock_regret_candidates.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = mock_regret_candidates.json; sourceTree = "<group>"; };
@@ -198,6 +201,7 @@
 		45C0734BB3B091847ABD41DA /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
 		47F792F23F94CFA8FD42A7C5 /* GameEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEvent.swift; sourceTree = "<group>"; };
 		48CAEC1ACB1D95BABD8620BB /* MyTeamScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyTeamScreen.swift; sourceTree = "<group>"; };
+		4A77FDA757C76078808E364D /* BackendVentingProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendVentingProvider.swift; sourceTree = "<group>"; };
 		506110C58FB587CB361120D9 /* LiveRegretProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRegretProvider.swift; sourceTree = "<group>"; };
 		5367C84FBFDB3968D8D20D32 /* MockVentingHapticPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockVentingHapticPlayer.swift; sourceTree = "<group>"; };
 		53716117F7CB8A7631F7CBB6 /* CheerCheckinCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheerCheckinCard.swift; sourceTree = "<group>"; };
@@ -351,8 +355,10 @@
 		207F7347D38D7591BD90E35D /* Data */ = {
 			isa = PBXGroup;
 			children = (
+				4A77FDA757C76078808E364D /* BackendVentingProvider.swift */,
 				506110C58FB587CB361120D9 /* LiveRegretProvider.swift */,
 				7C833BBE7121E6BB688505E2 /* UIKitVentingHapticPlayer.swift */,
+				39BDCDFE97BFDA1971B13785 /* VentingEventsReporter.swift */,
 				A8457B0FF2D5731E437A0CD9 /* VentingFeatureFlag.swift */,
 				DFD10B6091D2BE290D8DF785 /* VentingOpenConditionChecker.swift */,
 				FD7A010FAFD964A786BC082A /* VentingShakeDetector.swift */,
@@ -798,6 +804,7 @@
 				E6F6938ABF1DBA468AF35E3E /* AtBatGroup.swift in Sources */,
 				4445D7D4D16681FE3A7B1490 /* AuthManager.swift in Sources */,
 				A5383A01F126F0E81F890728 /* BackendGamesRepository.swift in Sources */,
+				F61A0A40EE4881BAA172DE29 /* BackendVentingProvider.swift in Sources */,
 				2BE5DAB3C3841537A2B42622 /* BackgroundStreamManager.swift in Sources */,
 				2B38367BDC8E2EF23B0FC911 /* BannerAdView.swift in Sources */,
 				15887FB643D106BB387CDCB9 /* BaseHapticApp.swift in Sources */,
@@ -839,6 +846,7 @@
 				50EB22E9C3840FBC791B25C5 /* ThemeStoreScreen.swift in Sources */,
 				31D2492344FEF4CAC5FA2D59 /* UIKitVentingHapticPlayer.swift in Sources */,
 				62949C903DFFFC0E9B50F5AE /* VentingDestroyedScreen.swift in Sources */,
+				AC147CC2C506E43C82FB8861 /* VentingEventsReporter.swift in Sources */,
 				36D8374A362761D8DAF4E29F /* VentingFeatureFlag.swift in Sources */,
 				14873E1D18DE8D20672749A4 /* VentingFlowCoordinator.swift in Sources */,
 				43ED0FE54795C259DBAF5F44 /* VentingGateProviding.swift in Sources */,

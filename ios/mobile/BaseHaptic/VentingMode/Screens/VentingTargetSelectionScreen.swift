@@ -69,6 +69,8 @@ struct VentingTargetSelectionScreen: View {
                                 TargetRow(
                                     rank: index + 1,
                                     roleLabel: candidate.roleLabel,
+                                    // 실명은 선택 화면 TargetRow 에서만 노출 (룸·완파 화면 금지).
+                                    playerName: candidate.playerName,
                                     eventDescription: candidate.eventDescription,
                                     isSelected: selectedTarget == target,
                                     onTap: {
@@ -257,6 +259,8 @@ struct VentingTargetSelectionScreen: View {
 private struct TargetRow: View {
     let rank: Int?
     let roleLabel: String
+    /// 선택 화면 전용 실명 (있을 때만 "roleLabel playerName" 표기). 룸·완파 화면 금지.
+    var playerName: String? = nil
     let eventDescription: String
     let isSelected: Bool
     let onTap: () -> Void
@@ -281,9 +285,9 @@ private struct TargetRow: View {
                         .frame(width: 24, height: 24)
                 }
 
-                // 역할 + 사건 문구
+                // 역할(+실명) + 사건 문구
                 VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text(roleLabel)
+                    Text((playerName?.isEmpty == false) ? "\(roleLabel) \(playerName!)" : roleLabel)
                         .font(AppFont.captionBold)
                         .foregroundColor(isSelected ? .white : AppColors.gray300)
                     Text(eventDescription)

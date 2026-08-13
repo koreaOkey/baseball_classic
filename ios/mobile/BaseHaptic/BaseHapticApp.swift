@@ -405,6 +405,10 @@ struct ContentView: View {
     // 워치 페이스 테마와 무관하게 응원 발화 풀스크린에 적용될 테마.
     @State private var activeCheerTheme: ThemeData? = StadiumCheerThemes.allThemes.first { $0.id == UserDefaults.standard.string(forKey: "active_cheer_theme_id") }
     @State private var selectedGameId: String?
+    #if DEBUG
+    /// 패배 분풀이 딥링크(kind=venting_loss)로 여는 분풀이 플로우 요청. DEBUG 전용.
+    @State private var ventingDeepLinkRequest: VentingLiveRequest?
+    #endif
     @State private var syncedGameId: String? = Self.savedGameId(forKey: Self.syncedGameIdKey)
     @State private var activeLiveActivityGameId: String? = Self.savedGameId(forKey: Self.activeLiveActivityGameIdKey)
     @State private var showWatchSyncDialog = false
@@ -496,6 +500,62 @@ struct ContentView: View {
                 navigateTo(.home)
             }
         }
+        #if DEBUG
+        // 패배 분풀이 딥링크(kind=venting_loss): 홈 착지 후 서버 regret-top5(폴백: 로컬 규칙)로
+        // 컨텍스트를 만들어 분풀이 플로우를 연다. DEBUG + 피처 플래그 뒤에서만 동작.
+        .onReceive(NotificationCenter.default.publisher(for: .openVentingRequested)) { notification in
+            guard VentingFeatureFlag.isEnabled else { return }
+            guard let gameId = notification.userInfo?["game_id"] as? String, !gameId.isEmpty else { return }
+            guard !showOnboarding, selectedTeam != .none else { return }
+            // 알림 탭은 워치 동기화 팝업을 열지 않고 홈으로만 착지한다.
+            selectedGameId = gameId
+            if currentView != .home {
+                navigateTo(.home)
+            }
+            let team = selectedTeam
+            Task {
+                let repo = BackendGamesRepository.shared
+                async let regretTask = repo.fetchVentingRegretTop5(gameId: gameId)
+                async let stateTask = repo.fetchGameState(gameId: gameId)
+                async let boxscoreTask = repo.fetchGameBoxscore(gameId: gameId)
+                let regret = await regretTask
+                let state = await stateTask
+                let boxscore = await boxscoreTask
+
+                var context: VentingGameContext?
+                if let regret {
+                    context = BackendVentingProvider.buildContext(
+                        gameId: gameId,
+                        state: state,
+                        boxscore: boxscore,
+                        myTeam: team,
+                        regret: regret
+                    )
+                }
+                if context == nil, let state {
+                    let events = await repo.fetchGameEvents(gameId: gameId, after: 0, limit: 50)?.items ?? []
+                    context = LiveRegretProvider.buildContext(
+                        state: state,
+                        events: events,
+                        boxscore: boxscore,
+                        myTeam: team
+                    )
+                }
+                guard let context else { return }
+                await MainActor.run {
+                    ventingDeepLinkRequest = VentingLiveRequest(context: context, entrySource: "loss_push")
+                }
+            }
+        }
+        .fullScreenCover(item: $ventingDeepLinkRequest) { request in
+            VentingFlowCoordinator(
+                context: request.context,
+                onClose: { ventingDeepLinkRequest = nil },
+                backLabel: "홈",
+                entrySource: request.entrySource
+            )
+        }
+        #endif
         .onAppear {
             evaluateWhatsNewTrigger()
             if !showOnboarding && selectedTeam != .none && !teamDisplayNamePromptSeen {

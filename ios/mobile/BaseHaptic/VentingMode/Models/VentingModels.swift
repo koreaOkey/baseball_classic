@@ -11,6 +11,18 @@ struct RegretCandidate: Identifiable, Codable, Equatable {
     let roleLabel: String
     /// 사건 문구 (예: "8회 2사 만루 삼진")
     let eventDescription: String
+    // --- 서버 regret-top5 페이로드 소비용 (선택 화면 실명 표기 전용) ---
+    /// 서버 항목 종류 (예: "batter" / "pitcher").
+    var kind: String? = nil
+    /// 팀 사이드 ("home" / "away"). 박스스코어 명단 선택에 사용.
+    var teamSide: String? = nil
+    /// 타순 (타자 항목). 박스스코어 조인 키.
+    var battingOrder: Int? = nil
+    /// 등판 순서 (투수 항목). 박스스코어 조인 키.
+    var appearanceOrder: Int? = nil
+    /// 박스스코어에서 해소된 실명 — 선택 화면 TargetRow에서만 노출한다.
+    /// 룸·완파 화면은 절대 이 값을 읽지 않는다(VentingTarget.roleLabel/eventDescription 가 익명 방화벽).
+    var playerName: String? = nil
 }
 
 // MARK: - VentingManagerOption (감독 고정 선택지)

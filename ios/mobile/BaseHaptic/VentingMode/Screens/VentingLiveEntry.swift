@@ -7,6 +7,8 @@ import SwiftUI
 struct VentingLiveRequest: Identifiable {
     let id = UUID()
     let context: VentingGameContext
+    /// 진입 경로 지표 (live / loss_push 등). VentingFlowCoordinator 로 전달된다.
+    var entrySource: String = "unknown"
 }
 
 // MARK: - VentingLiveEntryOverlay
@@ -71,20 +73,43 @@ struct VentingLiveEntryOverlay: View {
             VentingFlowCoordinator(
                 context: request.context,
                 onClose: { flowRequest = nil },
-                backLabel: "경기"
+                backLabel: "경기",
+                entrySource: request.entrySource
             )
         }
     }
 
+    /// 서버 regret-top5(6.1) 우선 → 실패·빈 items 시 로컬 규칙(LiveRegretProvider) 폴백.
+    /// entrySource="live".
     private func openFlow() {
-        guard let state = gameState,
-              let context = LiveRegretProvider.buildContext(
-                  state: state,
-                  events: events,
-                  boxscore: boxscore,
-                  myTeam: myTeam
-              ) else { return }
-        flowRequest = VentingLiveRequest(context: context)
+        guard let state = gameState else { return }
+        let team = myTeam
+        let capturedEvents = events
+        let capturedBoxscore = boxscore
+        Task {
+            var context: VentingGameContext?
+            if let regret = await BackendGamesRepository.shared.fetchVentingRegretTop5(gameId: state.gameId) {
+                context = BackendVentingProvider.buildContext(
+                    gameId: state.gameId,
+                    state: state,
+                    boxscore: capturedBoxscore,
+                    myTeam: team,
+                    regret: regret
+                )
+            }
+            if context == nil {
+                context = LiveRegretProvider.buildContext(
+                    state: state,
+                    events: capturedEvents,
+                    boxscore: capturedBoxscore,
+                    myTeam: team
+                )
+            }
+            guard let context else { return }
+            await MainActor.run {
+                flowRequest = VentingLiveRequest(context: context, entrySource: "live")
+            }
+        }
     }
 
     /// 종료 감지 → 마이팀 패배면 경기당 1회 알림 ("다음에"를 눌러도 재노출하지 않는다)

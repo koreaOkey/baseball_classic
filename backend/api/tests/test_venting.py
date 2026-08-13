@@ -198,7 +198,19 @@ def test_venting_event_and_team_ranking():
     rank = client.get(f"/venting/team-ranking?season={season}").json()["ranking"]
     counts = {row["team"]: row["count"] for row in rank}
     assert counts.get("LG") == 2
-    assert counts.get("Doosan") == 1
+    assert counts.get("DOOSAN") == 1  # "Doosan" 입력이 표준(대문자)으로 정규화
+
+
+def test_venting_team_ranking_canonicalizes_cross_platform():
+    """iOS(kboTeamId 코드 'HH')와 Android(enum명 'HANWHA')가 같은 한화 팬으로 집계돼야 한다."""
+    _enable()
+    client.post("/venting/events", json={"event_type": "room_enter", "team": "HH", "platform": "ios"})
+    client.post("/venting/events", json={"event_type": "room_enter", "team": "HANWHA", "platform": "android"})
+    season = str(datetime.now(venting_module.KST).year)
+    rank = client.get(f"/venting/team-ranking?season={season}").json()["ranking"]
+    counts = {row["team"]: row["count"] for row in rank}
+    assert counts.get("HANWHA") == 2  # 두 표기가 하나로 합산
+    assert "HH" not in counts
 
 
 def test_venting_event_rejects_invalid_type():

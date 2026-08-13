@@ -12,6 +12,7 @@ import SwiftUI
 struct VentingDestroyedScreen: View {
 
     let viewModel: VentingRoomViewModel
+    var entrySource: String = "unknown"
     let onRetry: () -> Void
     let onClose: () -> Void
 
@@ -91,7 +92,16 @@ struct VentingDestroyedScreen: View {
                             .tint(AppColors.red400)
                             .padding()
                     } else if retryAllowed {
-                        Button(action: onRetry) {
+                        Button(action: {
+                            // 6.1 지표: 재도전(리워드 광고 진입 지점) = retry_ad_start
+                            VentingEventsReporter.report(
+                                eventType: "retry_ad_start",
+                                team: viewModel.gameContext.myTeamId,
+                                entrySource: entrySource,
+                                gameId: viewModel.gameContext.gameId
+                            )
+                            onRetry()
+                        }) {
                             HStack(spacing: AppSpacing.sm) {
                                 Image(systemName: "arrow.clockwise")
                                     .font(AppFont.bodyLgBold)
@@ -122,6 +132,13 @@ struct VentingDestroyedScreen: View {
         }
         .navigationBarHidden(true)
         .task {
+            // 6.1 지표: 재도전 프롬프트(완파 화면) 노출 = retry_prompt_shown
+            VentingEventsReporter.report(
+                eventType: "retry_prompt_shown",
+                team: viewModel.gameContext.myTeamId,
+                entrySource: entrySource,
+                gameId: viewModel.gameContext.gameId
+            )
             showConfetti = true
             isCheckingRetry = true
             retryAllowed = await viewModel.canRetry()

@@ -455,6 +455,28 @@ def _increment_team_count(db: Session, model: type, keys: dict[str, Any]) -> Non
     db.execute(stmt)
 
 
+# 팬 응원팀 표기 정규화 — 클라이언트마다 다른 표기(iOS kboTeamId 코드 "HH" vs
+# Android enum명 "HANWHA", 혹은 한글 라벨)를 하나의 표준(enum명)으로 모아 팀 랭킹이
+# 같은 팬덤인데도 쪼개지지 않게 한다. 표준형은 이미 배포된 Android 표기(enum명).
+_TEAM_CANONICAL = {
+    # iOS kboTeamId 코드 → 표준(enum명)
+    "OB": "DOOSAN", "WO": "KIWOOM", "SS": "SAMSUNG", "LT": "LOTTE",
+    "SK": "SSG", "HH": "HANWHA", "HT": "KIA",
+    # 한글 라벨 → 표준
+    "두산": "DOOSAN", "키움": "KIWOOM", "삼성": "SAMSUNG", "롯데": "LOTTE", "한화": "HANWHA",
+    # LG/KT/NC/SSG/KIA 등 공통 코드·enum명은 그대로(하단 passthrough).
+}
+
+
+def _canonical_team(team: str) -> str:
+    """iOS/Android 팬팀 표기를 표준(enum명)으로 정규화. 미매핑은 대문자 그대로."""
+    t = (team or "").strip()
+    if t in _TEAM_CANONICAL:
+        return _TEAM_CANONICAL[t]
+    up = t.upper()
+    return _TEAM_CANONICAL.get(up, up)
+
+
 def record_venting_event(
     db: Session,
     *,
@@ -467,6 +489,7 @@ def record_venting_event(
     platform: str = "unknown",
 ) -> VentingEvent:
     """지표 이벤트 저장 + room_enter 는 팀 랭킹 집계에 반영."""
+    team = _canonical_team(team)
     normalized_platform = platform if platform in VALID_PLATFORMS else "unknown"
     normalized_source = entry_source if entry_source in VALID_ENTRY_SOURCES else None
     event = VentingEvent(

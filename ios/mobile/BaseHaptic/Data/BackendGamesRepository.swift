@@ -227,6 +227,27 @@ struct BoxscorePitcherLine {
     let strikeouts: Int
 }
 
+// MARK: - Venting Regret Top5 (분풀이 6.1 서버 응답)
+/// GET /games/{gameId}/venting/regret-top5 응답. 최상위 키는 camelCase,
+/// items 항목 키는 snake_case. 미지원 백엔드(404)·파싱 실패 시 fetch 가 nil 을 반환한다.
+struct VentingRegretTop5 {
+    let teamCode: String?
+    let source: String?
+    let manager: String?
+    let items: [VentingRegretItem]
+}
+
+struct VentingRegretItem {
+    let kind: String?
+    let teamSide: String?
+    let battingOrder: Int?
+    let appearanceOrder: Int?
+    let roleLabel: String?
+    let inning: String?
+    let eventType: String?
+    let reason: String?
+}
+
 struct AppNotice {
     let enabled: Bool
     let title: String
@@ -455,6 +476,36 @@ final class BackendGamesRepository {
             let items = itemsArray.compactMap { self.parseLiveEvent($0) }
             let nextCursor = json["nextCursor"] as? Int64
             return LiveEventsPage(items: items, nextCursor: nextCursor)
+        }
+    }
+
+    // MARK: - Venting Regret Top5
+    /// 분풀이 regret-top5 조회. 최상위 camelCase + items snake_case 파싱.
+    /// 미지원 백엔드(404)·네트워크 실패·파싱 실패 시 nil. items 가 비어 있어도
+    /// 빈 배열을 담아 반환하며, 호출부가 로컬 폴백 여부를 판단한다.
+    func fetchVentingRegretTop5(gameId: String) async -> VentingRegretTop5? {
+        let endpoint = "\(BackendConfig.baseURL.trimmingSuffix("/"))/games/\(gameId)/venting/regret-top5"
+        return await getJSON(endpoint: endpoint) { data in
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            let itemsArray = json["items"] as? [[String: Any]] ?? []
+            let items: [VentingRegretItem] = itemsArray.map { item in
+                VentingRegretItem(
+                    kind: item["kind"] as? String,
+                    teamSide: item["team_side"] as? String,
+                    battingOrder: item["batting_order"] as? Int,
+                    appearanceOrder: item["appearance_order"] as? Int,
+                    roleLabel: item["role_label"] as? String,
+                    inning: item["inning"] as? String,
+                    eventType: item["event_type"] as? String,
+                    reason: item["reason"] as? String
+                )
+            }
+            return VentingRegretTop5(
+                teamCode: json["teamCode"] as? String,
+                source: json["source"] as? String,
+                manager: json["manager"] as? String,
+                items: items
+            )
         }
     }
 

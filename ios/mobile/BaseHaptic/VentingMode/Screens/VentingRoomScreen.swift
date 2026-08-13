@@ -15,6 +15,7 @@ import SwiftUI
 struct VentingRoomScreen: View {
 
     @ObservedObject var viewModel: VentingRoomViewModel
+    var entrySource: String = "unknown"
     let onBack: () -> Void
     let onDestroyed: () -> Void
 
@@ -125,6 +126,13 @@ struct VentingRoomScreen: View {
         }
         .onChange(of: viewModel.isDestroyed) { _, destroyed in
             if destroyed {
+                // 6.1 지표: 완파 순간 = destroy_complete
+                VentingEventsReporter.report(
+                    eventType: "destroy_complete",
+                    team: viewModel.gameContext.myTeamId,
+                    entrySource: entrySource,
+                    gameId: viewModel.gameContext.gameId
+                )
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                     onDestroyed()
                 }
