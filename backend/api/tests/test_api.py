@@ -2123,6 +2123,48 @@ def test_game_start_push_groups_korean_home_away_against_code_subscriptions() ->
     }
 
 
+def test_loss_push_targets_only_losing_team() -> None:
+    captured: list[dict[str, object]] = []
+    requested_codes: list[set[str]] = []
+
+    def fake_load(my_teams: set[str]) -> list[tuple[str, str, str, bool, str]]:
+        requested_codes.append(set(my_teams))
+        return [("android-lotte-token", "LOTTE", "android", False, "MASCOT")]
+
+    async def fake_fcm(
+        tokens: list[str], *, title: str, body: str, data: dict[str, str] | None = None,
+    ) -> tuple[list[str], list[str]]:
+        captured.append({"tokens": tokens, "title": title, "body": body, "data": data})
+        return [], []
+
+    with patch.object(main_module, "_load_team_subscriptions", side_effect=fake_load), \
+        patch.object(main_module, "send_fcm_visible_push_to_tokens_detailed", side_effect=fake_fcm):
+        # 홈 두산 5 : 3 롯데(원정) → 패배팀 = 롯데
+        asyncio.run(main_module._send_loss_notification("20260616LTOB02026", "두산", "롯데", 5, 3))
+
+    # 패배팀(롯데) 코드만 조회, 승리팀(두산) 코드는 미포함
+    assert requested_codes, "_load_team_subscriptions 가 호출되어야 한다"
+    codes = requested_codes[0]
+    assert {"LOTTE", "자이언츠"}.issubset(codes)
+    assert "DOOSAN" not in codes and "베어스" not in codes
+    assert len(captured) == 1
+    assert captured[0]["tokens"] == ["android-lotte-token"]
+    assert isinstance(captured[0]["data"], dict) and captured[0]["data"]["kind"] == "venting_loss"
+
+
+def test_loss_push_skips_draw() -> None:
+    called = {"load": False}
+
+    def fake_load(my_teams: set[str]) -> list[tuple[str, str, str, bool, str]]:
+        called["load"] = True
+        return []
+
+    with patch.object(main_module, "_load_team_subscriptions", side_effect=fake_load):
+        asyncio.run(main_module._send_loss_notification("g", "두산", "롯데", 4, 4))
+
+    assert called["load"] is False  # 무승부는 토큰 조회조차 하지 않는다
+
+
 def test_first_live_snapshot_schedules_game_start_push() -> None:
     from app.db import init_db
 

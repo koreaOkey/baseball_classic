@@ -1863,6 +1863,96 @@ async def _send_game_start_notification(
     )
 
 
+async def _send_loss_notification(
+    game_id: str,
+    home_team: str,
+    away_team: str,
+    home_score: int,
+    away_score: int,
+) -> None:
+    """경기 종료(→FINISHED) 시점에 패배팀 응원팀 구독자에게 분풀이 유도 visible push.
+
+    무승부는 스킵, 승리팀에는 발송하지 않는다. `_send_game_start_notification` 과 동일하게
+    out-of-band: 토큰 로드는 짧은 세션에서 끝내고 APNs/FCM 발송 구간에는 DB 커넥션을
+    점유하지 않는다(2026-07-28 FCM/풀 고갈 패턴 회피). payload kind=venting_loss.
+    """
+    try:
+        hs = int(home_score or 0)
+        as_ = int(away_score or 0)
+    except (TypeError, ValueError):
+        return
+    if hs == as_:
+        return  # 무승부
+    losing_label = away_team if hs > as_ else home_team
+    if not losing_label:
+        return
+    target_codes = _team_codes_for_match(losing_label)
+    if not target_codes:
+        return
+
+    subscriptions = await asyncio.to_thread(_load_team_subscriptions, target_codes)
+    if not subscriptions:
+        return
+
+    grouped: dict[tuple[str, str], list[tuple[str, str, bool]]] = defaultdict(list)
+    for token, my_team, platform, is_sandbox, display_style in subscriptions:
+        grouped[(my_team, display_style)].append((token, (platform or "ios").lower(), bool(is_sandbox)))
+
+    tasks: list[Any] = []
+    total_ios = 0
+    total_android = 0
+    for (my_team, display_style), group in grouped.items():
+        team_display = _team_display_name(my_team, display_style)
+        title = "오늘은 아쉽게 졌어요 💢"
+        body = f"{team_display} 팬, 분풀이 방에서 오늘 경기 풀고 가세요."
+        data = {
+            "game_id": game_id,
+            "kind": "venting_loss",
+            "home_team": _team_display_name(home_team, display_style),
+            "away_team": _team_display_name(away_team, display_style),
+            "display_name_style": display_style,
+        }
+
+        ios_targets: list[tuple[str, bool]] = []
+        android_tokens: list[str] = []
+        for token, platform, is_sandbox in group:
+            if platform == "android":
+                android_tokens.append(token)
+            else:
+                ios_targets.append((token, is_sandbox))
+
+        if ios_targets:
+            tasks.append(
+                send_apns_visible_push_to_tokens_detailed(
+                    ios_targets,
+                    title=title,
+                    body=body,
+                    data=data,
+                    category="OPEN_VENTING",
+                )
+            )
+            total_ios += len(ios_targets)
+        if android_tokens:
+            tasks.append(
+                send_fcm_visible_push_to_tokens_detailed(android_tokens, title=title, body=body, data=data)
+            )
+            total_android += len(android_tokens)
+
+    dead_tokens: list[str] = []
+    if tasks:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, BaseException):
+                continue
+            _, permanently_failed = result
+            dead_tokens.extend(permanently_failed)
+    await _prune_dead_team_subscription_tokens(dead_tokens)
+    logger.info(
+        "[venting-loss-push] gameId=%s losing=%s ios=%d android=%d",
+        game_id, losing_label, total_ios, total_android,
+    )
+
+
 async def _send_push_for_game_events(
     game_id: str,
     state_payload: dict[str, Any],
@@ -2260,6 +2350,17 @@ def _ingest_crawler_snapshot_locked(
     # 플래그 OFF 시 compute 진입점이 즉시 no-op → 기존 운영 경로 무영향.
     if settings.venting_backend_enabled and getattr(game, "_just_became_finished", False):
         background_tasks.add_task(compute_regret_for_game_background, game_id)
+
+    # 경기 종료 시 패배팀 팬에게 분풀이 유도 푸시 (다크, 플래그 OFF면 스케줄되지 않아 무영향).
+    if settings.venting_loss_push_enabled and getattr(game, "_just_became_finished", False):
+        background_tasks.add_task(
+            _send_loss_notification,
+            game_id,
+            state_payload.get("homeTeam", "") or "",
+            state_payload.get("awayTeam", "") or "",
+            state_payload.get("homeScore", 0) or 0,
+            state_payload.get("awayScore", 0) or 0,
+        )
 
     # Live Activity push 전송 (잠금화면 실시간 업데이트)
     la_event = "end" if state_payload.get("status") == "FINISHED" else "update"

@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     venting_llm_base_url: str = "https://api.openai.com/v1"
     venting_llm_timeout_sec: int = 20  # LLM 호출 타임아웃 (초)
     venting_llm_max_concurrency: int = 2  # 동시 regret 산정 상한 (버스트 종료 시 폭주 방지)
+    # 경기 종료 시 패배팀 팬에게 분풀이 유도 푸시 (다크, 기본 OFF). 켜기 전까지 종료 훅에서
+    # 태스크가 스케줄되지 않아 기존 운영 경로 무영향.
+    venting_loss_push_enabled: bool = False
 
     @property
     def cors_origins(self) -> list[str]:
