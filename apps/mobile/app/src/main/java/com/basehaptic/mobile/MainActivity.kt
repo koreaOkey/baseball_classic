@@ -376,6 +376,7 @@ class MainActivity : ComponentActivity() {
             homeTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_HOME_TEAM),
             awayTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_AWAY_TEAM),
             openHomeOnly = true,
+            venting = intent.getBooleanExtra(BaseHapticMessagingService.EXTRA_VENTING, false),
         )
     }
 
@@ -1112,6 +1113,52 @@ fun BaseHapticApp(
             NotificationIntentBus.consume()
             return@LaunchedEffect
         }
+
+        // 패배 분풀이 딥링크 (kind=venting_loss) — DEBUG 게이트 뒤에서만 소비.
+        // 홈 착지 후 서버 regret-top5(폴백: 로컬 규칙)로 컨텍스트를 만들어 분풀이 플로우를 연다.
+        if (pending.venting && com.basehaptic.mobile.venting.VentingFeatureFlag.isEnabled(context)) {
+            selectedGameId = pending.gameId
+            if (currentView != Screen.Home) {
+                navigateTo(Screen.Home)
+            }
+            val ventingContext = withContext(Dispatchers.IO) {
+                val prefsTeam = context.applicationContext
+                    .getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
+                    .getString("selected_team", null)
+                val myTeam = prefsTeam?.let { Team.fromString(it) } ?: Team.NONE
+                if (myTeam == Team.NONE) return@withContext null
+                val state = BackendGamesRepository.fetchGameState(pending.gameId)
+                val boxscore = BackendGamesRepository.fetchGameBoxscore(pending.gameId)
+                val regret = BackendGamesRepository.fetchVentingRegretTop5(pending.gameId)
+                val serverContext = regret?.let {
+                    com.basehaptic.mobile.venting.ServerRegretProvider.buildContext(
+                        gameId = pending.gameId,
+                        state = state,
+                        boxscore = boxscore,
+                        myTeam = myTeam,
+                        regret = it
+                    )
+                }
+                serverContext ?: run {
+                    val liveState = state ?: return@run null
+                    val events = BackendGamesRepository
+                        .fetchGameEvents(pending.gameId, after = 0, limit = 50)
+                        ?.items.orEmpty()
+                    com.basehaptic.mobile.venting.LiveRegretProvider
+                        .buildContext(liveState, events, boxscore, myTeam)
+                }
+            }
+            if (ventingContext != null) {
+                com.basehaptic.mobile.venting.ui.VentingFlowController.open(
+                    ventingContext,
+                    backLabel = "경기",
+                    entrySource = "loss_push"
+                )
+            }
+            NotificationIntentBus.consume()
+            return@LaunchedEffect
+        }
+
         selectedGameId = pending.gameId
         if (currentView != Screen.Home) {
             navigateTo(Screen.Home)

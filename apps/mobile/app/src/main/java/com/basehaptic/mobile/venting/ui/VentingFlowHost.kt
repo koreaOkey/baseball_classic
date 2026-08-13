@@ -25,13 +25,18 @@ import com.basehaptic.mobile.venting.VentingGameContext
  * 인셋 동작이 다른 화면과 동일하게 보장된다).
  */
 object VentingFlowController {
-    data class Request(val context: VentingGameContext, val backLabel: String)
+    data class Request(
+        val context: VentingGameContext,
+        val backLabel: String,
+        /** 진입 경로 지표 (room_enter 등 6.1 metrics의 entry_source). */
+        val entrySource: String
+    )
 
     var request by mutableStateOf<Request?>(null)
         private set
 
-    fun open(context: VentingGameContext, backLabel: String = "홈") {
-        request = Request(context, backLabel)
+    fun open(context: VentingGameContext, backLabel: String = "홈", entrySource: String = "unknown") {
+        request = Request(context, backLabel, entrySource)
     }
 
     fun close() {
@@ -59,7 +64,8 @@ fun VentingFlowHost() {
         VentingFlowCoordinator(
             context = request.context,
             onClose = { VentingFlowController.close() },
-            backLabel = request.backLabel
+            backLabel = request.backLabel,
+            entrySource = request.entrySource
         )
     }
 }

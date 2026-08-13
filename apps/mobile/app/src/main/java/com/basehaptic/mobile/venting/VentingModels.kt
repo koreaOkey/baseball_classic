@@ -11,7 +11,21 @@ data class RegretCandidate(
     /** 역할·포지션 레이블 (예: "3번 타자") — 실명·등번호 금지 */
     val roleLabel: String,
     /** 사건 문구 (예: "8회 2사 만루 삼진") */
-    val eventDescription: String
+    val eventDescription: String,
+    // --- 서버 regret-top5 페이로드 소비용 (선택 화면 실명 표기 전용) ---
+    /** 서버 항목 종류 (예: "batter" / "pitcher"). */
+    val kind: String? = null,
+    /** 팀 사이드 ("home" / "away"). 박스스코어 명단 선택에 사용. */
+    val teamSide: String? = null,
+    /** 타순 (타자 항목). 박스스코어 조인 키. */
+    val battingOrder: Int? = null,
+    /** 등판 순서 (투수 항목). 박스스코어 조인 키. */
+    val appearanceOrder: Int? = null,
+    /**
+     * 박스스코어에서 해소된 실명 — 선택 화면 TargetRow에서만 노출한다.
+     * 룸·완파 화면은 절대 이 값을 읽지 않는다([VentingTarget.roleLabel]/[eventDescription]가 익명 방화벽).
+     */
+    val playerName: String? = null,
 )
 
 /** 항상 마지막(6번째)에 고정되는 감독 선택지. */

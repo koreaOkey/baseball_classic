@@ -65,6 +65,7 @@ import com.basehaptic.mobile.ui.theme.Red500
 import com.basehaptic.mobile.ui.theme.Yellow400
 import com.basehaptic.mobile.venting.DestructionConstants
 import com.basehaptic.mobile.venting.DestructionStage
+import com.basehaptic.mobile.venting.VentingEventReporter
 import com.basehaptic.mobile.venting.VentingRoomState
 import com.basehaptic.mobile.venting.VentingShakeDetector
 import com.basehaptic.mobile.venting.VentingTool
@@ -131,8 +132,10 @@ internal fun VentingDollSpotlight(
 fun VentingRoomScreen(
     state: VentingRoomState,
     onBack: () -> Unit,
-    onDestroyed: () -> Unit
+    onDestroyed: () -> Unit,
+    entrySource: String = "unknown"
 ) {
+    val reportContext = LocalContext.current
     var selectedTool by remember { mutableStateOf(VentingTool.HAMMER) }
 
     // 타격 연출 상태 (와인드업 → 회전 스윙 → 히트스톱 임팩트 → 복원)
@@ -149,6 +152,14 @@ fun VentingRoomScreen(
 
     LaunchedEffect(state.isDestroyed) {
         if (state.isDestroyed) {
+            // 6.1 지표: 완파 순간 = destroy_complete
+            VentingEventReporter.report(
+                context = reportContext,
+                eventType = "destroy_complete",
+                team = state.gameContext.myTeamId,
+                entrySource = entrySource,
+                gameId = state.gameContext.gameId
+            )
             delay(600)
             onDestroyed()
         }

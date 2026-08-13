@@ -17,6 +17,8 @@ object NotificationIntentBus {
         val homeTeam: String?,
         val awayTeam: String?,
         val openHomeOnly: Boolean = false,
+        /** 패배 분풀이 딥링크(kind=venting_loss) 여부. DEBUG 게이트 뒤에서만 소비된다. */
+        val venting: Boolean = false,
     )
 
     private val _pending = MutableStateFlow<PendingIntent?>(null)
@@ -27,9 +29,10 @@ object NotificationIntentBus {
         homeTeam: String?,
         awayTeam: String?,
         openHomeOnly: Boolean = false,
+        venting: Boolean = false,
     ) {
         if (gameId.isBlank()) return
-        _pending.value = PendingIntent(gameId, homeTeam, awayTeam, openHomeOnly)
+        _pending.value = PendingIntent(gameId, homeTeam, awayTeam, openHomeOnly, venting)
     }
 
     fun consume() {

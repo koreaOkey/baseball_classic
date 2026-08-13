@@ -92,7 +92,7 @@ fun VentingLiveEntryOverlay(
         modifier = modifier,
         onTap = {
             LiveRegretProvider.buildContext(gameState, events, boxscore, myTeam)
-                ?.let { VentingFlowController.open(it, backLabel = "경기") }
+                ?.let { VentingFlowController.open(it, backLabel = "경기", entrySource = "live") }
         }
     )
 
@@ -113,7 +113,7 @@ fun VentingLiveEntryOverlay(
                 TextButton(onClick = {
                     showLossPrompt = false
                     LiveRegretProvider.buildContext(gameState, events, boxscore, myTeam)
-                        ?.let { VentingFlowController.open(it, backLabel = "경기") }
+                        ?.let { VentingFlowController.open(it, backLabel = "경기", entrySource = "live") }
                 }) {
                     Text(text = "분풀이 하러 가기", style = AppFont.bodyMedium, color = Red400)
                 }

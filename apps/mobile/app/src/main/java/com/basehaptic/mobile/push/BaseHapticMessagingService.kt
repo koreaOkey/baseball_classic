@@ -39,6 +39,7 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
         val homeTeam = data["home_team"]
         val awayTeam = data["away_team"]
         val eventType = data["event_type"]
+        val kind = data["kind"]
 
         // 잠금화면 이벤트 필터 가드: 미선택 이벤트는 폰 강한 알림을 게시 안 함
         if (!EventFilterGate.isAllowed(this, eventType, EventNotificationChannel.LOCK_SCREEN)) {
@@ -52,6 +53,7 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
             gameId = gameId,
             homeTeam = homeTeam,
             awayTeam = awayTeam,
+            kind = kind,
         )
     }
 
@@ -61,6 +63,7 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
         gameId: String?,
         homeTeam: String?,
         awayTeam: String?,
+        kind: String?,
     ) {
         NotificationChannels.ensureCreated(this)
 
@@ -69,6 +72,8 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
             gameId?.let { putExtra(EXTRA_GAME_ID, it) }
             homeTeam?.let { putExtra(EXTRA_HOME_TEAM, it) }
             awayTeam?.let { putExtra(EXTRA_AWAY_TEAM, it) }
+            // 패배 분풀이 딥링크: MainActivity 소비단(DEBUG 게이트)에서 분풀이 플로우로 라우팅.
+            if (kind == "venting_loss") putExtra(EXTRA_VENTING, true)
             putExtra(EXTRA_NOTIFICATION_SOURCE, SOURCE_GAME_ALERT)
         }
         val baseRequestCode = gameId?.hashCode() ?: 0
@@ -131,6 +136,7 @@ class BaseHapticMessagingService : FirebaseMessagingService() {
         const val EXTRA_GAME_ID = "extra_game_id"
         const val EXTRA_HOME_TEAM = "extra_home_team"
         const val EXTRA_AWAY_TEAM = "extra_away_team"
+        const val EXTRA_VENTING = "extra_venting"
         const val EXTRA_NOTIFICATION_SOURCE = "extra_notification_source"
         const val SOURCE_GAME_ALERT = "game_alert"
         const val SOURCE_LIVE_SCORE = "live_score"

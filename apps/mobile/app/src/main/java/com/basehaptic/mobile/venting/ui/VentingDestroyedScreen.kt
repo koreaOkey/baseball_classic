@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,6 +48,7 @@ import com.basehaptic.mobile.ui.theme.Red500
 import com.basehaptic.mobile.ui.theme.Yellow400
 import com.basehaptic.mobile.ui.theme.Yellow500
 import com.basehaptic.mobile.venting.DestructionStage
+import com.basehaptic.mobile.venting.VentingEventReporter
 import com.basehaptic.mobile.venting.VentingRoomState
 
 /**
@@ -59,10 +61,20 @@ import com.basehaptic.mobile.venting.VentingRoomState
 fun VentingDestroyedScreen(
     state: VentingRoomState,
     onRetry: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    entrySource: String = "unknown"
 ) {
+    val reportContext = LocalContext.current
     val dollScale = remember { Animatable(0.5f) }
     LaunchedEffect(Unit) {
+        // 6.1 지표: 재도전 프롬프트(완파 화면) 노출 = retry_prompt_shown
+        VentingEventReporter.report(
+            context = reportContext,
+            eventType = "retry_prompt_shown",
+            team = state.gameContext.myTeamId,
+            entrySource = entrySource,
+            gameId = state.gameContext.gameId
+        )
         dollScale.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium))
     }
 
@@ -186,7 +198,17 @@ fun VentingDestroyedScreen(
                     .fillMaxWidth()
                     .clip(AppShapes.md)
                     .background(Red500)
-                    .clickable { onRetry() }
+                    .clickable {
+                        // 6.1 지표: 재도전(리워드 광고 진입 지점) = retry_ad_start
+                        VentingEventReporter.report(
+                            context = reportContext,
+                            eventType = "retry_ad_start",
+                            team = state.gameContext.myTeamId,
+                            entrySource = entrySource,
+                            gameId = state.gameContext.gameId
+                        )
+                        onRetry()
+                    }
                     .padding(vertical = AppSpacing.lg),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically

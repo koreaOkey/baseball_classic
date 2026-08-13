@@ -195,6 +195,8 @@ fun VentingTargetSelectionScreen(
                     TargetRow(
                         rank = index + 1,
                         roleLabel = candidate.roleLabel,
+                        // 실명은 선택 화면 TargetRow에서만 노출 (룸·완파 화면 금지).
+                        playerName = candidate.playerName,
                         eventDescription = candidate.eventDescription,
                         isSelected = selectedTarget == target,
                         onTap = { selectedTarget = target }
@@ -365,7 +367,9 @@ private fun TargetRow(
     roleLabel: String,
     eventDescription: String,
     isSelected: Boolean,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    /** 선택 화면 전용 실명 (있을 때만 "{roleLabel} {playerName}" 표기). */
+    playerName: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -411,7 +415,7 @@ private fun TargetRow(
             verticalArrangement = Arrangement.spacedBy(AppSpacing.xxs)
         ) {
             Text(
-                text = roleLabel,
+                text = if (!playerName.isNullOrBlank()) "$roleLabel $playerName" else roleLabel,
                 style = AppFont.captionBold,
                 color = if (isSelected) Color.White else Gray300
             )

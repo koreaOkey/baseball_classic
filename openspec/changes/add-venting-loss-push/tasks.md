@@ -13,9 +13,9 @@
 
 ## 3. Android 딥링크 라우팅 (DEBUG)
 
-- [ ] 3.1 `BaseHapticMessagingService.onMessageReceived` 에서 `data["kind"]` 판독 + PendingIntent에 venting extra
-- [ ] 3.2 `NotificationIntentBus.PendingIntent` 에 `venting` 필드 추가, `MainActivity.handleNotificationIntent`에서 세팅
-- [ ] 3.3 `MainActivity` 소비 `LaunchedEffect`(1108-1135)에서 venting 분기 → `VentingFlowController.open`
+- [x] 3.1 `BaseHapticMessagingService` 에서 `data["kind"]` 판독 + `EXTRA_VENTING` intent extra
+- [x] 3.2 `NotificationIntentBus.PendingIntent` 에 `venting` 필드 추가, `MainActivity.handleNotificationIntent`에서 세팅
+- [x] 3.3 `MainActivity` 소비 `LaunchedEffect`에서 venting 분기 → 서버 regret-top5(폴백 로컬)로 컨텍스트 빌드 → `VentingFlowController.open(entrySource="loss_push")`, DEBUG 게이트 준수. compileDebugKotlin 통과
 
 ## 4. 검증·게이트
 

@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.basehaptic.mobile.data.model.Team
 import com.basehaptic.mobile.venting.MockRegretProvider
+import com.basehaptic.mobile.venting.VentingEventReporter
 import com.basehaptic.mobile.venting.VentingFeatureFlag
 import com.basehaptic.mobile.venting.VentingGameContext
 import com.basehaptic.mobile.venting.VentingOpenConditionChecker
@@ -30,7 +31,8 @@ private sealed class VentingFlowState {
 fun VentingFlowCoordinator(
     context: VentingGameContext,
     onClose: () -> Unit,
-    backLabel: String = "홈"
+    backLabel: String = "홈",
+    entrySource: String = "unknown"
 ) {
     val appContext = LocalContext.current.applicationContext
     var flowState by remember { mutableStateOf<VentingFlowState>(VentingFlowState.Selection) }
@@ -41,6 +43,14 @@ fun VentingFlowCoordinator(
             onBack = onClose,
             backLabel = backLabel,
             onSelectTarget = { target: VentingTarget ->
+                // 6.1 지표: 룸 진입 순간 = room_enter
+                VentingEventReporter.report(
+                    context = appContext,
+                    eventType = "room_enter",
+                    team = context.myTeamId,
+                    entrySource = entrySource,
+                    gameId = context.gameId
+                )
                 flowState = VentingFlowState.Room(
                     VentingRoomState(
                         context = appContext,
@@ -53,12 +63,14 @@ fun VentingFlowCoordinator(
 
         is VentingFlowState.Room -> VentingRoomScreen(
             state = current.state,
+            entrySource = entrySource,
             onBack = { flowState = VentingFlowState.Selection },
             onDestroyed = { flowState = VentingFlowState.Destroyed(current.state) }
         )
 
         is VentingFlowState.Destroyed -> VentingDestroyedScreen(
             state = current.state,
+            entrySource = entrySource,
             onRetry = {
                 current.state.reset()
                 flowState = VentingFlowState.Room(current.state)
@@ -88,6 +100,6 @@ fun VentingHomeCardContainer(myTeam: Team) {
 
     VentingHomeCard(
         context = ventingContext,
-        onEnterVenting = { VentingFlowController.open(ventingContext) }
+        onEnterVenting = { VentingFlowController.open(ventingContext, entrySource = "home_card") }
     )
 }

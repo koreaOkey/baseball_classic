@@ -191,6 +191,25 @@ object BackendGamesRepository {
         val nextCursor: Long?
     )
 
+    /** 분풀이 regret-top5 서버 응답 (GET /games/{id}/venting/regret-top5). */
+    data class VentingRegretTop5(
+        val teamCode: String?,
+        val source: String?,
+        val manager: String?,
+        val items: List<VentingRegretItem>,
+    )
+
+    data class VentingRegretItem(
+        val kind: String?,
+        val teamSide: String?,
+        val battingOrder: Int?,
+        val appearanceOrder: Int?,
+        val roleLabel: String?,
+        val inning: String?,
+        val eventType: String?,
+        val reason: String?,
+    )
+
     data class TeamRecordStats(
         val teamId: String,
         val ranking: Int?,
@@ -775,6 +794,40 @@ object BackendGamesRepository {
                 null
             }
             LiveEventsPage(items = items, nextCursor = nextCursor)
+        }
+    }
+
+    /**
+     * 분풀이 regret-top5 조회. 미지원 백엔드(404)·파싱 실패 시 null,
+     * items 비었으면 빈 리스트를 담아 반환한다(호출자가 로컬 폴백 여부를 판단).
+     */
+    fun fetchVentingRegretTop5(gameId: String): VentingRegretTop5? {
+        val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/games/$gameId/venting/regret-top5"
+        return getJson(endpoint) { body ->
+            val root = JSONObject(body)
+            val array = root.optJSONArray("items") ?: JSONArray()
+            val items = ArrayList<VentingRegretItem>(array.length())
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                items.add(
+                    VentingRegretItem(
+                        kind = item.optCleanString("kind"),
+                        teamSide = item.optCleanString("team_side"),
+                        battingOrder = item.optNullableInt("batting_order"),
+                        appearanceOrder = item.optNullableInt("appearance_order"),
+                        roleLabel = item.optCleanString("role_label"),
+                        inning = item.optCleanString("inning"),
+                        eventType = item.optCleanString("event_type"),
+                        reason = item.optCleanString("reason"),
+                    )
+                )
+            }
+            VentingRegretTop5(
+                teamCode = root.optCleanString("teamCode"),
+                source = root.optCleanString("source"),
+                manager = root.optCleanString("manager"),
+                items = items,
+            )
         }
     }
 
