@@ -1135,9 +1135,13 @@ fun BaseHapticApp(
                     .getString("selected_team", null)
                 val myTeam = prefsTeam?.let { Team.fromString(it) } ?: Team.NONE
                 if (myTeam == Team.NONE) return@withContext null
-                val state = BackendGamesRepository.fetchGameState(pending.gameId)
-                val boxscore = BackendGamesRepository.fetchGameBoxscore(pending.gameId)
-                val regret = BackendGamesRepository.fetchVentingRegretTop5(pending.gameId)
+                // 3개 호출을 병렬로 — 순차면 합산(≈1초)돼 홈이 잠깐 보이는 딜레이가 생긴다.
+                val stateD = async { BackendGamesRepository.fetchGameState(pending.gameId) }
+                val boxscoreD = async { BackendGamesRepository.fetchGameBoxscore(pending.gameId) }
+                val regretD = async { BackendGamesRepository.fetchVentingRegretTop5(pending.gameId) }
+                val state = stateD.await()
+                val boxscore = boxscoreD.await()
+                val regret = regretD.await()
                 val serverContext = regret?.let {
                     com.basehaptic.mobile.venting.ServerRegretProvider.buildContext(
                         gameId = pending.gameId,
