@@ -14,6 +14,6 @@
 
 ## 3. 활성화
 
-- [ ] 3.1 ALTER 적용 후 코드 배포(플래그·min_version 아직 미설정=다크)
-- [ ] 3.2 실테스트: `venting_loss_push_min_version`=테스트 빌드 버전 + `venting_loss_push_enabled=true` → 테스터만 수신, 푸시→딥링크→분풀이 확인
-- [ ] 3.3 출시: venting 릴리즈(DEBUG 게이트 해제) + 그 버전으로 min_version 설정 → 업데이트 사용자에게 확대
+- [x] 3.1 ALTER 적용(Supabase SQL Editor) 후 코드 배포(커밋 3e2ca4f5), 프로덕션 register app_version 동작 검증
+- [~] 3.2 실테스트 활성(2026-08-14): `venting_loss_push_min_version=1.1.7` + `venting_loss_push_enabled=true` 설정, health 200. app_version 전송 코드가 미출시라 **실사용자 전원 NULL=제외**, 재빌드 테스터(1.1.7 전송)만 대상. 잔여: 실기기에서 재빌드→응원팀(지는 팀) 선택→경기 종료 시 푸시→딥링크→분풀이 확인
+- [ ] 3.3 출시: venting 릴리즈(DEBUG 게이트 해제) + 그 버전으로 min_version 갱신 → 업데이트 사용자에게 확대
