@@ -441,8 +441,21 @@ def _parse_ip_to_outs(raw_value: Any) -> int:
 
 
 def _extract_latest_entry(relays_by_inning: Dict[int, Dict[str, Any]], key: str) -> Dict[str, Any]:
-    for inning in sorted(relays_by_inning.keys(), reverse=True):
-        entry = (relays_by_inning.get(inning) or {}).get(key)
+    """homeLineup/homeEntry 등 '게임 전체 누적' lineup 객체를 가장 신선한 relay 에서 취한다.
+
+    homeLineup 은 이닝별이 아니라 게임 전체 누적(타수/안타/타점…)이며 Naver 는 어느
+    이닝을 조회해도 현재까지의 누적을 돌려준다. 하지만 이닝별 relay 캐시(C5) 때문에
+    아직 진행되지 않은 높은 이닝의 relay 는 크롤러가 게임 초반(또는 프로세스 재시작)
+    시점에 캐시한 stale lineup 을 들고 있을 수 있다 — 그 시점 스탯은 대부분 0 이다.
+
+    단순히 '가장 높은 이닝'을 고르면(과거 구현) 그 stale 한 상위 이닝 lineup 이 매 폴
+    재조회되는 현재 이닝의 신선한 lineup 을 가려서, 라이브 내내 박스스코어가 0(초반 값)
+    으로 굳고 경기 종료(상위 이닝이 다시 조회되는 시점)에야 정상화되는 버그가 있었다.
+    textRelays 가 있는(=실제 진행된, 매 폴 재조회되는) relay 를 우선하는
+    _relays_latest_first 순서로 골라 최신 누적 스탯을 취한다.
+    """
+    for relay_data in _relays_latest_first(relays_by_inning):
+        entry = relay_data.get(key)
         if isinstance(entry, dict) and entry:
             return entry
     return {}

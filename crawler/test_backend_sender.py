@@ -234,6 +234,79 @@ def test_pitcher_stats_pick_up_ballcount_as_pitches_thrown() -> None:
     assert by_name["송승기"]["pitchesThrown"] == 0
 
 
+def test_boxscore_prefers_fresh_played_inning_lineup_over_stale_higher_inning() -> None:
+    """라이브 박스스코어 회귀: 상위 이닝(미진행) relay 에 stale 한 0-스탯 lineup 이
+    캐시돼 있어도, 실제 진행 중인 현재 이닝의 신선한 누적 스탯을 써야 한다.
+
+    homeLineup 은 게임 전체 누적 객체지만 이닝별 relay 캐시(C5) 탓에 게임 초반/재시작
+    시점에 잡힌 상위 이닝 lineup 은 스탯이 0 인 채로 굳는다. 과거엔 '가장 높은 이닝'을
+    골라 라이브 내내 박스스코어가 0 으로 표기되던 버그가 있었다.
+    """
+    game_data = {
+        "homeTeamName": "KIA",
+        "awayTeamName": "삼성",
+        "statusCode": "STARTED",
+        "currentInning": "5회말",
+        "homeTeamScore": 3,
+        "awayTeamScore": 1,
+        "gameDateTime": "2026-08-13T18:30:00+09:00",
+    }
+    # 실제 진행 중인 현재 이닝(5회) — 매 폴 재조회되어 신선함 (textRelays 존재)
+    fresh_home_batter = {
+        "name": "김선빈", "pcode": "50072", "batOrder": 2,
+        "pa": 3, "ab": 3, "hit": 2, "run": 1, "rbi": 1, "hr": 0, "bb": 0, "so": 0,
+    }
+    fresh_away_batter = {
+        "name": "구자욱", "pcode": "60256", "batOrder": 4,
+        "pa": 3, "ab": 3, "hit": 1, "run": 0, "rbi": 0, "hr": 0, "bb": 0, "so": 1,
+    }
+    # 아직 진행되지 않은 상위 이닝(9회) — 초반에 캐시된 stale 0-스탯 lineup, textRelays 없음
+    stale_home_batter = {
+        "name": "김선빈", "pcode": "50072", "batOrder": 2,
+        "pa": 0, "ab": 0, "hit": 0, "run": 0, "rbi": 0, "hr": 0, "bb": 0, "so": 0,
+    }
+    stale_away_batter = {
+        "name": "구자욱", "pcode": "60256", "batOrder": 4,
+        "pa": 0, "ab": 0, "hit": 0, "run": 0, "rbi": 0, "hr": 0, "bb": 0, "so": 0,
+    }
+    relays_by_inning = {
+        5: {
+            "homeLineup": {"pitcher": [], "batter": [fresh_home_batter]},
+            "awayLineup": {"pitcher": [], "batter": [fresh_away_batter]},
+            "textRelays": [
+                {
+                    "no": 30,
+                    "homeOrAway": "1",
+                    "textOptions": [
+                        {
+                            "seqno": 100,
+                            "type": 1,
+                            "text": "1구 스트라이크",
+                            "currentGameState": {"homeScore": "3", "awayScore": "1", "out": "1"},
+                        }
+                    ],
+                }
+            ],
+        },
+        9: {
+            "homeLineup": {"pitcher": [], "batter": [stale_home_batter]},
+            "awayLineup": {"pitcher": [], "batter": [stale_away_batter]},
+            # 미진행 이닝: textRelays 없음
+        },
+    }
+
+    payload = build_snapshot_payload(game_data=game_data, relays_by_inning=relays_by_inning)
+    home = {b["playerName"]: b for b in payload["batterStats"] if b["teamSide"] == "home"}
+    away = {b["playerName"]: b for b in payload["batterStats"] if b["teamSide"] == "away"}
+
+    # 신선한 5회 lineup 의 실제 누적 스탯이 반영돼야 한다 (stale 9회 0 이 아님)
+    assert home["김선빈"]["hits"] == 2
+    assert home["김선빈"]["atBats"] == 3
+    assert home["김선빈"]["rbi"] == 1
+    assert away["구자욱"]["hits"] == 1
+    assert away["구자욱"]["atBats"] == 3
+
+
 def test_normalize_status_supports_canceled_and_postponed() -> None:
     assert _normalize_status("ENDED") == "FINISHED"
     assert _normalize_status("CANCELED") == "CANCELED"
