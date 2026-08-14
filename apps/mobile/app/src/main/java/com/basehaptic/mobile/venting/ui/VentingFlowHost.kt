@@ -4,16 +4,24 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.basehaptic.mobile.ui.theme.Gray950
+import com.basehaptic.mobile.ui.theme.Red400
 import com.basehaptic.mobile.venting.VentingGameContext
 
 /**
@@ -35,19 +43,45 @@ object VentingFlowController {
     var request by mutableStateOf<Request?>(null)
         private set
 
+    // 딥링크(패배 푸시) 탭 즉시 방을 로딩 상태로 띄우기 위한 플래그.
+    // 데이터(state·boxscore·regret) 로드 전 홈이 잠깐 보이는 플래시를 없앤다.
+    var loading by mutableStateOf(false)
+        private set
+
+    /** 탭 즉시 호출 — 데이터 로드 동안 로딩 오버레이를 띄운다. */
+    fun showLoading() {
+        loading = true
+    }
+
+    /** 로드 실패 등으로 진입을 접을 때 (오버레이만 내린다). */
+    fun dismissLoading() {
+        loading = false
+    }
+
     fun open(context: VentingGameContext, backLabel: String = "홈", entrySource: String = "unknown") {
+        loading = false
         request = Request(context, backLabel, entrySource)
     }
 
     fun close() {
         request = null
+        loading = false
     }
 }
 
-/** MainActivity 루트 Box에 배치되는 분풀이 플로우 오버레이. 요청이 없으면 아무것도 그리지 않는다. */
+/**
+ * MainActivity 루트 Box에 배치되는 분풀이 플로우 오버레이.
+ * 요청이 있으면 플로우를, (요청 전) 로딩 중이면 스피너 오버레이를 그린다. 둘 다 아니면 미표시.
+ */
 @Composable
 fun VentingFlowHost() {
-    val request = VentingFlowController.request ?: return
+    val request = VentingFlowController.request
+    if (request == null) {
+        if (VentingFlowController.loading) {
+            VentingLoadingOverlay()
+        }
+        return
+    }
     BackHandler { VentingFlowController.close() }
     Box(
         modifier = Modifier
@@ -67,5 +101,31 @@ fun VentingFlowHost() {
             backLabel = request.backLabel,
             entrySource = request.entrySource
         )
+    }
+}
+
+/** 딥링크 탭 직후 데이터 로드 동안 표시되는 풀스크린 로딩 오버레이 (💢 + 스피너). */
+@Composable
+private fun VentingLoadingOverlay() {
+    BackHandler { VentingFlowController.dismissLoading() }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
+            .background(Gray950)
+            .safeDrawingPadding(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Text(text = "💢", fontSize = 48.sp)
+            CircularProgressIndicator(color = Red400)
+        }
     }
 }

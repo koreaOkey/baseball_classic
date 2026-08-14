@@ -1125,6 +1125,8 @@ fun BaseHapticApp(
         // 패배 분풀이 딥링크 (kind=venting_loss) — DEBUG 게이트 뒤에서만 소비.
         // 홈 착지 후 서버 regret-top5(폴백: 로컬 규칙)로 컨텍스트를 만들어 분풀이 플로우를 연다.
         if (pending.venting && com.basehaptic.mobile.venting.VentingFeatureFlag.isEnabled(context)) {
+            // 탭 즉시 로딩 오버레이(💢+스피너)를 띄워 데이터 로드 동안 홈이 보이는 플래시를 없앤다.
+            com.basehaptic.mobile.venting.ui.VentingFlowController.showLoading()
             selectedGameId = pending.gameId
             if (currentView != Screen.Home) {
                 navigateTo(Screen.Home)
@@ -1166,6 +1168,9 @@ fun BaseHapticApp(
                     backLabel = "경기",
                     entrySource = "loss_push"
                 )
+            } else {
+                // 컨텍스트 못 만들면 로딩만 내리고 홈에 머문다.
+                com.basehaptic.mobile.venting.ui.VentingFlowController.dismissLoading()
             }
             NotificationIntentBus.consume()
             return@LaunchedEffect
