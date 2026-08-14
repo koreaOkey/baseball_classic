@@ -1364,6 +1364,7 @@ def register_team_subscription(
             platform=payload.platform,
             is_sandbox=payload.is_sandbox,
             display_name_style=payload.display_name_style,
+            app_version=payload.app_version,
         ).on_conflict_do_update(
             constraint="uq_team_subscription_token",
             set_={
@@ -1371,6 +1372,7 @@ def register_team_subscription(
                 "platform": payload.platform,
                 "is_sandbox": payload.is_sandbox,
                 "display_name_style": payload.display_name_style,
+                "app_version": payload.app_version,
                 # 재등록 시 최근 사용 시각 갱신 (90일 미사용 purge 기준)
                 "updated_at": datetime.now(UTC),
             },
@@ -1385,6 +1387,7 @@ def register_team_subscription(
             existing.platform = payload.platform
             existing.is_sandbox = payload.is_sandbox
             existing.display_name_style = payload.display_name_style
+            existing.app_version = payload.app_version
         else:
             db.add(TeamSubscriptionToken(
                 token=payload.token,
@@ -1392,6 +1395,7 @@ def register_team_subscription(
                 platform=payload.platform,
                 is_sandbox=payload.is_sandbox,
                 display_name_style=payload.display_name_style,
+                app_version=payload.app_version,
             ))
     db.commit()
     return {"status": "ok"}
@@ -1783,6 +1787,53 @@ def _load_team_subscriptions(my_teams: set[str]) -> list[tuple[str, str, str, bo
         ]
 
 
+def _load_team_subscriptions_with_version(
+    my_teams: set[str],
+) -> list[tuple[str, str, str, bool, str, str | None]]:
+    """패배 푸시 버전 게이트용 — _load_team_subscriptions 에 app_version 을 추가한 변형."""
+    if not my_teams:
+        return []
+    assert_db_available()
+    with SessionLocal() as db:
+        rows = db.execute(
+            select(
+                TeamSubscriptionToken.token,
+                TeamSubscriptionToken.my_team,
+                TeamSubscriptionToken.platform,
+                TeamSubscriptionToken.is_sandbox,
+                TeamSubscriptionToken.display_name_style,
+                TeamSubscriptionToken.app_version,
+            ).where(TeamSubscriptionToken.my_team.in_(list(my_teams)))
+        ).all()
+        return [
+            (
+                r.token, r.my_team, r.platform, bool(r.is_sandbox),
+                _normalize_display_style(r.display_name_style), r.app_version,
+            )
+            for r in rows
+        ]
+
+
+def _parse_version(v: str | None) -> tuple[int, ...]:
+    """'8.6.0' → (8, 6, 0). 숫자 파트만 취하고, 빈/이상값은 (0,)."""
+    if not v:
+        return (0,)
+    parts: list[int] = []
+    for seg in str(v).strip().split("."):
+        digits = "".join(ch for ch in seg if ch.isdigit())
+        if digits == "":
+            break
+        parts.append(int(digits))
+    return tuple(parts) if parts else (0,)
+
+
+def _version_gte(candidate: str | None, minimum: str) -> bool:
+    """candidate 앱버전 >= minimum 이면 True. minimum 이 빈값이면 게이트 없음(항상 True)."""
+    if not minimum:
+        return True
+    return _parse_version(candidate) >= _parse_version(minimum)
+
+
 async def _send_game_start_notification(
     game_id: str,
     home_team: str,
@@ -1890,12 +1941,16 @@ async def _send_loss_notification(
     if not target_codes:
         return
 
-    subscriptions = await asyncio.to_thread(_load_team_subscriptions, target_codes)
+    subscriptions = await asyncio.to_thread(_load_team_subscriptions_with_version, target_codes)
+    # 버전 게이트: 지정 시 그 버전 이상으로 등록한 구독자에게만 발송(구버전엔 배너 미표시).
+    min_version = settings.venting_loss_push_min_version
+    if min_version:
+        subscriptions = [s for s in subscriptions if _version_gte(s[5], min_version)]
     if not subscriptions:
         return
 
     grouped: dict[tuple[str, str], list[tuple[str, str, bool]]] = defaultdict(list)
-    for token, my_team, platform, is_sandbox, display_style in subscriptions:
+    for token, my_team, platform, is_sandbox, display_style, _app_version in subscriptions:
         grouped[(my_team, display_style)].append((token, (platform or "ios").lower(), bool(is_sandbox)))
 
     tasks: list[Any] = []

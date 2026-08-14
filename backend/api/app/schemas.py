@@ -456,3 +456,5 @@ class TeamSubscriptionRequest(BaseModel):
     platform: str = Field(default="ios", max_length=16)
     is_sandbox: bool = Field(default=False)
     display_name_style: Literal["TEAM", "MASCOT"] = "TEAM"
+    # 앱 버전(예 "8.6.0"). 패배 푸시 버전 게이트용. 구버전은 미전송 → NULL 저장.
+    app_version: str | None = Field(default=None, max_length=32)

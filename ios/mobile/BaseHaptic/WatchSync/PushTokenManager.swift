@@ -193,6 +193,14 @@ enum TeamSubscriptionManager {
     private static let lastTokenKey = "team_subscription_last_token"
     private static let lastTeamKey = "team_subscription_last_team"
     private static let lastDisplayNameStyleKey = "team_subscription_last_display_name_style"
+    // 앱 버전도 캐시 비교에 포함 — 업데이트 시 재등록되어 백엔드가 새 버전을 기록,
+    // 패배 푸시 버전 게이트가 동작하게 한다.
+    private static let lastAppVersionKey = "team_subscription_last_app_version"
+
+    /// 현재 앱 버전(CFBundleShortVersionString, 예 "8.6.0").
+    private static var appVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? ""
+    }
 
     /// 현재 token + selected_team 을 백엔드에 동기화. 직전과 동일하면 생략.
     static func syncIfNeeded() async {
@@ -208,6 +216,7 @@ enum TeamSubscriptionManager {
         let lastToken = UserDefaults.standard.string(forKey: lastTokenKey)
         let lastTeam = UserDefaults.standard.string(forKey: lastTeamKey)
         let lastDisplayNameStyle = UserDefaults.standard.string(forKey: lastDisplayNameStyleKey)
+        let lastAppVersion = UserDefaults.standard.string(forKey: lastAppVersionKey)
 
         if myTeam.isEmpty {
             if let prev = lastToken, !prev.isEmpty {
@@ -216,7 +225,8 @@ enum TeamSubscriptionManager {
             return
         }
 
-        if token == lastToken && myTeam == lastTeam && displayNameStyle == lastDisplayNameStyle { return }
+        if token == lastToken && myTeam == lastTeam && displayNameStyle == lastDisplayNameStyle
+            && appVersion == lastAppVersion { return }
 
         await register(token: token, myTeam: myTeam, displayNameStyle: displayNameStyle)
     }
@@ -231,7 +241,8 @@ enum TeamSubscriptionManager {
             "my_team": myTeam,
             "platform": "ios",
             "is_sandbox": PushTokenManager.isApnsSandbox(),
-            "display_name_style": displayNameStyle
+            "display_name_style": displayNameStyle,
+            "app_version": appVersion
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         do {
@@ -241,6 +252,7 @@ enum TeamSubscriptionManager {
                 UserDefaults.standard.set(token, forKey: lastTokenKey)
                 UserDefaults.standard.set(myTeam, forKey: lastTeamKey)
                 UserDefaults.standard.set(displayNameStyle, forKey: lastDisplayNameStyleKey)
+                UserDefaults.standard.set(appVersion, forKey: lastAppVersionKey)
                 print("[TeamSubscription] Registered team=\(myTeam) displayStyle=\(displayNameStyle) status=\(statusCode)")
             } else {
                 print("[TeamSubscription] Register failed status=\(statusCode)")
@@ -261,6 +273,7 @@ enum TeamSubscriptionManager {
                 UserDefaults.standard.removeObject(forKey: lastTokenKey)
                 UserDefaults.standard.removeObject(forKey: lastTeamKey)
                 UserDefaults.standard.removeObject(forKey: lastDisplayNameStyleKey)
+                UserDefaults.standard.removeObject(forKey: lastAppVersionKey)
                 print("[TeamSubscription] Unregistered status=\(statusCode)")
             }
         } catch {

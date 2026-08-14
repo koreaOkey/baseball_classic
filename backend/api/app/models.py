@@ -305,6 +305,8 @@ class TeamSubscriptionToken(Base):
     platform: Mapped[str] = mapped_column(String(16), nullable=False, default="ios")
     is_sandbox: Mapped[bool] = mapped_column(nullable=False, server_default="false")
     display_name_style: Mapped[str] = mapped_column(String(16), nullable=False, default="TEAM", server_default="TEAM")
+    # 등록 시점 앱 버전(예 "8.6.0"). 패배 푸시 버전 게이트에 사용. 구버전/미전송은 NULL.
+    app_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 

@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     # 경기 종료 시 패배팀 팬에게 분풀이 유도 푸시 (다크, 기본 OFF). 켜기 전까지 종료 훅에서
     # 태스크가 스케줄되지 않아 기존 운영 경로 무영향.
     venting_loss_push_enabled: bool = False
+    # 패배 푸시 최소 앱 버전 게이트. 빈 값이면 게이트 없음(전 구독자). 값이 있으면(예 "8.6.0")
+    # 그 버전 이상으로 등록한 구독자에게만 발송 — venting 미지원 구버전엔 배너를 안 보낸다.
+    # 실테스트 시 이 값을 테스트 빌드 버전으로 두면 그 빌드(=본인)만 받는다.
+    venting_loss_push_min_version: str = ""
 
     @property
     def cors_origins(self) -> list[str]:

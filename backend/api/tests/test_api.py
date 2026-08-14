@@ -2127,9 +2127,9 @@ def test_loss_push_targets_only_losing_team() -> None:
     captured: list[dict[str, object]] = []
     requested_codes: list[set[str]] = []
 
-    def fake_load(my_teams: set[str]) -> list[tuple[str, str, str, bool, str]]:
+    def fake_load(my_teams: set[str]) -> list[tuple[str, str, str, bool, str, str | None]]:
         requested_codes.append(set(my_teams))
-        return [("android-lotte-token", "LOTTE", "android", False, "MASCOT")]
+        return [("android-lotte-token", "LOTTE", "android", False, "MASCOT", None)]
 
     async def fake_fcm(
         tokens: list[str], *, title: str, body: str, data: dict[str, str] | None = None,
@@ -2137,19 +2137,56 @@ def test_loss_push_targets_only_losing_team() -> None:
         captured.append({"tokens": tokens, "title": title, "body": body, "data": data})
         return [], []
 
-    with patch.object(main_module, "_load_team_subscriptions", side_effect=fake_load), \
+    with patch.object(main_module, "_load_team_subscriptions_with_version", side_effect=fake_load), \
         patch.object(main_module, "send_fcm_visible_push_to_tokens_detailed", side_effect=fake_fcm):
         # 홈 두산 5 : 3 롯데(원정) → 패배팀 = 롯데
         asyncio.run(main_module._send_loss_notification("20260616LTOB02026", "두산", "롯데", 5, 3))
 
     # 패배팀(롯데) 코드만 조회, 승리팀(두산) 코드는 미포함
-    assert requested_codes, "_load_team_subscriptions 가 호출되어야 한다"
+    assert requested_codes, "구독 조회가 호출되어야 한다"
     codes = requested_codes[0]
     assert {"LOTTE", "자이언츠"}.issubset(codes)
     assert "DOOSAN" not in codes and "베어스" not in codes
     assert len(captured) == 1
     assert captured[0]["tokens"] == ["android-lotte-token"]
     assert isinstance(captured[0]["data"], dict) and captured[0]["data"]["kind"] == "venting_loss"
+
+
+def test_loss_push_version_gate_filters_old_versions() -> None:
+    """min_version 설정 시 그 버전 이상 구독자에게만 발송(구버전·미상 제외)."""
+    captured: list[list[str]] = []
+
+    def fake_load(my_teams: set[str]) -> list[tuple[str, str, str, bool, str, str | None]]:
+        return [
+            ("tok-new", "LOTTE", "android", False, "MASCOT", "8.6.0"),   # 지원 버전 → 받음
+            ("tok-old", "LOTTE", "android", False, "MASCOT", "8.5.9"),   # 구버전 → 제외
+            ("tok-none", "LOTTE", "android", False, "MASCOT", None),      # 미상 → 제외
+        ]
+
+    async def fake_fcm(tokens, *, title, body, data=None):
+        captured.append(list(tokens))
+        return [], []
+
+    settings = main_module.settings
+    prev = settings.venting_loss_push_min_version
+    settings.venting_loss_push_min_version = "8.6.0"
+    try:
+        with patch.object(main_module, "_load_team_subscriptions_with_version", side_effect=fake_load), \
+            patch.object(main_module, "send_fcm_visible_push_to_tokens_detailed", side_effect=fake_fcm):
+            asyncio.run(main_module._send_loss_notification("g", "두산", "롯데", 5, 3))
+    finally:
+        settings.venting_loss_push_min_version = prev
+
+    sent = [t for group in captured for t in group]
+    assert sent == ["tok-new"]  # 지원 버전만
+
+
+def test_version_gte_helper() -> None:
+    assert main_module._version_gte("8.6.0", "8.6.0") is True
+    assert main_module._version_gte("8.10.0", "8.9.0") is True   # 숫자 비교(문자열 아님)
+    assert main_module._version_gte("8.5.9", "8.6.0") is False
+    assert main_module._version_gte(None, "8.6.0") is False
+    assert main_module._version_gte("8.5.0", "") is True         # 게이트 없음
 
 
 def test_loss_push_skips_draw() -> None:

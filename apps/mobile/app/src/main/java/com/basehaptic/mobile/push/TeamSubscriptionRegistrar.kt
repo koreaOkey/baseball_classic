@@ -27,6 +27,9 @@ object TeamSubscriptionRegistrar {
     private const val KEY_LAST_REGISTERED_TOKEN = "last_token"
     private const val KEY_LAST_REGISTERED_TEAM = "last_team"
     private const val KEY_LAST_REGISTERED_DISPLAY_STYLE = "last_display_style"
+    // 앱 버전도 캐시 비교에 포함 — 업데이트(버전 변경) 시 재등록되어 백엔드가 새 버전을 기록,
+    // 패배 푸시 버전 게이트가 동작하게 한다.
+    private const val KEY_LAST_REGISTERED_VERSION = "last_app_version"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client = OkHttpClient.Builder()
@@ -55,6 +58,7 @@ object TeamSubscriptionRegistrar {
         val lastToken = prefs.getString(KEY_LAST_REGISTERED_TOKEN, null)
         val lastTeam = prefs.getString(KEY_LAST_REGISTERED_TEAM, null)
         val lastDisplayStyle = prefs.getString(KEY_LAST_REGISTERED_DISPLAY_STYLE, null)
+        val lastVersion = prefs.getString(KEY_LAST_REGISTERED_VERSION, null)
 
         if (team.isBlank()) {
             Log.i(TAG, "skip sync: no team selected (clearing registration if any)")
@@ -64,7 +68,8 @@ object TeamSubscriptionRegistrar {
             return
         }
 
-        if (token == lastToken && team == lastTeam && displayStyle == lastDisplayStyle) {
+        if (token == lastToken && team == lastTeam && displayStyle == lastDisplayStyle &&
+            BuildConfig.VERSION_NAME == lastVersion) {
             Log.i(TAG, "skip sync: already registered team=$team token=${token.take(8)}...")
             return
         }
@@ -81,6 +86,7 @@ object TeamSubscriptionRegistrar {
                 .put("platform", "android")
                 .put("is_sandbox", false)
                 .put("display_name_style", displayStyle)
+                .put("app_version", BuildConfig.VERSION_NAME)
                 .toString()
                 .toRequestBody(jsonMedia)
             val request = Request.Builder()
@@ -95,6 +101,7 @@ object TeamSubscriptionRegistrar {
                             .putString(KEY_LAST_REGISTERED_TOKEN, token)
                             .putString(KEY_LAST_REGISTERED_TEAM, team)
                             .putString(KEY_LAST_REGISTERED_DISPLAY_STYLE, displayStyle)
+                            .putString(KEY_LAST_REGISTERED_VERSION, BuildConfig.VERSION_NAME)
                             .apply()
                         Log.i(TAG, "registered team=$team displayStyle=$displayStyle token=${token.take(8)}...")
                     } else {
