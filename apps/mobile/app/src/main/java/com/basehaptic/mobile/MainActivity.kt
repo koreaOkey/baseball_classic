@@ -369,14 +369,22 @@ class MainActivity : ComponentActivity() {
 
     private fun handleNotificationIntent(intent: Intent?) {
         if (intent == null) return
-        val gameId = intent.getStringExtra(BaseHapticMessagingService.EXTRA_GAME_ID).orEmpty()
+        // 포그라운드(onMessageReceived→showNotification)에서는 커스텀 extra 가 실리지만,
+        // 백그라운드 notification 탭은 onMessageReceived 를 안 거치고 OS 가 FCM 원본 data 키를
+        // 런처 인텐트 extra 로 넣는다. 두 경로 모두 지원하려면 원본 키(game_id/kind)도 읽어야 한다.
+        val gameId = (intent.getStringExtra(BaseHapticMessagingService.EXTRA_GAME_ID)
+            ?: intent.getStringExtra("game_id")).orEmpty()
         if (gameId.isBlank()) return
+        val venting = intent.getBooleanExtra(BaseHapticMessagingService.EXTRA_VENTING, false) ||
+            intent.getStringExtra("kind") == "venting_loss"
         NotificationIntentBus.post(
             gameId = gameId,
-            homeTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_HOME_TEAM),
-            awayTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_AWAY_TEAM),
+            homeTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_HOME_TEAM)
+                ?: intent.getStringExtra("home_team"),
+            awayTeam = intent.getStringExtra(BaseHapticMessagingService.EXTRA_AWAY_TEAM)
+                ?: intent.getStringExtra("away_team"),
             openHomeOnly = true,
-            venting = intent.getBooleanExtra(BaseHapticMessagingService.EXTRA_VENTING, false),
+            venting = venting,
         )
     }
 
