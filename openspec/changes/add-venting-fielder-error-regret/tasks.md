@@ -6,5 +6,5 @@
 - [x] 2.1 단위 테스트: 실책→fielder 귀속(role_label=포지션, batting_order 해소, 투수 중복 없음, 실명 미저장) + 포지션 미상 익명("수비수"/타순 없음)
 - [x] 2.2 백엔드 전체 테스트 통과 (`pytest` 113 passed)
 - [x] 3.1 클라이언트 무변경 검증 — iOS/Android `resolvePlayerName`이 kind!=pitcher를 batting_order로 조인, TargetRow가 `roleLabel(+playerName)` 렌더(코드 리뷰로 확인, 변경 불필요)
-- [ ] 4.1 백엔드(baseball_classic) 재배포 후 실책 발생 경기에서 regret-top5에 fielder 항목 확인
+- [~] 4.1 백엔드(baseball_classic) 재배포 완료 — staging push(e9fc5f27) → overflowing-solace/baseball_classic 배포 090a5a6d SUCCESS(2026-08-17 12:36 UTC), 8워커 startup complete + /health 200. 실책 발생 경기에서 fielder 항목 관측 대기(재배포 이후 처리 경기 필요)
 - [ ] 4.2 실기기: 선택 화면에 "유격수 이OO" 실명 표기 + 룸·완파 익명("유격수") 확인
