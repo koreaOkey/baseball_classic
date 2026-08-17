@@ -252,7 +252,12 @@ final class WatchVentingState: ObservableObject {
                 isDestroyed = true
                 recordFirstDestructionIfNeeded()
             }
+        } else if hits == 1 {
+            // 단발 탭: 매 탭마다 타격감을 준다 (이전엔 3탭당 1회라 "진동 안 느껴짐" 체감).
+            hitsSinceLightHaptic = 0
+            device.play(.click)
         } else {
+            // 크라운 연속 스크롤(hits>1)만 3틱당 1회로 모터 과부하를 막는다.
             hitsSinceLightHaptic += hits
             if hitsSinceLightHaptic >= 3 {
                 hitsSinceLightHaptic = 0

@@ -128,7 +128,12 @@ class WatchVentingState(context: Context, private val gameId: String) {
                 isDestroyed = true
                 recordFirstDestructionIfNeeded()
             }
+        } else if (hits == 1) {
+            // 단발 탭: 매 탭마다 타격감을 준다 (이전엔 3탭당 1회라 "진동 안 느껴짐" 체감).
+            hitsSinceLightHaptic = 0
+            hapticPlayer.playHitFeedback()
         } else {
+            // 로터리(베젤/크라운) 연속 스크롤(hits>1)만 3틱당 1회로 모터 과부하를 막는다.
             hitsSinceLightHaptic += hits
             if (hitsSinceLightHaptic >= WatchVentingConstants.TAP_HAPTIC_EVERY_HITS) {
                 hitsSinceLightHaptic = 0
