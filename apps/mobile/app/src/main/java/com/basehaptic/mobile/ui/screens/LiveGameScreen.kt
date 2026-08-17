@@ -80,6 +80,7 @@ import com.basehaptic.mobile.data.WatchSyncAdLedger
 import com.basehaptic.mobile.data.model.AtBatGroup
 import com.basehaptic.mobile.data.model.GameStatus
 import com.basehaptic.mobile.data.model.Team
+import com.basehaptic.mobile.push.LiveScoreNotificationManager
 
 import com.basehaptic.mobile.ui.components.RewardedAdManager
 import com.basehaptic.mobile.ui.components.RewardedAdFormat
@@ -148,6 +149,18 @@ fun LiveGameScreen(
     var backfilledEvents by remember(gameId) { mutableStateOf<List<BackendGamesRepository.LiveEvent>>(emptyList()) }
     var loadedEventFilterKeys by remember(gameId) { mutableStateOf<Set<String>>(emptySet()) }
     var loadingEventFilterKey by remember(gameId) { mutableStateOf<String?>(null) }
+
+    // 승격 지원 기기인데 시스템 "실시간 업데이트"가 꺼져 promoted 고정이 안 되는 경우,
+    // 라이브 진입 시 1회만 안내 프롬프트를 띄운다(닫으면 다시 뜨지 않음).
+    val promptContext = LocalContext.current
+    var showPromotedPrompt by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (LiveScoreNotificationManager.isPromotedBlockedBySystemSetting(promptContext) &&
+            !LiveScoreNotificationManager.isPromotedPromptDismissed(promptContext)
+        ) {
+            showPromotedPrompt = true
+        }
+    }
 
     LaunchedEffect(gameState?.inning) {
         val inning = gameState?.inning ?: return@LaunchedEffect
@@ -507,6 +520,35 @@ fun LiveGameScreen(
             boxscore = boxscore,
             modifier = Modifier.align(Alignment.BottomStart)
         )
+
+        if (showPromotedPrompt) {
+            AlertDialog(
+                onDismissRequest = {
+                    showPromotedPrompt = false
+                    LiveScoreNotificationManager.markPromotedPromptDismissed(promptContext)
+                },
+                title = { Text("잠금화면 고정 스코어 켜기") },
+                text = {
+                    Text(
+                        "'실시간 업데이트'를 켜면 이 경기의 라이브 스코어가 잠금화면 상단에 고정돼요. " +
+                            "지금 설정에서 켤 수 있어요."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showPromotedPrompt = false
+                        LiveScoreNotificationManager.markPromotedPromptDismissed(promptContext)
+                        LiveScoreNotificationManager.openLiveUpdatesSettings(promptContext)
+                    }) { Text("설정 열기") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showPromotedPrompt = false
+                        LiveScoreNotificationManager.markPromotedPromptDismissed(promptContext)
+                    }) { Text("나중에") }
+                }
+            )
+        }
     }
 }
 

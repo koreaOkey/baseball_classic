@@ -239,6 +239,12 @@ fun WatchTestScreen(
     var pendingLiveScorePreviewStyle by remember {
         mutableStateOf<LiveScoreNotificationManager.Style?>(null)
     }
+    // 미리보기 스타일 선택(기본 PROMOTED). "Live Score 시작"·"득점 강조"·자동 시뮬레이션이
+    // 이 선택을 forceStyle로 게시하므로, 승격 미지원 기기(삼성 One UI 8.0 등)에서도 선택한
+    // 스타일로 결정적으로 테스트할 수 있다.
+    var selectedPreviewStyle by remember {
+        mutableStateOf(LiveScoreNotificationManager.Style.PROMOTED)
+    }
     var simIndex by remember { mutableIntStateOf(0) }
 
     fun addLog(msg: String) {
@@ -254,7 +260,10 @@ fun WatchTestScreen(
     }
 
     fun shouldHighlightLiveScorePreview(eventType: EventType): Boolean {
-        return eventType == EventType.SCORE || eventType == EventType.HOMERUN
+        // 득점·홈런·안타를 강조(프로덕션 LOCK_SCREEN 필터 기본값과 동일).
+        return eventType == EventType.SCORE ||
+            eventType == EventType.HOMERUN ||
+            eventType == EventType.HIT
     }
 
     fun sendCurrentState(eventType: String?) {
@@ -332,7 +341,9 @@ fun WatchTestScreen(
             latestEventType = eventType,
             latestEventDescription = eventText,
             highlightEvent = highlight,
-            forceStyle = forceStyle
+            forceStyle = forceStyle,
+            // 테스트 미리보기는 사용자 이벤트 필터와 무관하게 선택 이벤트를 강조한다.
+            bypassEventFilter = true
         )
     }
 
@@ -528,6 +539,14 @@ fun WatchTestScreen(
                                         gameState = SimGameState()
                                         logMessages = emptyList()
                                         addLog("자동 시뮬레이션 시작")
+                                        // 잠금화면 라이브 스코어 카드도 선택 스타일로 함께 갱신되도록
+                                        // 미리보기를 자동 활성화("Live Score 시작"을 따로 누르지 않아도 적용).
+                                        if (!isLiveScorePreviewActive) {
+                                            requestOrPostLiveScorePreview(
+                                                alert = false,
+                                                forceStyle = selectedPreviewStyle
+                                            )
+                                        }
 
                                         scope.launch {
                                             for (i in simulationScenario.indices) {
@@ -552,7 +571,8 @@ fun WatchTestScreen(
                                                         state = nextState,
                                                         eventType = event.eventType.name,
                                                         eventText = event.description,
-                                                        highlight = shouldHighlight
+                                                        highlight = shouldHighlight,
+                                                        forceStyle = selectedPreviewStyle
                                                     )
                                                     if (posted) {
                                                         val mode = if (shouldHighlight) "주요 이벤트" else "일반"
@@ -615,7 +635,12 @@ fun WatchTestScreen(
                         Spacer(Modifier.height(AppSpacing.sm))
                         Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
                             Button(
-                                onClick = { requestOrPostLiveScorePreview(alert = false) },
+                                onClick = {
+                                    requestOrPostLiveScorePreview(
+                                        alert = false,
+                                        forceStyle = selectedPreviewStyle
+                                    )
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(AppSpacing.buttonHeight),
@@ -625,7 +650,12 @@ fun WatchTestScreen(
                                 Text("Live Score 시작", style = AppFont.bodyBold)
                             }
                             Button(
-                                onClick = { requestOrPostLiveScorePreview(alert = true) },
+                                onClick = {
+                                    requestOrPostLiveScorePreview(
+                                        alert = true,
+                                        forceStyle = selectedPreviewStyle
+                                    )
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(AppSpacing.buttonHeight),
@@ -636,10 +666,20 @@ fun WatchTestScreen(
                             }
                         }
                         Spacer(Modifier.height(AppSpacing.sm))
-                        // 설정 토글·승격 조건과 무관하게 각 스타일을 강제 게시해 비교하는 버튼.
+                        // 스타일 선택 토글. 선택은 위 "Live Score 시작"·"득점 강조"·자동 시뮬레이션에
+                        // forceStyle로 적용된다(승격 조건·설정과 무관하게 결정적 테스트).
+                        Text(
+                            "미리보기 스타일 (시작·자동 시뮬레이션에 적용)",
+                            style = AppFont.caption,
+                            color = Gray500
+                        )
+                        Spacer(Modifier.height(AppSpacing.xs))
                         Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.sm)) {
-                            OutlinedButton(
+                            val promotedSelected =
+                                selectedPreviewStyle == LiveScoreNotificationManager.Style.PROMOTED
+                            Button(
                                 onClick = {
+                                    selectedPreviewStyle = LiveScoreNotificationManager.Style.PROMOTED
                                     requestOrPostLiveScorePreview(
                                         alert = false,
                                         forceStyle = LiveScoreNotificationManager.Style.PROMOTED
@@ -648,12 +688,20 @@ fun WatchTestScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(AppSpacing.buttonHeight),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (promotedSelected) teamTheme.primary else Gray700
+                                ),
                                 shape = AppShapes.sm
                             ) {
-                                Text("Promoted 버전", color = Color.White, style = AppFont.bodyBold)
+                                Text(
+                                    if (promotedSelected) "● Promoted 버전" else "Promoted 버전",
+                                    color = Color.White,
+                                    style = AppFont.bodyBold
+                                )
                             }
-                            OutlinedButton(
+                            Button(
                                 onClick = {
+                                    selectedPreviewStyle = LiveScoreNotificationManager.Style.CLASSIC
                                     requestOrPostLiveScorePreview(
                                         alert = false,
                                         forceStyle = LiveScoreNotificationManager.Style.CLASSIC
@@ -662,9 +710,16 @@ fun WatchTestScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(AppSpacing.buttonHeight),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!promotedSelected) teamTheme.primary else Gray700
+                                ),
                                 shape = AppShapes.sm
                             ) {
-                                Text("Ongoing 버전", color = Color.White, style = AppFont.bodyBold)
+                                Text(
+                                    if (!promotedSelected) "● Ongoing 버전" else "Ongoing 버전",
+                                    color = Color.White,
+                                    style = AppFont.bodyBold
+                                )
                             }
                         }
                         Spacer(Modifier.height(AppSpacing.sm))

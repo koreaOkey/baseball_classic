@@ -3,7 +3,9 @@ package com.basehaptic.mobile.push
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.RelativeSizeSpan
@@ -22,6 +24,8 @@ import com.basehaptic.mobile.data.model.TeamDisplayNameStyle
 object LiveScoreNotificationManager {
     const val KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED = "lock_screen_live_score_enabled"
     const val KEY_PROMOTED_STYLE_ENABLED = "live_score_promoted_style_enabled"
+    // 승격 안내(실시간 업데이트 켜기) 1회성 프롬프트를 이미 닫았는지.
+    const val KEY_PROMOTED_PROMPT_DISMISSED = "live_score_promoted_prompt_dismissed"
 
     private const val NOTIFICATION_ID = 1002
     private const val PREFS_NAME = "basehaptic_user_prefs"
@@ -35,10 +39,11 @@ object LiveScoreNotificationManager {
             .getBoolean(KEY_LOCK_SCREEN_LIVE_SCORE_ENABLED, true)
     }
 
-    // 삼성은 promoted가 Now Bar로 표현되는데 Now Bar 노출은 기본으로 쓰지 않기로 한
-    // 제품 결정이 있어, 하드 블록 대신 기본값만 OFF로 두고 사용자가 켤 수 있게 한다.
+    // promoted 스타일을 모든 기기에서 기본 ON으로 둔다(사용자가 설정에서 끌 수 있음).
+    // 삼성은 promoted가 Now Bar로 표현되며, 승격 불가 기기는 post()의 런타임 확인
+    // (canPostPromotedNotifications)에서 자동으로 이전 카드로 폴백하므로 여기서 막지 않는다.
     fun isPromotedStyleEnabled(context: Context): Boolean {
-        val defaultEnabled = !Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+        val defaultEnabled = true
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_PROMOTED_STYLE_ENABLED, defaultEnabled)
     }
@@ -49,13 +54,52 @@ object LiveScoreNotificationManager {
         return Build.VERSION.SDK_INT >= 36
     }
 
+    // 기기는 승격을 지원하고(API36+) 사용자도 promoted를 켰지만, 시스템 "실시간 업데이트(Live Updates)"
+    // appop이 꺼져 있어 실제 승격이 불가한 상태. 삼성 등은 기본 OFF라 사용자를 안내해야 한다.
+    // 이 상태에서는 promoted 레이아웃이 일반 알림으로만 보이고 잠금화면 고정/Now Bar가 되지 않는다.
+    fun isPromotedBlockedBySystemSetting(context: Context): Boolean {
+        return isPromotedStyleSupportedOnDevice() &&
+            isPromotedStyleEnabled(context) &&
+            !NotificationManagerCompat.from(context).canPostPromotedNotifications()
+    }
+
+    fun isPromotedPromptDismissed(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_PROMOTED_PROMPT_DISMISSED, false)
+    }
+
+    fun markPromotedPromptDismissed(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_PROMOTED_PROMPT_DISMISSED, true)
+            .apply()
+    }
+
+    // "실시간 업데이트" 토글이 있는 앱 알림 설정 화면으로 이동(삼성 One UI 포함).
+    fun openLiveUpdatesSettings(context: Context) {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { context.startActivity(intent) }.onFailure {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        }
+    }
+
     fun post(
         context: Context,
         state: LiveGameState,
         latestEventType: String? = state.lastEventType,
         latestEventDescription: String? = null,
         highlightEvent: Boolean = false,
-        forceStyle: Style? = null
+        forceStyle: Style? = null,
+        // 테스트 도구 전용: 사용자 이벤트 필터를 무시하고 강조를 강제(결정적 미리보기).
+        bypassEventFilter: Boolean = false
     ): Boolean {
         if (!isLockScreenCardEnabled(context)) {
             remove(context)
@@ -94,7 +138,8 @@ object LiveScoreNotificationManager {
         )
 
         val shouldHighlight = highlightEvent &&
-            EventFilterGate.isAllowed(context, latestEventType, EventNotificationChannel.LOCK_SCREEN)
+            (bypassEventFilter ||
+                EventFilterGate.isAllowed(context, latestEventType, EventNotificationChannel.LOCK_SCREEN))
         val channelId = if (shouldHighlight) {
             NotificationChannels.LIVE_SCORE_ALERTS_ID
         } else {
@@ -116,7 +161,7 @@ object LiveScoreNotificationManager {
 
         // 삼성 One UI 8.0처럼 API 36이어도 서드파티 승격을 막아둔 기기가 있다.
         // 승격이 안 되는 기기에서 promoted 스타일을 쓰면 기존 리치 커스텀 카드만 잃으므로 런타임 확인.
-        // 마지막 조건: 설정 탭에서 사용자가 promoted/이전 카드 스타일을 선택할 수 있다(삼성 기본 OFF).
+        // 마지막 조건: 설정 탭에서 사용자가 promoted/이전 카드 스타일을 선택할 수 있다(기본 ON).
         // forceStyle은 테스트 도구 전용 — 승격 불가 기기에서 PROMOTED를 강제하면
         // 승격 없는 시스템 템플릿(BigText) 형태로만 보인다.
         val canPromote = when (forceStyle) {
@@ -194,6 +239,59 @@ object LiveScoreNotificationManager {
             .setRequestPromotedOngoing(true)
     }
 
+    // [프로토타입 · DEBUG 검증 전용] 삼성 Now bar("실시간 정보") 등록 가설 검증.
+    // 가설: BigText+requestPromotedOngoing은 Pixel에선 승격되지만 삼성 Now bar는
+    // Live Update로 인식하지 않음(활성 PROMOTED_ONGOING에도 목록 미등록 확인, 2026-08-17).
+    // ProgressStyle(9이닝 세그먼트) 채택 시 목록 등록·핀 여부를 실기기로 확인한다.
+    // 검증 결과에 따라 정식 채택(applyPromotedStyle 대체) 또는 제거.
+    fun postProgressStylePrototype(context: Context, state: LiveGameState): Boolean {
+        if (Build.VERSION.SDK_INT < 36) return false
+        NotificationChannels.ensureCreated(context)
+
+        val displayNameStyle = loadDisplayNameStyle(context)
+        val awayName = displayTeamName(state.awayTeamId, state.awayTeam, displayNameStyle)
+        val homeName = displayTeamName(state.homeTeamId, state.homeTeam, displayNameStyle)
+        val inningNo = state.inning.filter { it.isDigit() }.toIntOrNull()?.coerceIn(1, 9) ?: 1
+
+        // 9이닝 = 9세그먼트, 현재 이닝까지 채움.
+        val style = NotificationCompat.ProgressStyle()
+            .setProgressSegments(List(9) { NotificationCompat.ProgressStyle.Segment(1) })
+            .setProgress(inningNo)
+
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("extra_game_id", state.gameId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            state.gameId.hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, NotificationChannels.LIVE_SCORE_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("$awayName ${state.awayScore} : ${state.homeScore} $homeName (${state.inning})")
+            .setContentText("타자 ${state.batter.ifBlank { "-" }} | 투수 ${state.pitcher.ifBlank { "-" }}")
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(pendingIntent)
+            .setStyle(style)
+            .setLargeIcon(LiveScorePromotedIconRenderer.render(state))
+            .setShortCriticalText("${state.awayScore}:${state.homeScore}")
+            .setRequestPromotedOngoing(true)
+
+        return try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+            true
+        } catch (_: SecurityException) {
+            false
+        }
+    }
+
     // 이모지 원이 텍스트 폰트 크기를 그대로 따라 커 보여서 한 단계 줄인다.
     // 크기 span을 무시하는 기기에서는 원래 크기로 표시될 뿐 깨지지 않는다.
     private fun shrunk(text: String): CharSequence {
@@ -205,9 +303,9 @@ object LiveScoreNotificationManager {
     private fun bsoEmojiLine(state: LiveGameState): String {
         fun slots(filled: Int, total: Int, emoji: String): String {
             val active = filled.coerceIn(0, total)
-            // 빈 슬롯은 이모지가 아닌 텍스트 글리프 ○(U+25CB) — 속이 투명해 카드 배경이 비치고
-            // 테두리는 본문 텍스트 색을 따른다. 이모지 원 세트에는 테두리만 있는 중립색이 없다.
-            return emoji.repeat(active) + "○".repeat(total - active)
+            // 빈 슬롯도 이모지 원 ⚪(U+26AA)로 채워 채운 슬롯과 크기·기준선을 맞춘다.
+            // 텍스트 글리프 ○(U+25CB)는 폰트 크기·베이스라인이 이모지와 달라 정렬이 어긋나 보였다.
+            return emoji.repeat(active) + "⚪".repeat(total - active)
         }
         return "B ${slots(state.ball, 3, "🟢")} S ${slots(state.strike, 2, "🟡")} O ${slots(state.out, 2, "🔴")}"
     }

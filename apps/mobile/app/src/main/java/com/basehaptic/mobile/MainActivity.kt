@@ -397,33 +397,39 @@ class MainActivity : ComponentActivity() {
             .apply()
         val eventType = if (highlight) "SCORE" else "HIT"
         val eventText = if (highlight) "김현수 적시타 · 1점 추가" else "경기 진행 상황을 업데이트 중입니다"
-        val posted = LiveScoreNotificationManager.post(
-            context = this,
-            state = BackendGamesRepository.LiveGameState(
-                gameId = "debug-live-score-preview",
-                homeTeam = Team.LG.name,
-                awayTeam = Team.KIA.name,
-                homeTeamId = Team.LG,
-                awayTeamId = Team.KIA,
-                homeScore = if (highlight) 5 else 4,
-                awayScore = 3,
-                inning = "9회초",
-                status = GameStatus.LIVE,
-                ball = 2,
-                strike = 1,
-                out = 1,
-                baseFirst = true,
-                baseSecond = false,
-                baseThird = highlight,
-                pitcher = "임찬규",
-                batter = "김현수",
-                pitcherPitchCount = 87,
-                lastEventType = eventType
-            ),
-            latestEventType = eventType,
-            latestEventDescription = eventText,
-            highlightEvent = highlight
+        val state = BackendGamesRepository.LiveGameState(
+            gameId = "debug-live-score-preview",
+            homeTeam = Team.LG.name,
+            awayTeam = Team.KIA.name,
+            homeTeamId = Team.LG,
+            awayTeamId = Team.KIA,
+            homeScore = if (highlight) 5 else 4,
+            awayScore = 3,
+            inning = "9회초",
+            status = GameStatus.LIVE,
+            ball = 2,
+            strike = 1,
+            out = 1,
+            baseFirst = true,
+            baseSecond = false,
+            baseThird = highlight,
+            pitcher = "임찬규",
+            batter = "김현수",
+            pitcherPitchCount = 87,
+            lastEventType = eventType
         )
+        // progress_style: 삼성 Now bar 등록 검증용 ProgressStyle 프로토타입 게시(검증 후 제거 예정).
+        val posted = if (intent.getBooleanExtra("progress_style", false)) {
+            LiveScoreNotificationManager.postProgressStylePrototype(this, state)
+        } else {
+            LiveScoreNotificationManager.post(
+                context = this,
+                state = state,
+                latestEventType = eventType,
+                latestEventDescription = eventText,
+                highlightEvent = highlight
+            )
+        }
         Log.d("LiveScoreDebug", "debug live score notification posted=$posted highlight=$highlight")
         return true
     }

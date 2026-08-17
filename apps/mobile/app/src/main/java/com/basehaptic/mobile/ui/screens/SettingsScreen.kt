@@ -389,24 +389,49 @@ fun SettingsScreen(
 
             item {
                 val context = LocalContext.current
+                val lifecycleOwner = LocalLifecycleOwner.current
                 val prefs = remember {
                     context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
                 }
                 var promotedStyleEnabled by remember {
                     mutableStateOf(LiveScoreNotificationManager.isPromotedStyleEnabled(context))
                 }
-                SettingsItemWithSwitch(
-                    icon = Icons.Default.Lock,
-                    title = "잠금화면 고정 스코어 (promoted)",
-                    subtitle = "끄면 이전 버전(ongoing) 라이브 스코어 카드로 표시",
-                    checked = promotedStyleEnabled,
-                    onCheckedChange = {
-                        promotedStyleEnabled = it
-                        prefs.edit()
-                            .putBoolean(LiveScoreNotificationManager.KEY_PROMOTED_STYLE_ENABLED, it)
-                            .apply()
+                // 승격이 지원되지만 시스템 "실시간 업데이트"가 꺼져 실제 고정이 안 되는 상태면 안내 배너를 띄운다.
+                var promotedBlocked by remember {
+                    mutableStateOf(LiveScoreNotificationManager.isPromotedBlockedBySystemSetting(context))
+                }
+                // 사용자가 설정에서 실시간 업데이트를 켜고 돌아오면 배너가 사라지도록 resume마다 재확인.
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            promotedBlocked =
+                                LiveScoreNotificationManager.isPromotedBlockedBySystemSetting(context)
+                        }
                     }
-                )
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                }
+                Column {
+                    SettingsItemWithSwitch(
+                        icon = Icons.Default.Lock,
+                        title = "잠금화면 고정 스코어 (promoted)",
+                        subtitle = "끄면 이전 버전(ongoing) 라이브 스코어 카드로 표시",
+                        checked = promotedStyleEnabled,
+                        onCheckedChange = {
+                            promotedStyleEnabled = it
+                            prefs.edit()
+                                .putBoolean(LiveScoreNotificationManager.KEY_PROMOTED_STYLE_ENABLED, it)
+                                .apply()
+                            promotedBlocked =
+                                LiveScoreNotificationManager.isPromotedBlockedBySystemSetting(context)
+                        }
+                    )
+                    if (promotedBlocked) {
+                        PromotedLiveUpdatesBanner(
+                            onClick = { LiveScoreNotificationManager.openLiveUpdatesSettings(context) }
+                        )
+                    }
+                }
             }
         }
 
@@ -580,6 +605,47 @@ private fun SettingsSection(title: String) {
         color = Gray400,
         modifier = Modifier.padding(top = AppSpacing.sm, bottom = AppSpacing.sm)
     )
+}
+
+// promoted가 켜져 있지만 시스템 "실시간 업데이트"가 꺼져 잠금화면 고정이 안 될 때 노출하는 안내 배너.
+@Composable
+private fun PromotedLiveUpdatesBanner(onClick: () -> Unit) {
+    val teamTheme = LocalTeamTheme.current
+    Spacer(Modifier.height(AppSpacing.sm))
+    Surface(
+        shape = AppShapes.md,
+        color = Gray800,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(AppSpacing.md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = teamTheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(AppSpacing.sm))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "잠금화면 고정이 꺼져 있어요",
+                    style = AppFont.bodyBold,
+                    color = Gray300
+                )
+                Text(
+                    "시스템 '실시간 업데이트'를 켜면 promoted 카드가 잠금화면 상단에 고정됩니다.",
+                    style = AppFont.caption,
+                    color = Gray500
+                )
+            }
+            Spacer(Modifier.width(AppSpacing.sm))
+            Text("켜기", style = AppFont.bodyBold, color = teamTheme.primary)
+        }
+    }
 }
 
 @Composable
