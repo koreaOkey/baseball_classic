@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import WatchConnectivity
 
 // MARK: - VentingFlowState
 
@@ -9,6 +10,7 @@ enum VentingFlowState {
     case selection                  // 대상 선택 화면
     case room(VentingRoomViewModel) // 분풀이 룸
     case destroyed(VentingRoomViewModel) // 완파 화면
+    case watchHandoff               // 워치로 분풀이 시작 후 안내 화면 (폰 룸 미진입)
 }
 
 // MARK: - VentingFlowCoordinator
@@ -29,6 +31,20 @@ struct VentingFlowCoordinator: View {
     private let gate: any VentingGateProviding = AlwaysAllowGate()
 
     @State private var flowState: VentingFlowState = .selection
+
+    /// 워치 연동(페어링 + 워치 앱 설치) 여부. installed일 때만 "워치로 분풀이 시작하기"를 노출한다.
+    private var isWatchAvailable: Bool {
+        guard WCSession.isSupported() else { return false }
+        let session = WCSession.default
+        return session.activationState == .activated
+            && session.isPaired
+            && session.isWatchAppInstalled
+    }
+
+    /// 워치 트리거 페이로드 매핑. 선수는 역할 라벨(실명 금지), 감독/직접입력은 라벨 그대로.
+    private func watchPayload(for target: VentingTarget) -> (label: String, description: String) {
+        (target.roleLabel, target.eventDescription)
+    }
 
     var body: some View {
         switch flowState {
@@ -52,6 +68,24 @@ struct VentingFlowCoordinator: View {
                         gate: gate
                     )
                     flowState = .room(vm)
+                },
+                showWatchOption: isWatchAvailable,
+                onSelectTargetOnWatch: { target in
+                    // 워치 룸 트리거 발송 (테스트 도구와 동일 경로). 폰은 룸으로 진입하지 않는다.
+                    let payload = watchPayload(for: target)
+                    WatchGameSyncManager.shared.sendVentingTrigger(
+                        gameId: context.gameId,
+                        targetLabel: payload.label,
+                        eventDescription: payload.description
+                    )
+                    // 6.1 지표: 워치 진입 = watch_room_enter
+                    VentingEventsReporter.report(
+                        eventType: "watch_room_enter",
+                        team: context.myTeamId,
+                        entrySource: entrySource,
+                        gameId: context.gameId
+                    )
+                    flowState = .watchHandoff
                 }
             )
 
@@ -77,7 +111,52 @@ struct VentingFlowCoordinator: View {
                 },
                 onClose: onClose
             )
+
+        case .watchHandoff:
+            VentingWatchHandoffScreen(onClose: onClose)
         }
+    }
+}
+
+// MARK: - VentingWatchHandoffScreen
+
+/// 워치로 분풀이를 시작했을 때 표시하는 안내 화면 (결정 ⓑ).
+/// 폰은 룸으로 진입하지 않고, 손목의 워치 앱에서 룸이 열렸음을 안내한다.
+private struct VentingWatchHandoffScreen: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            AppColors.gray950.ignoresSafeArea()
+            VStack(spacing: AppSpacing.lg) {
+                Spacer()
+                Image(systemName: "applewatch.radiowaves.left.and.right")
+                    .font(.system(size: 56))
+                    .foregroundColor(AppColors.red400)
+                Text("워치에서 분풀이를 시작하세요")
+                    .font(AppFont.h5Bold)
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                Text("손목의 야구봄 워치 앱에서\n분풀이 룸이 열렸어요. 마음껏 풀어보세요!")
+                    .font(AppFont.body)
+                    .foregroundColor(AppColors.gray400)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, AppSpacing.xxl)
+                Spacer()
+                Button(action: onClose) {
+                    Text("닫기")
+                        .font(AppFont.bodyLgMedium)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppSpacing.lg)
+                        .background(AppColors.red500)
+                        .cornerRadius(AppRadius.md)
+                }
+                .padding(.horizontal, AppSpacing.xxl)
+                .padding(.bottom, AppSpacing.xxxl)
+            }
+        }
+        .navigationBarHidden(true)
     }
 }
 

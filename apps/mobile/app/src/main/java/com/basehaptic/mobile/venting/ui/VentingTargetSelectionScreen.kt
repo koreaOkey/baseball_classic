@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -77,7 +78,11 @@ fun VentingTargetSelectionScreen(
     context: VentingGameContext,
     onBack: () -> Unit,
     onSelectTarget: (VentingTarget) -> Unit,
-    backLabel: String = "홈"
+    backLabel: String = "홈",
+    /** 워치 연동(앱 설치)됐을 때만 "워치로 분풀이 시작하기" 버튼을 노출한다. */
+    showWatchOption: Boolean = false,
+    /** 워치로 분풀이 시작 선택 시 호출. */
+    onSelectTargetOnWatch: (VentingTarget) -> Unit = {}
 ) {
     var selectedTarget by remember { mutableStateOf<VentingTarget?>(null) }
     var customName by remember { mutableStateOf("") }
@@ -264,12 +269,14 @@ fun VentingTargetSelectionScreen(
             targetValue = if (buttonEnabled) Red500 else Gray800,
             label = "ventingStartButton"
         )
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Gray950)
-                .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.lg)
+                .padding(horizontal = AppSpacing.xxl, vertical = AppSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
         ) {
+            // 폰에서 분풀이 시작
             Text(
                 text = if (buttonEnabled) "분풀이 시작하기" else "대상을 선택하세요",
                 style = AppFont.bodyLgMedium,
@@ -284,6 +291,41 @@ fun VentingTargetSelectionScreen(
                     }
                     .padding(vertical = AppSpacing.lg)
             )
+
+            // 워치로 분풀이 시작 (워치 연동 시에만 노출)
+            if (showWatchOption) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(AppShapes.md)
+                        .background(Gray900)
+                        .border(
+                            1.dp,
+                            if (buttonEnabled) Red500.copy(alpha = 0.5f) else Gray800,
+                            AppShapes.md
+                        )
+                        .clickable(enabled = buttonEnabled) {
+                            selectedTarget?.let { onSelectTargetOnWatch(it) }
+                        }
+                        .padding(vertical = AppSpacing.lg),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Watch,
+                        contentDescription = null,
+                        tint = if (buttonEnabled) Red400 else Gray500,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(AppSpacing.xs))
+                    Text(
+                        text = "워치로 분풀이 시작하기",
+                        style = AppFont.bodyLgMedium,
+                        color = if (buttonEnabled) Red400 else Gray500,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         }
     }
 }

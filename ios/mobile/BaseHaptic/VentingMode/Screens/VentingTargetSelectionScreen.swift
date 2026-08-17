@@ -17,6 +17,10 @@ struct VentingTargetSelectionScreen: View {
     let onBack: () -> Void
     var backLabel: String = "홈"
     let onSelectTarget: (VentingTarget) -> Void
+    /// 워치 연동(앱 설치)됐을 때만 "워치로 분풀이 시작하기" 버튼을 노출한다.
+    var showWatchOption: Bool = false
+    /// 워치로 분풀이 시작 선택 시 호출. 미지정(nil)이면 버튼을 렌더하지 않는다.
+    var onSelectTargetOnWatch: ((VentingTarget) -> Void)? = nil
 
     @State private var selectedTarget: VentingTarget?
     @State private var customName: String = ""
@@ -122,20 +126,51 @@ struct VentingTargetSelectionScreen: View {
                 // 분풀이 시작 버튼
                 VStack(spacing: 0) {
                     Divider().background(AppColors.gray800)
-                    Button {
-                        if let target = selectedTarget {
-                            onSelectTarget(target)
+                    VStack(spacing: AppSpacing.sm) {
+                        // 폰에서 분풀이 시작
+                        Button {
+                            if let target = selectedTarget {
+                                onSelectTarget(target)
+                            }
+                        } label: {
+                            Text(selectedTarget == nil ? "대상을 선택하세요" : "분풀이 시작하기")
+                                .font(AppFont.bodyLgMedium)
+                                .foregroundColor(selectedTarget == nil ? AppColors.gray400 : .white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, AppSpacing.lg)
+                                .background(selectedTarget == nil ? AppColors.gray800 : AppColors.red500)
+                                .cornerRadius(AppRadius.md)
                         }
-                    } label: {
-                        Text(selectedTarget == nil ? "대상을 선택하세요" : "분풀이 시작하기")
-                            .font(AppFont.bodyLgMedium)
-                            .foregroundColor(selectedTarget == nil ? AppColors.gray400 : .white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, AppSpacing.lg)
-                            .background(selectedTarget == nil ? AppColors.gray800 : AppColors.red500)
-                            .cornerRadius(AppRadius.md)
+                        .disabled(selectedTarget == nil)
+
+                        // 워치로 분풀이 시작 (워치 연동 시에만 노출)
+                        if showWatchOption, let onSelectTargetOnWatch {
+                            Button {
+                                if let target = selectedTarget {
+                                    onSelectTargetOnWatch(target)
+                                }
+                            } label: {
+                                HStack(spacing: AppSpacing.xs) {
+                                    Image(systemName: "applewatch")
+                                    Text("워치로 분풀이 시작하기")
+                                }
+                                .font(AppFont.bodyLgMedium)
+                                .foregroundColor(selectedTarget == nil ? AppColors.gray500 : AppColors.red400)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, AppSpacing.lg)
+                                .background(AppColors.gray900)
+                                .cornerRadius(AppRadius.md)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: AppRadius.md)
+                                        .stroke(
+                                            selectedTarget == nil ? AppColors.gray800 : AppColors.red500.opacity(0.5),
+                                            lineWidth: 1
+                                        )
+                                )
+                            }
+                            .disabled(selectedTarget == nil)
+                        }
                     }
-                    .disabled(selectedTarget == nil)
                     .padding(.horizontal, AppSpacing.xxl)
                     .padding(.vertical, AppSpacing.lg)
                     .background(AppColors.gray950)
