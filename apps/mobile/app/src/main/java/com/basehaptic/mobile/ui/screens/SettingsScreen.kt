@@ -411,22 +411,29 @@ fun SettingsScreen(
                     lifecycleOwner.lifecycle.addObserver(observer)
                     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                 }
+                fun selectStyle(promoted: Boolean) {
+                    promotedStyleEnabled = promoted
+                    prefs.edit()
+                        .putBoolean(LiveScoreNotificationManager.KEY_PROMOTED_STYLE_ENABLED, promoted)
+                        .apply()
+                    promotedBlocked =
+                        LiveScoreNotificationManager.isPromotedBlockedBySystemSetting(context)
+                }
                 Column {
-                    SettingsItemWithSwitch(
-                        icon = Icons.Default.Lock,
-                        title = "잠금화면 고정 스코어 (promoted)",
-                        subtitle = "끄면 이전 버전(ongoing) 라이브 스코어 카드로 표시",
-                        checked = promotedStyleEnabled,
-                        onCheckedChange = {
-                            promotedStyleEnabled = it
-                            prefs.edit()
-                                .putBoolean(LiveScoreNotificationManager.KEY_PROMOTED_STYLE_ENABLED, it)
-                                .apply()
-                            promotedBlocked =
-                                LiveScoreNotificationManager.isPromotedBlockedBySystemSetting(context)
-                        }
+                    LiveScoreStyleOption(
+                        title = "시스템 카드 (Promoted)",
+                        subtitle = "OS 기본 알림 스타일 · 픽셀은 잠금화면 고정 지원",
+                        selected = promotedStyleEnabled,
+                        onClick = { selectStyle(true) }
                     )
-                    if (promotedBlocked) {
+                    Spacer(Modifier.height(AppSpacing.sm))
+                    LiveScoreStyleOption(
+                        title = "커스텀 카드 (Ongoing)",
+                        subtitle = "팀 로고·득점 하이라이트가 있는 야구봄 카드",
+                        selected = !promotedStyleEnabled,
+                        onClick = { selectStyle(false) }
+                    )
+                    if (promotedBlocked && promotedStyleEnabled) {
                         PromotedLiveUpdatesBanner(
                             onClick = { LiveScoreNotificationManager.openLiveUpdatesSettings(context) }
                         )
@@ -605,6 +612,40 @@ private fun SettingsSection(title: String) {
         color = Gray400,
         modifier = Modifier.padding(top = AppSpacing.sm, bottom = AppSpacing.sm)
     )
+}
+
+// 잠금화면 라이브 스코어 스타일 선택 행(2택 라디오).
+@Composable
+private fun LiveScoreStyleOption(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val teamTheme = LocalTeamTheme.current
+    Surface(
+        shape = AppShapes.md,
+        color = Gray900,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(AppSpacing.md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                if (selected) "●" else "○",
+                color = if (selected) teamTheme.primary else Gray500,
+                style = AppFont.bodyBold
+            )
+            Spacer(Modifier.width(AppSpacing.sm))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = AppFont.bodyBold, color = if (selected) Gray300 else Gray400)
+                Text(subtitle, style = AppFont.caption, color = Gray500)
+            }
+        }
+    }
 }
 
 // promoted가 켜져 있지만 시스템 "실시간 업데이트"가 꺼져 잠금화면 고정이 안 될 때 노출하는 안내 배너.

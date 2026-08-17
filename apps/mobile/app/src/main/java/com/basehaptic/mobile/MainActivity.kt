@@ -418,16 +418,30 @@ class MainActivity : ComponentActivity() {
             pitcherPitchCount = 87,
             lastEventType = eventType
         )
-        // progress_style: 삼성 Now bar 등록 검증용 ProgressStyle 프로토타입 게시(검증 후 제거 예정).
-        val posted = if (intent.getBooleanExtra("progress_style", false)) {
-            LiveScoreNotificationManager.postProgressStylePrototype(this, state)
-        } else {
-            LiveScoreNotificationManager.post(
+        // progress_style: 삼성 Now bar 등록 검증용 ProgressStyle 프로토타입(검증 완료, 제거 예정).
+        // promoted_proto: 진행바 없는 BSO 중심 promoted UI 후보 미리보기(highlight와 조합 가능).
+        val posted = when {
+            intent.getBooleanExtra("promoted_proto", false) ->
+                LiveScoreNotificationManager.postPromotedUiPrototype(
+                    context = this,
+                    state = state,
+                    highlight = highlight,
+                    eventText = if (highlight) eventText else null
+                )
+            intent.getBooleanExtra("progress_style", false) ->
+                LiveScoreNotificationManager.postProgressStylePrototype(this, state)
+            else -> LiveScoreNotificationManager.post(
                 context = this,
                 state = state,
                 latestEventType = eventType,
                 latestEventDescription = eventText,
-                highlightEvent = highlight
+                highlightEvent = highlight,
+                // force_style=promoted|classic — 검증용 스타일 강제(생략 시 설정 선택을 따름).
+                forceStyle = when (intent.getStringExtra("force_style")?.lowercase()) {
+                    "promoted" -> LiveScoreNotificationManager.Style.PROMOTED
+                    "classic" -> LiveScoreNotificationManager.Style.CLASSIC
+                    else -> null
+                }
             )
         }
         Log.d("LiveScoreDebug", "debug live score notification posted=$posted highlight=$highlight")

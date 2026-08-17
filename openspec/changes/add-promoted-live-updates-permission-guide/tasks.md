@@ -17,6 +17,10 @@
 - [x] 3.1 라이브 진입 `LaunchedEffect`로 blocked && 미닫힘 시 다이얼로그 노출
 - [x] 3.2 "설정 열기"/"나중에" 어느 쪽이든 1회성 dismiss 기록
 
+## 3b. Samsung gate (2026-08-17 실측 후속)
+
+- [x] 3b.1 `isPromotedBlockedBySystemSetting` 삼성 즉시 false — 삼성은 "실시간 정보"(Now bar) 목록이 큐레이션이라 사용자가 켤 수단이 없어 안내가 막다른 길이 됨(배너·프롬프트 공통 차단)
+
 ## 4. Verification
 
 - [x] 4.1 `:app:compileDebugKotlin` 빌드 통과

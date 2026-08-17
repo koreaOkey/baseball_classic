@@ -239,11 +239,17 @@ fun WatchTestScreen(
     var pendingLiveScorePreviewStyle by remember {
         mutableStateOf<LiveScoreNotificationManager.Style?>(null)
     }
-    // 미리보기 스타일 선택(기본 PROMOTED). "Live Score 시작"·"득점 강조"·자동 시뮬레이션이
-    // 이 선택을 forceStyle로 게시하므로, 승격 미지원 기기(삼성 One UI 8.0 등)에서도 선택한
-    // 스타일로 결정적으로 테스트할 수 있다.
+    // 미리보기 스타일 선택(기본: 설정의 시스템/커스텀 카드 선택을 따름). "Live Score 시작"·
+    // "득점 강조"·자동 시뮬레이션이 이 선택을 forceStyle로 게시하므로, 승격 미지원 기기에서도
+    // 선택한 스타일로 결정적으로 테스트할 수 있다.
     var selectedPreviewStyle by remember {
-        mutableStateOf(LiveScoreNotificationManager.Style.PROMOTED)
+        mutableStateOf(
+            if (LiveScoreNotificationManager.isPromotedStyleEnabled(context)) {
+                LiveScoreNotificationManager.Style.PROMOTED
+            } else {
+                LiveScoreNotificationManager.Style.CLASSIC
+            }
+        )
     }
     var simIndex by remember { mutableIntStateOf(0) }
 
@@ -391,9 +397,9 @@ fun WatchTestScreen(
             when {
                 !posted -> "[LIVE_SCORE] 알림 권한이 없어 게시하지 못함"
                 forceStyle == LiveScoreNotificationManager.Style.PROMOTED ->
-                    "[LIVE_SCORE] promoted 버전 강제 미리보기 (승격 미지원 기기는 시스템 템플릿으로만 표시)"
+                    "[LIVE_SCORE] 시스템 카드(promoted) 미리보기 (삼성은 일반 알림, 픽셀은 잠금화면 고정)"
                 forceStyle == LiveScoreNotificationManager.Style.CLASSIC ->
-                    "[LIVE_SCORE] 이전 ongoing 카드 강제 미리보기"
+                    "[LIVE_SCORE] 커스텀 카드(ongoing) 미리보기"
                 alert -> "[LIVE_SCORE] 득점 강조 알림 갱신"
                 else -> "[LIVE_SCORE] 알림 미리보기 시작 · 자동 시뮬레이션과 함께 갱신"
             }
@@ -694,7 +700,7 @@ fun WatchTestScreen(
                                 shape = AppShapes.sm
                             ) {
                                 Text(
-                                    if (promotedSelected) "● Promoted 버전" else "Promoted 버전",
+                                    if (promotedSelected) "● 시스템 카드" else "시스템 카드",
                                     color = Color.White,
                                     style = AppFont.bodyBold
                                 )
@@ -716,7 +722,7 @@ fun WatchTestScreen(
                                 shape = AppShapes.sm
                             ) {
                                 Text(
-                                    if (!promotedSelected) "● Ongoing 버전" else "Ongoing 버전",
+                                    if (!promotedSelected) "● 커스텀 카드" else "커스텀 카드",
                                     color = Color.White,
                                     style = AppFont.bodyBold
                                 )

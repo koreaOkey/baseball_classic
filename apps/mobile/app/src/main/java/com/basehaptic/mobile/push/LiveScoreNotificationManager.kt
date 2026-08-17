@@ -55,9 +55,13 @@ object LiveScoreNotificationManager {
     }
 
     // 기기는 승격을 지원하고(API36+) 사용자도 promoted를 켰지만, 시스템 "실시간 업데이트(Live Updates)"
-    // appop이 꺼져 있어 실제 승격이 불가한 상태. 삼성 등은 기본 OFF라 사용자를 안내해야 한다.
-    // 이 상태에서는 promoted 레이아웃이 일반 알림으로만 보이고 잠금화면 고정/Now Bar가 되지 않는다.
+    // appop이 꺼져 있어 실제 승격이 불가한 상태. 이 상태에서는 promoted 레이아웃이 일반 알림으로만
+    // 보이고 잠금화면 고정이 되지 않으므로, 설정 배너·라이브 진입 프롬프트로 사용자를 안내한다.
     fun isPromotedBlockedBySystemSetting(context: Context): Boolean {
+        // 삼성 게이트(2026-08-17 실측): 삼성은 이 appop을 "실시간 정보"(Now bar) 목록으로만 켤 수
+        // 있는데 그 목록이 큐레이션이라 야구봄이 없음 → 앱 알림 설정에도 토글이 없어 안내가
+        // 막다른 길이 됨. 사용자가 켤 수단이 생기기 전까지 배너/프롬프트를 띄우지 않는다.
+        if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) return false
         return isPromotedStyleSupportedOnDevice() &&
             isPromotedStyleEnabled(context) &&
             !NotificationManagerCompat.from(context).canPostPromotedNotifications()
@@ -159,9 +163,9 @@ object LiveScoreNotificationManager {
             .setVibrate(if (shouldHighlight) longArrayOf(0, 180, 80, 180) else null)
             .setContentIntent(pendingIntent)
 
-        // 삼성 One UI 8.0처럼 API 36이어도 서드파티 승격을 막아둔 기기가 있다.
         // 승격이 안 되는 기기에서 promoted 스타일을 쓰면 기존 리치 커스텀 카드만 잃으므로 런타임 확인.
-        // 마지막 조건: 설정 탭에서 사용자가 promoted/이전 카드 스타일을 선택할 수 있다(기본 ON).
+        // 스타일은 설정의 "시스템 카드/커스텀 카드" 선택(isPromotedStyleEnabled)이 지배한다(기본: 시스템 카드).
+        // 삼성 참고(2026-08-17 실측): promoted는 특수 렌더링 없이 일반 알림으로 표시된다(픽셀은 잠금화면 고정).
         // forceStyle은 테스트 도구 전용 — 승격 불가 기기에서 PROMOTED를 강제하면
         // 승격 없는 시스템 템플릿(BigText) 형태로만 보인다.
         val canPromote = when (forceStyle) {
@@ -172,7 +176,15 @@ object LiveScoreNotificationManager {
                 isPromotedStyleEnabled(context)
         }
         if (canPromote) {
-            applyPromotedStyle(context, builder, state, eventLabel, latestEventDescription)
+            applyPromotedStyle(
+                context = context,
+                builder = builder,
+                state = state,
+                eventType = latestEventType,
+                eventLabel = eventLabel,
+                eventDescription = latestEventDescription,
+                highlight = shouldHighlight
+            )
         } else {
             val compactView = buildCompactRemoteViews(
                 context = context,
@@ -215,28 +227,49 @@ object LiveScoreNotificationManager {
     }
 
     // Android 16+ promoted Live Update: 커스텀 뷰가 금지되어 시스템 템플릿 + largeIcon 비트맵으로 구성.
-    // 잠금화면 최상단 고정 + 상태바 칩(스코어) 노출 대상.
-    // largeIcon = 베이스 다이아몬드. 최근 이벤트가 있으면 그 설명이 첫 줄, BSO·타자/투수는 아랫줄.
+    // 잠금화면 최상단 고정 + 상태바 칩(스코어) 노출 대상(픽셀 기준, 삼성은 일반 알림으로 표시).
+    // 평상시: 본문 = BSO 줄(접힘에서도 노출), 펼침에 타자/투수(+투구수) 추가.
+    // 하이라이트(득점·홈런·안타): 본문을 이벤트 문구 단독으로 교체(이모지 강조), 3초 후 원복은 호출부 몫.
     private fun applyPromotedStyle(
         context: Context,
         builder: NotificationCompat.Builder,
         state: LiveGameState,
+        eventType: String?,
         eventLabel: String,
-        eventDescription: String?
+        eventDescription: String?,
+        highlight: Boolean
     ) {
         val eventLine = eventDescription?.trim()?.takeIf { it.isNotBlank() }?.take(42)
             ?: eventLabel.takeIf { it.isNotBlank() }
-        val bsoLine = shrunk(bsoEmojiLine(state))
-        val playersLine = "타자 ${state.batter.ifBlank { "-" }} · 투수 ${state.pitcher.ifBlank { "-" }}"
-        val expandedText = SpannableStringBuilder()
-        eventLine?.let { expandedText.append(it).append("\n") }
-        expandedText.append(bsoLine).append("\n").append(playersLine)
-        builder.setSubText(state.inning.ifBlank { "라이브" })
-            .setContentText(eventLine ?: bsoLine)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
-            .setLargeIcon(LiveScorePromotedIconRenderer.render(state))
+        if (highlight && eventLine != null) {
+            // 하이라이트는 이벤트 문구 단독 — 이닝(subText)도 붙이지 않는다.
+            val solo = "${eventEmoji(eventType)} $eventLine"
+            builder.setContentText(solo)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(solo))
+        } else {
+            val bsoLine = shrunk(bsoEmojiLine(state))
+            val pitchSuffix = state.pitcherPitchCount
+                ?.takeIf { it > 0 }
+                ?.let { " ${it}구" }
+                .orEmpty()
+            val playersLine =
+                "타자 ${state.batter.ifBlank { "-" }} | 투수 ${state.pitcher.ifBlank { "-" }}$pitchSuffix"
+            val expandedText = SpannableStringBuilder()
+                .append(bsoLine).append("\n").append(playersLine)
+            builder.setContentText(bsoLine)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
+                .setSubText(state.inning.ifBlank { "라이브" })
+        }
+        builder.setLargeIcon(LiveScorePromotedIconRenderer.render(state))
             .setShortCriticalText("${state.awayScore}:${state.homeScore}")
             .setRequestPromotedOngoing(true)
+    }
+
+    private fun eventEmoji(type: String?): String = when (type?.uppercase()) {
+        "HOMERUN" -> "💥"
+        "SCORE", "SAC_FLY_SCORE" -> "🔥"
+        "HIT" -> "⚾"
+        else -> "⚡"
     }
 
     // [프로토타입 · DEBUG 검증 전용] 삼성 Now bar("실시간 정보") 등록 가설 검증.
@@ -292,6 +325,84 @@ object LiveScoreNotificationManager {
         }
     }
 
+    // [프로토타입 v2 · DEBUG 전용] 사용자 확정 UI 후보 미리보기.
+    // 실측(2026-08-17, One UI 9.0): PROMOTED_ONGOING인데 ProgressStyle이 아니면 삼성 라이브
+    // 렌더러가 처리하지 못해 카드가 어디에도 렌더링되지 않음 → 진행바(ProgressStyle)는 존재 조건이라 유지.
+    // 본문 = BSO(+타자|투수 한 줄) / 하이라이트(득점·홈런·안타) 시 이벤트 문구 단독 교체.
+    // 시스템 템플릿 제약상 ongoing 카드의 색점+배경 하이라이트 행은 불가 → 단독 문구+이모지로 대체.
+    fun postPromotedUiPrototype(
+        context: Context,
+        state: LiveGameState,
+        highlight: Boolean,
+        eventText: String?
+    ): Boolean {
+        if (Build.VERSION.SDK_INT < 36) return false
+        NotificationChannels.ensureCreated(context)
+
+        val displayNameStyle = loadDisplayNameStyle(context)
+        val awayName = displayTeamName(state.awayTeamId, state.awayTeam, displayNameStyle)
+        val homeName = displayTeamName(state.homeTeamId, state.homeTeam, displayNameStyle)
+        val title = "$awayName ${state.awayScore} : ${state.homeScore} $homeName (${state.inning})"
+        val inningNo = state.inning.filter { it.isDigit() }.toIntOrNull()?.coerceIn(1, 9) ?: 1
+
+        // 삼성 라이브 렌더러 요건: ProgressStyle 필수(9이닝 세그먼트). 하이라이트 상태에서도 유지.
+        val style = NotificationCompat.ProgressStyle()
+            .setProgressSegments(List(9) { NotificationCompat.ProgressStyle.Segment(1) })
+            .setProgress(inningNo)
+
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("extra_game_id", state.gameId)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            state.gameId.hashCode(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val channelId = if (highlight) {
+            NotificationChannels.LIVE_SCORE_ALERTS_ID
+        } else {
+            NotificationChannels.LIVE_SCORE_ID
+        }
+        // 본문은 한 줄(contentText) — ProgressStyle과 BigTextStyle은 동시 사용 불가.
+        val body: CharSequence = if (highlight && !eventText.isNullOrBlank()) {
+            // 하이라이트: 이벤트 문구 단독 노출(득점·홈런·안타). 3초 후 원복은 호출부 몫.
+            "🔥 $eventText"
+        } else {
+            SpannableStringBuilder()
+                .append(shrunk(bsoEmojiLine(state)))
+                .append("  타자 ${state.batter.ifBlank { "-" }} | 투수 ${state.pitcher.ifBlank { "-" }}")
+        }
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(style)
+            .setOngoing(true)
+            .setOnlyAlertOnce(!highlight)
+            .setShowWhen(false)
+            .setCategory(if (highlight) NotificationCompat.CATEGORY_EVENT else NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(pendingIntent)
+            .setLargeIcon(LiveScorePromotedIconRenderer.render(state))
+            .setShortCriticalText("${state.awayScore}:${state.homeScore}")
+            .setRequestPromotedOngoing(true)
+        if (highlight) {
+            builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setVibrate(longArrayOf(0, 180, 80, 180))
+        }
+
+        return try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+            true
+        } catch (_: SecurityException) {
+            false
+        }
+    }
+
     // 이모지 원이 텍스트 폰트 크기를 그대로 따라 커 보여서 한 단계 줄인다.
     // 크기 span을 무시하는 기기에서는 원래 크기로 표시될 뿐 깨지지 않는다.
     private fun shrunk(text: String): CharSequence {
@@ -334,8 +445,15 @@ object LiveScoreNotificationManager {
         homeName: String
     ): RemoteViews {
         return RemoteViews(context.packageName, R.layout.notification_live_score_compact).apply {
-            setTextViewText(R.id.notification_away_team, awayName)
-            setTextViewText(R.id.notification_home_team, homeName)
+            // 접힘 한 줄은 폭이 빠듯해 사용자 표기 설정과 무관하게 짧은 구단명(KIA/두산)을 쓴다.
+            setTextViewText(
+                R.id.notification_away_team,
+                displayTeamName(state.awayTeamId, awayName, TeamDisplayNameStyle.TEAM)
+            )
+            setTextViewText(
+                R.id.notification_home_team,
+                displayTeamName(state.homeTeamId, homeName, TeamDisplayNameStyle.TEAM)
+            )
             setTextViewText(R.id.notification_away_score, state.awayScore.toString())
             setTextViewText(R.id.notification_home_score, state.homeScore.toString())
             setImageViewResource(R.id.notification_away_logo, teamLogoRes(state.awayTeamId))
@@ -371,7 +489,14 @@ object LiveScoreNotificationManager {
                 R.id.notification_event_label,
                 if (eventLabel.isBlank()) View.GONE else View.VISIBLE
             )
-            setTextViewText(R.id.notification_pitcher_batter, "P ${state.pitcher.ifBlank { "-" }}  |  B ${state.batter.ifBlank { "-" }}")
+            val pitchSuffix = state.pitcherPitchCount
+                ?.takeIf { it > 0 }
+                ?.let { " ${it}구" }
+                .orEmpty()
+            setTextViewText(
+                R.id.notification_pitcher_batter,
+                "P ${state.pitcher.ifBlank { "-" }}$pitchSuffix  |  B ${state.batter.ifBlank { "-" }}"
+            )
             setTextViewText(R.id.notification_recent_event, recentText)
             setTextViewText(R.id.notification_highlight_event, recentText)
             setTextColor(R.id.notification_highlight_dot, eventColor(eventType))
