@@ -28,7 +28,15 @@ from app import venting as venting_module  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.db import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Game, GameBatterStat, GameEvent, GamePitcherStat, TeamManager, VentingRegretCache  # noqa: E402
+from app.models import (  # noqa: E402
+    Game,
+    GameBatterStat,
+    GameEvent,
+    GameLineupSlot,
+    GamePitcherStat,
+    TeamManager,
+    VentingRegretCache,
+)
 
 Base.metadata.create_all(bind=engine)
 client = TestClient(app)
@@ -217,3 +225,83 @@ def test_venting_event_rejects_invalid_type():
     _enable()
     resp = client.post("/venting/events", json={"event_type": "bogus", "team": "LG"})
     assert resp.status_code == 400
+
+
+def _seed_error_game(game_id: str) -> None:
+    """away(LG)가 지는 FINISHED 경기 + away 수비 유격수 실책(실점) + 라인업/박스스코어."""
+    with SessionLocal() as db:
+        db.add(
+            Game(
+                id=game_id, home_team="Doosan", away_team="LG", status="FINISHED",
+                inning="경기 종료", home_score=5, away_score=1,
+            )
+        )
+        # 8회말 = home 공격 / away 수비. away 유격수 실책으로 실점(SCORE 로 분류됐어도 실책 우선).
+        db.add(
+            GameEvent(
+                game_id=game_id, source_event_id="err1", event_type="SCORE",
+                description="유격수 실책으로 주자 홈인, 실점", event_time=datetime.now(timezone.utc),
+                pitcher="김투수", inning="8회말",
+                payload_json={"wpaByPlate": -0.25, "isError": True, "errorPosition": "유격수", "errorPositionCode": "SS"},
+            )
+        )
+        # 라인업: away 유격수 = 타순 6 (포지션→타순 해소 근거)
+        db.add(
+            GameLineupSlot(
+                game_id=game_id, team_side="away", batting_order=6,
+                player_name="문상철", position_name="유격수", position_code="SS", is_starter=True,
+            )
+        )
+        # 박스스코어: away 타순 6 = 문상철 (클라 실명 조인 키)
+        db.add(GameBatterStat(game_id=game_id, team_side="away", player_name="문상철", batting_order=6))
+        db.commit()
+
+
+def test_compute_regret_attributes_fielding_error_to_fielder():
+    """수비 실책 metadata → fielder 후보(포지션 역할 레이블 + 타순 해소, 실명 미저장)."""
+    _enable(llm=False)
+    gid = "20260817ErrorGame0"
+    _seed_error_game(gid)
+    venting_module.compute_regret_for_game(gid)
+
+    cache = _cache_for(gid)
+    assert cache is not None
+    assert cache.team_code == "LG"
+    fielder = next((it for it in cache.items if it.get("kind") == "fielder"), None)
+    assert fielder is not None
+    assert fielder["role_label"] == "유격수"     # 포지션 = 역할 레이블(익명)
+    assert fielder["event_type"] == "ERROR"
+    assert fielder["batting_order"] == 6         # 라인업 포지션→타순(클라가 이 값으로 실명 조인)
+    assert "실책" in (fielder["reason"] or "")
+    # 실책 이벤트는 fielder 로만 귀속 — 같은 SCORE 이벤트가 투수 후보로 중복 생성되지 않는다
+    assert not any(it.get("kind") == "pitcher" for it in cache.items)
+    # 실명은 캐시에 절대 저장되지 않는다
+    assert "문상철" not in json.dumps(cache.items, ensure_ascii=False)
+
+
+def test_fielder_position_unknown_stays_anonymous():
+    """포지션 미상 실책은 '수비수' 레이블 + 타순 없음(익명 유지)."""
+    _enable(llm=False)
+    gid = "20260817ErrorNoPos0"
+    with SessionLocal() as db:
+        db.add(
+            Game(
+                id=gid, home_team="Doosan", away_team="LG", status="FINISHED",
+                inning="경기 종료", home_score=4, away_score=0,
+            )
+        )
+        db.add(
+            GameEvent(
+                game_id=gid, source_event_id="err1", event_type="OTHER",
+                description="실책으로 출루", event_time=datetime.now(timezone.utc),
+                inning="7회말", payload_json={"isError": True, "wpaByPlate": -0.1},
+            )
+        )
+        db.commit()
+    venting_module.compute_regret_for_game(gid)
+    cache = _cache_for(gid)
+    assert cache is not None
+    fielder = next((it for it in cache.items if it.get("kind") == "fielder"), None)
+    assert fielder is not None
+    assert fielder["role_label"] == "수비수"
+    assert fielder["batting_order"] is None

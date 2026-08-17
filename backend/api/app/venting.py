@@ -27,6 +27,7 @@ from .models import (
     Game,
     GameBatterStat,
     GameEvent,
+    GameLineupSlot,
     GamePitcherStat,
     TeamManager,
     VentingEvent,
@@ -52,6 +53,8 @@ _TOP_N = 5
 # 이벤트 타입별 기본 심각도 가중치 (WPA 부재 시 폴백 근거). WPA 가 있으면 함께 반영.
 _OFFENSE_FAIL_WEIGHTS = {"TRIPLE_PLAY": 2.5, "DOUBLE_PLAY": 2.0, "OUT": 1.0}
 _DEFENSE_CONCEDE_WEIGHTS = {"SCORE": 3.0, "SAC_FLY_SCORE": 3.0, "HOMERUN": 3.0}
+# 개인 수비 실책 — 비자책 실점의 원흉이라 병살(2.0)보다 무겁고 실점(3.0)보다 살짝 낮게.
+_DEFENSE_ERROR_WEIGHT = 2.5
 _OUT_INCLUDE_WPA_THRESHOLD = 0.05  # 삼진이 아니어도 고레버리지(찬스 무산) 아웃이면 후보
 
 _INNING_RE = re.compile(r"(\d+)\s*회\s*(초|말)")
@@ -64,7 +67,7 @@ _LLM_SYSTEM_PROMPT = (
     "반드시 주어진 candidates 목록 안에서만 최대 5개를 심각도(승패 영향) 순으로 고른다. "
     "목록에 없는 플레이를 지어내지 않는다. 각 항목에는 '상황'을 한 문장으로 쓴다. "
     "사람을 평가·비난하지 말고 상황만 담담히 묘사한다(예: '2사 만루에서 병살로 추격 흐름이 끊겼다'). "
-    "선수 실명·등번호를 절대 쓰지 말고 주어진 역할 레이블(예: '5번 타자', '선발 투수')만 쓴다. "
+    "선수 실명·등번호를 절대 쓰지 말고 주어진 역할 레이블(예: '5번 타자', '선발 투수', '유격수')만 쓴다. "
     '반드시 JSON 오브젝트로만 답한다: {"items":[{"index":<candidates의 index>,"reason":"<상황 한 문장>"}]}'
 )
 
@@ -148,6 +151,47 @@ def _pitcher_role_label(db: Session, game_id: str, team_side: str, pitcher_name:
     return None, "투수"
 
 
+def _fielder_order_label(
+    db: Session,
+    game_id: str,
+    team_side: str,
+    position_name: str | None,
+    event_cursor: int | None,
+) -> tuple[int | None, str]:
+    """수비 실책 후보의 역할 레이블(포지션명)과 타순을 해소한다(실명 미저장).
+
+    라인업(game_lineup_slots)에서 그 팀·그 포지션 슬롯의 타순을 찾아 반환한다. 타순을
+    실으면 클라이언트가 기존 batter 경로(박스스코어 타순 조인)로 실명을 표시한다. 교체로
+    같은 포지션에 복수 슬롯이 있으면 실책 이벤트 cursor 시점에 활성인 슬롯을 우선한다.
+    포지션 미상이면 ('수비수', 타순 없음)으로 익명 유지.
+    """
+    if not position_name:
+        return None, "수비수"
+    rows = db.execute(
+        select(
+            GameLineupSlot.batting_order,
+            GameLineupSlot.entered_at_event_cursor,
+            GameLineupSlot.exited_at_event_cursor,
+        ).where(
+            GameLineupSlot.game_id == game_id,
+            GameLineupSlot.team_side == team_side,
+            GameLineupSlot.position_name == position_name,
+        )
+    ).all()
+    if not rows:
+        return None, position_name
+
+    chosen: int | None = None
+    if event_cursor is not None:
+        for order, entered, exited in rows:
+            if (entered is None or entered <= event_cursor) and (exited is None or event_cursor < exited):
+                chosen = order
+                break
+    if chosen is None:
+        chosen = rows[0][0]
+    return (int(chosen) if chosen is not None else None), position_name
+
+
 def _select_candidates(db: Session, game: Game, losing_side: str) -> list[dict[str, Any]]:
     """패배팀의 아쉬운 순간 후보를 규칙/WPA 로 선별(역할 레이블만, 실명 미저장).
 
@@ -169,11 +213,31 @@ def _select_candidates(db: Session, game: Game, losing_side: str) -> list[dict[s
         etype = (event.event_type or "").upper()
         desc = event.description or ""
         wpa = _event_wpa(event)
+        payload = event.payload_json if isinstance(event.payload_json, dict) else {}
+        is_error = bool(payload.get("isError"))
 
         candidate: dict[str, Any] | None = None
 
+        # 수비 실책 (수비 팀 == 패배팀) — 실점 여부와 무관하게 실책은 실책 담당(포지션)에게 귀속.
+        # SCORE 로 분류된 실책성 실점도 여기서 fielder 로 먼저 잡아 투수 귀속보다 우선한다.
+        if pitching_side == losing_side and is_error:
+            order, label = _fielder_order_label(
+                db, game.id, pitching_side, payload.get("errorPosition"), event.cursor
+            )
+            candidate = {
+                "kind": "fielder",
+                "team_side": pitching_side,
+                "batting_order": order,
+                "appearance_order": None,
+                "role_label": label,
+                "inning": event.inning,
+                "event_type": "ERROR",
+                "situation": _event_situation(event),
+                "severity": round(_DEFENSE_ERROR_WEIGHT + wpa * 10.0, 4),
+            }
+
         # 공격 실패 (배팅 팀 == 패배팀)
-        if batting_side == losing_side and etype in _OFFENSE_FAIL_WEIGHTS:
+        elif batting_side == losing_side and etype in _OFFENSE_FAIL_WEIGHTS:
             include = etype in ("DOUBLE_PLAY", "TRIPLE_PLAY") or "삼진" in desc or wpa >= _OUT_INCLUDE_WPA_THRESHOLD
             if include:
                 order, label = _batting_order_label(db, game.id, batting_side, event.batter)
@@ -227,6 +291,7 @@ def _fallback_reason(candidate: dict[str, Any]) -> str:
         "SCORE": "실점",
         "SAC_FLY_SCORE": "희생플라이 실점",
         "HOMERUN": "피홈런",
+        "ERROR": "실책",
     }
     label = label_map.get(candidate.get("event_type", ""), "아쉬운 장면")
     inning = candidate.get("inning") or ""
