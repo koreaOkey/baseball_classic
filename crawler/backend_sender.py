@@ -385,6 +385,61 @@ def _classify_event_type(option: Dict[str, Any]) -> str:
     return "OTHER"
 
 
+# 수비 포지션 토큰 → 포지션 코드. 긴 토큰("좌익수")을 짧은 토큰("좌익")보다 먼저 둬서
+# 부분일치 시 더 구체적인 쪽이 잡히게 한다.
+_ERROR_POSITIONS: List[Tuple[str, str]] = [
+    ("투수", "P"),
+    ("포수", "C"),
+    ("1루수", "1B"),
+    ("2루수", "2B"),
+    ("3루수", "3B"),
+    ("유격수", "SS"),
+    ("좌익수", "LF"),
+    ("중견수", "CF"),
+    ("우익수", "RF"),
+    ("좌익", "LF"),
+    ("중견", "CF"),
+    ("우익", "RF"),
+]
+
+
+def _detect_fielding_error(text: str) -> Tuple[bool, str, str]:
+    """수비 실책(에러) 감지 — regret(분풀이) 산정용 metadata 부착 전용.
+
+    이벤트 타입/햅틱/푸시는 바꾸지 않는다(수집만). 반환 (is_error, 포지션명, 포지션코드).
+    실책이지만 포지션 미상이면 ("", "")로, 미감지면 (False, "", "").
+
+    - 오탐 제외: '실책성 타구/안타'(안타로 기록), '무실책', '실책 없이'.
+    - 포지션은 '실책' 바로 앞에 오는 가장 가까운 수비 위치 토큰을 채택(정밀 판정).
+    """
+    t = text or ""
+    low = t.lower()
+    if "실책" not in t and "error" not in low:
+        return False, "", ""
+    if "실책성" in t or "무실책" in t or "실책 없" in t:
+        return False, "", ""
+
+    err_idx = t.find("실책")
+    if err_idx < 0:
+        err_idx = low.find("error")
+
+    best: Optional[Tuple[int, str, str]] = None
+    for name, code in _ERROR_POSITIONS:
+        pos = t.rfind(name, 0, err_idx) if err_idx > 0 else -1
+        if pos >= 0:
+            dist = err_idx - pos
+            if best is None or dist < best[0]:
+                best = (dist, name, code)
+    if best is not None:
+        return True, best[1], best[2]
+
+    # '실책' 뒤에 포지션이 오는 드문 표기 폴백.
+    for name, code in _ERROR_POSITIONS:
+        if name in t:
+            return True, name, code
+    return True, "", ""
+
+
 def _get_str(value: Any) -> str:
     return str(value or "").strip()
 
@@ -911,6 +966,17 @@ def build_snapshot_payload(
                 metadata["wpaByPlate"] = metric_option["wpaByPlate"]
 
         event_type = _classify_event_type(option)
+
+        # 수비 실책 감지 — event_type 은 건드리지 않고(햅틱/푸시/클라 렌더 무변경)
+        # metadata 로만 부착한다. 실책 팀은 metadata["defenseTeam"] 이 이미 가리킨다.
+        is_error, err_pos_name, err_pos_code = _detect_fielding_error(option.get("text") or "")
+        if is_error:
+            metadata["isError"] = True
+            if err_pos_name:
+                metadata["errorPosition"] = err_pos_name
+            if err_pos_code:
+                metadata["errorPositionCode"] = err_pos_code
+
         if event_type == "PITCHER_CHANGE":
             player_change = option.get("playerChange") or {}
             in_player = player_change.get("inPlayer") or {}

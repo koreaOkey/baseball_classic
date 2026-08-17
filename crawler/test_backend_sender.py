@@ -5,7 +5,12 @@ CRAWLER_ROOT = Path(__file__).resolve().parent
 if str(CRAWLER_ROOT) not in sys.path:
     sys.path.insert(0, str(CRAWLER_ROOT))
 
-from backend_sender import _classify_event_type, _normalize_status, build_snapshot_payload
+from backend_sender import (
+    _classify_event_type,
+    _detect_fielding_error,
+    _normalize_status,
+    build_snapshot_payload,
+)
 
 
 def test_video_review_out_to_out_is_out() -> None:
@@ -399,3 +404,82 @@ def test_extract_line_score_prefers_freshest_played_inning() -> None:
     }
 
     assert _extract_line_score(relays) == {"home": {"1": 1}, "away": {"1": 2}}
+
+
+def test_detect_fielding_error_picks_nearest_preceding_position() -> None:
+    # '실책' 바로 앞의 수비 위치(유격수)를 채택 — 앞에 나온 '투수 교체'에 오탐되면 안 됨
+    is_error, name, code = _detect_fielding_error("투수 교체 후 유격수 송구 실책으로 출루")
+    assert is_error is True
+    assert name == "유격수"
+    assert code == "SS"
+
+
+def test_detect_fielding_error_prefers_specific_outfield_token() -> None:
+    is_error, name, code = _detect_fielding_error("좌익수 실책으로 주자 2루 진루")
+    assert (is_error, name, code) == (True, "좌익수", "LF")
+
+
+def test_detect_fielding_error_excludes_ruled_hit_and_negation() -> None:
+    # '실책성 안타'는 안타로 기록 → 실책 아님. '무실책' 부정도 제외.
+    assert _detect_fielding_error("3루수 옆을 빠지는 실책성 안타") == (False, "", "")
+    assert _detect_fielding_error("수비진 무실책으로 이닝 종료") == (False, "", "")
+
+
+def test_detect_fielding_error_no_keyword_is_false() -> None:
+    assert _detect_fielding_error("유격수 정면 땅볼 아웃") == (False, "", "")
+
+
+def test_detect_fielding_error_position_unknown_still_flags() -> None:
+    is_error, name, code = _detect_fielding_error("실책으로 출루")
+    assert is_error is True
+    assert (name, code) == ("", "")
+
+
+def test_snapshot_payload_attaches_error_metadata_without_changing_type() -> None:
+    game_data = {
+        "homeTeamName": "SSG",
+        "awayTeamName": "KT",
+        "statusCode": "STARTED",
+        "currentInning": "7회말",
+        "homeTeamScore": 3,
+        "awayTeamScore": 4,
+        "gameDateTime": "2026-06-07T17:00:00+09:00",
+    }
+    relays_by_inning = {
+        7: {
+            "textRelays": [
+                {
+                    "no": 30,
+                    "homeOrAway": "1",
+                    "textOptions": [
+                        {
+                            "seqno": 100,
+                            "type": 13,
+                            "text": "유격수 실책으로 출루",
+                            "currentGameState": {
+                                "homeScore": 3,
+                                "awayScore": 4,
+                                "out": 1,
+                            },
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+
+    payload = build_snapshot_payload(game_data=game_data, relays_by_inning=relays_by_inning)
+    event = payload["events"][0]
+    metadata = event["metadata"]
+
+    # 실책이 실점(SCORE)/병살 등으로 분류되지 않은 무득점 상황이어도 이벤트는 전송되고
+    # metadata 로 실책 정보가 실린다. 수비팀(=실책팀)은 defenseTeam 이 가리킨다.
+    assert metadata["isError"] is True
+    assert metadata["errorPosition"] == "유격수"
+    assert metadata["errorPositionCode"] == "SS"
+    assert metadata["half"] == "bottom"
+    assert metadata["defenseTeam"] == "KT"  # 7회말 수비 = 원정(KT)
+    # event_type 은 실책 감지로 바뀌지 않는다(햅틱/푸시/클라 렌더 무영향)
+    assert event["type"] == _classify_event_type(
+        {"type": 13, "text": "유격수 실책으로 출루"}
+    )
