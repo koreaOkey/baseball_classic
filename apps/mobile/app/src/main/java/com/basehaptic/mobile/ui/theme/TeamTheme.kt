@@ -20,6 +20,14 @@ data class TeamTheme(
     val navIndicator: Color
 )
 
+/**
+ * Gray900 카드 위 아이콘·토글 ON 표시용 액센트.
+ * KT(검정)·두산·롯데(짙은 남색)는 primary가 어두운 배경에 묻히므로
+ * 대비가 보장되는 navIndicator를 쓴다. 밝은 primary 팀은 primary와 같은 값.
+ */
+val TeamTheme.controlAccent: Color
+    get() = navIndicator
+
 object TeamThemes {
     val NONE = TeamTheme(
         team = Team.NONE,

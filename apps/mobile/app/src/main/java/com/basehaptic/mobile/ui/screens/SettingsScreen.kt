@@ -70,6 +70,7 @@ import com.basehaptic.mobile.ui.theme.Gray800
 import com.basehaptic.mobile.ui.theme.Gray900
 import com.basehaptic.mobile.ui.theme.Gray950
 import com.basehaptic.mobile.ui.theme.LocalTeamTheme
+import com.basehaptic.mobile.ui.theme.controlAccent
 
 private const val SHOW_STADIUM_CHEER_TOGGLE = false
 
@@ -201,7 +202,7 @@ fun SettingsScreen(
                                         showTeamPicker = false
                                     },
                                 color = if (team == selectedTeam) {
-                                    teamTheme.primary.copy(alpha = 0.2f)
+                                    teamTheme.controlAccent.copy(alpha = 0.2f)
                                 } else {
                                     Color.Transparent
                                 },
@@ -225,7 +226,7 @@ fun SettingsScreen(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = teamTheme.primary,
+                                            tint = teamTheme.controlAccent,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -636,7 +637,7 @@ private fun LiveScoreStyleOption(
         ) {
             Text(
                 if (selected) "●" else "○",
-                color = if (selected) teamTheme.primary else Gray500,
+                color = if (selected) teamTheme.controlAccent else Gray500,
                 style = AppFont.bodyBold
             )
             Spacer(Modifier.width(AppSpacing.sm))
@@ -667,7 +668,7 @@ private fun PromotedLiveUpdatesBanner(onClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Default.Info,
                 contentDescription = null,
-                tint = teamTheme.primary,
+                tint = teamTheme.controlAccent,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.width(AppSpacing.sm))
@@ -684,7 +685,7 @@ private fun PromotedLiveUpdatesBanner(onClick: () -> Unit) {
                 )
             }
             Spacer(Modifier.width(AppSpacing.sm))
-            Text("켜기", style = AppFont.bodyBold, color = teamTheme.primary)
+            Text("켜기", style = AppFont.bodyBold, color = teamTheme.controlAccent)
         }
     }
 }
@@ -715,7 +716,7 @@ private fun SettingsItem(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = theme.primary,
+                tint = theme.controlAccent,
                 modifier = Modifier.size(24.dp)
             )
 
@@ -843,7 +844,7 @@ private fun EventFilterMatrixRow(option: EventFilterOption) {
         Icon(
             imageVector = option.icon,
             contentDescription = null,
-            tint = teamTheme.primary,
+            tint = teamTheme.controlAccent,
             modifier = Modifier.size(22.dp)
         )
 
@@ -898,10 +899,10 @@ private fun EventChannelToggleChip(
             .clip(AppShapes.sm)
             .clickable(onClick = onClick),
         shape = AppShapes.sm,
-        color = if (checked) teamTheme.primary else Gray800,
+        color = if (checked) teamTheme.controlAccent else Gray800,
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
-            color = if (checked) teamTheme.primary else Gray700
+            color = if (checked) teamTheme.controlAccent else Gray700
         )
     ) {
         Row(
@@ -943,7 +944,7 @@ private fun SettingsItemWithSwitch(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (enabled) teamTheme.primary else Gray500,
+                tint = if (enabled) teamTheme.controlAccent else Gray500,
                 modifier = Modifier.size(24.dp)
             )
 
@@ -971,7 +972,7 @@ private fun SettingsItemWithSwitch(
                 enabled = enabled,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
-                    checkedTrackColor = teamTheme.primary,
+                    checkedTrackColor = teamTheme.controlAccent,
                     uncheckedThumbColor = Gray500,
                     uncheckedTrackColor = Gray700,
                     disabledUncheckedThumbColor = Gray500,

@@ -85,12 +85,12 @@ struct SettingsScreen: View {
                                     Spacer()
                                     if team == selectedTeam {
                                         Image(systemName: "checkmark")
-                                            .foregroundColor(teamTheme.primary)
+                                            .foregroundColor(teamTheme.controlAccent)
                                             .font(AppFont.h4)
                                     }
                                 }
                                 .padding(AppSpacing.md)
-                                .background(team == selectedTeam ? teamTheme.primary.opacity(0.2) : Color.clear)
+                                .background(team == selectedTeam ? teamTheme.controlAccent.opacity(0.2) : Color.clear)
                                 .cornerRadius(AppRadius.sm)
                             }
                         }
@@ -316,7 +316,7 @@ private struct SettingsItem: View {
         Button(action: onTap) {
             HStack(spacing: AppSpacing.lg) {
                 Image(systemName: icon)
-                    .foregroundColor(teamTheme.primary)
+                    .foregroundColor(teamTheme.controlAccent)
                     .font(AppFont.h3)
                     .frame(width: 24)
 
@@ -356,7 +356,7 @@ private struct SettingsItemWithToggle: View {
     var body: some View {
         HStack(spacing: AppSpacing.lg) {
             Image(systemName: icon)
-                .foregroundColor(teamTheme.primary)
+                .foregroundColor(teamTheme.controlAccent)
                 .font(AppFont.h3)
                 .frame(width: 24)
 
@@ -375,7 +375,7 @@ private struct SettingsItemWithToggle: View {
 
             Toggle("", isOn: $isOn)
                 .labelsHidden()
-                .tint(teamTheme.primary)
+                .tint(teamTheme.controlAccent)
         }
         .padding(AppSpacing.lg)
         .background(AppColors.gray900)
@@ -442,7 +442,7 @@ private struct EventFilterMatrixRow: View {
         HStack(spacing: AppSpacing.md) {
             Image(systemName: option.icon)
                 .font(AppFont.bodyLg)
-                .foregroundColor(teamTheme.primary)
+                .foregroundColor(teamTheme.controlAccent)
                 .frame(width: 22)
 
             Text(option.title)
@@ -456,7 +456,7 @@ private struct EventFilterMatrixRow: View {
             EventChannelToggleChip(
                 accessibilityTitle: "\(option.title) Watch 알림",
                 isOn: watchEnabled,
-                activeColor: teamTheme.primary
+                activeColor: teamTheme.controlAccent
             ) {
                 watchEnabled.toggle()
                 WatchThemeSyncManager.syncEventFiltersToWatch(
@@ -467,7 +467,7 @@ private struct EventFilterMatrixRow: View {
             EventChannelToggleChip(
                 accessibilityTitle: "\(option.title) 잠금화면 알림",
                 isOn: lockScreenEnabled,
-                activeColor: teamTheme.primary
+                activeColor: teamTheme.controlAccent
             ) {
                 lockScreenEnabled.toggle()
             }
