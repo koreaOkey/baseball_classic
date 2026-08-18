@@ -3217,3 +3217,95 @@ def test_boxscore_404_when_game_missing_and_empty_when_no_stats() -> None:
             "homePitchers": [],
             "awayPitchers": [],
         }
+
+
+def _la_state(**overrides) -> dict:
+    state = {
+        "homeScore": 3, "awayScore": 2, "inning": "7회말",
+        "ball": 2, "strike": 1, "out": 1,
+        "baseFirst": True, "baseSecond": False, "baseThird": True,
+        "pitcher": "Kim Starter", "batter": "Moon Batter",
+        "status": "LIVE", "lastEventType": None,
+    }
+    state.update(overrides)
+    return state
+
+
+def test_la_is_significant_classification() -> None:
+    base = _la_state()
+    # 이전 상태 없음 → 항상 significant
+    assert main_module._la_is_significant(None, base) is True
+    # 볼카운트/타자/이벤트타입만 변한 경우 → routine
+    assert main_module._la_is_significant(base, _la_state(ball=3, strike=2)) is False
+    assert main_module._la_is_significant(base, _la_state(lastEventType="BALL")) is False
+    # 스코어·아웃·주자·이닝·상태 변화 → significant
+    assert main_module._la_is_significant(base, _la_state(homeScore=4)) is True
+    assert main_module._la_is_significant(base, _la_state(out=2)) is True
+    assert main_module._la_is_significant(base, _la_state(inning="8회초")) is True
+    assert main_module._la_is_significant(base, _la_state(status="FINISHED")) is True
+    # 필드 변화 없어도 주요 이벤트 타입이면 significant
+    assert main_module._la_is_significant(base, _la_state(lastEventType="HIT")) is True
+
+
+def test_send_live_activity_update_priority_dedupe_heartbeat() -> None:
+    sent: list[tuple[str, dict, str, int]] = []
+    fake_cache: dict[str, dict] = {}
+
+    async def fake_tokens(game_id: str) -> list[str]:
+        return ["tok1"]
+
+    async def fake_get_cache(key: str):
+        return fake_cache.get(key)
+
+    async def fake_set_cache(key: str, value: dict, ttl_sec: int = 300) -> None:
+        fake_cache[key] = value
+
+    async def fake_send(token, content_state, *, event_type="update", priority=10, **kwargs):
+        sent.append((token, content_state, event_type, priority))
+        return True, False
+
+    payload = {
+        "homeScore": 3, "awayScore": 2, "inning": "7회말",
+        "ball": 2, "strike": 1, "out": 1,
+        "bases": {"first": True, "second": False, "third": True},
+        "pitcher": "Kim Starter", "batter": "Moon Batter",
+        "status": "LIVE", "lastEventType": None,
+    }
+
+    with patch.object(main_module, "_cached_live_activity_tokens", fake_tokens), \
+            patch.object(main_module.redis_relay, "get_cache", fake_get_cache), \
+            patch.object(main_module.redis_relay, "set_cache", fake_set_cache), \
+            patch.object(main_module, "send_live_activity_push_with_result", fake_send):
+        # 첫 발송: 이전 상태 없음 → priority 10
+        asyncio.run(main_module._send_live_activity_update("g1", dict(payload)))
+        assert len(sent) == 1 and sent[-1][3] == 10
+
+        # 동일 상태가 heartbeat 간격 내 재수신 → 발송 스킵
+        asyncio.run(main_module._send_live_activity_update("g1", dict(payload)))
+        assert len(sent) == 1
+
+        # 볼카운트만 변화 → routine priority 5
+        asyncio.run(main_module._send_live_activity_update(
+            "g1", {**payload, "ball": 3, "lastEventType": "BALL"},
+        ))
+        assert len(sent) == 2 and sent[-1][3] == 5
+
+        # 득점 변화 → significant priority 10
+        asyncio.run(main_module._send_live_activity_update(
+            "g1", {**payload, "ball": 0, "homeScore": 4, "lastEventType": "SCORE"},
+        ))
+        assert len(sent) == 3 and sent[-1][3] == 10
+
+        # 동일 상태라도 heartbeat 간격 경과 → stale-date 갱신용 저우선 재전송
+        cache_key = main_module._LA_LAST_STATE_CACHE_KEY.format(game_id="g1")
+        fake_cache[cache_key]["sentAt"] -= main_module._LA_HEARTBEAT_SEC + 1
+        asyncio.run(main_module._send_live_activity_update(
+            "g1", {**payload, "ball": 0, "homeScore": 4, "lastEventType": "SCORE"},
+        ))
+        assert len(sent) == 4 and sent[-1][3] == 5
+
+        # 경기 종료 event=end 는 항상 priority 10
+        asyncio.run(main_module._send_live_activity_update(
+            "g1", {**payload, "status": "FINISHED"}, "end",
+        ))
+        assert len(sent) == 5 and sent[-1][2] == "end" and sent[-1][3] == 10

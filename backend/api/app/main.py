@@ -2103,6 +2103,37 @@ def _load_live_activity_tokens(game_id: str) -> list[str]:
         return [row.token for row in rows]
 
 
+# iOS 는 priority 10 liveactivity push 에 기기별 budget 을 두고 초과분을 조용히
+# 드롭한다(APNs 는 200 반환). "계속 실시간"을 지키려면 budget 을 주요 이벤트에만
+# 쓰고, 볼카운트 등 일상 갱신은 budget 을 소모하지 않는 priority 5 로 보낸다.
+_LA_LAST_STATE_CACHE_KEY = "live_activity_last_state:{game_id}"
+_LA_LAST_STATE_TTL_SEC = 6 * 3600
+_LA_HEARTBEAT_SEC = 60           # 상태 불변이어도 stale-date 갱신용 저우선 재전송 간격
+_LA_ROUTINE_PRIORITY = 5
+_LA_SIGNIFICANT_PRIORITY = 10
+# 이 필드만 변한 업데이트는 일상 갱신으로 간주 (스코어·주자·아웃·이닝·투수·상태 변화가 significant)
+_LA_ROUTINE_ONLY_FIELDS = frozenset({"ball", "strike", "batter", "lastEventType"})
+_LA_SIGNIFICANT_EVENT_TYPES = frozenset({
+    "HOMERUN", "SCORE", "SAC_FLY_SCORE",
+    "HIT", "WALK", "HIT_BY_PITCH",
+    "STEAL", "TAG_UP_ADVANCE",
+    "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY",
+    "PITCHER_CHANGE",
+})
+
+
+def _la_is_significant(prev_state: dict[str, Any] | None, next_state: dict[str, Any]) -> bool:
+    if prev_state is None:
+        return True
+    if any(
+        prev_state.get(key) != value
+        for key, value in next_state.items()
+        if key not in _LA_ROUTINE_ONLY_FIELDS
+    ):
+        return True
+    return (next_state.get("lastEventType") or "").upper() in _LA_SIGNIFICANT_EVENT_TYPES
+
+
 async def _send_live_activity_update(
     game_id: str,
     state_payload: dict[str, Any],
@@ -2130,9 +2161,38 @@ async def _send_live_activity_update(
         "lastEventType": last_event_type,
     }
 
+    state_cache_key = _LA_LAST_STATE_CACHE_KEY.format(game_id=game_id)
+    cached_last = await redis_relay.get_cache(state_cache_key)
+    prev_state = cached_last.get("state") if isinstance(cached_last, dict) else None
+    last_sent_at = float(cached_last.get("sentAt") or 0) if isinstance(cached_last, dict) else 0.0
+    now = time.time()
+
+    if event_type == "end":
+        significant = True
+    elif prev_state == content_state:
+        # 상태 불변(이닝 교대 등): heartbeat 간격 내 재전송은 스킵하고,
+        # 간격이 지나면 stale-date 만 굴리는 저우선 재전송.
+        if now - last_sent_at < _LA_HEARTBEAT_SEC:
+            return
+        significant = False
+    else:
+        significant = _la_is_significant(prev_state, content_state)
+
+    priority = _LA_SIGNIFICANT_PRIORITY if significant else _LA_ROUTINE_PRIORITY
+
     results = await asyncio.gather(
-        *(send_live_activity_push_with_result(token, content_state, event_type=event_type) for token in tokens),
+        *(
+            send_live_activity_push_with_result(
+                token, content_state, event_type=event_type, priority=priority,
+            )
+            for token in tokens
+        ),
         return_exceptions=True,
+    )
+    await redis_relay.set_cache(
+        state_cache_key,
+        {"state": content_state, "sentAt": now},
+        ttl_sec=_LA_LAST_STATE_TTL_SEC,
     )
     dead_tokens: list[str] = []
     for token, result in zip(tokens, results):

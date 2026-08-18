@@ -166,16 +166,24 @@ async def send_push_with_result(
     return False, False
 
 
+# stale-date 미포함 push 는 스로틀링으로 업데이트가 끊겨도 카드가 낡은 데이터를
+# 살아있는 것처럼 계속 보여준다. heartbeat(60s) 2회 유실까지는 흡수하는 여유폭.
+LIVE_ACTIVITY_STALE_SECONDS = 180
+
+
 async def send_live_activity_push(
     push_token: str,
     content_state: dict[str, Any],
     *,
     event_type: str = "update",  # "update" or "end"
     timestamp: int | None = None,
+    priority: int = 10,
+    stale_seconds: int | None = LIVE_ACTIVITY_STALE_SECONDS,
 ) -> bool:
     """ActivityKit Live Activity push 전송"""
     ok, _ = await send_live_activity_push_with_result(
         push_token, content_state, event_type=event_type, timestamp=timestamp,
+        priority=priority, stale_seconds=stale_seconds,
     )
     return ok
 
@@ -186,8 +194,15 @@ async def send_live_activity_push_with_result(
     *,
     event_type: str = "update",  # "update" or "end"
     timestamp: int | None = None,
+    priority: int = 10,
+    stale_seconds: int | None = LIVE_ACTIVITY_STALE_SECONDS,
 ) -> tuple[bool, bool]:
-    """ActivityKit Live Activity push 전송. (성공 여부, 영구 실패 여부) 반환."""
+    """ActivityKit Live Activity push 전송. (성공 여부, 영구 실패 여부) 반환.
+
+    priority 10 은 기기별 Live Activity 업데이트 budget 을 소모하므로
+    (frequent-updates 미지원 기기는 초과 시 조용히 드롭됨) 주요 이벤트에만 쓰고,
+    볼카운트 등 일상 갱신은 priority 5 로 보낸다.
+    """
     settings = get_settings()
     jwt_token = _create_jwt_token()
     if jwt_token is None:
@@ -202,16 +217,18 @@ async def send_live_activity_push_with_result(
         "authorization": f"bearer {jwt_token}",
         "apns-topic": f"{settings.apns_bundle_id}.push-type.liveactivity",
         "apns-push-type": "liveactivity",
-        "apns-priority": "10",
+        "apns-priority": str(priority),
     }
 
-    apns_payload = {
-        "aps": {
-            "timestamp": ts,
-            "event": event_type,
-            "content-state": content_state,
-        },
+    aps: dict[str, Any] = {
+        "timestamp": ts,
+        "event": event_type,
+        "content-state": content_state,
     }
+    if stale_seconds is not None:
+        aps["stale-date"] = ts + stale_seconds
+
+    apns_payload = {"aps": aps}
 
     client = _get_http_client()
 

@@ -6,6 +6,8 @@ final class LiveActivityManager {
     static let shared = LiveActivityManager()
     static let previewGameId = "live_score_preview"
     static let lockScreenLiveScoreEnabledKey = "lock_screen_live_score_enabled"
+    /// 백엔드 push 의 stale-date(180s)와 동일 값. 초과 시 위젯이 "동기화 지연" 표시.
+    private static let staleInterval: TimeInterval = 180
 
     private var currentActivity: Activity<BaseballGameAttributes>?
     private var pushTokenTask: Task<Void, Never>?
@@ -69,7 +71,7 @@ final class LiveActivityManager {
         do {
             let activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: initialState, staleDate: nil),
+                content: .init(state: initialState, staleDate: Date.now.addingTimeInterval(Self.staleInterval)),
                 pushType: .token
             )
             currentActivity = activity
@@ -121,7 +123,7 @@ final class LiveActivityManager {
         do {
             let activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: contentState, staleDate: Date.now.addingTimeInterval(60)),
+                content: .init(state: contentState, staleDate: Date.now.addingTimeInterval(Self.staleInterval)),
                 pushType: .token
             )
             currentActivity = activity
@@ -169,7 +171,7 @@ final class LiveActivityManager {
         do {
             let activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: state, staleDate: Date.now.addingTimeInterval(60)),
+                content: .init(state: state, staleDate: Date.now.addingTimeInterval(Self.staleInterval)),
                 pushType: .token
             )
             currentActivity = activity
@@ -185,7 +187,7 @@ final class LiveActivityManager {
     /// 로컬에서 상태 업데이트 (WebSocket 스트림용)
     func updateActivity(state: BaseballGameAttributes.ContentState) async {
         guard let activity = currentActivity else { return }
-        await activity.update(.init(state: state, staleDate: nil))
+        await activity.update(.init(state: state, staleDate: Date.now.addingTimeInterval(Self.staleInterval)))
     }
 
     func updateFromPushPayload(_ userInfo: [AnyHashable: Any]) {
@@ -338,7 +340,7 @@ final class LiveActivityManager {
         }()
 
         await activity.update(
-            .init(state: state, staleDate: Date.now.addingTimeInterval(60), relevanceScore: alert ? 100 : 50),
+            .init(state: state, staleDate: Date.now.addingTimeInterval(Self.staleInterval), relevanceScore: alert ? 100 : 50),
             alertConfiguration: alertConfiguration
         )
 
@@ -366,7 +368,7 @@ final class LiveActivityManager {
                 highlightEventType: nil,
                 highlightEventText: nil
             )
-            await activity.update(.init(state: latest, staleDate: Date.now.addingTimeInterval(60), relevanceScore: 50))
+            await activity.update(.init(state: latest, staleDate: Date.now.addingTimeInterval(Self.staleInterval), relevanceScore: 50))
             if self.currentActivity?.id == activity.id {
                 self.highlightClearTask = nil
             }

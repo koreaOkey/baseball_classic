@@ -5,7 +5,7 @@ import WidgetKit
 struct BaseHapticLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         let configuration = ActivityConfiguration(for: BaseballGameAttributes.self) { context in
-            ActivityContentView(attributes: context.attributes, state: context.state)
+            ActivityContentView(attributes: context.attributes, state: context.state, isStale: context.isStale)
                 .activityBackgroundTint(.black.opacity(0.88))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
@@ -80,12 +80,13 @@ struct BaseHapticLiveActivityWidget: Widget {
 private struct ActivityContentView: View {
     let attributes: BaseballGameAttributes
     let state: BaseballGameAttributes.ContentState
+    let isStale: Bool
 
     var body: some View {
         if #available(iOS 18.0, *) {
-            SupplementalAwareLiveActivityView(attributes: attributes, state: state)
+            SupplementalAwareLiveActivityView(attributes: attributes, state: state, isStale: isStale)
         } else {
-            LockScreenLiveActivityView(attributes: attributes, state: state)
+            LockScreenLiveActivityView(attributes: attributes, state: state, isStale: isStale)
         }
     }
 }
@@ -96,15 +97,16 @@ private struct SupplementalAwareLiveActivityView: View {
 
     let attributes: BaseballGameAttributes
     let state: BaseballGameAttributes.ContentState
+    let isStale: Bool
 
     var body: some View {
         switch activityFamily {
         case .small:
             WatchSmallLiveActivityView(attributes: attributes, state: state)
         case .medium:
-            LockScreenLiveActivityView(attributes: attributes, state: state)
+            LockScreenLiveActivityView(attributes: attributes, state: state, isStale: isStale)
         @unknown default:
-            LockScreenLiveActivityView(attributes: attributes, state: state)
+            LockScreenLiveActivityView(attributes: attributes, state: state, isStale: isStale)
         }
     }
 }
@@ -188,6 +190,7 @@ private struct WatchTeamScoreView: View {
 private struct LockScreenLiveActivityView: View {
     let attributes: BaseballGameAttributes
     let state: BaseballGameAttributes.ContentState
+    var isStale: Bool = false
 
     var body: some View {
         VStack(spacing: 10) {
@@ -204,7 +207,11 @@ private struct LockScreenLiveActivityView: View {
                     Text(state.inning.isEmpty ? "LIVE" : state.inning)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    if let type = state.lastEventType, !type.isEmpty {
+                    if isStale {
+                        Text("동기화 지연")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.orange)
+                    } else if let type = state.lastEventType, !type.isEmpty {
                         Text(eventLabel(type))
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(eventColor(type))
