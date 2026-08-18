@@ -18,9 +18,10 @@ iOS 잠금화면 라이브 스코어(Live Activity)가 관람 시작 직후에�
 "계속 실시간" 기준으로 3축 개선:
 
 1. **frequent updates 엔타이틀먼트** — 위젯 확장 Info.plist 에 `NSSupportsLiveActivitiesFrequentUpdates=YES` 추가. 스포츠 스코어 앱의 정식 고빈도 갱신 경로로, budget 이 대폭 상향된다. (앱 업데이트 배포 필요)
-2. **백엔드 발송 정책** (`_send_live_activity_update`) — budget 을 아껴 구버전 앱·frequent-updates OFF 사용자도 주요 순간은 계속 받도록:
-   - **중복 스킵**: 직전 발송 content-state 와 동일하면 발송 생략 (Redis `live_activity_last_state:{game_id}`, TTL 6h). 단 heartbeat 간격(60s) 경과 시 stale-date 갱신용 저우선 재전송.
-   - **priority 차등**: 스코어·주자·아웃·이닝·투수·상태 변화 또는 주요 이벤트 타입(홈런·득점·안타 등) → priority 10 즉시. 볼카운트/타자만 변한 일상 갱신 → priority 5 (budget 미소모, 기회적 전달). `event=end` 는 항상 10.
+2. **백엔드 발송 정책** (`_send_live_activity_update`):
+   - **중복 스킵**: 직전 발송 content-state 와 동일하면 발송 생략 (Redis `live_activity_last_state:{game_id}`, TTL 6h). 단 heartbeat 간격(60s) 경과 시 stale-date 갱신용 재전송.
+   - **코얼레싱**: 스코어·주자·아웃·이닝·투수·상태 변화 또는 주요 이벤트 타입(홈런·득점·안타 등)은 즉시 발송. 볼카운트/타자만 변한 일상 갱신은 최소 간격 20s (스킵분은 다음 ingest 가 실어옴).
+   - **priority 는 전부 10**: 최초안은 일상 갱신을 p5(budget 미소모)로 보냈으나, 2026-08-18 실기기 검증에서 p5 가 잠금 상태에서 전달 지연/유실돼 카드가 자주 stale 해지는 것으로 확인 → 코얼레싱으로 볼륨을 줄이고 전부 p10 으로 전환. `apns.py` 의 priority 파라미터는 향후 토큰별 차등 발송용으로 유지.
 3. **stale 가시화** — 모든 push 에 `stale-date`(+180s) 포함, iOS 로컬 업데이트 staleDate 도 180s 로 통일. 위젯은 `context.isStale` 이면 이벤트 라벨 대신 주황색 "동기화 지연" 표시 → 끊김을 낡은 스코어로 오인하지 않게.
 
 수정 파일:

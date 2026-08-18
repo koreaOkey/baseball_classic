@@ -3247,7 +3247,7 @@ def test_la_is_significant_classification() -> None:
     assert main_module._la_is_significant(base, _la_state(lastEventType="HIT")) is True
 
 
-def test_send_live_activity_update_priority_dedupe_heartbeat() -> None:
+def test_send_live_activity_update_coalesce_dedupe_heartbeat() -> None:
     sent: list[tuple[str, dict, str, int]] = []
     fake_cache: dict[str, dict] = {}
 
@@ -3276,7 +3276,9 @@ def test_send_live_activity_update_priority_dedupe_heartbeat() -> None:
             patch.object(main_module.redis_relay, "get_cache", fake_get_cache), \
             patch.object(main_module.redis_relay, "set_cache", fake_set_cache), \
             patch.object(main_module, "send_live_activity_push_with_result", fake_send):
-        # 첫 발송: 이전 상태 없음 → priority 10
+        cache_key = main_module._LA_LAST_STATE_CACHE_KEY.format(game_id="g1")
+
+        # 첫 발송: 이전 상태 없음 → 즉시 발송 (priority 는 항상 10)
         asyncio.run(main_module._send_live_activity_update("g1", dict(payload)))
         assert len(sent) == 1 and sent[-1][3] == 10
 
@@ -3284,28 +3286,34 @@ def test_send_live_activity_update_priority_dedupe_heartbeat() -> None:
         asyncio.run(main_module._send_live_activity_update("g1", dict(payload)))
         assert len(sent) == 1
 
-        # 볼카운트만 변화 → routine priority 5
+        # 볼카운트만 변화, 최소 간격 내 → 코얼레싱 스킵
         asyncio.run(main_module._send_live_activity_update(
             "g1", {**payload, "ball": 3, "lastEventType": "BALL"},
         ))
-        assert len(sent) == 2 and sent[-1][3] == 5
+        assert len(sent) == 1
 
-        # 득점 변화 → significant priority 10
+        # 최소 간격 경과 후 볼카운트 변화 → 발송
+        fake_cache[cache_key]["sentAt"] -= main_module._LA_ROUTINE_MIN_INTERVAL_SEC + 1
+        asyncio.run(main_module._send_live_activity_update(
+            "g1", {**payload, "ball": 3, "lastEventType": "BALL"},
+        ))
+        assert len(sent) == 2 and sent[-1][3] == 10
+
+        # 득점 변화 → 간격 무관 즉시 발송
         asyncio.run(main_module._send_live_activity_update(
             "g1", {**payload, "ball": 0, "homeScore": 4, "lastEventType": "SCORE"},
         ))
         assert len(sent) == 3 and sent[-1][3] == 10
 
-        # 동일 상태라도 heartbeat 간격 경과 → stale-date 갱신용 저우선 재전송
-        cache_key = main_module._LA_LAST_STATE_CACHE_KEY.format(game_id="g1")
+        # 동일 상태라도 heartbeat 간격 경과 → stale-date 갱신용 재전송
         fake_cache[cache_key]["sentAt"] -= main_module._LA_HEARTBEAT_SEC + 1
         asyncio.run(main_module._send_live_activity_update(
             "g1", {**payload, "ball": 0, "homeScore": 4, "lastEventType": "SCORE"},
         ))
-        assert len(sent) == 4 and sent[-1][3] == 5
+        assert len(sent) == 4
 
-        # 경기 종료 event=end 는 항상 priority 10
+        # 경기 종료 event=end 는 항상 발송
         asyncio.run(main_module._send_live_activity_update(
             "g1", {**payload, "status": "FINISHED"}, "end",
         ))
-        assert len(sent) == 5 and sent[-1][2] == "end" and sent[-1][3] == 10
+        assert len(sent) == 5 and sent[-1][2] == "end"

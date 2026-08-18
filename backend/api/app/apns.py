@@ -199,9 +199,11 @@ async def send_live_activity_push_with_result(
 ) -> tuple[bool, bool]:
     """ActivityKit Live Activity push 전송. (성공 여부, 영구 실패 여부) 반환.
 
-    priority 10 은 기기별 Live Activity 업데이트 budget 을 소모하므로
-    (frequent-updates 미지원 기기는 초과 시 조용히 드롭됨) 주요 이벤트에만 쓰고,
-    볼카운트 등 일상 갱신은 priority 5 로 보낸다.
+    priority 10 은 기기별 Live Activity 업데이트 budget 을 소모한다
+    (frequent-updates 미지원 기기는 초과 시 조용히 드롭). priority 5 는 budget 을
+    안 쓰지만 잠금 상태 전달이 지연/유실됨이 실기기에서 확인돼(2026-08-18) 발송
+    단은 코얼레싱으로 볼륨을 줄이고 전부 10 으로 보낸다. 파라미터는 향후
+    토큰별 차등 발송용으로 유지.
     """
     settings = get_settings()
     jwt_token = _create_jwt_token()

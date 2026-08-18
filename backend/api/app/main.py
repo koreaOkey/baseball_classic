@@ -2104,13 +2104,14 @@ def _load_live_activity_tokens(game_id: str) -> list[str]:
 
 
 # iOS 는 priority 10 liveactivity push 에 기기별 budget 을 두고 초과분을 조용히
-# 드롭한다(APNs 는 200 반환). "계속 실시간"을 지키려면 budget 을 주요 이벤트에만
-# 쓰고, 볼카운트 등 일상 갱신은 budget 을 소모하지 않는 priority 5 로 보낸다.
+# 드롭한다(APNs 는 200 반환). 볼카운트성 갱신을 priority 5 로 보내는 정책은 실기기
+# 검증(2026-08-18)에서 잠금 상태 전달이 지연/유실돼 카드가 자주 stale 해지는 것으로
+# 확인됨 → 전부 priority 10 으로 보내되 볼카운트성 갱신은 코얼레싱해 budget 을 아낀다
+# (frequent-updates 엔타이틀먼트 빌드 전제; 구버전 앱은 기존과 동일하게 스로틀링).
 _LA_LAST_STATE_CACHE_KEY = "live_activity_last_state:{game_id}"
 _LA_LAST_STATE_TTL_SEC = 6 * 3600
-_LA_HEARTBEAT_SEC = 60           # 상태 불변이어도 stale-date 갱신용 저우선 재전송 간격
-_LA_ROUTINE_PRIORITY = 5
-_LA_SIGNIFICANT_PRIORITY = 10
+_LA_HEARTBEAT_SEC = 60             # 상태 불변이어도 stale-date 갱신용 재전송 간격
+_LA_ROUTINE_MIN_INTERVAL_SEC = 20  # 볼카운트성 갱신 최소 발송 간격 (다음 ingest 가 곧 따라옴)
 # 이 필드만 변한 업데이트는 일상 갱신으로 간주 (스코어·주자·아웃·이닝·투수·상태 변화가 significant)
 _LA_ROUTINE_ONLY_FIELDS = frozenset({"ball", "strike", "batter", "lastEventType"})
 _LA_SIGNIFICANT_EVENT_TYPES = frozenset({
@@ -2170,24 +2171,30 @@ async def _send_live_activity_update(
     if event_type == "end":
         significant = True
     elif prev_state == content_state:
-        # 상태 불변(이닝 교대 등): heartbeat 간격 내 재전송은 스킵하고,
-        # 간격이 지나면 stale-date 만 굴리는 저우선 재전송.
+        # 상태 불변(이닝 교대 등): heartbeat 간격 경과 시에만 stale-date 갱신 재전송.
         if now - last_sent_at < _LA_HEARTBEAT_SEC:
             return
         significant = False
     else:
         significant = _la_is_significant(prev_state, content_state)
-
-    priority = _LA_SIGNIFICANT_PRIORITY if significant else _LA_ROUTINE_PRIORITY
+        # 볼카운트성 갱신 코얼레싱: 스킵해도 다음 ingest 가 최신 상태를 실어온다.
+        if not significant and now - last_sent_at < _LA_ROUTINE_MIN_INTERVAL_SEC:
+            return
 
     results = await asyncio.gather(
         *(
-            send_live_activity_push_with_result(
-                token, content_state, event_type=event_type, priority=priority,
-            )
+            send_live_activity_push_with_result(token, content_state, event_type=event_type)
             for token in tokens
         ),
         return_exceptions=True,
+    )
+    ok_count = sum(
+        1 for result in results
+        if not isinstance(result, BaseException) and result[0]
+    )
+    logger.info(
+        "[APNs-LA] game=%s sent=%d/%d significant=%s event=%s",
+        game_id, ok_count, len(tokens), significant, event_type,
     )
     await redis_relay.set_cache(
         state_cache_key,
