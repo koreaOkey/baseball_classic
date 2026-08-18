@@ -2110,6 +2110,9 @@ def _load_live_activity_tokens(game_id: str) -> list[str]:
 # (frequent-updates 엔타이틀먼트 빌드 전제; 구버전 앱은 기존과 동일하게 스로틀링).
 _LA_LAST_STATE_CACHE_KEY = "live_activity_last_state:{game_id}"
 _LA_LAST_STATE_TTL_SEC = 6 * 3600
+# 발송 정책 검증용 로거: 루트 레벨이 WARNING 이라 INFO 가 묻히므로 전용 로거만 개방
+_la_send_logger = logging.getLogger("app.live_activity")
+_la_send_logger.setLevel(logging.INFO)
 _LA_HEARTBEAT_SEC = 60             # 상태 불변이어도 stale-date 갱신용 재전송 간격
 _LA_ROUTINE_MIN_INTERVAL_SEC = 20  # 볼카운트성 갱신 최소 발송 간격 (다음 ingest 가 곧 따라옴)
 # 이 필드만 변한 업데이트는 일상 갱신으로 간주 (스코어·주자·아웃·이닝·투수·상태 변화가 significant)
@@ -2192,7 +2195,7 @@ async def _send_live_activity_update(
         1 for result in results
         if not isinstance(result, BaseException) and result[0]
     )
-    logger.info(
+    _la_send_logger.info(
         "[APNs-LA] game=%s sent=%d/%d significant=%s event=%s",
         game_id, ok_count, len(tokens), significant, event_type,
     )
