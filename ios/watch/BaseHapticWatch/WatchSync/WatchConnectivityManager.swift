@@ -143,7 +143,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         case "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY": key = "event_filter_out_enabled"
         case "BALL", "STRIKE": key = "event_filter_pitch_count_enabled"
         case "PITCHER_CHANGE": key = "event_filter_pitcher_change_enabled"
-        default: return true
+        // 필터 옵션에 매핑되지 않은 타입(OTHER·HALF_INNING_CHANGE·MOUND_VISIT 등)은 차단.
+        // 기본 허용이면 타자 교체 같은 OTHER 이벤트가 사용자 필터를 우회해 햅틱·애니메이션을 울린다.
+        // VICTORY 만 예외 — 필터 항목이 아닌 승리 순간 햅틱으로, 폰이 게이트 없이 직접 보낸다.
+        default: return eventType.uppercased() == "VICTORY"
         }
         let fallback = eventFilterDefaults[key] ?? true
         return UserDefaults.standard.object(forKey: key) as? Bool ?? fallback

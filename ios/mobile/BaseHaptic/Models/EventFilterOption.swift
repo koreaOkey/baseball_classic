@@ -7,9 +7,13 @@ enum EventNotificationChannel {
 
 enum EventFilterGate {
     static func isAllowed(eventType: String?, channel: EventNotificationChannel = .watch) -> Bool {
+        // 타입이 아예 없는 페이로드(경기 시작·분풀이 등 이벤트성 아님)는 이 게이트 대상이 아니다.
         guard let type = eventType?.uppercased(), !type.isEmpty else { return true }
         guard let option = EventFilterOption.option(forEventType: type) else {
-            return true
+            // 필터 옵션에 매핑되지 않은 타입(OTHER·HALF_INNING_CHANGE·MOUND_VISIT 등)은 차단.
+            // 기본 허용이면 타자 교체 같은 OTHER 이벤트가 사용자 필터를 우회해 알림·햅틱을 울린다.
+            // VICTORY 만 예외 — 필터 항목이 아닌 승리 순간 햅틱으로, 프로덕션은 게이트 없이 직접 전송한다.
+            return type == "VICTORY"
         }
         let key = option.storageKey(for: channel)
         return UserDefaults.standard.object(forKey: key) as? Bool ?? option.defaultEnabled(for: channel)

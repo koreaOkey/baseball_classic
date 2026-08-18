@@ -458,7 +458,10 @@ class DataLayerListenerService : WearableListenerService() {
             "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY" -> "event_filter_out_enabled"
             "BALL", "STRIKE" -> "event_filter_pitch_count_enabled"
             "PITCHER_CHANGE" -> "event_filter_pitcher_change_enabled"
-            else -> return true
+            // 필터 옵션에 매핑되지 않은 타입(OTHER·HALF_INNING_CHANGE·MOUND_VISIT 등)은 차단.
+            // 기본 허용이면 타자 교체 같은 OTHER 이벤트가 사용자 필터를 우회해 햅틱·애니메이션을 울린다.
+            // VICTORY 만 예외 — 필터 항목이 아닌 승리 순간 햅틱으로, 폰이 게이트 없이 직접 보낸다.
+            else -> return eventType.uppercase() == "VICTORY"
         }
         val fallback = when (key) {
             "event_filter_homerun_enabled",

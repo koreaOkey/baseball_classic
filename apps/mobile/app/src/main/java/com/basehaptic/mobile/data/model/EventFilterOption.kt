@@ -22,9 +22,13 @@ object EventFilterGate {
         eventType: String?,
         channel: EventNotificationChannel = EventNotificationChannel.WATCH
     ): Boolean {
+        // 타입이 아예 없는 페이로드(경기 시작·분풀이 등 이벤트성 아님)는 이 게이트 대상이 아니다.
         val type = eventType?.uppercase() ?: return true
         if (type.isBlank()) return true
-        val option = EventFilterOption.optionForEventType(type) ?: return true
+        // 필터 옵션에 매핑되지 않은 타입(OTHER·HALF_INNING_CHANGE·MOUND_VISIT 등)은 차단.
+        // 기본 허용이면 타자 교체 같은 OTHER 이벤트가 사용자 필터를 우회해 알림·진동을 울린다.
+        // VICTORY 만 예외 — 필터 항목이 아닌 승리 순간 햅틱으로, 프로덕션은 게이트 없이 직접 전송한다.
+        val option = EventFilterOption.optionForEventType(type) ?: return type == "VICTORY"
         val key = option.storageKey(channel)
         val prefs = context.getSharedPreferences("basehaptic_user_prefs", android.content.Context.MODE_PRIVATE)
         return if (prefs.contains(key)) prefs.getBoolean(key, option.defaultEnabled(channel))
