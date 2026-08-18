@@ -71,7 +71,8 @@ private val Red300 = Color(0xFFFCA5A5)
  * - 선수 후보(최대 5명) + 감독 고정 6번째 항목을 표시한다.
  * - 후보 5명 미만이어도 있는 후보만 부분 표시하며 진입을 차단하지 않는다.
  * - "기록 기반 자동 선정이며 공식 평가가 아닙니다" 면책 문구 상시 노출.
- * - 선수 이름·등번호·실제 외형 표기 없음.
+ * - 후보 제목은 "역할(실명)" 형식(예: "9번 타자(구자욱)") — 실명 노출은 이 선택 화면 한정,
+ *   룸·완파·워치 화면은 익명(역할 레이블) 유지.
  */
 @Composable
 fun VentingTargetSelectionScreen(
@@ -410,7 +411,7 @@ private fun TargetRow(
     eventDescription: String,
     isSelected: Boolean,
     onTap: () -> Unit,
-    /** 선택 화면 전용 실명 (있을 때만 "{roleLabel} {playerName}" 표기). */
+    /** 선택 화면 전용 실명 (있을 때만 "역할(실명)" 표기 — 예: "9번 타자(구자욱)"). */
     playerName: String? = null
 ) {
     Row(
@@ -457,7 +458,7 @@ private fun TargetRow(
             verticalArrangement = Arrangement.spacedBy(AppSpacing.xxs)
         ) {
             Text(
-                text = if (!playerName.isNullOrBlank()) "$roleLabel $playerName" else roleLabel,
+                text = if (!playerName.isNullOrBlank()) "$roleLabel($playerName)" else roleLabel,
                 style = AppFont.captionBold,
                 color = if (isSelected) Color.White else Gray300
             )

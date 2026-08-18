@@ -16,8 +16,8 @@ import java.time.format.DateTimeFormatter
  * 후보 규칙(인터뷰 동결 TOP5 규칙의 라이브 축소판):
  * - 마이팀 공격 중: 병살·삼진 타자
  * - 마이팀 수비 중: 실점(득점·희생플라이·홈런 허용) 시점의 투수
- * - 표기는 역할 레이블만 사용(실명·등번호 금지 — 홈카드 TOP5와 동일 원칙),
- *   실명 지목은 선택 화면의 직접 입력으로만 가능하다.
+ * - 실명은 [RegretCandidate.playerName]에 담아 선택 화면 TargetRow의 "역할(실명)"
+ *   표기에만 사용한다 — 룸·완파 화면은 익명(역할 레이블) 유지.
  */
 object LiveRegretProvider {
 
@@ -87,7 +87,8 @@ object LiveRegretProvider {
                 RegretCandidate(
                     id = "live_${event.cursor}",
                     roleLabel = batterRoleLabel(event.batter, myBatters),
-                    eventDescription = "$inning ${stripNamePrefix(event.description)}"
+                    eventDescription = "$inning ${stripNamePrefix(event.description)}",
+                    playerName = normalizedPlayerName(event.batter)
                 )
             } else {
                 val isPitcherRegret = type == "SCORE" || type == "SAC_FLY_SCORE" || type == "HOMERUN"
@@ -95,15 +96,20 @@ object LiveRegretProvider {
                 RegretCandidate(
                     id = "live_${event.cursor}",
                     roleLabel = pitcherRoleLabel(event.pitcher, myPitchers),
-                    eventDescription = "$inning ${stripNamePrefix(event.description)} 허용"
+                    eventDescription = "$inning ${stripNamePrefix(event.description)} 허용",
+                    playerName = normalizedPlayerName(event.pitcher)
                 )
             }
             candidates.add(candidate)
         }
 
-        // 같은 역할(예: "3번 타자")은 가장 최근 사건 1건만 남긴다.
-        return candidates.distinctBy { it.roleLabel }.take(5)
+        // 같은 선수(실명 없으면 같은 역할)는 가장 최근 사건 1건만 남긴다.
+        return candidates.distinctBy { it.playerName ?: it.roleLabel }.take(5)
     }
+
+    /** 공백 정리 후 비어 있으면 null — 선택 화면 "역할(실명)" 표기용. */
+    private fun normalizedPlayerName(name: String?): String? =
+        name?.trim()?.takeIf { it.isNotEmpty() }
 
     /** 박스스코어 타순으로 "N번 타자" 레이블 생성. 매칭 실패 시 "타자". */
     private fun batterRoleLabel(
@@ -125,7 +131,7 @@ object LiveRegretProvider {
         return if (pitcher.isStarter) "선발 투수" else "구원 투수"
     }
 
-    /** 중계 문구의 "선수명 : 내용" 앞부분을 제거해 실명 노출을 막는다. */
+    /** 중계 문구의 "선수명 : 내용" 앞부분을 제거해 사건 문구를 정리한다 (실명은 제목의 "역할(실명)" 표기가 담당). */
     private fun stripNamePrefix(description: String): String {
         val separatorIndex = description.indexOf(" : ")
         return if (separatorIndex > 0) {
