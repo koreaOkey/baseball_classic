@@ -248,6 +248,9 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
                 self.handleHapticEvent(message)
             case "watch_sync_prompt":
                 self.handleWatchSyncPrompt(message)
+            case "watch_sync_prompt_dismiss":
+                // 폰에서 이미 관람을 시작함 → 어떤 경기의 팝업이든 응답 없이 내림
+                self.watchSyncPrompt = nil
             case "stadium_cheer_trigger":
                 self.handleStadiumCheerTrigger(message)
             case "venting_trigger":
@@ -341,10 +344,15 @@ final class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDeleg
         }
 
         // 모바일에서 이미 경기 관람을 시작한 경우 → 워치 팝업 자동 수락
-        if let prompt = watchSyncPrompt,
-           prompt.gameId == (message["game_id"] as? String ?? "") {
-            sendSyncResponse(gameId: prompt.gameId, accepted: true)
-            watchSyncPrompt = nil
+        if let prompt = watchSyncPrompt {
+            if prompt.gameId == newGameData.gameId {
+                sendSyncResponse(gameId: prompt.gameId, accepted: true)
+                watchSyncPrompt = nil
+            } else if newGameData.isLive {
+                // 폰이 다른 경기를 관람 중 → 응답 없이 팝업만 내림
+                // (dismiss 신호 이후에 폴러가 띄운 팝업 레이스 커버)
+                watchSyncPrompt = nil
+            }
         }
 
         // 테마 동기화

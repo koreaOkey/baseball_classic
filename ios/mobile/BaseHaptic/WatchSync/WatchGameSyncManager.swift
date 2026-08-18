@@ -191,4 +191,23 @@ final class WatchGameSyncManager: NSObject, ObservableObject {
             WCSession.default.transferUserInfo(message)
         }
     }
+
+    /// 폰에서 워치 관람이 시작되면 워치에 남아있는 관람 팝업을 수락 여부와 무관하게 내린다.
+    func sendWatchSyncPromptDismiss() {
+        guard WCSession.default.activationState == .activated else { return }
+
+        let message: [String: Any] = [
+            "type": "watch_sync_prompt_dismiss",
+            "updated_at": Date().timeIntervalSince1970
+        ]
+
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("[WatchGameSync] Failed to send watch sync prompt dismiss: \(error.localizedDescription)")
+                WCSession.default.transferUserInfo(message)
+            }
+        } else {
+            WCSession.default.transferUserInfo(message)
+        }
+    }
 }

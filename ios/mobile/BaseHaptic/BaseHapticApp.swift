@@ -668,6 +668,8 @@ struct ContentView: View {
                 refreshLiveActivityStream()
                 return
             }
+            // 폰에서 관람이 시작됐으므로 워치에 떠 있는 관람 팝업은 수락 전이어도 내린다
+            WatchGameSyncManager.shared.sendWatchSyncPromptDismiss()
             gameStreamTask = Task {
                 await streamSyncedGame()
             }
