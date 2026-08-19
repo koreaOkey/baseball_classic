@@ -43,8 +43,16 @@ settings = get_settings()
 KST = timezone(timedelta(hours=9))
 FINISHED_STATUS = "FINISHED"
 
-VALID_VENTING_EVENT_TYPES = {"room_enter", "destroy_complete", "retry_prompt_shown", "retry_ad_start"}
-VALID_ENTRY_SOURCES = {"home_card", "live_button", "loss_prompt"}
+VALID_VENTING_EVENT_TYPES = {
+    "room_enter",
+    "watch_room_enter",
+    "destroy_complete",
+    "retry_prompt_shown",
+    "retry_ad_start",
+}
+# 클라이언트가 실제로 보내는 값 기준 (live=라이브 플로팅 버튼, loss_push=패배 푸시 딥링크,
+# whats_new=업데이트 팝업 "지금 해보기" CTA).
+VALID_ENTRY_SOURCES = {"home_card", "live", "loss_push", "whats_new"}
 VALID_PLATFORMS = {"ios", "android", "unknown"}
 
 _MAX_CANDIDATES = 15

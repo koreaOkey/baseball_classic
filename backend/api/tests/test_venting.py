@@ -35,6 +35,7 @@ from app.models import (  # noqa: E402
     GameLineupSlot,
     GamePitcherStat,
     TeamManager,
+    VentingEvent,
     VentingRegretCache,
 )
 
@@ -225,6 +226,49 @@ def test_venting_event_rejects_invalid_type():
     _enable()
     resp = client.post("/venting/events", json={"event_type": "bogus", "team": "LG"})
     assert resp.status_code == 400
+
+
+def test_venting_event_accepts_watch_enter_and_client_entry_sources():
+    """워치 진입 타입 + 클라이언트가 실제로 보내는 entry_source 가 유실 없이 저장돼야 한다."""
+    _enable()
+    for etype, source in [
+        ("watch_room_enter", "live"),
+        ("room_enter", "loss_push"),
+        ("room_enter", "whats_new"),
+    ]:
+        resp = client.post(
+            "/venting/events",
+            json={"event_type": etype, "team": "LG", "entry_source": source},
+        )
+        assert resp.status_code == 200, (etype, source)
+        event_id = resp.json()["id"]
+        with SessionLocal() as db:
+            row = db.get(VentingEvent, event_id)
+            assert row is not None
+            assert row.event_type == etype
+            assert row.entry_source == source  # 허용 목록 밖이면 None 으로 유실됐을 값
+
+
+def test_venting_event_extracts_user_id_from_bearer_token():
+    """리포터가 토큰을 첨부하면 서버가 user_id(sub)를 저장 — 순 사용자 집계 기반."""
+    _enable()
+    import jwt
+
+    token = jwt.encode(
+        {"sub": "user-venting-1", "aud": "authenticated"},
+        "test-jwt-secret-0123456789abcdef0123456789abcdef",
+        algorithm="HS256",
+    )
+    resp = client.post(
+        "/venting/events",
+        json={"event_type": "room_enter", "team": "LG"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    with SessionLocal() as db:
+        row = db.get(VentingEvent, resp.json()["id"])
+        assert row is not None
+        assert row.user_id == "user-venting-1"
 
 
 def _seed_error_game(game_id: str) -> None:

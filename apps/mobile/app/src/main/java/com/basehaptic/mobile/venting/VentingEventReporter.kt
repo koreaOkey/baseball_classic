@@ -3,6 +3,8 @@ package com.basehaptic.mobile.venting
 import android.content.Context
 import android.util.Log
 import com.basehaptic.mobile.BuildConfig
+import com.basehaptic.mobile.auth.SupabaseClientProvider
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,7 +22,7 @@ import java.util.concurrent.TimeUnit
  * 완전 베스트에포트: UI 를 절대 블로킹하지 않으며(자체 IO 스코프 fire-and-forget),
  * 실패는 조용히 삼킨다. 서버가 비활성이면 {ok:false} 를 돌려주지만 클라이언트는 무시한다.
  *
- * event_type: room_enter · destroy_complete · retry_prompt_shown · retry_ad_start.
+ * event_type: room_enter · watch_room_enter · destroy_complete · retry_prompt_shown · retry_ad_start.
  */
 object VentingEventReporter {
     private const val TAG = "VentingEventReporter"
@@ -51,10 +53,15 @@ object VentingEventReporter {
                     .put("platform", "android")
                 if (!gameId.isNullOrBlank()) payload.put("game_id", gameId)
                 val body = payload.toString().toRequestBody(jsonMedia)
-                val request = Request.Builder()
+                val builder = Request.Builder()
                     .url("${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/venting/events")
                     .post(body)
-                    .build()
+                // 로그인 상태면 토큰 첨부 → 서버가 user_id 를 추출해 순 사용자 집계 가능.
+                // 비로그인/실패 시 익명 이벤트로 전송(비차단).
+                runCatching { SupabaseClientProvider.client.auth.currentSessionOrNull()?.accessToken }
+                    .getOrNull()
+                    ?.let { builder.addHeader("Authorization", "Bearer $it") }
+                val request = builder.build()
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         Log.w(TAG, "report failed eventType=$eventType code=${response.code}")
