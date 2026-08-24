@@ -1195,12 +1195,18 @@ private struct BoxscoreSection: View {
     let boxscore: GameBoxscore?
     let isLoading: Bool
 
-    // 어웨이 팀이 선공이므로 기본 선택은 어웨이
-    @State private var selectedSide: BoxscoreTeamSide = .away
+    // 수동 선택 전(nil)에는 응원팀 기본 노출 (응원팀이 없거나 이 경기 미출전이면 선공인 어웨이)
+    @State private var selectedSide: BoxscoreTeamSide?
     @AppStorage("team_display_name_style") private var teamDisplayNameStyleRaw = TeamDisplayNameStyle.team.rawValue
+    @AppStorage("selected_team") private var selectedTeamRaw = Team.none.rawValue
 
     private var style: TeamDisplayNameStyle {
         TeamDisplayNameStyle.fromString(teamDisplayNameStyleRaw)
+    }
+
+    private var defaultSide: BoxscoreTeamSide {
+        let favorite = Team.fromString(selectedTeamRaw)
+        return favorite != .none && favorite == state.homeTeamId ? .home : .away
     }
 
     var body: some View {
@@ -1214,14 +1220,22 @@ private struct BoxscoreSection: View {
     }
 
     private func content(_ boxscore: GameBoxscore) -> some View {
-        let batters = selectedSide == .home ? boxscore.homeBatters : boxscore.awayBatters
-        let pitchers = selectedSide == .home ? boxscore.homePitchers : boxscore.awayPitchers
+        let side = selectedSide ?? defaultSide
+        let batters = side == .home ? boxscore.homeBatters : boxscore.awayBatters
+        let pitchers = side == .home ? boxscore.homePitchers : boxscore.awayPitchers
         return VStack(alignment: .leading, spacing: AppSpacing.md) {
             BoxscoreTeamSegment(
                 awayName: state.awayTeamId.displayName(style: style),
                 homeName: state.homeTeamId.displayName(style: style),
-                selected: $selectedSide
+                selected: Binding(
+                    get: { selectedSide ?? defaultSide },
+                    set: { selectedSide = $0 }
+                )
             )
+
+            Text("타자 기록")
+                .font(AppFont.h5Bold)
+                .foregroundColor(.white)
 
             BoxscoreBatterTable(batters: sortedBatters(batters))
 
@@ -1263,8 +1277,8 @@ private struct BoxscoreTeamSegment: View {
 
     var body: some View {
         HStack(spacing: AppSpacing.xs) {
-            segmentButton(title: "\(awayName) 타자", side: .away)
-            segmentButton(title: "\(homeName) 타자", side: .home)
+            segmentButton(title: "\(awayName) 기록", side: .away)
+            segmentButton(title: "\(homeName) 기록", side: .home)
         }
         .padding(AppSpacing.xs)
         .background(RoundedRectangle(cornerRadius: AppRadius.md).fill(AppColors.gray900))

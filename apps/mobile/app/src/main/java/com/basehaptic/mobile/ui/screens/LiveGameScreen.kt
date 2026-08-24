@@ -140,8 +140,9 @@ fun LiveGameScreen(
     var boxscore by remember(gameId) { mutableStateOf<BackendGamesRepository.GameBoxscore?>(null) }
     // 최초 조회 완료 전에는 스피너, 이후에는 실패해도 마지막 데이터/빈 상태 유지
     var boxscoreFetchAttempted by remember(gameId) { mutableStateOf(false) }
-    // 박스스코어 팀 토글. 어웨이 팀이 초 공격이므로 어웨이 먼저 노출.
-    var boxscoreShowsHome by remember(gameId) { mutableStateOf(false) }
+    // 박스스코어 팀 토글. 수동 선택 전(null)에는 응원팀 기본 노출 (응원팀이 없거나 이 경기 미출전이면 선공인 어웨이).
+    var boxscoreShowsHome by remember(gameId) { mutableStateOf<Boolean?>(null) }
+    val favoriteTeam = LocalTeamTheme.current.team
 
     var selectedInningNumber by remember(gameId) { mutableStateOf<Int?>(null) }
     var hasManualInningSelection by remember(gameId) { mutableStateOf(false) }
@@ -502,7 +503,8 @@ fun LiveGameScreen(
                             state = state,
                             boxscore = boxscore,
                             isLoading = !boxscoreFetchAttempted,
-                            showsHome = boxscoreShowsHome,
+                            showsHome = boxscoreShowsHome
+                                ?: (favoriteTeam != Team.NONE && favoriteTeam == state.homeTeamId),
                             onSelectHome = { boxscoreShowsHome = it }
                         )
                     }
@@ -1004,8 +1006,8 @@ private fun BoxscoreSection(
         // 초 공격인 어웨이 팀이 먼저 (라인스코어 표기 순서와 동일)
         SegmentedTabRow(
             options = listOf(
-                "${state.awayTeamId.displayName(teamDisplayNameStyle)} 타자",
-                "${state.homeTeamId.displayName(teamDisplayNameStyle)} 타자"
+                "${state.awayTeamId.displayName(teamDisplayNameStyle)} 기록",
+                "${state.homeTeamId.displayName(teamDisplayNameStyle)} 기록"
             ),
             selectedIndex = if (showsHome) 1 else 0,
             onSelect = { index -> onSelectHome(index == 1) }
@@ -1081,6 +1083,8 @@ private fun BoxscoreBatterTable(batters: List<BackendGamesRepository.BoxscoreBat
             modifier = Modifier.padding(AppSpacing.md),
             verticalArrangement = Arrangement.spacedBy(AppSpacing.sm)
         ) {
+            Text(text = "타자 기록", style = AppFont.captionBold, color = Yellow400)
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "타순 · 선수",
