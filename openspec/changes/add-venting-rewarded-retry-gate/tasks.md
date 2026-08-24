@@ -17,4 +17,4 @@
 - [x] 3.3 백엔드 py_compile 통과
 - [ ] 3.4 실기기(DEBUG=테스트 광고): 완파 → 광고 보고 재도전 → 보상 후 룸 재진입, 중도 이탈 시 거부, 이벤트 3종 기록 확인
 - [ ] 3.5 백엔드 배포 후 `/venting/ad-funnel` 응답 확인
-- [ ] 3.6 전용 AdMob Rewarded 유닛 발급 후 상수 교체 (iOS `ventingRetryAdUnitID` / Android `VENTING_RETRY_AD_UNIT`)
+- [x] 3.6 전용 AdMob Rewarded 유닛 발급 후 상수 교체 (iOS 7560088484 / Android 9256313538, 2026-08-24)

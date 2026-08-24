@@ -37,6 +37,7 @@ final class RewardedAdManager: NSObject, ObservableObject {
     private static let themeStoreAdUnitProd = "ca-app-pub-7935544989894266/6775093261"
     private static let watchSyncAdUnitProd = "ca-app-pub-7935544989894266/6602098213"
     private static let liveActivityAdUnitProd = "ca-app-pub-7935544989894266/2584558049"
+    private static let ventingRetryAdUnitProd = "ca-app-pub-7935544989894266/7560088484"
 
     static var themeStoreAdUnitID: String {
         #if DEBUG
@@ -62,9 +63,13 @@ final class RewardedAdManager: NSObject, ObservableObject {
         #endif
     }
 
-    /// 분풀이 재도전 게이트 — 전용 유닛 발급 전까지 테마 스토어 Rewarded 유닛 재사용.
+    /// 빠따존 재도전 게이트 (Rewarded)
     static var ventingRetryAdUnitID: String {
-        themeStoreAdUnitID
+        #if DEBUG
+        return rewardedTestAdUnitID
+        #else
+        return ventingRetryAdUnitProd
+        #endif
     }
 
     /// 광고 로드 → 표시 → dismiss 후 콜백.
