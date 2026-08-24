@@ -95,6 +95,7 @@ from .workers.cheer_validator import validate_pending_cheer_events
 from .venting import (
     VALID_VENTING_EVENT_TYPES,
     compute_regret_for_game_background,
+    get_ad_funnel,
     get_regret_cache,
     get_team_season_ranking,
     record_venting_event,
@@ -1959,7 +1960,7 @@ async def _send_loss_notification(
     for (my_team, display_style), group in grouped.items():
         team_display = _team_display_name(my_team, display_style)
         title = "오늘은 아쉽게 졌어요 💢"
-        body = f"{team_display} 팬, 분풀이 방에서 오늘 경기 풀고 가세요."
+        body = f"{team_display} 팬, 빠따존에서 오늘 스트레스 풀고 가세요."
         data = {
             "game_id": game_id,
             "kind": "venting_loss",
@@ -2926,6 +2927,20 @@ def get_venting_team_ranking(
         return {"season": season, "ranking": []}
     resolved_season = season or str(datetime.now(KST).year)
     return {"season": resolved_season, "ranking": get_team_season_ranking(db, resolved_season)}
+
+
+@app.get("/venting/ad-funnel")
+def get_venting_ad_funnel(
+    db: Annotated[Session, Depends(get_db)],
+    days: int = Query(default=7, ge=1, le=90),
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+) -> dict[str, Any]:
+    """재도전 광고 퍼널 집계(운영 확인용) — retry_prompt_shown → retry_ad_start → retry_ad_complete."""
+    if x_api_key is None or not secrets.compare_digest(x_api_key, settings.crawler_api_key):
+        raise HTTPException(status_code=401, detail="invalid api key")
+    if not settings.venting_backend_enabled:
+        return {"days": days, "funnel": {}, "completion_rate": None, "daily": []}
+    return get_ad_funnel(db, days)
 
 
 @app.get("/rankings/teams")

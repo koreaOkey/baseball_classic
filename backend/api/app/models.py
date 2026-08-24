@@ -514,7 +514,7 @@ class VentingEvent(Base):
     )
 
     id: Mapped[int] = mapped_column(BIGINT_TYPE, primary_key=True, autoincrement=True)
-    event_type: Mapped[str] = mapped_column(String(32), nullable=False)  # room_enter|watch_room_enter|destroy_complete|retry_prompt_shown|retry_ad_start
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)  # room_enter|watch_room_enter|destroy_complete|retry_prompt_shown|retry_ad_start|retry_ad_complete
     entry_source: Mapped[str | None] = mapped_column(String(24), nullable=True)  # home_card|live|loss_push|whats_new
     team: Mapped[str] = mapped_column(String(32), nullable=False)  # 유저 응원팀
     game_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

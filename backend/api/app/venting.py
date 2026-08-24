@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -49,6 +49,7 @@ VALID_VENTING_EVENT_TYPES = {
     "destroy_complete",
     "retry_prompt_shown",
     "retry_ad_start",
+    "retry_ad_complete",
 }
 # 클라이언트가 실제로 보내는 값 기준 (live=라이브 플로팅 버튼, loss_push=패배 푸시 딥링크,
 # whats_new=업데이트 팝업 "지금 해보기" CTA).
@@ -594,3 +595,49 @@ def get_team_season_ranking(db: Session, season: str) -> list[dict[str, Any]]:
         .order_by(VentingTeamSeason.count.desc())
     ).all()
     return [{"team": team, "count": count} for team, count in rows]
+
+
+AD_FUNNEL_EVENT_TYPES = ("retry_prompt_shown", "retry_ad_start", "retry_ad_complete")
+
+
+def get_ad_funnel(db: Session, days: int) -> dict[str, Any]:
+    """재도전 광고 퍼널 집계 — 이벤트별 건수·순 사용자 수(로그인 사용자 한정) + 일별(KST) 추이.
+
+    users 는 COUNT(DISTINCT user_id) 라 비로그인(익명) 이벤트는 count 에만 잡힌다.
+    """
+    since = datetime.now(KST) - timedelta(days=days)
+
+    totals_rows = db.execute(
+        select(
+            VentingEvent.event_type,
+            func.count().label("count"),
+            func.count(func.distinct(VentingEvent.user_id)).label("users"),
+        )
+        .where(VentingEvent.event_type.in_(AD_FUNNEL_EVENT_TYPES))
+        .where(VentingEvent.created_at >= since)
+        .group_by(VentingEvent.event_type)
+    ).all()
+    totals: dict[str, dict[str, int]] = {et: {"count": 0, "users": 0} for et in AD_FUNNEL_EVENT_TYPES}
+    for event_type, count, users in totals_rows:
+        totals[event_type] = {"count": count, "users": users}
+
+    day_col = func.date(VentingEvent.created_at + timedelta(hours=9)).label("day")
+    daily_rows = db.execute(
+        select(day_col, VentingEvent.event_type, func.count().label("count"))
+        .where(VentingEvent.event_type.in_(AD_FUNNEL_EVENT_TYPES))
+        .where(VentingEvent.created_at >= since)
+        .group_by(day_col, VentingEvent.event_type)
+        .order_by(day_col)
+    ).all()
+    daily: dict[str, dict[str, int]] = {}
+    for day, event_type, count in daily_rows:
+        daily.setdefault(str(day), dict.fromkeys(AD_FUNNEL_EVENT_TYPES, 0))[event_type] = count
+
+    started = totals["retry_ad_start"]["count"]
+    completed = totals["retry_ad_complete"]["count"]
+    return {
+        "days": days,
+        "funnel": totals,
+        "completion_rate": round(completed / started, 3) if started else None,
+        "daily": [{"date": d, **counts} for d, counts in sorted(daily.items())],
+    }
