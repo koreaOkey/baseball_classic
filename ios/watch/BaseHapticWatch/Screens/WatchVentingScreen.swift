@@ -138,7 +138,7 @@ struct WatchVentingSelectionView: View {
 
         ScrollView {
             VStack(spacing: 6) {
-                Text("💢 분풀이")
+                Text("💢 빠따존")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Color(red: 0.97, green: 0.44, blue: 0.44))
                 Text(rankBySeverity ? "오늘의 아쉬운 순간" : (candidates.isEmpty ? "아직 집계된 순간이 없어요" : "지금까지의 아쉬운 순간"))

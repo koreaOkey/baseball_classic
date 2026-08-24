@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - VentingEventsReporter
@@ -8,7 +7,7 @@ import Foundation
 /// 완전 베스트에포트: UI 를 절대 블로킹하지 않으며(자체 detached Task, fire-and-forget),
 /// 실패는 조용히 삼킨다. 서버가 비활성이면 {ok:false} 를 돌려주지만 클라이언트는 무시한다.
 ///
-/// event_type: room_enter · watch_room_enter · destroy_complete · retry_prompt_shown · retry_ad_start.
+/// event_type: room_enter · watch_room_enter · destroy_complete · retry_prompt_shown · retry_ad_start · retry_ad_complete.
 enum VentingEventsReporter {
 
     /// fire-and-forget: 반환 즉시 종료하며 결과를 기다리지 않는다.
@@ -55,4 +54,3 @@ enum VentingEventsReporter {
         }
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - MockVentingHapticPlayer
@@ -48,4 +47,3 @@ final class MockVentingHapticPlayer: VentingHapticPlaying {
         tapFeedbackCallCount = 0
     }
 }
-#endif

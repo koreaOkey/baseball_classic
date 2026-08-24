@@ -7,8 +7,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.basehaptic.mobile.data.BackendGamesRepository
+import com.basehaptic.mobile.data.model.Game
 import com.basehaptic.mobile.data.model.Team
-import com.basehaptic.mobile.venting.MockRegretProvider
+import com.basehaptic.mobile.venting.LiveRegretProvider
+import com.basehaptic.mobile.venting.ServerRegretProvider
 import com.basehaptic.mobile.venting.VentingEventReporter
 import com.basehaptic.mobile.venting.VentingFeatureFlag
 import com.basehaptic.mobile.venting.VentingGameContext
@@ -18,6 +21,9 @@ import com.basehaptic.mobile.venting.VentingTarget
 import com.basehaptic.mobile.wear.WatchCompanionStatus
 import com.basehaptic.mobile.wear.WatchCompanionStatusRepository
 import com.basehaptic.mobile.wear.WearGameSyncManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
 
 /** 분풀이 모드 화면 흐름 상태 (iOS VentingFlowState 포팅). */
 private sealed class VentingFlowState {
@@ -124,23 +130,56 @@ fun VentingFlowCoordinator(
 /**
  * HomeScreen에 삽입되는 분풀이 카드 컨테이너 (iOS VentingHomeCardContainer 포팅).
  *
- * - 목업 경기 컨텍스트를 로드하고, 오픈 조건을 판정한다.
- * - 조건 미충족 시 아무것도 렌더링하지 않는다.
- * - DEBUG + venting_mode_enabled 이중 게이트 뒤에서만 동작한다.
+ * - 오늘 완료된 마이팀 패배 경기의 실제 컨텍스트를 서버 regret-top5(6.1)로 로드하고,
+ *   실패·빈 items 시 로컬 규칙([LiveRegretProvider])으로 폴백한다 — loss_push 딥링크와 동일 경로.
+ * - 오픈 조건 미충족 시 아무것도 렌더링하지 않는다.
+ * - venting_mode_enabled 피처 플래그(기본 ON) 뒤에서만 동작한다.
  * - 진입 시 [VentingFlowController]로 루트 오버레이 플로우를 연다.
  */
 @Composable
-fun VentingHomeCardContainer(myTeam: Team) {
+fun VentingHomeCardContainer(myTeam: Team, finishedLossGame: Game?) {
     val androidContext = LocalContext.current
 
-    val ventingContext = remember(myTeam) {
-        if (!VentingFeatureFlag.isEnabled(androidContext)) return@remember null
-        val loaded = MockRegretProvider.fetchVentingContext(androidContext)
-        if (VentingOpenConditionChecker.isOpen(loaded, myTeam.name)) loaded else null
-    } ?: return
+    var ventingContext by remember(finishedLossGame?.id, myTeam) {
+        mutableStateOf<VentingGameContext?>(null)
+    }
 
+    LaunchedEffect(finishedLossGame?.id, myTeam) {
+        if (!VentingFeatureFlag.isEnabled(androidContext)) return@LaunchedEffect
+        if (myTeam == Team.NONE) return@LaunchedEffect
+        val game = finishedLossGame ?: return@LaunchedEffect
+
+        val loaded = withContext(Dispatchers.IO) {
+            // 3개 호출을 병렬로 (loss_push 딥링크와 동일).
+            val stateD = async { BackendGamesRepository.fetchGameState(game.id) }
+            val boxscoreD = async { BackendGamesRepository.fetchGameBoxscore(game.id) }
+            val regretD = async { BackendGamesRepository.fetchVentingRegretTop5(game.id) }
+            val state = stateD.await()
+            val boxscore = boxscoreD.await()
+            val regret = regretD.await()
+            val serverContext = regret?.let {
+                ServerRegretProvider.buildContext(
+                    gameId = game.id,
+                    state = state,
+                    boxscore = boxscore,
+                    myTeam = myTeam,
+                    regret = it
+                )
+            }
+            serverContext ?: run {
+                val liveState = state ?: return@run null
+                val events = BackendGamesRepository
+                    .fetchGameEvents(game.id, after = 0, limit = 50)
+                    ?.items.orEmpty()
+                LiveRegretProvider.buildContext(liveState, events, boxscore, myTeam)
+            }
+        }
+        ventingContext = loaded?.takeIf { VentingOpenConditionChecker.isOpen(it, myTeam.name) }
+    }
+
+    val cardContext = ventingContext ?: return
     VentingHomeCard(
-        context = ventingContext,
-        onEnterVenting = { VentingFlowController.open(ventingContext, entrySource = "home_card") }
+        context = cardContext,
+        onEnterVenting = { VentingFlowController.open(cardContext, entrySource = "home_card") }
     )
 }

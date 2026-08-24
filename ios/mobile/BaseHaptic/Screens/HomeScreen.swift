@@ -47,46 +47,49 @@ struct HomeScreen: View {
 
     private var games: [Game] {
         let sortedGames = sortHomeGames(todayGames)
-        #if DEBUG
-        // 분풀이 모드 확인용: 마이팀이 설정돼 있고 완료된 마이팀 경기가 없으면
-        // 마이팀 패배 완료 경기(목업) 하나를 홈 상단에 주입한다.
-        if VentingFeatureFlag.isEnabled, selectedTeam != .none,
-           !sortedGames.contains(where: { $0.status == .finished && $0.isMyTeam }) {
-            return [ventingMockFinishedGame(selectedTeam: selectedTeam)] + sortedGames
-        }
-        #endif
         if showUpdateHighlights && sortedGames.isEmpty {
             return [updateHighlightSampleGame(selectedTeam: selectedTeam)]
         }
         return sortedGames
     }
 
-    #if DEBUG
-    /// 분풀이 확인용 마이팀 패배 완료 경기 (목업 JSON의 1:7 스코어와 일치).
-    private func ventingMockFinishedGame(selectedTeam: Team) -> Game {
-        let awayTeam: Team = selectedTeam == .ssg ? .lg : .ssg
-        return Game(
-            id: "venting-mock-finished-game",
-            homeTeam: selectedTeam.teamName,
-            awayTeam: awayTeam.teamName,
-            homeTeamId: selectedTeam,
-            awayTeamId: awayTeam,
-            homeScore: 1,
-            awayScore: 7,
-            inning: "경기 종료",
-            status: .finished,
-            isMyTeam: true
-        )
+    /// 오늘 완료된 마이팀 패배 경기 — 분풀이 홈카드 대상 (없으면 카드 미표시).
+    private var ventingFinishedLossGame: Game? {
+        guard selectedTeam != .none else { return nil }
+        return todayGames.first { game in
+            guard game.status == .finished, game.isMyTeam else { return false }
+            let myScore = game.homeTeamId == selectedTeam ? game.homeScore : game.awayScore
+            let opponentScore = game.homeTeamId == selectedTeam ? game.awayScore : game.homeScore
+            return myScore < opponentScore
+        }
     }
-    #endif
+
+    /// 피처 가이드 쇼케이스용 샘플 컨텍스트 (가이드 중에만 렌더링, 분풀이 플로우 진입 없음).
+    private static let ventingHighlightSampleContext = VentingGameContext(
+        gameId: "update-highlight-venting-sample",
+        gameDate: "2026-01-01",
+        gameResult: .loss,
+        myTeamId: "",
+        myScore: 3,
+        opponentScore: 7,
+        candidates: [
+            RegretCandidate(id: "guide-1", roleLabel: "선발 투수", eventDescription: "5이닝 6실점 조기 강판"),
+            RegretCandidate(id: "guide-2", roleLabel: "4번 타자", eventDescription: "8회 2사 만루 삼진")
+        ],
+        managerEventDescription: "9회 투수 교체 타이밍 아쉬움"
+    )
+
+    private var updateHighlightSteps: [UpdateHighlightStep] {
+        UpdateHighlightStep.activeSteps
+    }
 
     private var updateHighlightStep: UpdateHighlightStep? {
         guard showUpdateHighlights else { return nil }
-        return UpdateHighlightStep.allCases[safe: updateHighlightStepIndex]
+        return updateHighlightSteps[safe: updateHighlightStepIndex]
     }
 
     private func advanceUpdateHighlight() {
-        if updateHighlightStepIndex >= UpdateHighlightStep.allCases.count - 1 {
+        if updateHighlightStepIndex >= updateHighlightSteps.count - 1 {
             onDismissUpdateHighlights()
         } else {
             updateHighlightStepIndex += 1
@@ -108,9 +111,20 @@ struct HomeScreen: View {
                             .padding(.vertical, AppSpacing.md)
 
                         gamesListHeader
-                        #if DEBUG
-                        VentingHomeCardContainer(myTeamId: selectedTeam.kboTeamId ?? "")
-                        #endif
+                        if showUpdateHighlights, VentingFeatureFlag.isEnabled {
+                            // 피처 가이드 쇼케이스 카드 — 오버레이가 탭을 가로채므로 플로우 진입 없음
+                            VentingHomeCard(
+                                context: Self.ventingHighlightSampleContext,
+                                onEnterVenting: { _ in }
+                            )
+                            .trackUpdateHighlight(.venting)
+                            .id(UpdateHighlightScrollTarget.venting)
+                        } else {
+                            VentingHomeCardContainer(
+                                myTeam: selectedTeam,
+                                finishedLossGame: ventingFinishedLossGame
+                            )
+                        }
                         if let checkinStadium {
                             CheerCheckinCard(
                                 stadiumName: checkinStadium.name,
@@ -136,6 +150,7 @@ struct HomeScreen: View {
                 if let step = updateHighlightStep, let targetFrame = updateHighlightFrames[step] {
                     UpdateHighlightOverlay(
                         step: step,
+                        steps: updateHighlightSteps,
                         targetFrame: targetFrame,
                         onNext: advanceUpdateHighlight,
                         onDismiss: onDismissUpdateHighlights
@@ -158,6 +173,8 @@ struct HomeScreen: View {
                         proxy.scrollTo(UpdateHighlightScrollTarget.header, anchor: .top)
                     case .lockScreen, .watch, .score:
                         proxy.scrollTo(UpdateHighlightScrollTarget.games, anchor: .top)
+                    case .venting:
+                        proxy.scrollTo(UpdateHighlightScrollTarget.venting, anchor: .center)
                     case nil:
                         break
                     }
@@ -1085,6 +1102,7 @@ private enum UpdateHighlightCoordinateSpace {
 }
 
 private enum UpdateHighlightScrollTarget: Hashable {
+    case venting
     case header
     case games
 }
@@ -1095,6 +1113,13 @@ private enum UpdateHighlightStep: CaseIterable, Hashable {
     case standings
     case schedule
     case score
+    case venting
+
+    /// 이 빌드에서 노출할 스텝 목록 — 분풀이 스텝은 피처 게이트가 열려 있을 때만 포함.
+    static var activeSteps: [UpdateHighlightStep] {
+        if VentingFeatureFlag.isEnabled { return allCases }
+        return allCases.filter { $0 != .venting }
+    }
 
     var title: String {
         switch self {
@@ -1103,6 +1128,7 @@ private enum UpdateHighlightStep: CaseIterable, Hashable {
         case .standings: return "전체 순위 보기"
         case .schedule: return "전체 일정 보기"
         case .score: return "점수 보기"
+        case .venting: return "빠따존"
         }
     }
 
@@ -1118,6 +1144,8 @@ private enum UpdateHighlightStep: CaseIterable, Hashable {
             return "이 카드를 누르면 응원팀 시즌 일정을 달력으로 한눈에 볼 수 있어요."
         case .score:
             return "경기 카드에서 최신 점수와 진행 상황을 바로 확인할 수 있어요."
+        case .venting:
+            return "마이팀이 아쉽게 진 날, 홈에 이 카드가 나타나요. 인형을 두드리며 스트레스를 풀어보세요."
         }
     }
 }
@@ -1150,16 +1178,17 @@ private extension View {
 
 private struct UpdateHighlightOverlay: View {
     let step: UpdateHighlightStep
+    let steps: [UpdateHighlightStep]
     let targetFrame: CGRect
     let onNext: () -> Void
     let onDismiss: () -> Void
 
     private var index: Int {
-        (UpdateHighlightStep.allCases.firstIndex(of: step) ?? 0) + 1
+        (steps.firstIndex(of: step) ?? 0) + 1
     }
 
     private var isLast: Bool {
-        index == UpdateHighlightStep.allCases.count
+        index == steps.count
     }
 
     var body: some View {
@@ -1191,7 +1220,7 @@ private struct UpdateHighlightOverlay: View {
                     .position(x: paddedFrame.midX, y: paddedFrame.midY)
 
                 VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                        Text("\(index)/\(UpdateHighlightStep.allCases.count)  \(step.title)")
+                        Text("\(index)/\(steps.count)  \(step.title)")
                             .font(AppFont.captionBold)
                             .foregroundColor(AppColors.gray950)
                             .padding(.horizontal, AppSpacing.sm)

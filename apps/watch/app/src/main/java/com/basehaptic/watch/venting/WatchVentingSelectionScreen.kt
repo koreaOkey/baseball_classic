@@ -55,7 +55,7 @@ fun WatchVentingSelectionScreen(
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
-            text = "💢 분풀이",
+            text = "💢 빠따존",
             color = Color(0xFFF87171),
             fontSize = 14.sp,
             textAlign = TextAlign.Center

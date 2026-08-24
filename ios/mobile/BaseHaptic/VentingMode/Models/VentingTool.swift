@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - VentingTool
@@ -69,4 +68,3 @@ enum VentingTool: String, CaseIterable, Identifiable {
     /// 타격 히트 이펙트 스프라이트 (별·충격파, 투명 배경).
     static let hitEffectImageName = "VentingHitEffect"
 }
-#endif

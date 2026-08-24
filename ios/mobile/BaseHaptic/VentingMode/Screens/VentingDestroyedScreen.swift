@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 
 // MARK: - VentingDestroyedScreen
@@ -7,8 +6,7 @@ import SwiftUI
 ///
 /// - "분풀이 완료" 상태와 재도전 버튼을 표시한다.
 /// - 재도전 허용 여부는 VentingGateProviding 프로토콜로 판정.
-/// - Phase 1: AlwaysAllowGate → 광고 없이 항상 허용.
-#if DEBUG
+/// - 운영(RewardedAdGate): 재도전은 Rewarded 광고 1회 시청 후 허용.
 struct VentingDestroyedScreen: View {
 
     let viewModel: VentingRoomViewModel
@@ -16,8 +14,10 @@ struct VentingDestroyedScreen: View {
     let onRetry: () -> Void
     let onClose: () -> Void
 
-    @State private var retryAllowed: Bool = true
+    // 기본은 광고 경로 — 게이트 판정 전 무료 버튼이 잠깐 보이는 플래시 방지
+    @State private var retryAllowed: Bool = false
     @State private var isCheckingRetry: Bool = false
+    @State private var isRequestingAd: Bool = false
     @State private var showConfetti: Bool = false
 
     var body: some View {
@@ -92,29 +92,19 @@ struct VentingDestroyedScreen: View {
                             .tint(AppColors.red400)
                             .padding()
                     } else if retryAllowed {
-                        Button(action: {
-                            // 6.1 지표: 재도전(리워드 광고 진입 지점) = retry_ad_start
-                            VentingEventsReporter.report(
-                                eventType: "retry_ad_start",
-                                team: viewModel.gameContext.myTeamId,
-                                entrySource: entrySource,
-                                gameId: viewModel.gameContext.gameId
-                            )
+                        // 무료 재도전 (디버그/프리뷰 AlwaysAllowGate 경로 — 광고 지표 미보고)
+                        retryButton(icon: "arrow.clockwise", title: "재도전하기") {
                             onRetry()
-                        }) {
-                            HStack(spacing: AppSpacing.sm) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(AppFont.bodyLgBold)
-                                Text("재도전하기")
-                                    .font(AppFont.bodyLgMedium)
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, AppSpacing.lg)
-                            .background(AppColors.red500)
-                            .cornerRadius(AppRadius.md)
                         }
-                        .buttonStyle(.plain)
+                    } else {
+                        // 운영 경로: Rewarded 광고 1회 시청 후 재도전
+                        retryButton(
+                            icon: "play.rectangle.fill",
+                            title: "광고 보고 재도전하기",
+                            isBusy: isRequestingAd
+                        ) {
+                            requestAdRetry()
+                        }
                     }
 
                     Button(action: onClose) {
@@ -143,6 +133,69 @@ struct VentingDestroyedScreen: View {
             isCheckingRetry = true
             retryAllowed = await viewModel.canRetry()
             isCheckingRetry = false
+        }
+    }
+
+    // MARK: - Retry Button / Ad Gate
+
+    private func retryButton(
+        icon: String,
+        title: String,
+        isBusy: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: AppSpacing.sm) {
+                if isBusy {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: icon)
+                        .font(AppFont.bodyLgBold)
+                }
+                Text(title)
+                    .font(AppFont.bodyLgMedium)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, AppSpacing.lg)
+            .background(AppColors.red500.opacity(isBusy ? 0.6 : 1))
+            .cornerRadius(AppRadius.md)
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy)
+    }
+
+    /// Rewarded 광고를 요청하고 판정에 따라 재도전을 진행한다.
+    private func requestAdRetry() {
+        guard !isRequestingAd else { return }
+        // 6.1 지표: 재도전 광고 진입 = retry_ad_start
+        VentingEventsReporter.report(
+            eventType: "retry_ad_start",
+            team: viewModel.gameContext.myTeamId,
+            entrySource: entrySource,
+            gameId: viewModel.gameContext.gameId
+        )
+        isRequestingAd = true
+        Task {
+            let verdict = await viewModel.requestRetry()
+            isRequestingAd = false
+            switch verdict {
+            case .adRewarded:
+                // 6.1 지표: 광고 보상 획득 = retry_ad_complete
+                VentingEventsReporter.report(
+                    eventType: "retry_ad_complete",
+                    team: viewModel.gameContext.myTeamId,
+                    entrySource: entrySource,
+                    gameId: viewModel.gameContext.gameId
+                )
+                onRetry()
+            case .allowedFree:
+                // 광고 로드 실패 폴백 — 사용자 귀책 아님, 광고 완료로 집계하지 않음
+                onRetry()
+            case .denied:
+                break
+            }
         }
     }
 
@@ -179,5 +232,3 @@ private extension VentingRoomViewModel {
         UserDefaults.standard.bool(forKey: "venting_first_destruction_\(gameContext.gameId)")
     }
 }
-#endif
-#endif

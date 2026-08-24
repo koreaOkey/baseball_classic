@@ -1,18 +1,18 @@
-#if DEBUG
 import Foundation
 
 // MARK: - VentingFeatureFlag
 
-/// 분풀이 모드 피처 플래그: DEBUG 빌드 + 로컬 토글의 이중 게이트.
+/// 분풀이 모드 피처 플래그: 릴리즈 포함 기본 ON.
 ///
-/// 릴리즈 빌드에서는 전체 파일이 컴파일 제외되므로
-/// `isEnabled`와 `setEnabled(_:)` 모두 존재하지 않는다.
+/// 토글은 설정의 DEBUG 섹션에서만 노출되는 로컬 킬스위치 —
+/// 릴리즈 사용자는 항상 ON이다.
 enum VentingFeatureFlag {
 
     private static let userDefaultsKey = "venting_mode_enabled"
 
-    /// 분풀이 모드 활성 여부.
+    /// 분풀이 모드 활성 여부 (저장값이 없으면 기본 ON).
     static var isEnabled: Bool {
+        guard UserDefaults.standard.object(forKey: userDefaultsKey) != nil else { return true }
         return UserDefaults.standard.bool(forKey: userDefaultsKey)
     }
 
@@ -26,4 +26,3 @@ enum VentingFeatureFlag {
         setEnabled(!isEnabled)
     }
 }
-#endif

@@ -35,6 +35,7 @@
 		2FAB3486106F5D7C5374917A /* AnimationFrameLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EC5A0CD5D7779408E0C2021 /* AnimationFrameLoader.swift */; };
 		31D2492344FEF4CAC5FA2D59 /* UIKitVentingHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C833BBE7121E6BB688505E2 /* UIKitVentingHapticPlayer.swift */; };
 		36D8374A362761D8DAF4E29F /* VentingFeatureFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8457B0FF2D5731E437A0CD9 /* VentingFeatureFlag.swift */; };
+		1066D2496FAB3E5D88D161A6 /* RewardedAdGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D4B9B7872E39A0ACCE6F317 /* RewardedAdGate.swift */; };
 		37D04C0E7E98A740EEF2DD47 /* VentingOpenConditionChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD10B6091D2BE290D8DF785 /* VentingOpenConditionChecker.swift */; };
 		3BA9752C23FFD502E30BA326 /* ReleaseNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3E6C583697B070DEE30918 /* ReleaseNotes.swift */; };
 		3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */; };
@@ -118,10 +119,8 @@
 		EBD95C4C91BD4F08671DB824 /* DestructionStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6655AA6FFD846E64239F21F /* DestructionStateMachine.swift */; };
 		EFD914141D2D4AD6CA14D96C /* MockVentingHapticPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5367C84FBFDB3968D8D20D32 /* MockVentingHapticPlayer.swift */; };
 		F12E146A8B5209368A57DCF0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8419E3A8AD866D20F930D497 /* Assets.xcassets */; };
-		F27D8F9A270EFDA8B34228FE /* mock_regret_candidates.json in Resources */ = {isa = PBXBuildFile; fileRef = 40F7EB0CAD7F31C01A2894AE /* mock_regret_candidates.json */; };
 		F40C89F218FF39FC41214EDC /* BaseHapticLiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D1BB10D2F8F60D22C04298CB /* BaseHapticLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F61A0A40EE4881BAA172DE29 /* BackendVentingProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A77FDA757C76078808E364D /* BackendVentingProvider.swift */; };
-		F6CBF646798EF1B409B9FADB /* MockRegretProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC933223A7CAA688E870C61 /* MockRegretProvider.swift */; };
 		F8341E6E8743A8070CE6E25C /* 피치 펄스.png in Resources */ = {isa = PBXBuildFile; fileRef = DABAAB834C102B94324210B1 /* 피치 펄스.png */; };
 		F8F011ADF82EF27818A238E9 /* AppRadius.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B00FE3A8F64F89794DD742A /* AppRadius.swift */; };
 		FCB564B362777F3D2B12E394 /* RegretCandidateProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604524B5D6749F89F29F5AC6 /* RegretCandidateProviding.swift */; };
@@ -195,7 +194,6 @@
 		39BDCDFE97BFDA1971B13785 /* VentingEventsReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingEventsReporter.swift; sourceTree = "<group>"; };
 		3BF6065006D97036C65F2C70 /* VentingLiveEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingLiveEntry.swift; sourceTree = "<group>"; };
 		3CB394E5FE0AB0CE864FEB37 /* 야구의 밤.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "야구의 밤.png"; sourceTree = "<group>"; };
-		40F7EB0CAD7F31C01A2894AE /* mock_regret_candidates.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = mock_regret_candidates.json; sourceTree = "<group>"; };
 		40F94DFC1744C68082E1AC79 /* OnboardingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingScreen.swift; sourceTree = "<group>"; };
 		43A9E61F3C6F0555030D4ABB /* Stadiums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stadiums.swift; sourceTree = "<group>"; };
 		45C0734BB3B091847ABD41DA /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
@@ -213,7 +211,6 @@
 		5A4D5DBCF11D97585FEF3045 /* 멍멍2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "멍멍2.png"; sourceTree = "<group>"; };
 		5A7FAF857AE9967BAAFEA2EE /* DestructionStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestructionStage.swift; sourceTree = "<group>"; };
 		5DB8E76083CCB66D81D3DDB0 /* WatchGamePoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGamePoller.swift; sourceTree = "<group>"; };
-		5DC933223A7CAA688E870C61 /* MockRegretProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockRegretProvider.swift; sourceTree = "<group>"; };
 		5EC5A0CD5D7779408E0C2021 /* AnimationFrameLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationFrameLoader.swift; sourceTree = "<group>"; };
 		5FC0A20F7DB2780D6A388E4D /* WatchAppSpacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppSpacing.swift; sourceTree = "<group>"; };
 		604524B5D6749F89F29F5AC6 /* RegretCandidateProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegretCandidateProviding.swift; sourceTree = "<group>"; };
@@ -249,6 +246,7 @@
 		9FF14835688DCF81CAB8F7F1 /* GameData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameData.swift; sourceTree = "<group>"; };
 		A4B68491596CE6E203408073 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A8457B0FF2D5731E437A0CD9 /* VentingFeatureFlag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VentingFeatureFlag.swift; sourceTree = "<group>"; };
+		1D4B9B7872E39A0ACCE6F317 /* RewardedAdGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardedAdGate.swift; sourceTree = "<group>"; };
 		A8B319F21D1FF9D25A280185 /* BaseHaptic.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BaseHaptic.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA8986E8EB82F1698A53C4AA /* 야구가 좋아.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "야구가 좋아.png"; sourceTree = "<group>"; };
 		AF0BFD94627C9204BFDBCF7A /* HomeRunTransitionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeRunTransitionScreen.swift; sourceTree = "<group>"; };
@@ -360,6 +358,7 @@
 				7C833BBE7121E6BB688505E2 /* UIKitVentingHapticPlayer.swift */,
 				39BDCDFE97BFDA1971B13785 /* VentingEventsReporter.swift */,
 				A8457B0FF2D5731E437A0CD9 /* VentingFeatureFlag.swift */,
+				1D4B9B7872E39A0ACCE6F317 /* RewardedAdGate.swift */,
 				DFD10B6091D2BE290D8DF785 /* VentingOpenConditionChecker.swift */,
 				FD7A010FAFD964A786BC082A /* VentingShakeDetector.swift */,
 			);
@@ -410,7 +409,6 @@
 				51E8F2188475E7A476AC64C4 /* Mock */,
 				E3A38D5A72F61232C8CD2BA2 /* Models */,
 				F5FEEAA648D1034455ADD437 /* Protocols */,
-				9BF2B52BBCD37176626B3F75 /* Resources */,
 				6EF9230555FCA54BBA4714C8 /* Screens */,
 				C9367B0BDCF3E325506B8EB3 /* ViewModel */,
 			);
@@ -422,7 +420,6 @@
 			isa = PBXGroup;
 			children = (
 				17F8E0B33E80A18F6316F22E /* AlwaysAllowGate.swift */,
-				5DC933223A7CAA688E870C61 /* MockRegretProvider.swift */,
 				5367C84FBFDB3968D8D20D32 /* MockVentingHapticPlayer.swift */,
 			);
 			path = Mock;
@@ -536,14 +533,6 @@
 				2D1440FAE3461380CA5B2787 /* VentingMode */,
 				A7D6830F8E7FB5E160EC44F1 /* Products */,
 			);
-			sourceTree = "<group>";
-		};
-		9BF2B52BBCD37176626B3F75 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				40F7EB0CAD7F31C01A2894AE /* mock_regret_candidates.json */,
-			);
-			path = Resources;
 			sourceTree = "<group>";
 		};
 		A374C6DDCD437AA662A94960 /* BaseHapticShared */ = {
@@ -784,7 +773,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				2CE2482EE1940F973BD02827 /* Assets.xcassets in Resources */,
-				F27D8F9A270EFDA8B34228FE /* mock_regret_candidates.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -823,7 +811,6 @@
 				5149C6E8A8F4998C32890151 /* LiveGameScreen.swift in Sources */,
 				E7276F81728AE337F95EB0D3 /* LiveRegretProvider.swift in Sources */,
 				3FB5184C8CB3A05447E9ABAB /* LiveViewSessionManager.swift in Sources */,
-				F6CBF646798EF1B409B9FADB /* MockRegretProvider.swift in Sources */,
 				EFD914141D2D4AD6CA14D96C /* MockVentingHapticPlayer.swift in Sources */,
 				2D0ECD50E2CF9899B886E607 /* MyTeamScreen.swift in Sources */,
 				3DA30AB4C5A9EDBB4F58D487 /* OnboardingScreen.swift in Sources */,
@@ -848,6 +835,7 @@
 				62949C903DFFFC0E9B50F5AE /* VentingDestroyedScreen.swift in Sources */,
 				AC147CC2C506E43C82FB8861 /* VentingEventsReporter.swift in Sources */,
 				36D8374A362761D8DAF4E29F /* VentingFeatureFlag.swift in Sources */,
+				1066D2496FAB3E5D88D161A6 /* RewardedAdGate.swift in Sources */,
 				14873E1D18DE8D20672749A4 /* VentingFlowCoordinator.swift in Sources */,
 				43ED0FE54795C259DBAF5F44 /* VentingGateProviding.swift in Sources */,
 				D52D97B7AE156BEB764A1EC4 /* VentingHapticPlaying.swift in Sources */,
@@ -1063,7 +1051,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.7;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
 				SDKROOT = iphoneos;
 				SUPABASE_ANON_KEY = "$(BASEHAPTIC_STAGING_SUPABASE_ANON_KEY)";
@@ -1087,7 +1075,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.7;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app;
 				SDKROOT = iphoneos;
 				SUPABASE_ANON_KEY = "sb_publishable_VTKZ4I3FS3COPXSe0dryjg_VDhg0D-a";
@@ -1108,7 +1096,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.7;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.liveactivity;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -1124,7 +1112,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
-				MARKETING_VERSION = 1.1.7;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -1142,7 +1130,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8G4LG3694Q;
 				INFOPLIST_FILE = watch/BaseHapticWatch/Info.plist;
-				MARKETING_VERSION = 1.1.7;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.watchkitapp;
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -1163,7 +1151,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.7;
+				MARKETING_VERSION = 1.1.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.basehaptic.app.liveactivity;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;

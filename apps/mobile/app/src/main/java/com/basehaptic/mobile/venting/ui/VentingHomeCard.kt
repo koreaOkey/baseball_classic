@@ -38,7 +38,7 @@ import com.basehaptic.mobile.venting.VentingGameContext
 
 /**
  * 분풀이 모드 홈카드: "오늘의 아쉬운 순간" (iOS VentingHomeCard 포팅).
- * 오픈 조건(DEBUG + 토글 + 마이팀 패배 당일) 충족 시에만 렌더링된다.
+ * 오픈 조건(피처 플래그 + 마이팀 패배 당일) 충족 시에만 렌더링된다.
  */
 @Composable
 fun VentingHomeCard(
@@ -74,7 +74,7 @@ fun VentingHomeCard(
                     color = Red400
                 )
                 Text(
-                    text = "분풀이 한번 해볼까요?",
+                    text = "빠따존 한번 가볼까요?",
                     style = AppFont.micro,
                     color = Gray400
                 )
@@ -133,7 +133,7 @@ fun VentingHomeCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "분풀이 하러 가기",
+                text = "빠따존 가기",
                 style = AppFont.bodyMedium,
                 color = Color.White
             )

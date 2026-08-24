@@ -1,9 +1,30 @@
 package com.basehaptic.mobile.data.model
 
+import androidx.annotation.DrawableRes
+import com.basehaptic.mobile.R
+
+/** 대표 기능 소개 페이지의 비주얼 렌더 방식. */
+sealed interface WhatsNewVisual {
+    /** 스크린샷을 영역에 꽉 채워(crop) 표시. */
+    data class Image(@DrawableRes val res: Int) : WhatsNewVisual
+
+    /** 시계·날짜 잠금 화면 프레임 안에 노티 카드 이미지를 얹어 표시. */
+    data class LockScreen(@DrawableRes val res: Int) : WhatsNewVisual
+}
+
+/** 대표 기능 소개 페이지 (슬라이드형 업데이트 안내). */
+data class WhatsNewFeaturePage(
+    val visual: WhatsNewVisual,
+    val title: String,
+    val body: String,
+)
+
 data class ReleaseNote(
     val version: String,
     val subtitle: String,
     val bullets: List<String>,
+    /** 비어 있으면 기존 단일 불릿 모달, 있으면 슬라이드형(대표 기능 페이지들 + 마지막 불릿 페이지). */
+    val featurePages: List<WhatsNewFeaturePage> = emptyList(),
 )
 
 object ReleaseNotes {
@@ -11,6 +32,27 @@ object ReleaseNotes {
     // version 은 BuildConfig.VERSION_NAME 과 정확히 일치해야 한다.
     // 일치하는 entry 가 없으면 모달이 노출되지 않는다.
     val all: List<ReleaseNote> = listOf(
+        ReleaseNote(
+            version = "1.1.8",
+            subtitle = "8월 업데이트",
+            bullets = listOf(
+                "라이브 상세에 라인스코어·박스스코어 탭이 생겼어요",
+                "타석 카드에 타순과 오늘 성적을 보여드려요",
+                "워치로 관람하기가 더 빨라졌어요",
+            ),
+            featurePages = listOf(
+                WhatsNewFeaturePage(
+                    visual = WhatsNewVisual.Image(R.drawable.whats_new_venting),
+                    title = "💢 빠따존이 생겼어요",
+                    body = "속상한 경기엔 펭귄 인형 한 대! 폰을 흔들거나 두드려서 아쉬움을 날려보세요.",
+                ),
+                WhatsNewFeaturePage(
+                    visual = WhatsNewVisual.LockScreen(R.drawable.whats_new_lockscreen),
+                    title = "잠금 화면에서 실시간 스코어",
+                    body = "이제 앱을 열지 않아도 경기 상황이 잠금 화면에서 실시간으로 업데이트돼요.",
+                ),
+            ),
+        ),
         ReleaseNote(
             version = "1.1.7",
             subtitle = "6/17일 배포",

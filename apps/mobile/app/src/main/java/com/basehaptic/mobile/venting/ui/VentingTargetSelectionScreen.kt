@@ -118,7 +118,7 @@ fun VentingTargetSelectionScreen(
                 Text(text = backLabel, style = AppFont.bodyMedium, color = Color.White)
             }
             Text(
-                text = "분풀이 모드",
+                text = "💢 빠따존",
                 style = AppFont.h5Bold,
                 color = Color.White,
                 modifier = Modifier.align(Alignment.Center)
@@ -279,7 +279,7 @@ fun VentingTargetSelectionScreen(
         ) {
             // 폰에서 분풀이 시작
             Text(
-                text = if (buttonEnabled) "분풀이 시작하기" else "대상을 선택하세요",
+                text = if (buttonEnabled) "빠따존 입장하기" else "대상을 선택하세요",
                 style = AppFont.bodyLgMedium,
                 color = if (buttonEnabled) Color.White else Gray400,
                 textAlign = TextAlign.Center,
@@ -320,7 +320,7 @@ fun VentingTargetSelectionScreen(
                     )
                     Spacer(modifier = Modifier.width(AppSpacing.xs))
                     Text(
-                        text = "워치로 분풀이 시작하기",
+                        text = "워치로 빠따존 열기",
                         style = AppFont.bodyLgMedium,
                         color = if (buttonEnabled) Red400 else Gray500,
                         textAlign = TextAlign.Center

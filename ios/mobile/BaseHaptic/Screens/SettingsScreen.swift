@@ -220,8 +220,8 @@ struct SettingsScreen: View {
 
                 SettingsItemWithToggle(
                     icon: "squirrel.fill",
-                    title: "분풀이 모드",
-                    subtitle: "DEBUG 전용 피처",
+                    title: "빠따존",
+                    subtitle: "로컬 토글 (릴리즈는 항상 ON)",
                     isOn: $ventingModeEnabled
                 )
                 .onChange(of: ventingModeEnabled) { _, newValue in

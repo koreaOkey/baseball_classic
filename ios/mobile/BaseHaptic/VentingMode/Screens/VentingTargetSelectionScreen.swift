@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 
 // MARK: - VentingTargetSelectionScreen
@@ -10,7 +9,6 @@ import SwiftUI
 /// - "기록 기반 자동 선정이며 공식 평가가 아닙니다" 면책 문구 상시 노출.
 /// - 후보 제목은 "역할(실명)" 형식(예: "9번 타자(구자욱)") — 실명 노출은 이 선택 화면 한정,
 ///   룸·완파·워치 화면은 익명(역할 레이블) 유지.
-#if DEBUG
 struct VentingTargetSelectionScreen: View {
 
     let context: VentingGameContext
@@ -134,7 +132,7 @@ struct VentingTargetSelectionScreen: View {
                                 onSelectTarget(target)
                             }
                         } label: {
-                            Text(selectedTarget == nil ? "대상을 선택하세요" : "분풀이 시작하기")
+                            Text(selectedTarget == nil ? "대상을 선택하세요" : "빠따존 입장하기")
                                 .font(AppFont.bodyLgMedium)
                                 .foregroundColor(selectedTarget == nil ? AppColors.gray400 : .white)
                                 .frame(maxWidth: .infinity)
@@ -153,7 +151,7 @@ struct VentingTargetSelectionScreen: View {
                             } label: {
                                 HStack(spacing: AppSpacing.xs) {
                                     Image(systemName: "applewatch")
-                                    Text("워치로 분풀이 시작하기")
+                                    Text("워치로 빠따존 열기")
                                 }
                                 .font(AppFont.bodyLgMedium)
                                 .foregroundColor(selectedTarget == nil ? AppColors.gray500 : AppColors.red400)
@@ -198,7 +196,7 @@ struct VentingTargetSelectionScreen: View {
 
             Spacer()
 
-            Text("분풀이 모드")
+            Text("💢 빠따존")
                 .font(AppFont.h5Bold)
                 .foregroundColor(.white)
 
@@ -351,13 +349,11 @@ private struct TargetRow: View {
         .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
 }
-#endif
 
 // MARK: - CustomTargetRow (직접 입력)
 
 /// 선수명 직접 입력 행. 입력 즉시 `VentingTarget.custom`으로 선택되며,
 /// 입력값을 지우면 선택도 해제된다.
-#if DEBUG
 private struct CustomTargetRow: View {
     @Binding var name: String
     let isSelected: Bool
@@ -413,13 +409,9 @@ private struct CustomTargetRow: View {
 private extension AppColors {
     static let red300Input = Color(hex: 0xFCA5A5)
 }
-#endif
 
 // MARK: - AppColors extension (red300)
 // red300은 기존 Colors.swift에 없으므로 VentingMode 전용으로 추가
-#if DEBUG
 private extension AppColors {
     static let red300 = Color(hex: 0xFCA5A5)
 }
-#endif
-#endif

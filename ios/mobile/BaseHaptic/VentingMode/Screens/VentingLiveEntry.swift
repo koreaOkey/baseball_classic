@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 
 // MARK: - VentingLiveRequest
@@ -64,10 +63,10 @@ struct VentingLiveEntryOverlay: View {
         }
         .onAppear { maybePromptLoss() }
         .alert("오늘은 아쉽게 졌어요 💢", isPresented: $showLossPrompt) {
-            Button("분풀이 하러 가기") { openFlow() }
+            Button("빠따존 가기") { openFlow() }
             Button("다음에", role: .cancel) {}
         } message: {
-            Text("분풀이 모드로 진입하시겠습니까?")
+            Text("빠따존에 입장하시겠습니까?")
         }
         .fullScreenCover(item: $flowRequest) { request in
             VentingFlowCoordinator(
@@ -133,4 +132,3 @@ struct VentingLiveEntryOverlay: View {
         showLossPrompt = true
     }
 }
-#endif

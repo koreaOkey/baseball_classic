@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - LiveRegretProvider
@@ -164,4 +163,3 @@ enum LiveRegretProvider {
         return formatter.string(from: Date())
     }
 }
-#endif

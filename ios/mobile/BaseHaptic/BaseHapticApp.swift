@@ -57,15 +57,6 @@ struct BaseHapticApp: App {
             "team_display_name_style": TeamDisplayNameStyle.team.rawValue,
             "team_display_name_prompt_seen": false,
         ])
-        // DEBUG 빌드에서 분풀이 모드를 기본 활성화 (시뮬레이터 테스트용)
-        #if DEBUG
-        VentingFeatureFlag.setEnabled(true)
-        // --venting-force-show 인자: 한화 팀 미설정 시 자동 선택 (E2E 스크린샷 캡처용)
-        if CommandLine.arguments.contains("--venting-force-show") &&
-           (UserDefaults.standard.string(forKey: "selected_team") ?? "NONE") == "NONE" {
-            UserDefaults.standard.set("HANWHA", forKey: "selected_team")
-        }
-        #endif
     }
 
     private var selectedTeam: Team {
@@ -405,10 +396,8 @@ struct ContentView: View {
     // 워치 페이스 테마와 무관하게 응원 발화 풀스크린에 적용될 테마.
     @State private var activeCheerTheme: ThemeData? = StadiumCheerThemes.allThemes.first { $0.id == UserDefaults.standard.string(forKey: "active_cheer_theme_id") }
     @State private var selectedGameId: String?
-    #if DEBUG
-    /// 패배 분풀이 딥링크(kind=venting_loss)로 여는 분풀이 플로우 요청. DEBUG 전용.
+    /// 패배 분풀이 딥링크(kind=venting_loss)로 여는 분풀이 플로우 요청.
     @State private var ventingDeepLinkRequest: VentingLiveRequest?
-    #endif
     @State private var syncedGameId: String? = Self.savedGameId(forKey: Self.syncedGameIdKey)
     @State private var activeLiveActivityGameId: String? = Self.savedGameId(forKey: Self.activeLiveActivityGameIdKey)
     @State private var showWatchSyncDialog = false
@@ -500,9 +489,8 @@ struct ContentView: View {
                 navigateTo(.home)
             }
         }
-        #if DEBUG
         // 패배 분풀이 딥링크(kind=venting_loss): 홈 착지 후 서버 regret-top5(폴백: 로컬 규칙)로
-        // 컨텍스트를 만들어 분풀이 플로우를 연다. DEBUG + 피처 플래그 뒤에서만 동작.
+        // 컨텍스트를 만들어 분풀이 플로우를 연다. 피처 플래그 뒤에서만 동작.
         .onReceive(NotificationCenter.default.publisher(for: .openVentingRequested)) { notification in
             guard VentingFeatureFlag.isEnabled else { return }
             guard let gameId = notification.userInfo?["game_id"] as? String, !gameId.isEmpty else { return }
@@ -555,7 +543,6 @@ struct ContentView: View {
                 entrySource: request.entrySource
             )
         }
-        #endif
         .onAppear {
             evaluateWhatsNewTrigger()
             if !showOnboarding && selectedTeam != .none && !teamDisplayNamePromptSeen {
@@ -579,7 +566,6 @@ struct ContentView: View {
                     note: note,
                     onConfirm: {
                         pendingReleaseNote = nil
-                        queueFeatureGuideIfNeeded()
                     }
                 )
                 .transition(.opacity)
@@ -1009,6 +995,7 @@ struct ContentView: View {
     }
 
     // MARK: - What's New
+    /// 노출 정책: 신규 설치 = 온보딩 → 홈 피처 가이드(1회), 업데이트 = 업데이트 안내 모달만.
     private func evaluateWhatsNewTrigger() {
         guard !showOnboarding else { return }
         let defaults = UserDefaults.standard
@@ -1018,32 +1005,43 @@ struct ContentView: View {
         let lastSeen = defaults.string(forKey: "last_seen_update_version") ?? ""
         if lastSeen.isEmpty {
             defaults.set(currentVersion, forKey: "last_seen_update_version")
-            if isExistingUserAtLaunch, let note = ReleaseNotes.notes(for: currentVersion) {
-                pendingReleaseNote = note
+            if isExistingUserAtLaunch {
+                // 키 도입 이전 버전에서 온 기존 사용자: 업데이트 안내만, 가이드는 미노출 처리
+                markFeatureGuideSeen()
+                if let note = ReleaseNotes.notes(for: currentVersion) {
+                    pendingReleaseNote = note
+                }
             } else {
-                queueFeatureGuideIfNeeded(currentVersion: currentVersion)
+                // 신규 설치: 업데이트 안내 없이 홈 피처 가이드만
+                queueFeatureGuideIfNeeded()
             }
             return
         }
         guard lastSeen != currentVersion else {
-            queueFeatureGuideIfNeeded(currentVersion: currentVersion)
+            // 같은 버전 재실행: 신규 설치 직후 가이드를 끝내지 못한 경우만 재개
+            queueFeatureGuideIfNeeded()
+            #if DEBUG
+            // DEBUG: 카피·이미지 확인용으로 업데이트 안내 모달을 매 실행 노출.
+            // 가이드 재개가 우선이며, 신규 설치(빈 lastSeen) 경로는 그대로다.
+            if !showFeatureGuide, let note = ReleaseNotes.notes(for: currentVersion) ?? ReleaseNotes.latest {
+                pendingReleaseNote = note
+            }
+            #endif
             return
         }
 
+        // 업데이트: 안내 모달만 노출, 가이드는 미노출 처리
         defaults.set(currentVersion, forKey: "last_seen_update_version")
-
+        markFeatureGuideSeen()
         if let note = ReleaseNotes.notes(for: currentVersion) {
             pendingReleaseNote = note
-        } else {
-            queueFeatureGuideIfNeeded(currentVersion: currentVersion)
         }
     }
 
-    private func queueFeatureGuideIfNeeded(currentVersion: String? = nil) {
-        let version = currentVersion ?? Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        guard !version.isEmpty else { return }
-        let lastSeen = UserDefaults.standard.string(forKey: "last_seen_feature_guide_version") ?? ""
-        guard lastSeen != version else { return }
+    /// 홈 피처 가이드는 신규 설치 1회만 — 한 번이라도 보았거나 미노출 처리(업데이트 사용자)되면 다시 띄우지 않는다.
+    private func queueFeatureGuideIfNeeded() {
+        let seen = UserDefaults.standard.string(forKey: "last_seen_feature_guide_version") ?? ""
+        guard seen.isEmpty else { return }
         showFeatureGuide = true
     }
 

@@ -158,6 +158,7 @@ struct WatchTestScreen: View {
     @State private var isSimulating = false
     @State private var simIndex = 0
     @State private var simTask: Task<Void, Never>?
+    @State private var showPhoneVenting = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -168,7 +169,7 @@ struct WatchTestScreen: View {
                         .foregroundColor(.white)
                         .font(AppFont.h4)
                 }
-                Text("워치 테스트")
+                Text("기능 테스트")
                     .font(AppFont.h4Bold)
                     .foregroundColor(.white)
                 Spacer()
@@ -625,11 +626,11 @@ struct WatchTestScreen: View {
 
     private var ventingTestCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("워치 분풀이 테스트")
+            Text("빠따존 분풀이 테스트")
                 .font(AppFont.bodyBold)
                 .foregroundColor(AppColors.gray300)
 
-            Text("워치에 분풀이 룸(탭·크라운 연타로 인형 완파)을 즉시 띄웁니다.")
+            Text("워치 또는 휴대폰에 빠따존(연타로 인형 완파)을 즉시 띄웁니다.")
                 .font(AppFont.caption)
                 .foregroundColor(AppColors.gray500)
 
@@ -639,12 +640,12 @@ struct WatchTestScreen: View {
                     targetLabel: "감독",
                     eventDescription: "지금까지의 경기 운영 아쉬움"
                 )
-                addLog("[VENTING] 워치 분풀이 룸 트리거 전송")
+                addLog("[VENTING] 워치 빠따존 트리거 전송")
             } label: {
                 HStack(spacing: AppSpacing.xs) {
                     Text("💢")
                         .font(AppFont.body)
-                    Text("워치 분풀이 룸 열기")
+                    Text("워치 빠따존 열기")
                         .font(AppFont.bodyBold)
                 }
                 .foregroundColor(.white)
@@ -654,10 +655,60 @@ struct WatchTestScreen: View {
                 .cornerRadius(AppRadius.sm)
             }
             .buttonStyle(.plain)
+
+            phoneVentingButton
         }
         .padding(AppSpacing.lg)
         .background(AppColors.gray900)
         .cornerRadius(AppRadius.md)
+    }
+
+    private var phoneVentingButton: some View {
+        Button {
+            addLog("[VENTING] 휴대폰 빠따존 진입")
+            showPhoneVenting = true
+        } label: {
+            HStack(spacing: AppSpacing.xs) {
+                Text("💢")
+                    .font(AppFont.body)
+                Text("휴대폰 빠따존 열기")
+                    .font(AppFont.bodyBold)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: AppSpacing.buttonHeight)
+            .background(AppColors.red500)
+            .cornerRadius(AppRadius.sm)
+        }
+        .buttonStyle(.plain)
+        .fullScreenCover(isPresented: $showPhoneVenting) {
+            VentingFlowCoordinator(
+                context: phoneVentingMockContext,
+                onClose: { showPhoneVenting = false },
+                backLabel: "테스트",
+                entrySource: "test_tool"
+            )
+        }
+    }
+
+    /// 테스트 도구 전용 휴대폰 빠따존 mock 컨텍스트 (VentingDebugNavigator와 동일 데이터).
+    private var phoneVentingMockContext: VentingGameContext {
+        VentingGameContext(
+            gameId: "debug-venting-mock",
+            gameDate: "2026-07-20",
+            gameResult: .loss,
+            myTeamId: selectedTeam.kboTeamId ?? "HH",
+            myScore: 1,
+            opponentScore: 7,
+            candidates: [
+                RegretCandidate(id: "dbg-1", roleLabel: "선발 투수", eventDescription: "2회 피홈런 3실점"),
+                RegretCandidate(id: "dbg-2", roleLabel: "3번 타자", eventDescription: "8회 2사 만루 삼진"),
+                RegretCandidate(id: "dbg-3", roleLabel: "4번 타자", eventDescription: "6회 병살타"),
+                RegretCandidate(id: "dbg-4", roleLabel: "중견수", eventDescription: "5회 플라이 실책"),
+                RegretCandidate(id: "dbg-5", roleLabel: "마무리 투수", eventDescription: "9회 동점 홈런 피허용"),
+            ],
+            managerEventDescription: "번트 실패 후 무리한 강공 지시"
+        )
     }
 
     // MARK: - Cheer Test

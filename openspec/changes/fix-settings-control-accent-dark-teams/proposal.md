@@ -25,6 +25,14 @@ KT 위즈 응원 팀 선택 시 설정 > 알림 이벤트 화면에서 **ON/OFF 
 - `apps/mobile/app/src/main/java/com/basehaptic/mobile/ui/theme/TeamTheme.kt` — `controlAccent` extension val
 - `apps/mobile/app/src/main/java/com/basehaptic/mobile/ui/screens/SettingsScreen.kt` — primary → controlAccent (11곳)
 
+### 2026-08-19 확장 — 설정 플로우 잔존 다이얼로그
+
+두산·롯데·KT 재보고 후 설정 플로우 전체 재점검에서 발견된 잔존 3건 추가 교체:
+
+- `ios/mobile/BaseHaptic/Components/WhatsNewSheet.swift` — primary → controlAccent (4곳: 페이지 dot, 다음/확인 버튼 2곳, 불릿 체크 원)
+- `apps/mobile/app/src/main/java/com/basehaptic/mobile/ui/components/WhatsNewDialog.kt` — accentColor primary → controlAccent (2곳)
+- `apps/mobile/.../SettingsScreen.kt` 계정 삭제 다이얼로그 "취소" TextButton — 기본 colorScheme.primary(KT=검정) 대신 Gray400 명시
+
 ## Non-Goals
 
 - 설정 화면 외의 primary 사용처(홈·라이브 등)는 배경/그라데이션 용도가 많아 별도 검토 대상.

@@ -682,9 +682,10 @@ fun BaseHapticApp(
         pendingNotificationSettingsIssue = liveScoreNotificationSettingsIssue(context)
     }
 
+    // 홈 피처 가이드는 신규 설치 1회만 — 한 번이라도 보았거나 미노출 처리(업데이트 사용자)되면 다시 띄우지 않는다.
     fun showFeatureGuideIfNeeded(currentVersion: String): Boolean {
         if (currentVersion.isBlank()) return false
-        if (loadLastSeenFeatureGuideVersion() == currentVersion) return false
+        if (loadLastSeenFeatureGuideVersion().isNotEmpty()) return false
         showFeatureGuide = true
         return true
     }
@@ -1588,10 +1589,8 @@ fun BaseHapticApp(
                 note = note,
                 onConfirm = {
                     pendingReleaseNote = null
-                    val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
-                    if (!showFeatureGuideIfNeeded(currentVersion)) {
-                        showNotificationSettingsPromptIfNeeded(currentVersion)
-                    }
+                    // 업데이트 사용자는 안내 모달만 — 홈 피처 가이드로 이어가지 않는다.
+                    showNotificationSettingsPromptIfNeeded(com.basehaptic.mobile.BuildConfig.VERSION_NAME)
                 }
             )
         }
@@ -1602,17 +1601,21 @@ fun BaseHapticApp(
         val currentVersion = com.basehaptic.mobile.BuildConfig.VERSION_NAME
         if (currentVersion.isEmpty()) return@LaunchedEffect
 
+        // 노출 정책: 신규 설치 = 온보딩 → 홈 피처 가이드(1회), 업데이트 = 업데이트 안내 모달만.
         val lastSeen = loadLastSeenUpdateVersion()
         if (lastSeen.isEmpty()) {
             onPersistLastSeenUpdateVersion(currentVersion)
             if (isExistingUserAtLaunch) {
+                // 키 도입 이전 버전에서 온 기존 사용자: 업데이트 안내만, 가이드는 미노출 처리
+                onPersistLastSeenFeatureGuideVersion(currentVersion)
                 val note = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
                 if (note != null) {
                     pendingReleaseNote = note
-                } else if (!showFeatureGuideIfNeeded(currentVersion)) {
+                } else {
                     showNotificationSettingsPromptIfNeeded(currentVersion)
                 }
             } else {
+                // 신규 설치: 업데이트 안내 없이 홈 피처 가이드만
                 if (!showFeatureGuideIfNeeded(currentVersion)) {
                     showNotificationSettingsPromptIfNeeded(currentVersion)
                 }
@@ -1620,18 +1623,33 @@ fun BaseHapticApp(
             return@LaunchedEffect
         }
         if (lastSeen == currentVersion) {
+            // 같은 버전 재실행: 신규 설치 직후 가이드를 끝내지 못한 경우만 재개
             if (!showFeatureGuideIfNeeded(currentVersion)) {
-                showNotificationSettingsPromptIfNeeded(currentVersion)
+                // DEBUG: 카피·이미지 확인용으로 업데이트 안내 모달을 매 실행 노출.
+                // 가이드 재개가 우선이며, 신규 설치(빈 lastSeen) 경로는 그대로다.
+                val debugNote = if (com.basehaptic.mobile.BuildConfig.DEBUG) {
+                    com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
+                        ?: com.basehaptic.mobile.data.model.ReleaseNotes.latest()
+                } else {
+                    null
+                }
+                if (debugNote != null) {
+                    pendingReleaseNote = debugNote
+                } else {
+                    showNotificationSettingsPromptIfNeeded(currentVersion)
+                }
             }
             return@LaunchedEffect
         }
 
+        // 업데이트: 안내 모달만 노출, 가이드는 미노출 처리
         onPersistLastSeenUpdateVersion(currentVersion)
+        onPersistLastSeenFeatureGuideVersion(currentVersion)
 
         val note = com.basehaptic.mobile.data.model.ReleaseNotes.notes(currentVersion)
         if (note != null) {
             pendingReleaseNote = note
-        } else if (!showFeatureGuideIfNeeded(currentVersion)) {
+        } else {
             showNotificationSettingsPromptIfNeeded(currentVersion)
         }
     }

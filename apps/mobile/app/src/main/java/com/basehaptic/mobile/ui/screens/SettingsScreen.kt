@@ -507,8 +507,8 @@ fun SettingsScreen(
                 }
                 SettingsItemWithSwitch(
                     icon = Icons.Default.Build,
-                    title = "분풀이 모드",
-                    subtitle = "DEBUG 전용 피처",
+                    title = "빠따존",
+                    subtitle = "로컬 토글 (릴리즈는 항상 ON)",
                     checked = ventingModeEnabled,
                     onCheckedChange = {
                         ventingModeEnabled = it
@@ -598,7 +598,7 @@ fun SettingsScreen(
                 androidx.compose.material3.TextButton(
                     onClick = { showDeleteConfirm = false }
                 ) {
-                    Text("취소")
+                    Text("취소", color = Gray400)
                 }
             }
         )

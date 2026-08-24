@@ -52,14 +52,14 @@ fun VentingWatchHandoffScreen(onClose: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(AppSpacing.xl))
         Text(
-            text = "워치에서 분풀이를 시작하세요",
+            text = "워치에서 빠따존에 입장하세요",
             style = AppFont.h5Bold,
             color = Color.White,
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(AppSpacing.md))
         Text(
-            text = "손목의 야구봄 워치 앱에서\n분풀이 룸이 열렸어요. 마음껏 풀어보세요!",
+            text = "손목의 야구봄 워치 앱에서\n빠따존이 열렸어요. 마음껏 풀어보세요!",
             style = AppFont.body,
             color = Gray400,
             textAlign = TextAlign.Center

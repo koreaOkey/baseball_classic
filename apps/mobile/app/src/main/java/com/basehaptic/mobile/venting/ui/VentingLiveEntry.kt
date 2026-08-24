@@ -104,7 +104,7 @@ fun VentingLiveEntryOverlay(
             title = { Text(text = "오늘은 아쉽게 졌어요 💢", style = AppFont.h5Bold, color = Color.White) },
             text = {
                 Text(
-                    text = "${myLabel} 패배… 분풀이 모드로 진입하시겠습니까?",
+                    text = "${myLabel} 패배… 빠따존에 입장하시겠습니까?",
                     style = AppFont.body,
                     color = Gray300
                 )
@@ -115,7 +115,7 @@ fun VentingLiveEntryOverlay(
                     LiveRegretProvider.buildContext(gameState, events, boxscore, myTeam)
                         ?.let { VentingFlowController.open(it, backLabel = "경기", entrySource = "live") }
                 }) {
-                    Text(text = "분풀이 하러 가기", style = AppFont.bodyMedium, color = Red400)
+                    Text(text = "빠따존 가기", style = AppFont.bodyMedium, color = Red400)
                 }
             },
             dismissButton = {

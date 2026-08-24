@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - VentingOpenConditionChecker
@@ -54,4 +53,3 @@ enum VentingOpenConditionChecker {
         return kstCalendar.isDateInToday(gameDate)
     }
 }
-#endif

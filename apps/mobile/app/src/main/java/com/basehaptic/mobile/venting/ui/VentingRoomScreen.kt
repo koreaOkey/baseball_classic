@@ -273,7 +273,7 @@ fun VentingRoomScreen(
                     Text(text = "선택", style = AppFont.bodyMedium, color = Color.White)
                 }
                 Text(
-                    text = "분풀이 룸",
+                    text = "💢 빠따존",
                     style = AppFont.h5Bold,
                     color = Color.White,
                     modifier = Modifier.align(Alignment.Center)

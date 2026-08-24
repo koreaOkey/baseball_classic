@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 
 // MARK: - VentingRoomScreen
@@ -11,7 +10,6 @@ import SwiftUI
 ///   **인형을 직접 탭**하면 선택한 도구가 인형을 내려치는 연출 + 히트 이펙트가 재생된다.
 ///   (캐릭터가 스윙하는 모션 없음 — 도구 오브젝트만 등장)
 /// - 탭 경햅틱·단계 전환 중햅틱·완파 성공 햅틱 — VentingRoomViewModel이 구동.
-#if DEBUG
 struct VentingRoomScreen: View {
 
     @ObservedObject var viewModel: VentingRoomViewModel
@@ -186,7 +184,7 @@ struct VentingRoomScreen: View {
 
             Spacer()
 
-            Text("분풀이 룸")
+            Text("💢 빠따존")
                 .font(AppFont.h5Bold)
                 .foregroundColor(.white)
 
@@ -541,5 +539,3 @@ struct VentingDollSpotlight: View {
             .frame(width: diameter, height: diameter)
     }
 }
-#endif
-#endif

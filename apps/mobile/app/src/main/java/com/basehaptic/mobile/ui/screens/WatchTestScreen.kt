@@ -70,6 +70,10 @@ import com.basehaptic.mobile.ui.theme.LocalTeamTheme
 import com.basehaptic.mobile.ui.theme.Red400
 import com.basehaptic.mobile.ui.theme.Yellow400
 import com.basehaptic.mobile.ui.theme.Red500
+import com.basehaptic.mobile.venting.RegretCandidate
+import com.basehaptic.mobile.venting.VentingGameContext
+import com.basehaptic.mobile.venting.VentingGameResult
+import com.basehaptic.mobile.venting.ui.VentingFlowController
 import com.basehaptic.mobile.wear.WearGameSyncManager
 import com.basehaptic.mobile.push.NotificationChannels
 import androidx.core.app.NotificationCompat
@@ -455,7 +459,7 @@ fun WatchTestScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로", tint = Color.White)
                 }
                 Text(
-                    text = "워치 테스트",
+                    text = "기능 테스트",
                     style = AppFont.h4Bold,
                     color = Color.White
                 )
@@ -809,10 +813,10 @@ fun WatchTestScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(AppSpacing.lg)) {
-                        Text("워치 분풀이 테스트", style = AppFont.bodyBold, color = Gray300)
+                        Text("빠따존 분풀이 테스트", style = AppFont.bodyBold, color = Gray300)
                         Spacer(Modifier.height(AppSpacing.xs))
                         Text(
-                            text = "워치에 분풀이 룸(탭·베젤 연타로 인형 완파)을 즉시 띄웁니다. 워치 앱이 꺼져 있으면 자동 실행을 시도합니다.",
+                            text = "워치 또는 휴대폰에 빠따존(연타로 인형 완파)을 즉시 띄웁니다. 워치 앱이 꺼져 있으면 자동 실행을 시도합니다.",
                             style = AppFont.caption,
                             color = Gray500
                         )
@@ -825,7 +829,7 @@ fun WatchTestScreen(
                                     targetLabel = "감독",
                                     eventDescription = "지금까지의 경기 운영 아쉬움"
                                 )
-                                addLog("[VENTING] 워치 분풀이 룸 트리거 전송")
+                                addLog("[VENTING] 워치 빠따존 트리거 전송")
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -833,7 +837,25 @@ fun WatchTestScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = Red500),
                             shape = AppShapes.sm
                         ) {
-                            Text("워치 분풀이 룸 열기", style = AppFont.bodyBold)
+                            Text("워치 빠따존 열기", style = AppFont.bodyBold)
+                        }
+                        Spacer(Modifier.height(AppSpacing.sm))
+                        Button(
+                            onClick = {
+                                addLog("[VENTING] 휴대폰 빠따존 진입")
+                                VentingFlowController.open(
+                                    context = debugPhoneVentingContext(teamTheme.team),
+                                    backLabel = "테스트",
+                                    entrySource = "test_tool"
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(AppSpacing.buttonHeight),
+                            colors = ButtonDefaults.buttonColors(containerColor = Red500),
+                            shape = AppShapes.sm
+                        ) {
+                            Text("휴대폰 빠따존 열기", style = AppFont.bodyBold)
                         }
                     }
                 }
@@ -1049,3 +1071,21 @@ private fun postLocalPush(
         }
     }.start()
 }
+
+/** 테스트 도구 전용 휴대폰 빠따존 진입 mock 컨텍스트 (iOS VentingDebugNavigator와 동일 데이터). */
+private fun debugPhoneVentingContext(myTeam: Team): VentingGameContext = VentingGameContext(
+    gameId = "debug-venting-mock",
+    gameDate = "2026-07-20",
+    gameResult = VentingGameResult.LOSS,
+    myTeamId = (if (myTeam == Team.NONE) Team.HANWHA else myTeam).name,
+    myScore = 1,
+    opponentScore = 7,
+    candidates = listOf(
+        RegretCandidate("dbg-1", "선발 투수", "2회 피홈런 3실점"),
+        RegretCandidate("dbg-2", "3번 타자", "8회 2사 만루 삼진"),
+        RegretCandidate("dbg-3", "4번 타자", "6회 병살타"),
+        RegretCandidate("dbg-4", "중견수", "5회 플라이 실책"),
+        RegretCandidate("dbg-5", "마무리 투수", "9회 동점 홈런 피허용"),
+    ),
+    managerEventDescription = "번트 실패 후 무리한 강공 지시"
+)

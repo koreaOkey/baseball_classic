@@ -1,4 +1,3 @@
-#if DEBUG
 import CoreMotion
 import Foundation
 
@@ -47,4 +46,3 @@ final class VentingShakeDetector {
         motionManager.stopDeviceMotionUpdates()
     }
 }
-#endif

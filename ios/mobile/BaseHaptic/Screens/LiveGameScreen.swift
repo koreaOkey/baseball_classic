@@ -64,14 +64,12 @@ struct LiveGameScreen: View {
         ZStack(alignment: .bottomLeading) {
             mainContent
 
-            // 분풀이 라이브 진입 (DEBUG + 피처 플래그 게이트, 마이팀 경기에서만 렌더링)
-            #if DEBUG
+            // 분풀이 라이브 진입 (피처 플래그 게이트, 마이팀 경기에서만 렌더링)
             VentingLiveEntryOverlay(
                 gameState: gameState,
                 events: events,
                 boxscore: boxscore
             )
-            #endif
         }
     }
 

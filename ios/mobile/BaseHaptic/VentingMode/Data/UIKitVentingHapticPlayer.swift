@@ -1,4 +1,3 @@
-#if DEBUG
 import UIKit
 
 // MARK: - UIKitVentingHapticPlayer
@@ -64,4 +63,3 @@ final class UIKitVentingHapticPlayer: VentingHapticPlaying {
         lightFeedback.impactOccurred(intensity: 0.6)
     }
 }
-#endif

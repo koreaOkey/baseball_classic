@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - RegretCandidate (아쉬운 순간 후보)
@@ -66,4 +65,3 @@ struct VentingGameContext: Codable, Equatable {
     /// 라이브 진입 시 현재 이닝 라벨 (예: "7회말"). nil이면 종료 경기("최종")로 표시.
     var inningLabel: String? = nil
 }
-#endif

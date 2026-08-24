@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
  * 완전 베스트에포트: UI 를 절대 블로킹하지 않으며(자체 IO 스코프 fire-and-forget),
  * 실패는 조용히 삼킨다. 서버가 비활성이면 {ok:false} 를 돌려주지만 클라이언트는 무시한다.
  *
- * event_type: room_enter · watch_room_enter · destroy_complete · retry_prompt_shown · retry_ad_start.
+ * event_type: room_enter · watch_room_enter · destroy_complete · retry_prompt_shown · retry_ad_start · retry_ad_complete.
  */
 object VentingEventReporter {
     private const val TAG = "VentingEventReporter"

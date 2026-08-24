@@ -62,6 +62,11 @@ final class RewardedAdManager: NSObject, ObservableObject {
         #endif
     }
 
+    /// 분풀이 재도전 게이트 — 전용 유닛 발급 전까지 테마 스토어 Rewarded 유닛 재사용.
+    static var ventingRetryAdUnitID: String {
+        themeStoreAdUnitID
+    }
+
     /// 광고 로드 → 표시 → dismiss 후 콜백.
     /// 결과는 `RewardedAdOutcome`으로 구분 — 호출부에서 보상 지급 정책을 판단한다.
     func loadAndShowAd(

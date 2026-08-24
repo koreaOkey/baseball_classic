@@ -52,7 +52,11 @@ import com.basehaptic.mobile.data.model.*
 import com.basehaptic.mobile.toGameStartWeatherSummary
 import com.basehaptic.mobile.ui.components.TeamLogo
 import com.basehaptic.mobile.ui.theme.*
+import com.basehaptic.mobile.venting.RegretCandidate
 import com.basehaptic.mobile.venting.VentingFeatureFlag
+import com.basehaptic.mobile.venting.VentingGameContext
+import com.basehaptic.mobile.venting.VentingGameResult
+import com.basehaptic.mobile.venting.ui.VentingHomeCard
 import com.basehaptic.mobile.venting.ui.VentingHomeCardContainer
 import java.time.LocalDate
 import java.time.LocalTime
@@ -84,20 +88,20 @@ fun HomeScreen(
     val context = LocalContext.current
     val games = remember(todayGames, selectedTeam, showUpdateHighlights) {
         val sortedGames = sortHomeGames(todayGames)
-        // 분풀이 모드 확인용 (DEBUG 토글): 마이팀이 설정돼 있고 완료된 마이팀 경기가 없으면
-        // 마이팀 패배 완료 경기(목업) 하나를 홈 상단에 주입한다 (iOS HomeScreen 동일).
-        val withVentingMock = if (
-            VentingFeatureFlag.isEnabled(context) && selectedTeam != Team.NONE &&
-            sortedGames.none { it.status == GameStatus.FINISHED && it.isMyTeam }
-        ) {
-            listOf(ventingMockFinishedGame(selectedTeam)) + sortedGames
+        if (showUpdateHighlights && sortedGames.isEmpty()) {
+            listOf(updateHighlightSampleGame(selectedTeam))
         } else {
             sortedGames
         }
-        if (showUpdateHighlights && withVentingMock.isEmpty()) {
-            listOf(updateHighlightSampleGame(selectedTeam))
-        } else {
-            withVentingMock
+    }
+    // 오늘 완료된 마이팀 패배 경기 — 분풀이 홈카드 대상 (없으면 카드 미표시, iOS HomeScreen 동일).
+    val ventingFinishedLossGame = remember(todayGames, selectedTeam) {
+        if (selectedTeam == Team.NONE) return@remember null
+        todayGames.firstOrNull { game ->
+            if (game.status != GameStatus.FINISHED || !game.isMyTeam) return@firstOrNull false
+            val myScore = if (game.homeTeamId == selectedTeam) game.homeScore else game.awayScore
+            val opponentScore = if (game.homeTeamId == selectedTeam) game.awayScore else game.homeScore
+            myScore < opponentScore
         }
     }
     var teamRecordStats by remember(selectedTeam) {
@@ -133,14 +137,22 @@ fun HomeScreen(
     var updateHighlightStepIndex by remember { mutableIntStateOf(0) }
     var updateHighlightBounds by remember { mutableStateOf<Map<UpdateHighlightStep, Rect>>(emptyMap()) }
     var updateHighlightRootBounds by remember { mutableStateOf<Rect?>(null) }
+    // 분풀이 스텝은 피처 게이트가 열려 있을 때만 포함 (iOS activeSteps 동일).
+    val updateHighlightSteps = remember {
+        if (VentingFeatureFlag.isEnabled(context)) {
+            UpdateHighlightStep.values().toList()
+        } else {
+            UpdateHighlightStep.values().filterNot { it == UpdateHighlightStep.VENTING }
+        }
+    }
     val updateHighlightStep = if (showUpdateHighlights) {
-        UpdateHighlightStep.values().getOrNull(updateHighlightStepIndex)
+        updateHighlightSteps.getOrNull(updateHighlightStepIndex)
     } else {
         null
     }
 
     fun advanceUpdateHighlight() {
-        if (updateHighlightStepIndex >= UpdateHighlightStep.values().lastIndex) {
+        if (updateHighlightStepIndex >= updateHighlightSteps.lastIndex) {
             onDismissUpdateHighlights()
         } else {
             updateHighlightStepIndex += 1
@@ -156,9 +168,11 @@ fun HomeScreen(
         when (updateHighlightStep) {
             UpdateHighlightStep.STANDINGS,
             UpdateHighlightStep.SCHEDULE -> listState.animateScrollToItem(0)
+            // 경기 카드는 분풀이 카드 아이템(4) 다음인 5번 아이템부터 시작한다.
             UpdateHighlightStep.LOCK_SCREEN,
             UpdateHighlightStep.WATCH,
-            UpdateHighlightStep.SCORE -> listState.animateScrollToItem(4)
+            UpdateHighlightStep.SCORE -> listState.animateScrollToItem(5)
+            UpdateHighlightStep.VENTING -> listState.animateScrollToItem(4)
             null -> Unit
         }
     }
@@ -574,7 +588,19 @@ fun HomeScreen(
 
         // \uBD84\uD480\uC774 \uBAA8\uB4DC \uD648\uCE74\uB4DC (DEBUG + \uD1A0\uAE00 + \uB9C8\uC774\uD300 \uD328\uBC30 \uB2F9\uC77C\uC5D0\uB9CC \uB80C\uB354\uB9C1, iOS \uB3D9\uC77C \uC704\uCE58)
         item {
-            VentingHomeCardContainer(myTeam = selectedTeam)
+            if (showUpdateHighlights && VentingFeatureFlag.isEnabled(context)) {
+                // \uD53C\uCC98 \uAC00\uC774\uB4DC \uC1FC\uCF00\uC774\uC2A4 \uCE74\uB4DC \u2014 \uC624\uBC84\uB808\uC774\uAC00 \uD0ED\uC744 \uAC00\uB85C\uCC44\uBBC0\uB85C \uD50C\uB85C\uC6B0 \uC9C4\uC785 \uC5C6\uC74C
+                VentingHomeCard(
+                    context = ventingHighlightSampleContext(),
+                    onEnterVenting = {},
+                    modifier = Modifier.captureUpdateHighlightBounds(UpdateHighlightStep.VENTING)
+                )
+            } else {
+                VentingHomeCardContainer(
+                    myTeam = selectedTeam,
+                    finishedLossGame = ventingFinishedLossGame
+                )
+            }
         }
 
         // Games List
@@ -672,6 +698,7 @@ fun HomeScreen(
             )
             UpdateHighlightOverlay(
                 step = step,
+                steps = updateHighlightSteps,
                 targetBounds = localTargetBounds,
                 onNext = ::advanceUpdateHighlight,
                 onDismiss = onDismissUpdateHighlights,
@@ -1894,25 +1921,27 @@ private enum class UpdateHighlightStep(
     SCORE(
         title = "점수 보기",
         body = "경기 카드에서 최신 점수와 진행 상황을 바로 확인할 수 있어요."
+    ),
+    VENTING(
+        title = "빠따존",
+        body = "마이팀이 아쉽게 진 날, 홈에 이 카드가 나타나요. 인형을 두드리며 스트레스를 풀어보세요."
     )
 }
 
-/** 분풀이 확인용 마이팀 패배 완료 경기 (목업 컨텍스트의 3:7 스코어와 일치). */
-private fun ventingMockFinishedGame(selectedTeam: Team): Game {
-    val awayTeam = if (selectedTeam == Team.SSG) Team.LG else Team.SSG
-    return Game(
-        id = "venting-mock-finished-game",
-        homeTeam = selectedTeam.teamName,
-        awayTeam = awayTeam.teamName,
-        homeTeamId = selectedTeam,
-        awayTeamId = awayTeam,
-        homeScore = 3,
-        awayScore = 7,
-        inning = "경기 종료",
-        status = GameStatus.FINISHED,
-        isMyTeam = true
-    )
-}
+/** 피처 가이드 쇼케이스용 샘플 컨텍스트 (가이드 중에만 렌더링, 분풀이 플로우 진입 없음). */
+private fun ventingHighlightSampleContext() = VentingGameContext(
+    gameId = "update-highlight-venting-sample",
+    gameDate = "2026-01-01",
+    gameResult = VentingGameResult.LOSS,
+    myTeamId = "",
+    myScore = 3,
+    opponentScore = 7,
+    candidates = listOf(
+        RegretCandidate("guide-1", "선발 투수", "5이닝 6실점 조기 강판"),
+        RegretCandidate("guide-2", "4번 타자", "8회 2사 만루 삼진")
+    ),
+    managerEventDescription = "9회 투수 교체 타이밍 아쉬움"
+)
 
 private fun updateHighlightSampleGame(selectedTeam: Team): Game {
     val homeTeam = if (selectedTeam == Team.NONE) Team.LG else selectedTeam
@@ -1935,14 +1964,15 @@ private fun updateHighlightSampleGame(selectedTeam: Team): Game {
 @Composable
 private fun UpdateHighlightOverlay(
     step: UpdateHighlightStep,
+    steps: List<UpdateHighlightStep>,
     targetBounds: Rect,
     onNext: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val index = UpdateHighlightStep.values().indexOf(step) + 1
-    val total = UpdateHighlightStep.values().size
+    val index = steps.indexOf(step) + 1
+    val total = steps.size
     val isLast = index == total
     val blockedClicks = remember { MutableInteractionSource() }
 

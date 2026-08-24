@@ -1,11 +1,9 @@
-#if DEBUG
 import SwiftUI
 import WatchConnectivity
 
 // MARK: - VentingFlowState
 
 /// 분풀이 모드 화면 흐름 상태.
-#if DEBUG
 enum VentingFlowState {
     case selection                  // 대상 선택 화면
     case room(VentingRoomViewModel) // 분풀이 룸
@@ -27,8 +25,8 @@ struct VentingFlowCoordinator: View {
     /// 진입 경로 지표 (room_enter 등 6.1 metrics 의 entry_source).
     var entrySource: String = "unknown"
 
-    // 의존성 — Phase 2에서 교체 가능
-    private let gate: any VentingGateProviding = AlwaysAllowGate()
+    // 재도전 게이트 — 경기당 첫 완파 무료, 재파괴는 Rewarded 광고
+    private let gate: any VentingGateProviding = RewardedAdGate()
 
     @State private var flowState: VentingFlowState = .selection
 
@@ -133,11 +131,11 @@ private struct VentingWatchHandoffScreen: View {
                 Image(systemName: "applewatch.radiowaves.left.and.right")
                     .font(.system(size: 56))
                     .foregroundColor(AppColors.red400)
-                Text("워치에서 분풀이를 시작하세요")
+                Text("워치에서 빠따존에 입장하세요")
                     .font(AppFont.h5Bold)
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
-                Text("손목의 야구봄 워치 앱에서\n분풀이 룸이 열렸어요. 마음껏 풀어보세요!")
+                Text("손목의 야구봄 워치 앱에서\n빠따존이 열렸어요. 마음껏 풀어보세요!")
                     .font(AppFont.body)
                     .foregroundColor(AppColors.gray400)
                     .multilineTextAlignment(.center)
@@ -164,23 +162,18 @@ private struct VentingWatchHandoffScreen: View {
 
 /// HomeScreen에 삽입되는 분풀이 카드 컨테이너.
 ///
-/// - 비동기로 경기 컨텍스트를 로드하고, 오픈 조건을 판정한다.
-/// - 조건 미충족 시 아무것도 렌더링하지 않는다.
-/// - DEBUG + venting_mode_enabled 이중 게이트 뒤에서만 동작한다.
-/// - DEBUG 빌드에서 `--venting-force-show` 런치 인자 사용 시 조건 판정 없이 목업 데이터를 즉시 표시한다.
+/// - 오늘 완료된 마이팀 패배 경기의 실제 컨텍스트를 서버 regret-top5(6.1)로 로드하고,
+///   실패·빈 items 시 로컬 규칙(LiveRegretProvider)으로 폴백한다 — loss_push 딥링크와 동일 경로.
+/// - 오픈 조건 미충족 시 아무것도 렌더링하지 않는다.
+/// - venting_mode_enabled 피처 플래그(기본 ON) 뒤에서만 동작한다.
 struct VentingHomeCardContainer: View {
 
-    let myTeamId: String
-
-    private let provider: any RegretCandidateProviding = MockRegretProvider()
+    let myTeam: Team
+    /// 오늘 완료된 마이팀 패배 경기 (HomeScreen이 실제 경기 목록에서 선별). nil이면 카드 미표시.
+    let finishedLossGame: Game?
 
     @State private var context: VentingGameContext?
     @State private var showVentingFlow = false
-
-    /// DEBUG 전용: `--venting-force-show` 런치 인자 존재 시 조건 판정 생략
-    private var isForceShowEnabled: Bool {
-        CommandLine.arguments.contains("--venting-force-show")
-    }
 
     var body: some View {
         Group {
@@ -204,20 +197,51 @@ struct VentingHomeCardContainer: View {
                 Color.clear.frame(height: 1)
             }
         }
-        .task {
-            guard VentingFeatureFlag.isEnabled else { return }
-            // DEBUG: force-show 인자가 있으면 오픈 조건 검사 없이 목업 컨텍스트 직접 표시
-            if isForceShowEnabled {
-                context = await MockRegretProvider().fetchVentingContext()
+        .task(id: finishedLossGame?.id) {
+            guard VentingFeatureFlag.isEnabled, myTeam != .none,
+                  let game = finishedLossGame else {
+                context = nil
                 return
             }
-            guard let loaded = await provider.fetchVentingContext() else { return }
-            guard VentingOpenConditionChecker.isOpen(context: loaded, myTeamId: myTeamId) else { return }
+            let team = myTeam
+            let repo = BackendGamesRepository.shared
+            async let regretTask = repo.fetchVentingRegretTop5(gameId: game.id)
+            async let stateTask = repo.fetchGameState(gameId: game.id)
+            async let boxscoreTask = repo.fetchGameBoxscore(gameId: game.id)
+            let regret = await regretTask
+            let state = await stateTask
+            let boxscore = await boxscoreTask
+
+            var loaded: VentingGameContext?
+            if let regret {
+                loaded = BackendVentingProvider.buildContext(
+                    gameId: game.id,
+                    state: state,
+                    boxscore: boxscore,
+                    myTeam: team,
+                    regret: regret
+                )
+            }
+            if loaded == nil, let state {
+                let events = await repo.fetchGameEvents(gameId: game.id, after: 0, limit: 50)?.items ?? []
+                loaded = LiveRegretProvider.buildContext(
+                    state: state,
+                    events: events,
+                    boxscore: boxscore,
+                    myTeam: team
+                )
+            }
+            guard let loaded,
+                  VentingOpenConditionChecker.isOpen(context: loaded, myTeamId: team.kboTeamId ?? "") else {
+                context = nil
+                return
+            }
             context = loaded
         }
     }
 }
 
+#if DEBUG
 // MARK: - VentingDebugNavigator
 
 /// DEBUG 딥링크(`com.basehaptic.app://venting-debug?screen=<name>`)로 직접
@@ -326,5 +350,4 @@ private struct VentingRoomDebugView: View {
         }
     }
 }
-#endif
 #endif

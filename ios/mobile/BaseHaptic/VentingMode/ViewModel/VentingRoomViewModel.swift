@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 import UIKit
 
@@ -141,8 +140,8 @@ final class VentingRoomViewModel: ObservableObject {
         await gate.canRetry(gameId: gameContext.gameId)
     }
 
-    /// 재도전 요청 (Phase 1: AlwaysAllowGate → 항상 true)
-    func requestRetry() async -> Bool {
+    /// 재도전 요청 — 광고 시청 등 선행 작업 후 판정 반환 (운영: RewardedAdGate)
+    func requestRetry() async -> VentingRetryVerdict {
         await gate.requestRetry(gameId: gameContext.gameId)
     }
 
@@ -192,4 +191,3 @@ enum VentingTarget: Equatable {
         }
     }
 }
-#endif

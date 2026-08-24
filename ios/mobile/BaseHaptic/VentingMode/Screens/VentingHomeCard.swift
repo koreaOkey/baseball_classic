@@ -1,13 +1,11 @@
-#if DEBUG
 import SwiftUI
 
 // MARK: - VentingHomeCard
 
 /// 분풀이 모드 홈카드: "오늘의 아쉬운 순간"
 ///
-/// - 오픈 조건(DEBUG + 토글 + 마이팀 패배 당일)이 충족된 경우에만 렌더링된다.
-/// - Phase 2에서 Mock→실제 데이터 제공자로 교체해도 이 파일은 무수정이다.
-#if DEBUG
+/// - 오픈 조건(피처 플래그 + 마이팀 패배 당일)이 충족된 경우에만 렌더링된다.
+/// - 컨텍스트는 실제 경기 데이터(서버 regret-top5, 폴백: 로컬 규칙)로 조립된다.
 struct VentingHomeCard: View {
 
     let context: VentingGameContext
@@ -23,7 +21,7 @@ struct VentingHomeCard: View {
                     Text("오늘의 아쉬운 순간")
                         .font(AppFont.captionBold)
                         .foregroundColor(AppColors.red400)
-                    Text("분풀이 한번 해볼까요?")
+                    Text("빠따존 한번 가볼까요?")
                         .font(AppFont.micro)
                         .foregroundColor(AppColors.gray400)
                 }
@@ -63,7 +61,7 @@ struct VentingHomeCard: View {
                 onEnterVenting(context)
             } label: {
                 HStack(spacing: AppSpacing.sm) {
-                    Text("분풀이 하러 가기")
+                    Text("빠따존 가기")
                         .font(AppFont.bodyMedium)
                         .foregroundColor(.white)
                     Image(systemName: "chevron.right")
@@ -94,5 +92,3 @@ struct VentingHomeCard: View {
         .padding(.vertical, 6)
     }
 }
-#endif
-#endif

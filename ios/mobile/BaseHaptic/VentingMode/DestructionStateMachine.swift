@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - DestructionStateMachine
@@ -87,4 +86,3 @@ final class DestructionStateMachine {
         userDefaults.set(true, forKey: firstDestructionKey)
     }
 }
-#endif

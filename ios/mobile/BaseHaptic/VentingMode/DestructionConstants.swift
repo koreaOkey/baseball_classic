@@ -1,6 +1,5 @@
 import Foundation
 
-#if DEBUG
 
 // MARK: - DestructionConstants
 
@@ -21,4 +20,3 @@ struct DestructionConstants {
     private init() {}
 }
 
-#endif

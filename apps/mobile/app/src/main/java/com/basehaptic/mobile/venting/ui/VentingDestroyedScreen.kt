@@ -20,13 +20,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,13 +54,16 @@ import com.basehaptic.mobile.ui.theme.Yellow400
 import com.basehaptic.mobile.ui.theme.Yellow500
 import com.basehaptic.mobile.venting.DestructionStage
 import com.basehaptic.mobile.venting.VentingEventReporter
+import com.basehaptic.mobile.venting.VentingRetryGate
+import com.basehaptic.mobile.venting.VentingRetryVerdict
 import com.basehaptic.mobile.venting.VentingRoomState
+import kotlinx.coroutines.launch
 
 /**
  * 완파 화면 (iOS VentingDestroyedScreen 포팅).
  *
  * - "분풀이 완료" 상태와 재도전 버튼을 표시한다.
- * - Phase 1: 광고 게이트 없이 항상 재도전 허용 (AlwaysAllowGate 상당).
+ * - 운영: 재도전은 Rewarded 광고 1회 시청 후 허용 (VentingRetryGate).
  */
 @Composable
 fun VentingDestroyedScreen(
@@ -185,7 +193,9 @@ fun VentingDestroyedScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // 재도전 버튼 영역 (Phase 1: 항상 허용)
+        // 재도전 버튼 영역 — 운영: Rewarded 광고 1회 시청 후 재도전 (VentingRetryGate)
+        val retryScope = rememberCoroutineScope()
+        var isRequestingAd by remember { mutableStateOf(false) }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -197,9 +207,9 @@ fun VentingDestroyedScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(AppShapes.md)
-                    .background(Red500)
-                    .clickable {
-                        // 6.1 지표: 재도전(리워드 광고 진입 지점) = retry_ad_start
+                    .background(if (isRequestingAd) Red500.copy(alpha = 0.6f) else Red500)
+                    .clickable(enabled = !isRequestingAd) {
+                        // 6.1 지표: 재도전 광고 진입 = retry_ad_start
                         VentingEventReporter.report(
                             context = reportContext,
                             eventType = "retry_ad_start",
@@ -207,20 +217,48 @@ fun VentingDestroyedScreen(
                             entrySource = entrySource,
                             gameId = state.gameContext.gameId
                         )
-                        onRetry()
+                        isRequestingAd = true
+                        retryScope.launch {
+                            val verdict = VentingRetryGate.requestRetry(reportContext)
+                            isRequestingAd = false
+                            when (verdict) {
+                                VentingRetryVerdict.AD_REWARDED -> {
+                                    // 6.1 지표: 광고 보상 획득 = retry_ad_complete
+                                    VentingEventReporter.report(
+                                        context = reportContext,
+                                        eventType = "retry_ad_complete",
+                                        team = state.gameContext.myTeamId,
+                                        entrySource = entrySource,
+                                        gameId = state.gameContext.gameId
+                                    )
+                                    onRetry()
+                                }
+                                // 광고 로드 실패 폴백 — 사용자 귀책 아님, 광고 완료로 집계하지 않음
+                                VentingRetryVerdict.ALLOWED_FREE -> onRetry()
+                                VentingRetryVerdict.DENIED -> Unit
+                            }
+                        }
                     }
                     .padding(vertical = AppSpacing.lg),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
+                if (isRequestingAd) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(AppSpacing.sm))
-                Text(text = "재도전하기", style = AppFont.bodyLgMedium, color = Color.White)
+                Text(text = "광고 보고 재도전하기", style = AppFont.bodyLgMedium, color = Color.White)
             }
 
             Text(

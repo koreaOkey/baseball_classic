@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - VentingHapticPlaying
@@ -31,4 +30,3 @@ protocol VentingHapticPlaying: AnyObject {
     /// 스로틀(50ms) 은 호출 측(VentingRoomViewModel)에서 적용한다.
     func playTapFeedback()
 }
-#endif

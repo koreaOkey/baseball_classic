@@ -1,4 +1,3 @@
-#if DEBUG
 import Foundation
 
 // MARK: - BackendVentingProvider
@@ -153,4 +152,3 @@ struct BackendVentingProvider: RegretCandidateProviding {
         return fmt.string(from: Date())
     }
 }
-#endif

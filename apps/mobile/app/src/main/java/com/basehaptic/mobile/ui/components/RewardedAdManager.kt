@@ -59,6 +59,10 @@ object RewardedAdManager {
     val LIVE_SCORE_AD_UNIT: String =
         if (BuildConfig.DEBUG) REWARDED_INTERSTITIAL_TEST_AD_UNIT_ID else LIVE_SCORE_AD_UNIT_PROD
 
+    /** 분풀이 재도전 게이트 — 전용 유닛 발급 전까지 테마 스토어 Rewarded 유닛 재사용. */
+    val VENTING_RETRY_AD_UNIT: String
+        get() = THEME_STORE_AD_UNIT
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
