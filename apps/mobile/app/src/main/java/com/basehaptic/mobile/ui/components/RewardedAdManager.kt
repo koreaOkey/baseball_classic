@@ -2,6 +2,8 @@ package com.basehaptic.mobile.ui.components
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.basehaptic.mobile.BuildConfig
 import com.google.android.gms.ads.AdRequest
@@ -67,6 +69,11 @@ object RewardedAdManager {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    /** 로드 콜백이 유실됐을 때 isLoading·전역 오버레이가 영구히 남지 않도록 하는 워치독 시한. */
+    private const val LOAD_TIMEOUT_MS = 60_000L
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     fun loadAndShowAd(
         context: Context,
         adUnitId: String,
@@ -91,17 +98,37 @@ object RewardedAdManager {
         val appContext = context.applicationContext
         val adRequest = AdRequest.Builder().build()
 
-        // isLoading 은 어떤 경로로든 반드시 해제한다 (중복 해제는 무해).
+        // isLoading 은 어떤 경로로든 반드시 해제하고, 종단 콜백은 정확히 한 번만 전달한다
+        // (중복 콜백이 그대로 흐르면 호출부 게이트가 이중 지급된다).
+        // AdMob 콜백과 워치독 모두 메인 스레드에서 실행되므로 플래그에 별도 동기화는 불필요.
+        var settled = false
+        var loadFinished = false
         val complete: (RewardedAdResult) -> Unit = { result ->
-            _isLoading.value = false
-            onComplete(result)
+            if (!settled) {
+                settled = true
+                _isLoading.value = false
+                onComplete(result)
+            }
         }
+        // 로드 콜백 도착 표시. 워치독이 이미 마감했으면 false — 늦게 온 광고는 표시하지 않는다.
+        val markLoadFinished: () -> Boolean = {
+            loadFinished = true
+            !settled
+        }
+        mainHandler.postDelayed({
+            if (!loadFinished) {
+                Log.w(TAG, "Ad load watchdog fired (${LOAD_TIMEOUT_MS}ms) — treating as LOAD_FAILED")
+                complete(RewardedAdResult.LOAD_FAILED)
+            }
+        }, LOAD_TIMEOUT_MS)
 
         when (format) {
             RewardedAdFormat.REWARDED ->
-                loadAndShowRewardedAd(appContext, activityRef, adUnitId, adRequest, complete)
+                loadAndShowRewardedAd(appContext, activityRef, adUnitId, adRequest, markLoadFinished, complete)
             RewardedAdFormat.REWARDED_INTERSTITIAL ->
-                loadAndShowRewardedInterstitialAd(appContext, activityRef, adUnitId, adRequest, complete)
+                loadAndShowRewardedInterstitialAd(
+                    appContext, activityRef, adUnitId, adRequest, markLoadFinished, complete
+                )
         }
     }
 
@@ -117,15 +144,18 @@ object RewardedAdManager {
         activityRef: WeakReference<Activity>,
         adUnitId: String,
         adRequest: AdRequest,
+        markLoadFinished: () -> Boolean,
         onComplete: (RewardedAdResult) -> Unit
     ) {
         RewardedAd.load(appContext, adUnitId, adRequest, object : RewardedAdLoadCallback() {
             override fun onAdFailedToLoad(error: LoadAdError) {
+                markLoadFinished()
                 Log.e(TAG, "Rewarded load failed: ${error.message}")
                 onComplete(RewardedAdResult.LOAD_FAILED)
             }
 
             override fun onAdLoaded(ad: RewardedAd) {
+                if (!markLoadFinished()) return
                 val activity = resolveShowableActivity(activityRef)
                 if (activity == null) {
                     // 로드 완료 시점에 Activity 가 이미 죽었으면 표시 불가 → 로드 실패와 동일 취급
@@ -162,6 +192,7 @@ object RewardedAdManager {
         activityRef: WeakReference<Activity>,
         adUnitId: String,
         adRequest: AdRequest,
+        markLoadFinished: () -> Boolean,
         onComplete: (RewardedAdResult) -> Unit
     ) {
         RewardedInterstitialAd.load(
@@ -170,11 +201,13 @@ object RewardedAdManager {
             adRequest,
             object : RewardedInterstitialAdLoadCallback() {
                 override fun onAdFailedToLoad(error: LoadAdError) {
+                    markLoadFinished()
                     Log.e(TAG, "Rewarded interstitial load failed: ${error.message}")
                     onComplete(RewardedAdResult.LOAD_FAILED)
                 }
 
                 override fun onAdLoaded(ad: RewardedInterstitialAd) {
+                    if (!markLoadFinished()) return
                     val activity = resolveShowableActivity(activityRef)
                     if (activity == null) {
                         Log.w(TAG, "Activity gone before rewarded interstitial show")

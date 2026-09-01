@@ -19,6 +19,7 @@ struct VentingDestroyedScreen: View {
     @State private var isCheckingRetry: Bool = false
     @State private var isRequestingAd: Bool = false
     @State private var showConfetti: Bool = false
+    @State private var showAdIncompleteNotice: Bool = false
 
     var body: some View {
         ZStack {
@@ -87,6 +88,13 @@ struct VentingDestroyedScreen: View {
 
                 // 재도전 버튼 영역
                 VStack(spacing: AppSpacing.md) {
+                    if showAdIncompleteNotice {
+                        Text("광고를 끝까지 보면 재도전할 수 있어요")
+                            .font(AppFont.captionMedium)
+                            .foregroundColor(AppColors.yellow400)
+                            .transition(.opacity)
+                    }
+
                     if isCheckingRetry {
                         ProgressView()
                             .tint(AppColors.red400)
@@ -177,6 +185,7 @@ struct VentingDestroyedScreen: View {
             gameId: viewModel.gameContext.gameId
         )
         isRequestingAd = true
+        withAnimation { showAdIncompleteNotice = false }
         Task {
             let verdict = await viewModel.requestRetry()
             isRequestingAd = false
@@ -194,7 +203,8 @@ struct VentingDestroyedScreen: View {
                 // 광고 로드 실패 폴백 — 사용자 귀책 아님, 광고 완료로 집계하지 않음
                 onRetry()
             case .denied:
-                break
+                // 광고 중도 이탈·중복 요청 — 무반응이면 버튼 고장으로 보이므로 안내를 띄운다
+                withAnimation { showAdIncompleteNotice = true }
             }
         }
     }

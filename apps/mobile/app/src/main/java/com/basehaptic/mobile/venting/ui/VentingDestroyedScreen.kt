@@ -235,7 +235,13 @@ fun VentingDestroyedScreen(
                                 }
                                 // 광고 로드 실패 폴백 — 사용자 귀책 아님, 광고 완료로 집계하지 않음
                                 VentingRetryVerdict.ALLOWED_FREE -> onRetry()
-                                VentingRetryVerdict.DENIED -> Unit
+                                // 광고 중도 이탈·중복 요청 — 무반응이면 버튼 고장으로 보이므로 안내
+                                VentingRetryVerdict.DENIED ->
+                                    android.widget.Toast.makeText(
+                                        reportContext,
+                                        "광고를 끝까지 보면 재도전할 수 있어요",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
                             }
                         }
                     }

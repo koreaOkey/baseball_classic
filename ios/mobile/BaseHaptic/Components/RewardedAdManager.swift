@@ -25,7 +25,17 @@ final class RewardedAdManager: NSObject, ObservableObject {
 
     @Published var isLoading = false
 
+    /// 광고가 화면에 떠 있는 동안 true — 이 동안 들어온 새 요청은 busy 처리해서
+    /// presentingAdDelegate 덮어쓰기(첫 요청의 종단 콜백 유실)를 막는다.
+    private var isPresenting = false
+
     private var presentingAdDelegate: AdDelegate?
+
+    /// 로드 세대 — 워치독과 로드 콜백 중 먼저 마감한 쪽만 유효하다.
+    private var loadGeneration = 0
+
+    /// 로드 콜백이 유실됐을 때 isLoading·스피너가 영구히 남지 않도록 하는 워치독 시한.
+    private static let loadTimeoutSeconds: TimeInterval = 60
 
     private override init() { super.init() }
 
@@ -79,7 +89,7 @@ final class RewardedAdManager: NSObject, ObservableObject {
         format: RewardedAdFormat = .rewarded,
         onComplete: @escaping (_ outcome: RewardedAdOutcome) -> Void
     ) {
-        guard !isLoading else {
+        guard !isLoading, !isPresenting else {
             // 중복 탭 가드 — 보상도 대기 상태 소비도 하지 않도록 busy로 구분해서 알림
             onComplete(.busy)
             return
@@ -98,13 +108,15 @@ final class RewardedAdManager: NSObject, ObservableObject {
         adUnitID: String,
         onComplete: @escaping (_ outcome: RewardedAdOutcome) -> Void
     ) {
+        let generation = beginLoadWatchdog(tag: "RewardedAd", onComplete: onComplete)
         RewardedAd.load(with: adUnitID, request: Request()) { [weak self] ad, error in
             Task { @MainActor in
                 guard let self else {
                     onComplete(.loadFailed)
                     return
                 }
-                self.isLoading = false
+                // 워치독이 먼저 마감했으면 늦게 도착한 로드는 폐기 (표시하면 안 됨)
+                guard self.settleLoad(generation: generation) else { return }
 
                 if let error {
                     print("[RewardedAd] Load failed: \(error.localizedDescription)")
@@ -120,11 +132,13 @@ final class RewardedAdManager: NSObject, ObservableObject {
                 }
 
                 let delegate = AdDelegate { outcome in
+                    self.isPresenting = false
                     self.presentingAdDelegate = nil
                     onComplete(outcome)
                 }
                 self.presentingAdDelegate = delegate
                 ad.fullScreenContentDelegate = delegate
+                self.isPresenting = true
 
                 ad.present(from: presenter) {
                     print("[RewardedAd] User earned reward")
@@ -138,13 +152,15 @@ final class RewardedAdManager: NSObject, ObservableObject {
         adUnitID: String,
         onComplete: @escaping (_ outcome: RewardedAdOutcome) -> Void
     ) {
+        let generation = beginLoadWatchdog(tag: "RewardedInterstitialAd", onComplete: onComplete)
         RewardedInterstitialAd.load(with: adUnitID, request: Request()) { [weak self] ad, error in
             Task { @MainActor in
                 guard let self else {
                     onComplete(.loadFailed)
                     return
                 }
-                self.isLoading = false
+                // 워치독이 먼저 마감했으면 늦게 도착한 로드는 폐기 (표시하면 안 됨)
+                guard self.settleLoad(generation: generation) else { return }
 
                 if let error {
                     print("[RewardedInterstitialAd] Load failed: \(error.localizedDescription)")
@@ -160,11 +176,13 @@ final class RewardedAdManager: NSObject, ObservableObject {
                 }
 
                 let delegate = AdDelegate { outcome in
+                    self.isPresenting = false
                     self.presentingAdDelegate = nil
                     onComplete(outcome)
                 }
                 self.presentingAdDelegate = delegate
                 ad.fullScreenContentDelegate = delegate
+                self.isPresenting = true
 
                 ad.present(from: presenter) {
                     print("[RewardedInterstitialAd] User earned reward")
@@ -172,6 +190,33 @@ final class RewardedAdManager: NSObject, ObservableObject {
                 }
             }
         }
+    }
+
+    /// 로드 워치독 시작. 시한 내에 로드 콜백이 오지 않으면 loadFailed로 마감해
+    /// isLoading·호출부 스피너가 영구히 남는 것을 막는다. 반환된 세대 값으로
+    /// 로드 콜백과 워치독 중 먼저 도착한 쪽만 유효 처리한다.
+    private func beginLoadWatchdog(
+        tag: String,
+        onComplete: @escaping (_ outcome: RewardedAdOutcome) -> Void
+    ) -> Int {
+        loadGeneration += 1
+        let generation = loadGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.loadTimeoutSeconds) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.settleLoad(generation: generation) else { return }
+                print("[\(tag)] Load watchdog fired — treating as loadFailed")
+                onComplete(.loadFailed)
+            }
+        }
+        return generation
+    }
+
+    /// 해당 세대의 로드를 마감 처리. 이미 다른 쪽(워치독/로드 콜백)이 마감했으면 false.
+    private func settleLoad(generation: Int) -> Bool {
+        guard loadGeneration == generation else { return false }
+        loadGeneration += 1
+        isLoading = false
+        return true
     }
 
     private static func currentAdPresenter() -> UIViewController? {
@@ -202,6 +247,7 @@ private extension UIViewController {
 
 private final class AdDelegate: NSObject, FullScreenContentDelegate {
     var rewardEarned = false
+    private var hasFired = false
     private let onDismissOrFail: (RewardedAdOutcome) -> Void
 
     init(onDismissOrFail: @escaping (RewardedAdOutcome) -> Void) {
@@ -209,15 +255,23 @@ private final class AdDelegate: NSObject, FullScreenContentDelegate {
         super.init()
     }
 
+    /// present 실패와 dismiss가 겹쳐 들어와도 종단 콜백은 한 번만 전달한다
+    /// (게이트가 continuation을 resume하므로 두 번째 호출은 크래시).
+    private func fire(_ outcome: RewardedAdOutcome) {
+        guard !hasFired else { return }
+        hasFired = true
+        onDismissOrFail(outcome)
+    }
+
     func adDidDismissFullScreenContent(_ ad: any FullScreenPresentingAd) {
         // 보상 없이 닫힘 = 사용자가 광고를 중간에 종료한 것
-        onDismissOrFail(rewardEarned ? .rewardEarned : .dismissedWithoutReward)
+        fire(rewardEarned ? .rewardEarned : .dismissedWithoutReward)
     }
 
     func ad(_ ad: any FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: any Error) {
         print("[RewardedAd] Present failed: \(error.localizedDescription)")
         // 표시 실패는 광고 측 문제 → loadFailed로 취급 (사용자 잘못 아님)
-        onDismissOrFail(.loadFailed)
+        fire(.loadFailed)
     }
 }
 

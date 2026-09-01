@@ -35,7 +35,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             options: []
         )
         // 패배 분풀이 딥링크 카테고리 (aps.category="OPEN_VENTING"). 탭 라우팅은
-        // didReceive 의 kind=="venting_loss" 분기(DEBUG 게이트)에서 처리한다.
+        // didReceive 의 kind=="venting_loss" 분기에서 처리한다.
         let ventingCategory = UNNotificationCategory(
             identifier: "OPEN_VENTING",
             actions: [],
@@ -192,9 +192,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             if let home = userInfo["home_team"] as? String { forwardInfo["home_team"] = home }
             if let away = userInfo["away_team"] as? String { forwardInfo["away_team"] = away }
 
-            #if DEBUG
             // 패배 분풀이 딥링크(kind=="venting_loss"): 분풀이 플로우로 라우팅.
-            // 소비단(BaseHapticApp)이 DEBUG + 피처 플래그 뒤에서 컨텍스트를 만들어 연다.
+            // 소비단(BaseHapticApp)이 VentingFeatureFlag 뒤에서 컨텍스트를 만들어 연다.
             if let kind = userInfo["kind"] as? String, kind == "venting_loss" {
                 NotificationCenter.default.post(
                     name: .openVentingRequested,
@@ -204,7 +203,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 completionHandler()
                 return
             }
-            #endif
 
             NotificationCenter.default.post(
                 name: .openLiveGameRequested,
@@ -219,6 +217,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 extension Notification.Name {
     /// 푸시 알림 탭 시 홈 화면으로 이동 요청
     static let openLiveGameRequested = Notification.Name("openLiveGameRequested")
-    /// 패배 분풀이 딥링크(kind=venting_loss) 탭 요청. 소비단은 DEBUG 게이트 뒤에서만 동작.
+    /// 패배 분풀이 딥링크(kind=venting_loss) 탭 요청. 소비단은 VentingFeatureFlag 뒤에서 동작.
     static let openVentingRequested = Notification.Name("openVentingRequested")
 }
