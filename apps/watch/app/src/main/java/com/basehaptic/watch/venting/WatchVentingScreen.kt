@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.rotary.onRotaryScrollEvent
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -187,10 +188,18 @@ fun WatchVentingScreen(
             }
         } else {
             // 진행 중 닫기: 좌측 상단 미니 ✕
+            // 원형 화면에서는 (10, 22) 지점이 원호 바깥 — 내접 사각형 모서리(14.6%)까지 들여야
+            // 잘리지 않는다 (Wear 품질 가이드 "시계 모양")
+            val configuration = LocalConfiguration.current
+            val closeInset = if (configuration.isScreenRound) {
+                (configuration.screenWidthDp * 0.146f).dp
+            } else {
+                10.dp
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(start = 10.dp, top = 22.dp)
+                    .padding(start = closeInset, top = closeInset)
                     .clip(CircleShape)
                     .background(Color(0xFF27272A))
                     .clickable { onClose() }

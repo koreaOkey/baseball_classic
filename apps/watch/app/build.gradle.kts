@@ -41,8 +41,8 @@ android {
         applicationId = "com.basehaptic.mobile"
         minSdk = 30  // Wear OS 3.0+
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.1.7"
+        versionCode = 33
+        versionName = "1.1.8"
     }
 
     buildFeatures {
@@ -99,9 +99,11 @@ dependencies {
     
     // Compose for Wear OS
     implementation(platform("androidx.compose:compose-bom:2024.09.03"))
-    implementation("androidx.wear.compose:compose-material:1.4.0")
-    implementation("androidx.wear.compose:compose-foundation:1.4.0")
-    implementation("androidx.wear.compose:compose-navigation:1.4.0")
+    // 1.4.1: targetSdk 35+에서 reduce_motion 설정 읽기 SecurityException 크래시 수정
+    // (ScalingLazyColumn 진입 시 크래시 — 1.4.0 사용 금지)
+    implementation("androidx.wear.compose:compose-material:1.4.1")
+    implementation("androidx.wear.compose:compose-foundation:1.4.1")
+    implementation("androidx.wear.compose:compose-navigation:1.4.1")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
