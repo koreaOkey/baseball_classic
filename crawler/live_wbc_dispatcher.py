@@ -35,6 +35,11 @@ LEAGUE_PRESETS: dict[str, tuple[str, str]] = {
 KBO_GAME_ID_PATTERN = re.compile(r"^\d{8}[A-Z]{4}\d{5}$")
 # 크롤러 비정상 종료 시 게임당 최대 재시작 횟수 (초과 시 ERROR 로그 후 포기)
 MAX_CRAWLER_RESTARTS_PER_GAME = 10
+# 크롤러 종료 직후 백엔드가 응답하지 않으면(2026-09-05 Redis 재배포 장애) 최종 상태 동기화가
+# 실패해 경기가 LIVE 로 영구 고착됐다. 백오프 재시도로 백엔드 복구 후 상태를 회수한다. (C7)
+MAX_FINAL_SYNC_RETRIES = 30
+FINAL_SYNC_RETRY_BASE_SEC = 30.0
+FINAL_SYNC_RETRY_MAX_SEC = 300.0
 # 재시작 백오프 상한 (초)
 CRAWLER_RESTART_BACKOFF_MAX_SEC = 900
 # 자정 윈도우 교체 시 전날 미종료 경기(우천 중단/연기 등)를 유지하는 최대 시간
@@ -62,6 +67,9 @@ class RelayCheckWindow:
     restart_count: int = 0
     # relay 체크 연속 fetch 실패 횟수 (C3: 네이버 장애 vs 중계 미시작 구분)
     relay_fetch_failures: int = 0
+    # 크롤러 종료 후 최종 상태 동기화(forced sync)가 실패해 재시도 대기 중인지 (C7)
+    final_sync_pending: bool = False
+    final_sync_attempts: int = 0
 
     def __post_init__(self) -> None:
         if self.next_check_at is None:
@@ -503,6 +511,21 @@ def _handle_crawler_exit(
     window.launched = False
     window.next_check_at = now + timedelta(seconds=backoff_sec)
     return "restart-scheduled"
+
+
+def _final_sync_backoff_sec(attempts: int) -> float:
+    return min(FINAL_SYNC_RETRY_MAX_SEC, FINAL_SYNC_RETRY_BASE_SEC * (2 ** max(0, attempts)))
+
+
+def _schedule_final_sync_retry(window: RelayCheckWindow, now: datetime) -> bool:
+    """최종 상태 동기화 실패 후 재시도를 예약한다. 상한 도달이면 False 를 돌려주고 포기한다. (C7)"""
+    if window.final_sync_attempts >= MAX_FINAL_SYNC_RETRIES:
+        window.final_sync_pending = False
+        return False
+    window.final_sync_pending = True
+    window.next_check_at = now + timedelta(seconds=_final_sync_backoff_sec(window.final_sync_attempts))
+    window.final_sync_attempts += 1
+    return True
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -1288,9 +1311,16 @@ def _build_schedule_import_dates_until(
 
 def _build_schedule_import_dates_for_mode(args: argparse.Namespace, *, today: date, mode: str) -> list[date]:
     if mode == "daily":
+        start_date = args.schedule_import_start_date
+        days = args.schedule_import_days
+        if start_date is None:
+            # 전날 경기가 장애로 LIVE 에 고착된 경우를 자정 import 에서 회수한다. 종료 경기는
+            # 백엔드 상태와 같으면 skipped_unchanged 로 걸러지므로 비용은 조회 1회뿐이다. (C7)
+            start_date = today - timedelta(days=1)
+            days = max(1, days) + 1
         return _build_schedule_import_dates_until(
-            start_date=args.schedule_import_start_date or today,
-            days=args.schedule_import_days,
+            start_date=start_date,
+            days=days,
             until_date=args.schedule_import_until,
         )
 
@@ -1554,6 +1584,13 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                         window.checks_done,
                         forced_synced,
                     )
+                    if not forced_synced and _schedule_final_sync_retry(window, now):
+                        LOGGER.warning(
+                            "[import] final_sync_retry_scheduled gameId=%s reason=relay-finalized attempt=%s nextAt=%s",
+                            game_id,
+                            window.final_sync_attempts,
+                            window.next_check_at.isoformat() if window.next_check_at else "-",
+                        )
                     continue
 
                 if max_check_window is not None and now >= window.start_at + max_check_window:
@@ -1562,6 +1599,39 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                     continue
 
                 window.next_check_at = now + timedelta(minutes=1)
+
+    def retry_pending_final_syncs(now: datetime) -> None:
+        """크롤러 종료 시점에 백엔드 장애로 실패한 최종 상태 동기화를 백오프로 재시도한다. (C7)"""
+        for game_id, window in list(windows.items()):
+            if not window.final_sync_pending or game_id in running:
+                continue
+            if window.next_check_at is not None and now < window.next_check_at:
+                continue
+            synced = _force_sync_schedule_snapshot_for_game_id(
+                source_base_url=args.source_base_url,
+                backend_base_url=args.backend_base_url,
+                backend_api_key=args.backend_api_key,
+                game_id=game_id,
+                fallback_date=now.date(),
+                fetch_timeout=args.http_timeout_sec,
+                backend_timeout=backend_sync_timeout,
+                backend_retries=backend_sync_retries,
+                reason="final-sync-retry",
+            )
+            if synced:
+                window.final_sync_pending = False
+                LOGGER.info(
+                    "[import] final_sync_recovered gameId=%s attempts=%s",
+                    game_id,
+                    window.final_sync_attempts,
+                )
+                continue
+            if not _schedule_final_sync_retry(window, now):
+                LOGGER.error(
+                    "[import] final_sync_gave_up gameId=%s attempts=%s 최종 상태 동기화 포기, 자정 import 에서 회수",
+                    game_id,
+                    window.final_sync_attempts,
+                )
 
     try:
         now = datetime.now(KST)
@@ -1617,8 +1687,17 @@ def run_dispatcher(args: argparse.Namespace) -> None:
                     )
                 else:
                     LOGGER.info("[crawler] window_closed gameId=%s reason=%s", game_id, action)
+                    if not forced_synced and _schedule_final_sync_retry(window, now):
+                        LOGGER.warning(
+                            "[import] final_sync_retry_scheduled gameId=%s reason=%s attempt=%s nextAt=%s",
+                            game_id,
+                            action,
+                            window.final_sync_attempts,
+                            window.next_check_at.isoformat() if window.next_check_at else "-",
+                        )
 
             check_relay_windows(now)
+            retry_pending_final_syncs(now)
 
             import_trigger = datetime.combine(
                 now.date(),

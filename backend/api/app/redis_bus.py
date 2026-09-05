@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import socket
+import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from typing import Any
@@ -25,6 +26,27 @@ except ModuleNotFoundError:
 logger = logging.getLogger(__name__)
 
 RedisMessageHandler = Callable[[str, dict[str, Any]], Awaitable[None]]
+
+# 2026-09-05 19:28~19:32 KST 장애: Redis 컨테이너가 재배포되자 타임아웃 없는 연결 시도가
+# 커널 SYN 재시도가 끝날 때까지 블로킹됐고, 모든 HTTP 경로가 캐시 조회를 먼저 하므로
+# API 전체가 4.5분간 멈췄다. 연결·명령·캐시 작업 모두 바운디드 타임아웃을 둔다.
+REDIS_CONNECT_TIMEOUT_SEC = 2.0
+REDIS_SOCKET_TIMEOUT_SEC = 2.0
+# 캐시 조회/저장 한 번에 허용하는 총 시간(풀 대기 포함). 초과 시 캐시 미스로 취급한다.
+REDIS_CACHE_OP_TIMEOUT_SEC = 3.0
+# 구독 재연결 백오프 상한. 실패가 이어져도 로그 폭주 없이 주기적으로 재시도한다.
+SUBSCRIBE_RECONNECT_MAX_SEC = 10.0
+_CACHE_FAIL_LOG_INTERVAL_SEC = 10.0
+
+
+def _tcp_keepalive_options() -> dict[int, int]:
+    """플랫폼이 지원하는 TCP keepalive 옵션만 모아 돌려준다 (Linux: idle 30s, interval 10s, 3회)."""
+    options: dict[int, int] = {}
+    for name, value in (("TCP_KEEPIDLE", 30), ("TCP_KEEPINTVL", 10), ("TCP_KEEPCNT", 3)):
+        option = getattr(socket, name, None)
+        if option is not None:
+            options[option] = value
+    return options
 
 
 class RedisBroadcastRelay:
@@ -52,8 +74,12 @@ class RedisBroadcastRelay:
             "sub_forwarded": 0,
             "sub_errors": 0,
             "sub_reconnects": 0,
+            "cache_fail": 0,
+            "cache_timeout": 0,
         }
         self.subscribed_at: float | None = None
+        self._last_cache_failure_log_at = 0.0
+        self._sub_consecutive_failures = 0
 
     @property
     def enabled(self) -> bool:
@@ -70,7 +96,7 @@ class RedisBroadcastRelay:
             return
 
         self._publisher = self._create_client()
-        self._subscriber = self._create_client()
+        self._subscriber = self._create_client(socket_timeout=None)
         is_connected, detail = await self.ping()
         if not is_connected:
             logger.warning("redis relay connection check failed: %s", detail)
@@ -101,7 +127,7 @@ class RedisBroadcastRelay:
             close_after_check = True
 
         try:
-            await client.ping()
+            await asyncio.wait_for(client.ping(), timeout=REDIS_CACHE_OP_TIMEOUT_SEC)
             return True, "connected"
         except Exception as exc:
             logger.warning("redis ping failed: %s", exc)
@@ -129,34 +155,64 @@ class RedisBroadcastRelay:
                 await self._subscriber.aclose()
             self._subscriber = None
 
+    async def _run_cache_op(self, label: str, op: Awaitable[Any]) -> Any:
+        """캐시 명령을 바운디드 타임아웃으로 실행한다. 실패는 None(캐시 미스)으로 흡수한다.
+
+        Redis 가 죽거나 교체돼도 요청 처리(DB 로더)는 계속 진행돼야 하므로 예외를
+        밖으로 내보내지 않는다. 연결·타임아웃 계열은 카운터와 스로틀된 경고로 남긴다.
+        """
+        try:
+            return await asyncio.wait_for(op, timeout=REDIS_CACHE_OP_TIMEOUT_SEC)
+        except asyncio.TimeoutError:
+            self.stats["cache_timeout"] += 1
+            self._log_cache_failure(label, "timeout")
+        except (RedisConnectionError, RedisTimeoutError, OSError) as exc:
+            self.stats["cache_fail"] += 1
+            self._log_cache_failure(label, f"{type(exc).__name__}: {exc}")
+        except Exception:
+            self.stats["cache_fail"] += 1
+            logger.debug("redis cache %s failed", label, exc_info=True)
+        return None
+
+    def _log_cache_failure(self, label: str, detail: str) -> None:
+        now = time.monotonic()
+        if now - self._last_cache_failure_log_at < _CACHE_FAIL_LOG_INTERVAL_SEC:
+            return
+        self._last_cache_failure_log_at = now
+        logger.warning(
+            "redis cache %s failed (%s); serving without cache. cache_fail=%s cache_timeout=%s",
+            label,
+            detail,
+            self.stats["cache_fail"],
+            self.stats["cache_timeout"],
+        )
+
     async def set_cache(self, key: str, value: dict[str, Any], ttl_sec: int = 300) -> None:
         if not self.enabled or self._publisher is None:
             return
         try:
             payload = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-            await self._publisher.set(key, payload, ex=ttl_sec)
         except Exception:
             logger.debug("redis cache set failed: key=%s", key)
+            return
+        await self._run_cache_op("set", self._publisher.set(key, payload, ex=ttl_sec))
 
     async def get_cache(self, key: str) -> dict[str, Any] | None:
         if not self.enabled or self._publisher is None:
             return None
+        raw = await self._run_cache_op("get", self._publisher.get(key))
+        if raw is None:
+            return None
         try:
-            raw = await self._publisher.get(key)
-            if raw is None:
-                return None
             return json.loads(raw)
         except Exception:
-            logger.debug("redis cache get failed: key=%s", key)
+            logger.debug("redis cache decode failed: key=%s", key)
             return None
 
     async def delete_cache(self, key: str) -> None:
         if not self.enabled or self._publisher is None:
             return
-        try:
-            await self._publisher.delete(key)
-        except Exception:
-            logger.debug("redis cache delete failed: key=%s", key)
+        await self._run_cache_op("delete", self._publisher.delete(key))
 
     async def publish(self, game_id: str, message: dict[str, Any]) -> None:
         if not self.enabled or self._publisher is None:
@@ -172,9 +228,12 @@ class RedisBroadcastRelay:
             separators=(",", ":"),
         )
         try:
-            await self._publisher.publish(self._channel, payload)
+            await asyncio.wait_for(
+                self._publisher.publish(self._channel, payload),
+                timeout=REDIS_CACHE_OP_TIMEOUT_SEC,
+            )
             self.stats["publish_ok"] += 1
-        except (RedisConnectionError, RedisTimeoutError) as exc:
+        except (RedisConnectionError, RedisTimeoutError, asyncio.TimeoutError, OSError) as exc:
             self.stats["publish_fail"] += 1
             logger.warning(
                 "redis relay publish connection issue: game_id=%s error=%s",
@@ -201,6 +260,7 @@ class RedisBroadcastRelay:
                     self._channel,
                     self._source_instance_id,
                 )
+                self._sub_consecutive_failures = 0
 
                 async for raw in pubsub.listen():
                     if self._stop_event.is_set():
@@ -224,34 +284,51 @@ class RedisBroadcastRelay:
                         logger.exception("redis relay on_message handler failed")
             except asyncio.CancelledError:
                 break
-            except (RedisConnectionError, RedisTimeoutError) as exc:
+            except (RedisConnectionError, RedisTimeoutError, OSError) as exc:
                 self.stats["sub_reconnects"] += 1
                 self.subscribed_at = None
+                delay = self._next_reconnect_delay()
                 logger.warning(
                     "redis relay subscribe connection dropped: %s; reconnecting in %.1fs",
                     exc,
-                    self._reconnect_delay_sec,
+                    delay,
                 )
                 await self._reset_subscriber_client()
-                await asyncio.sleep(self._reconnect_delay_sec)
+                await asyncio.sleep(delay)
             except Exception:
                 self.stats["sub_reconnects"] += 1
                 self.subscribed_at = None
-                logger.exception("redis relay subscribe loop failed; reconnecting shortly")
-                await asyncio.sleep(self._reconnect_delay_sec)
+                delay = self._next_reconnect_delay()
+                logger.exception("redis relay subscribe loop failed; reconnecting in %.1fs", delay)
+                await self._reset_subscriber_client()
+                await asyncio.sleep(delay)
             finally:
                 if pubsub is not None:
                     with suppress(Exception):
                         await pubsub.aclose()
 
-    def _create_client(self) -> Redis:
+    def _create_client(self, *, socket_timeout: float | None = REDIS_SOCKET_TIMEOUT_SEC) -> Redis:
+        # 구독 클라이언트는 blocking listen 을 쓰므로 socket_timeout 을 두면 idle 마다
+        # 끊긴다 → 구독은 connect 타임아웃만, 명령(publisher)은 둘 다 적용한다.
         return Redis.from_url(
             self._redis_url,
             decode_responses=True,
             socket_keepalive=True,
+            # 구독 연결은 health check 가 닿지 않으므로 커널 keepalive 로 죽은 피어를 ~60s 안에 감지한다.
+            socket_keepalive_options=_tcp_keepalive_options() or None,
+            socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SEC,
+            socket_timeout=socket_timeout,
             health_check_interval=30,
             retry_on_timeout=True,
         )
+
+    def _next_reconnect_delay(self) -> float:
+        delay = min(
+            SUBSCRIBE_RECONNECT_MAX_SEC,
+            self._reconnect_delay_sec * (2 ** self._sub_consecutive_failures),
+        )
+        self._sub_consecutive_failures += 1
+        return delay
 
     async def _reset_publisher_client(self) -> None:
         if not self.enabled:
@@ -267,7 +344,7 @@ class RedisBroadcastRelay:
         if self._subscriber is not None:
             with suppress(Exception):
                 await self._subscriber.aclose()
-        self._subscriber = self._create_client()
+        self._subscriber = self._create_client(socket_timeout=None)
 
     def _decode_envelope(self, raw: Any) -> dict[str, Any] | None:
         if raw is None:

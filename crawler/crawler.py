@@ -40,6 +40,28 @@ FINAL_STATUS = {
     "PPD",
     "SUSPENDED",
 }
+# statusCode 가 BEFORE 로 남은 채 statusInfo 로만 취소/연기가 표기되는 경기가 있어
+# (2026-09-03 HTNC "경기취소" 가 이틀간 폴링됨) 텍스트로도 종료를 판정한다. dispatcher 매핑과 동일 키워드.
+TERMINAL_STATUS_INFO_KEYWORDS_KO = (
+    "우천취소", "우천 취소", "경기취소", "경기 취소", "노게임", "경기연기", "경기 연기",
+)
+TERMINAL_STATUS_INFO_KEYWORDS_EN = ("CANCEL", "RAIN", "NO_GAME", "NO GAME", "POSTPONE", "DELAY", "SUSPEND")
+# 중계 텍스트 없는 경기 전 상태가 이 시간 이상 이어지면 종료해 dispatcher 판단(재시작/종료)에 맡긴다.
+PREGAME_IDLE_MAX_SEC = 6 * 3600
+
+
+def is_terminal_status(status_code: Optional[str], status_info: Optional[str]) -> bool:
+    """statusCode 또는 statusInfo 텍스트 기준으로 경기가 더 이상 진행되지 않는지 판정한다."""
+    status = (status_code or "").strip().upper()
+    if status in FINAL_STATUS:
+        return True
+    info = (status_info or "").strip()
+    if not info:
+        return False
+    info_upper = info.upper()
+    return any(keyword in info for keyword in TERMINAL_STATUS_INFO_KEYWORDS_KO) or any(
+        keyword in info_upper for keyword in TERMINAL_STATUS_INFO_KEYWORDS_EN
+    )
 
 
 def fetch_json(url: str) -> Dict[str, Any]:
@@ -581,6 +603,7 @@ def run(
     last_posted_state_signature: str | None = None
     relay_cache: Dict[int, Dict[str, Any]] = {}
     consecutive_failures = 0
+    pregame_idle_since: Optional[float] = None
 
     while True:
         try:
@@ -618,8 +641,24 @@ def run(
         home_score = game_data.get("homeTeamScore")
         relay_count = sum(len((relay.get("textRelays") or [])) for relay in relays_by_inning.values())
         # 경기 전(중계 텍스트 없음)에는 느린 주기로 폴링, 라이브 전환 시 원래 주기로 복귀 (C6)
-        is_pregame_idle = status not in LIVE_STATUS and status not in FINAL_STATUS and relay_count == 0
+        status_info = str(game_data.get("statusInfo") or "").strip()
+        is_terminal = is_terminal_status(status, status_info)
+        is_pregame_idle = status not in LIVE_STATUS and not is_terminal and relay_count == 0
         poll_interval = max(interval, PREGAME_IDLE_INTERVAL_SEC) if is_pregame_idle else interval
+        if is_pregame_idle:
+            if pregame_idle_since is None:
+                pregame_idle_since = time.monotonic()
+            elif watch and time.monotonic() - pregame_idle_since >= PREGAME_IDLE_MAX_SEC:
+                # 취소/연기가 어떤 필드에도 반영되지 않아 영원히 경기 전 상태에 머무는 경우를 끊는다.
+                # 정상 종료(0)로 나가면 dispatcher 가 소스 상태를 다시 판정해 재시작 여부를 정한다.
+                print(
+                    f"[crawl] gameId={game_id} pregame_idle_timeout "
+                    f"idle_sec={int(time.monotonic() - pregame_idle_since)} exiting",
+                    flush=True,
+                )
+                break
+        else:
+            pregame_idle_since = None
         print(
             f"[crawl] at={datetime.now().isoformat(timespec='seconds')} "
             f"gameId={game_id} status={status or '-'} inning={inning or '-'} "
@@ -653,7 +692,7 @@ def run(
                     f"[backend] gameId={game_id} skipped reason=no-delta-no-state-change",
                     flush=True,
                 )
-                if not watch or status in FINAL_STATUS:
+                if not watch or is_terminal:
                     break
                 time.sleep(poll_interval)
                 continue
@@ -700,7 +739,7 @@ def run(
                 if not watch:
                     raise
 
-        if not watch or status in FINAL_STATUS:
+        if not watch or is_terminal:
             break
         time.sleep(poll_interval)
 

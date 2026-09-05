@@ -28,6 +28,34 @@ def _is_permanent_failure(status_code: int, reason: str) -> bool:
 _cached_jwt: str | None = None
 _cached_jwt_expires: float = 0
 JWT_LIFETIME_SECONDS = 50 * 60
+# JWT 생성 실패(잘못된 .p8/환경변수)는 매 발송마다 반복되므로 traceback 은 스로틀해 남긴다.
+_jwt_failure_logged_at: float = 0.0
+_JWT_FAILURE_LOG_INTERVAL_SEC = 60.0
+
+
+def _log_jwt_failure(reason: str) -> None:
+    global _jwt_failure_logged_at
+    now = time.time()
+    if now - _jwt_failure_logged_at < _JWT_FAILURE_LOG_INTERVAL_SEC:
+        return
+    _jwt_failure_logged_at = now
+    logger.exception("[APNs] JWT creation failed: %s", reason)
+
+
+def log_send_exceptions(label: str, results: list[Any]) -> None:
+    """gather(return_exceptions=True) 결과 중 예외를 요약 로그로 남긴다.
+
+    발송 코루틴이 HTTP 호출 전에 예외를 내면(예: JWT 생성 실패) 결과가 조용히 버려져
+    `sent=0/N` 만 남고 원인이 보이지 않았다(2026-09-05 발견). 첫 예외의 타입·메시지를 남긴다.
+    """
+    errors = [result for result in results if isinstance(result, BaseException)]
+    if not errors:
+        return
+    first = errors[0]
+    logger.warning(
+        "[%s] %d/%d sends raised %s: %s",
+        label, len(errors), len(results), type(first).__name__, first,
+    )
 
 # HTTP/2 keep-alive 커넥션 재사용 전역 클라이언트.
 # 요청마다 새로 만들면 TLS handshake 비용이 누적돼 워치 푸시 지연으로 이어진다.
@@ -37,11 +65,15 @@ _http_client: httpx.AsyncClient | None = None
 def _get_http_client() -> httpx.AsyncClient:
     global _http_client
     if _http_client is None:
-        _http_client = httpx.AsyncClient(
-            http2=True,
-            timeout=httpx.Timeout(10.0),
-            limits=httpx.Limits(max_keepalive_connections=50, max_connections=200),
-        )
+        try:
+            _http_client = httpx.AsyncClient(
+                http2=True,
+                timeout=httpx.Timeout(10.0),
+                limits=httpx.Limits(max_keepalive_connections=50, max_connections=200),
+            )
+        except Exception:
+            logger.exception("[APNs] HTTP/2 client init failed (is the h2 package installed?)")
+            raise
     return _http_client
 
 
@@ -62,17 +94,25 @@ def _create_jwt_token() -> str | None:
         return _cached_jwt
 
     settings = get_settings()
-    key_content = _get_apns_key()
+    try:
+        key_content = _get_apns_key()
+    except Exception:
+        _log_jwt_failure("APNS_KEY_BASE64 decode failed")
+        return None
     if not key_content or not settings.apns_key_id or not settings.apns_team_id:
         logger.warning("[APNs] Missing APNs configuration (key, key_id, or team_id)")
         return None
 
-    token = jwt.encode(
-        {"iss": settings.apns_team_id, "iat": int(now)},
-        key_content,
-        algorithm="ES256",
-        headers={"kid": settings.apns_key_id},
-    )
+    try:
+        token = jwt.encode(
+            {"iss": settings.apns_team_id, "iat": int(now)},
+            key_content,
+            algorithm="ES256",
+            headers={"kid": settings.apns_key_id},
+        )
+    except Exception:
+        _log_jwt_failure("ES256 signing failed (check APNS_KEY_BASE64 is a valid .p8 key)")
+        return None
 
     _cached_jwt = token
     _cached_jwt_expires = now + JWT_LIFETIME_SECONDS
@@ -271,6 +311,7 @@ async def send_push_to_tokens(
         *(send_push(token, payload) for token in tokens),
         return_exceptions=True,
     )
+    log_send_exceptions("APNs-batch", results)
     failed_tokens: list[str] = []
     for token, result in zip(tokens, results):
         if isinstance(result, BaseException) or result is False:
@@ -398,6 +439,7 @@ async def send_visible_push_to_tokens_detailed(
         ),
         return_exceptions=True,
     )
+    log_send_exceptions("APNs-visible-batch", results)
     failed: list[str] = []
     permanently_failed: list[str] = []
     for (token, _), result in zip(tokens_with_sandbox, results):

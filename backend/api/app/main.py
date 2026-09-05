@@ -52,6 +52,7 @@ from .models import (
 )
 from .redis_bus import RedisBroadcastRelay
 from .apns import (
+    log_send_exceptions,
     send_live_activity_push_with_result,
     send_push_with_result,
     send_visible_push_to_tokens_detailed as send_apns_visible_push_to_tokens_detailed,
@@ -1902,6 +1903,7 @@ async def _send_game_start_notification(
     dead_tokens: list[str] = []
     if tasks:
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        log_send_exceptions("game-start-push", results)
         for result in results:
             if isinstance(result, BaseException):
                 continue
@@ -1997,6 +1999,7 @@ async def _send_loss_notification(
     dead_tokens: list[str] = []
     if tasks:
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        log_send_exceptions("venting-loss-push", results)
         for result in results:
             if isinstance(result, BaseException):
                 continue
@@ -2071,6 +2074,7 @@ async def _send_push_for_game_events(
                 platform=info["platform"],
             ))
         results = await asyncio.gather(*coros, return_exceptions=True)
+        log_send_exceptions("watch-push", results)
         for token, result in zip(tokens, results):
             if isinstance(result, BaseException):
                 continue
@@ -2192,6 +2196,7 @@ async def _send_live_activity_update(
         ),
         return_exceptions=True,
     )
+    log_send_exceptions("live-activity-push", results)
     ok_count = sum(
         1 for result in results
         if not isinstance(result, BaseException) and result[0]

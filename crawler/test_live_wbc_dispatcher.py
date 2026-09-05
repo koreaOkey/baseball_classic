@@ -4,13 +4,16 @@ from datetime import date, datetime, timedelta
 from live_wbc_dispatcher import (
     KST,
     MAX_CRAWLER_RESTARTS_PER_GAME,
+    MAX_FINAL_SYNC_RETRIES,
     RelayCheckWindow,
     _build_schedule_import_dates,
     _build_schedule_import_dates_for_mode,
     _build_schedule_import_dates_until,
     _build_team_record_payload,
     _crawler_restart_backoff_sec,
+    _final_sync_backoff_sec,
     _handle_crawler_exit,
+    _schedule_final_sync_retry,
     _import_marks_daily_complete,
     _map_schedule_status,
     _merge_relay_windows,
@@ -706,3 +709,94 @@ def test_parser_enable_file_log_default_off() -> None:
         ]
     )
     assert args_enabled.enable_file_log is True
+
+
+# --- C7: 크롤러 종료 시 최종 동기화 실패 재시도 + 자정 import 전날 회수 ---
+
+
+def test_build_schedule_import_dates_for_daily_default_includes_yesterday() -> None:
+    args = argparse.Namespace(
+        schedule_import_start_date=None,
+        schedule_import_days=1,
+        schedule_import_until=None,
+        schedule_refresh_start_date=None,
+        schedule_refresh_until=None,
+    )
+
+    dates = _build_schedule_import_dates_for_mode(args, today=date(2026, 9, 6), mode="daily")
+
+    assert dates == [date(2026, 9, 5), date(2026, 9, 6)]
+
+
+def test_build_schedule_import_dates_for_daily_default_keeps_range_end() -> None:
+    args = argparse.Namespace(
+        schedule_import_start_date=None,
+        schedule_import_days=30,
+        schedule_import_until=None,
+        schedule_refresh_start_date=None,
+        schedule_refresh_until=None,
+    )
+
+    dates = _build_schedule_import_dates_for_mode(args, today=date(2026, 9, 6), mode="daily")
+
+    assert dates[0] == date(2026, 9, 5)
+    assert dates[-1] == date(2026, 10, 5)
+    assert len(dates) == 31
+
+
+def test_final_sync_backoff_grows_and_caps_at_300() -> None:
+    assert _final_sync_backoff_sec(0) == 30.0
+    assert _final_sync_backoff_sec(1) == 60.0
+    assert _final_sync_backoff_sec(3) == 240.0
+    assert _final_sync_backoff_sec(4) == 300.0
+    assert _final_sync_backoff_sec(20) == 300.0
+
+
+def test_schedule_final_sync_retry_sets_pending_and_backoff() -> None:
+    now = datetime(2026, 9, 5, 19, 32, tzinfo=KST)
+    window = _make_window(launched=True, exhausted=True)
+
+    assert _schedule_final_sync_retry(window, now) is True
+    assert window.final_sync_pending is True
+    assert window.final_sync_attempts == 1
+    assert window.next_check_at == now + timedelta(seconds=30)
+
+    assert _schedule_final_sync_retry(window, now) is True
+    assert window.final_sync_attempts == 2
+    assert window.next_check_at == now + timedelta(seconds=60)
+
+
+def test_schedule_final_sync_retry_gives_up_after_cap() -> None:
+    now = datetime(2026, 9, 5, 22, 0, tzinfo=KST)
+    window = _make_window(
+        launched=True,
+        exhausted=True,
+        final_sync_pending=True,
+        final_sync_attempts=MAX_FINAL_SYNC_RETRIES,
+    )
+
+    assert _schedule_final_sync_retry(window, now) is False
+    assert window.final_sync_pending is False
+
+
+def test_merge_relay_windows_keeps_exhausted_window_with_pending_final_sync() -> None:
+    now = datetime(2026, 9, 5, 21, 0, tzinfo=KST)
+    existing = _make_window(
+        game_id="20260905OBSK02026",
+        start_at=datetime(2026, 9, 5, 17, 0, tzinfo=KST),
+        launched=True,
+        exhausted=True,
+        final_sync_pending=True,
+        final_sync_attempts=2,
+    )
+    loaded = {
+        "20260905OBSK02026": _make_window(
+            game_id="20260905OBSK02026",
+            start_at=datetime(2026, 9, 5, 17, 0, tzinfo=KST),
+        )
+    }
+
+    merged = live_wbc_dispatcher._merge_relay_windows({existing.game_id: existing}, loaded, now)
+
+    assert merged["20260905OBSK02026"] is existing
+    assert merged["20260905OBSK02026"].final_sync_pending is True
