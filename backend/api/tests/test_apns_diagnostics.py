@@ -100,3 +100,21 @@ def test_raw_pem_is_accepted_as_is(monkeypatch) -> None:
 def test_empty_key_returns_none(monkeypatch) -> None:
     assert _key_with(monkeypatch, "") is None
     assert _key_with(monkeypatch, "   ") is None
+
+
+def test_send_stats_logged_once_per_window(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(apns, "_send_stats_window_started_at", 0.0)
+    monkeypatch.setattr(apns, "_send_stats", {"ok": 0, "failed": 0, "permanent": 0})
+    clock = {"now": 1_000.0}
+    monkeypatch.setattr(apns.time, "time", lambda: clock["now"])
+
+    with caplog.at_level(logging.INFO, logger="app.apns.stats"):
+        apns._record_send_result(True, False)
+        apns._record_send_result(False, True)
+        assert not [r for r in caplog.records if "APNs-stats" in r.getMessage()]
+        clock["now"] += 61
+        apns._record_send_result(True, False)
+
+    stats = [r.getMessage() for r in caplog.records if "APNs-stats" in r.getMessage()]
+    assert stats == ["[APNs-stats] ok=2 failed=1 permanent=1 window_sec=61"]
+    assert apns._send_stats == {"ok": 0, "failed": 0, "permanent": 0}

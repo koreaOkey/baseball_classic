@@ -42,6 +42,36 @@ def _log_jwt_failure(reason: str) -> None:
     logger.exception("[APNs] JWT creation failed: %s", reason)
 
 
+# 성공 발송은 개별 로그를 남기지 않아 "APNs 가 동작 중인지" 를 로그로 알 수 없었다. 60초 단위로
+# 성공/실패 건수를 집계해 남긴다 (발송이 있었던 구간에만).
+_stats_logger = logging.getLogger("app.apns.stats")
+_stats_logger.setLevel(logging.INFO)
+_SEND_STATS_LOG_INTERVAL_SEC = 60.0
+_send_stats: dict[str, int] = {"ok": 0, "failed": 0, "permanent": 0}
+_send_stats_window_started_at: float = 0.0
+
+
+def _record_send_result(ok: bool, permanent: bool) -> None:
+    global _send_stats_window_started_at
+    now = time.time()
+    if _send_stats_window_started_at == 0.0:
+        _send_stats_window_started_at = now
+    if ok:
+        _send_stats["ok"] += 1
+    else:
+        _send_stats["failed"] += 1
+        if permanent:
+            _send_stats["permanent"] += 1
+    if now - _send_stats_window_started_at >= _SEND_STATS_LOG_INTERVAL_SEC:
+        _stats_logger.info(
+            "[APNs-stats] ok=%d failed=%d permanent=%d window_sec=%d",
+            _send_stats["ok"], _send_stats["failed"], _send_stats["permanent"],
+            int(now - _send_stats_window_started_at),
+        )
+        _send_stats.update(ok=0, failed=0, permanent=0)
+        _send_stats_window_started_at = now
+
+
 def log_send_exceptions(label: str, results: list[Any]) -> None:
     """gather(return_exceptions=True) 결과 중 예외를 요약 로그로 남긴다.
 
@@ -152,6 +182,20 @@ async def send_push_with_result(
     platform: str = "ios",
 ) -> tuple[bool, bool]:
     """단일 디바이스에 silent push 전송. (성공 여부, 영구 실패 여부) 반환."""
+    ok, permanent = await _send_push_with_result(
+        device_token, payload, use_sandbox=use_sandbox, platform=platform,
+    )
+    _record_send_result(ok, permanent)
+    return ok, permanent
+
+
+async def _send_push_with_result(
+    device_token: str,
+    payload: dict[str, Any],
+    *,
+    use_sandbox: bool | None = None,
+    platform: str = "ios",
+) -> tuple[bool, bool]:
     settings = get_settings()
     jwt_token = _create_jwt_token()
     if jwt_token is None:
@@ -248,7 +292,25 @@ async def send_live_activity_push_with_result(
     priority: int = 10,
     stale_seconds: int | None = LIVE_ACTIVITY_STALE_SECONDS,
 ) -> tuple[bool, bool]:
-    """ActivityKit Live Activity push 전송. (성공 여부, 영구 실패 여부) 반환.
+    """ActivityKit Live Activity push 전송. (성공 여부, 영구 실패 여부) 반환."""
+    ok, permanent = await _send_live_activity_push_with_result(
+        push_token, content_state, event_type=event_type, timestamp=timestamp,
+        priority=priority, stale_seconds=stale_seconds,
+    )
+    _record_send_result(ok, permanent)
+    return ok, permanent
+
+
+async def _send_live_activity_push_with_result(
+    push_token: str,
+    content_state: dict[str, Any],
+    *,
+    event_type: str = "update",  # "update" or "end"
+    timestamp: int | None = None,
+    priority: int = 10,
+    stale_seconds: int | None = LIVE_ACTIVITY_STALE_SECONDS,
+) -> tuple[bool, bool]:
+    """ActivityKit Live Activity push 전송 본체.
 
     priority 10 은 기기별 Live Activity 업데이트 budget 을 소모한다
     (frequent-updates 미지원 기기는 초과 시 조용히 드롭). priority 5 는 budget 을
@@ -366,6 +428,23 @@ async def send_visible_push_with_result(
     category: str | None = None,
 ) -> tuple[bool, bool]:
     """단일 iOS 디바이스에 visible push 전송. (성공 여부, 영구 실패 여부) 반환."""
+    ok, permanent = await _send_visible_push_with_result(
+        device_token, title=title, body=body, data=data,
+        use_sandbox=use_sandbox, category=category,
+    )
+    _record_send_result(ok, permanent)
+    return ok, permanent
+
+
+async def _send_visible_push_with_result(
+    device_token: str,
+    *,
+    title: str,
+    body: str,
+    data: dict[str, Any] | None = None,
+    use_sandbox: bool | None = None,
+    category: str | None = None,
+) -> tuple[bool, bool]:
     settings = get_settings()
     jwt_token = _create_jwt_token()
     if jwt_token is None:

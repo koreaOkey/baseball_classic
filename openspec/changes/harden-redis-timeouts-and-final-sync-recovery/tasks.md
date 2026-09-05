@@ -26,5 +26,7 @@
 - [x] 5.1 staging 푸시(=프로덕션 배포) 후 두산:SSG(20260905OBSK02026) FINISHED 회수 확인 — 20:46 KST `forced_synced reason=relay-finalized status=FINISHED`
 - [x] 5.2 원인 로그 확인 — 배포 직후 `[APNs] JWT creation failed: APNS_KEY_BASE64 decode failed` + `binascii.Error: Incorrect padding` (모든 APNs 발송이 HTTP 호출 전 실패 중이었음)
 - [x] 5.2b 키 디코드 복원(패딩 누락·줄바꿈·따옴표·.p8 원문 허용) + 테스트 4건
-- [ ] 5.2c 재배포 후 `[APNs-LA] sent>0` 또는 `ES256 signing failed`(값 자체 손상 → 환경변수 재설정 필요) 확인
+- [x] 5.2c 키 복원 재배포 후 JWT 실패 로그 소멸 확인(21:16 KST 기준 APNs 오류 로그 0건)
+- [x] 5.2d 성공 발송이 로그에 안 남던 사각지대 보완: 60초 집계 `[APNs-stats] ok/failed/permanent` 로그 + 테스트
+- [ ] 5.2e 다음 경기일 `[APNs-stats] ok>0` 확인(0 이거나 `ES256 signing failed` 면 APNS_KEY_BASE64 재설정)
 - [x] 5.3 9/3 취소 경기(20260903HTNC02026) 크롤러 종료 확인 — 재배포 후 해당 경기 crawl 로그 없음
