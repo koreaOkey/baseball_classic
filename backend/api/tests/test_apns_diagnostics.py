@@ -62,3 +62,41 @@ def test_log_send_exceptions_is_silent_without_errors(caplog) -> None:
         apns.log_send_exceptions("unit-push", [(True, False), (False, True)])
 
     assert not caplog.records
+
+
+_FAKE_P8 = "-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEG\n-----END PRIVATE KEY-----\n"
+
+
+class _KeySettings:
+    def __init__(self, value: str) -> None:
+        self.apns_key_base64 = value
+
+
+def _key_with(monkeypatch, value: str) -> str | None:
+    monkeypatch.setattr(apns, "get_settings", lambda: _KeySettings(value))
+    return apns._get_apns_key()
+
+
+def test_key_decodes_when_trailing_padding_was_stripped(monkeypatch) -> None:
+    encoded = base64.b64encode(_FAKE_P8.encode()).decode()
+    assert encoded.endswith("=")  # 패딩이 있는 입력이어야 의미 있는 검증
+    stripped = encoded.rstrip("=")
+
+    assert _key_with(monkeypatch, stripped) == _FAKE_P8
+
+
+def test_key_decodes_with_line_wraps_quotes_and_whitespace(monkeypatch) -> None:
+    encoded = base64.b64encode(_FAKE_P8.encode()).decode()
+    wrapped = "\n".join(encoded[i:i + 20] for i in range(0, len(encoded), 20))
+
+    assert _key_with(monkeypatch, f'  "{wrapped}"  \n') == _FAKE_P8
+
+
+def test_raw_pem_is_accepted_as_is(monkeypatch) -> None:
+    assert _key_with(monkeypatch, _FAKE_P8) == _FAKE_P8
+    assert _key_with(monkeypatch, _FAKE_P8.replace("\n", "\\n")) == _FAKE_P8
+
+
+def test_empty_key_returns_none(monkeypatch) -> None:
+    assert _key_with(monkeypatch, "") is None
+    assert _key_with(monkeypatch, "   ") is None

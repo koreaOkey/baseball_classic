@@ -28,6 +28,10 @@
   종료 경기를 회수한다(같으면 skipped_unchanged).
 - **APNs 발송 예외 가시화**: JWT 생성(키 디코드/서명) 실패를 60s 스로틀 traceback 으로 기록,
   HTTP/2 클라이언트 초기화 실패 기록, 모든 fan-out 결과의 예외를 "N/M sends raised …" 로 요약.
+- **APNs 키 디코드 복원**: 배포 직후 로그로 원인이 `APNS_KEY_BASE64` 의 `Incorrect padding` 으로
+  확정됐다(모든 APNs 발송이 HTTP 호출 전 실패). 끝의 `=` 누락·줄바꿈·따옴표·.p8 원문 등
+  붙여넣기 변형을 복원해 디코드한다. 값 자체가 손상된 경우는 환경변수 재설정이 필요하며
+  `ES256 signing failed` 로그로 구분된다.
 - **취소 표기 경기 폴링 종료**: crawler.py 가 statusInfo 텍스트(경기취소·우천취소·노게임·
   경기연기 등)로도 종료를 판정하고, 중계 없는 경기 전 상태가 6h 이상 이어지면 정상 종료해
   dispatcher 재판정에 맡긴다.
@@ -35,8 +39,6 @@
 ## Non-Goals
 
 - 장애 중 유실된 두산:SSG 9회 이벤트 11건 복원(상태·점수만 회수).
-- Live Activity `sent=0` 의 근본 원인 수정: 이 변경은 원인을 로그로 드러내는 단계이며,
-  다음 경기 로그로 원인을 확정한 뒤 별도 변경으로 다룬다.
 - Railway 고아 서비스(backend-staging, crawler-staging, Redis) 정리.
 - Android/iOS/워치 클라이언트 변경(없음).
 

@@ -78,11 +78,22 @@ def _get_http_client() -> httpx.AsyncClient:
 
 
 def _get_apns_key() -> str | None:
-    """환경 변수에서 .p8 키 내용을 base64 디코딩하여 반환"""
+    """환경 변수에서 .p8 키 내용을 base64 디코딩하여 반환.
+
+    2026-09-05 프로덕션에서 `binascii.Error: Incorrect padding` 으로 모든 APNs 발송이 조용히
+    실패하고 있었다. 대시보드 복사·붙여넣기 과정에서 흔히 생기는 변형(끝의 `=` 누락, 76열
+    줄바꿈, 따옴표, base64 대신 .p8 원문)을 여기서 복원한다.
+    """
     settings = get_settings()
-    if not settings.apns_key_base64:
+    raw = (settings.apns_key_base64 or "").strip().strip('"').strip("'").strip()
+    if not raw:
         return None
-    return base64.b64decode(settings.apns_key_base64).decode("utf-8")
+    if "-----BEGIN" in raw:
+        # base64 가 아니라 .p8 원문이 들어온 경우: 리터럴 \n 을 줄바꿈으로 되돌려 그대로 사용
+        return raw.replace("\\n", "\n").rstrip() + "\n"
+    compact = "".join(raw.split())
+    padded = compact + "=" * (-len(compact) % 4)
+    return base64.b64decode(padded).decode("utf-8")
 
 
 def _create_jwt_token() -> str | None:
