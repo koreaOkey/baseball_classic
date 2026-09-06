@@ -3,6 +3,8 @@ from collections import OrderedDict, defaultdict
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, Callable
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 import hashlib
 import httpx
 import jwt
@@ -91,7 +93,13 @@ from .services import (
     upsert_team_records,
     upsert_game_from_snapshot,
 )
-from .weather import KST, SUPPORTED_FORECAST_DAYS, build_hourly_weather, build_weather_summary
+from .weather import (
+    FORECAST_PREWARM_TIMEOUT_SECONDS,
+    KST,
+    SUPPORTED_FORECAST_DAYS,
+    build_hourly_weather,
+    build_weather_summary,
+)
 from .workers.cheer_validator import validate_pending_cheer_events
 from .venting import (
     VALID_VENTING_EVENT_TYPES,
@@ -391,6 +399,9 @@ GAME_DATA_PURGE_BATCH_PAUSE_SEC = 0.5
 # 받아 두면 목록 응답에도 항상 날씨가 실린다. 구장 수만큼만 KMA 를 호출한다(캐시 공유).
 WEATHER_PREWARM_INITIAL_DELAY_SEC = 10
 WEATHER_PREWARM_INTERVAL_SEC = 20 * 60  # KMA 성공 캐시 TTL(30분)보다 짧게 유지
+# 온디맨드 날씨 조회는 전용 스레드 풀에서 돌린다. 기본 to_thread 풀을 쓰면 상류(기상청) 지연 시
+# 날씨 요청이 풀을 점유해 DB 로더 등 다른 요청까지 느려진다 (2026-09-06).
+_weather_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="weather")
 
 
 def _seconds_until_next_kst_hour(hour: int) -> float:
@@ -527,6 +538,7 @@ def _prewarm_weather_forecasts() -> int:
             service_key=settings.weather_service_key,
             api_base_url=settings.weather_api_base_url,
             allow_network=True,
+            request_timeout=FORECAST_PREWARM_TIMEOUT_SECONDS,
         )
         if summary is not None:
             warmed += 1
@@ -925,12 +937,15 @@ async def get_game_weather(
     target_date = weather_date or datetime.now(KST).date()
 
     try:
-        payload = await asyncio.to_thread(
-            build_hourly_weather,
-            game,
-            service_key=settings.weather_service_key,
-            api_base_url=settings.weather_api_base_url,
-            target_date=target_date,
+        payload = await asyncio.get_running_loop().run_in_executor(
+            _weather_executor,
+            partial(
+                build_hourly_weather,
+                game,
+                service_key=settings.weather_service_key,
+                api_base_url=settings.weather_api_base_url,
+                target_date=target_date,
+            ),
         )
     except Exception:
         logger.warning("hourly weather unavailable: game_id=%s", game_id, exc_info=True)

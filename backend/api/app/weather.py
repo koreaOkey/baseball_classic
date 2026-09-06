@@ -16,8 +16,15 @@ from .models import Game
 
 KST = timezone(timedelta(hours=9))
 FORECAST_TTL_SECONDS = 30 * 60
-FORECAST_FAILURE_TTL_SECONDS = 60
-FORECAST_REQUEST_TIMEOUT_SECONDS = 12
+FORECAST_FAILURE_TTL_SECONDS = 120
+# 온디맨드(앱 요청) 경로 타임아웃 (connect, read). 앱은 5초에 포기하므로 그 안에 실패를 확정하고
+# 마지막 성공 예보(stale)로 대신 응답한다. 2026-09-06 기상청 API 지연(11~25s) 동안 앱의 날씨
+# 요청이 전부 5초 타임아웃(499)으로 끝나고 요청 스레드가 12초씩 묶이던 사례.
+FORECAST_REQUEST_TIMEOUT_SECONDS: float | tuple[float, float] = (2.0, 3.0)
+# 백그라운드 프리워밍 경로: 느린 응답도 기다려 캐시를 채운다.
+FORECAST_PREWARM_TIMEOUT_SECONDS: float | tuple[float, float] = (3.0, 12.0)
+# 새 base_time 조회가 실패/진행 중일 때 대신 쓰는 마지막 성공 예보의 최대 나이
+FORECAST_STALE_MAX_AGE_SECONDS = 6 * 3600
 SUPPORTED_FORECAST_DAYS = 3
 BASE_TIMES = ("0200", "0500", "0800", "1100", "1400", "1700", "2000", "2300")
 # 단기예보는 시간당 12개 카테고리 × 최대 +3일(~70여 시간) ≈ 900행을 넘을 수 있어
@@ -66,6 +73,12 @@ class ForecastSlot:
 
 _forecast_cache: dict[tuple[int, int, str, str, str], tuple[datetime, list[dict[str, Any]]]] = {}
 _forecast_cache_lock = Lock()
+# (nx, ny, key_suffix) → (fetched_at, items). base_time 이 바뀌어 새 조회가 실패하거나 진행 중일 때
+# 대체 응답으로 쓴다. 단기예보는 +3일치를 담고 있어 몇 시간 전 발표분도 유효하다.
+_last_good_forecast: dict[tuple[int, int, str], tuple[datetime, list[dict[str, Any]]]] = {}
+# 같은 키 조회가 진행 중이면 뒤따르는 요청은 기다리지 않고 stale/빈 응답으로 즉시 돌아간다
+# (느린 상류에 요청이 쌓여 스레드 풀을 점유하는 것을 막는다).
+_inflight_forecast_keys: set[tuple[int, int, str, str, str]] = set()
 
 
 def build_weather_summary(
@@ -75,6 +88,7 @@ def build_weather_summary(
     api_base_url: str,
     now: datetime | None = None,
     allow_network: bool = True,
+    request_timeout: float | tuple[float, float] | None = None,
 ) -> dict[str, Any] | None:
     if (game.status or "").upper() != "SCHEDULED":
         return None
@@ -95,6 +109,7 @@ def build_weather_summary(
         api_base_url=api_base_url,
         now=now,
         allow_network=allow_network,
+        request_timeout=request_timeout,
     )
     if not slots:
         return None
@@ -105,7 +120,15 @@ def build_weather_summary(
     return _summary_payload(stadium, selected)
 
 
-def build_hourly_weather(game: Game, *, service_key: str, api_base_url: str, target_date: date, now: datetime | None = None) -> dict[str, Any] | None:
+def build_hourly_weather(
+    game: Game,
+    *,
+    service_key: str,
+    api_base_url: str,
+    target_date: date,
+    now: datetime | None = None,
+    request_timeout: float | tuple[float, float] | None = None,
+) -> dict[str, Any] | None:
     stadium = _stadium_for_game(game)
     if stadium is None:
         return None
@@ -139,6 +162,7 @@ def build_hourly_weather(game: Game, *, service_key: str, api_base_url: str, tar
         service_key=service_key,
         api_base_url=api_base_url,
         now=now,
+        request_timeout=request_timeout,
     )
     if not slots:
         return _empty_hourly_payload(game, stadium)
@@ -182,6 +206,20 @@ def _empty_hourly_payload(game: Game, stadium: StadiumInfo) -> dict[str, Any]:
 def clear_weather_cache() -> None:
     with _forecast_cache_lock:
         _forecast_cache.clear()
+        _last_good_forecast.clear()
+        _inflight_forecast_keys.clear()
+
+
+def _stale_forecast(nx: int, ny: int, key_suffix: str, now: datetime) -> list[dict[str, Any]]:
+    """호출자가 _forecast_cache_lock 을 잡지 않은 상태에서 부른다."""
+    with _forecast_cache_lock:
+        entry = _last_good_forecast.get((nx, ny, key_suffix))
+    if entry is None:
+        return []
+    fetched_at, items = entry
+    if now - fetched_at > timedelta(seconds=FORECAST_STALE_MAX_AGE_SECONDS):
+        return []
+    return items
 
 
 def _forecast_slots_for_game(
@@ -192,6 +230,7 @@ def _forecast_slots_for_game(
     api_base_url: str,
     now: datetime | None,
     allow_network: bool = True,
+    request_timeout: float | tuple[float, float] | None = None,
 ) -> list[ForecastSlot]:
     normalized_service_key = _normalize_service_key(service_key)
     if not normalized_service_key:
@@ -211,6 +250,7 @@ def _forecast_slots_for_game(
         nx=nx,
         ny=ny,
         allow_network=allow_network,
+        request_timeout=request_timeout,
     )
     return _parse_slots(raw_items, target_date)
 
@@ -224,76 +264,103 @@ def _fetch_vilage_forecast(
     nx: int,
     ny: int,
     allow_network: bool = True,
+    request_timeout: float | tuple[float, float] | None = None,
 ) -> list[dict[str, Any]]:
     normalized_service_key = _normalize_service_key(service_key)
-    cache_key = (nx, ny, base_date, base_time, normalized_service_key[-8:])
+    key_suffix = normalized_service_key[-8:]
+    cache_key = (nx, ny, base_date, base_time, key_suffix)
     now = datetime.now(timezone.utc)
     with _forecast_cache_lock:
         cached = _forecast_cache.get(cache_key)
         if cached is not None:
             expires_at, cached_items = cached
             if now < expires_at:
-                return cached_items
+                if cached_items:
+                    return cached_items
+                # 실패 캐시(빈 목록) 구간에는 마지막 성공 예보로 대체한다
+                cached = None
+                stale_needed = True
+            else:
+                stale_needed = False
+        else:
+            stale_needed = False
+        if stale_needed:
+            pass
+        elif not allow_network:
+            pass
+        elif cache_key in _inflight_forecast_keys:
+            stale_needed = True
+        else:
+            _inflight_forecast_keys.add(cache_key)
+            stale_needed = None  # 이 스레드가 조회 담당
 
-    if not allow_network:
-        return []
+    if stale_needed is not None:
+        # 실패 캐시 구간 / 네트워크 금지 / 다른 스레드가 조회 중 → 기다리지 않고 stale 또는 빈 응답
+        return _stale_forecast(nx, ny, key_suffix, now)
 
+    timeout = request_timeout if request_timeout is not None else FORECAST_REQUEST_TIMEOUT_SECONDS
     try:
-        response = requests.get(
-            api_base_url,
-            params={
-                "serviceKey": normalized_service_key,
-                "pageNo": "1",
-                "numOfRows": str(FORECAST_ROWS),
-                "dataType": "JSON",
-                "base_date": base_date,
-                "base_time": base_time,
-                "nx": str(nx),
-                "ny": str(ny),
-            },
-            timeout=FORECAST_REQUEST_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        payload = response.json()
-    except requests.RequestException as exc:
-        logger.warning(
-            "weather forecast request failed: base_date=%s base_time=%s nx=%s ny=%s timeout_sec=%s error=%s",
-            base_date,
-            base_time,
-            nx,
-            ny,
-            FORECAST_REQUEST_TIMEOUT_SECONDS,
-            exc.__class__.__name__,
-        )
-        with _forecast_cache_lock:
-            _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_FAILURE_TTL_SECONDS), [])
-        return []
+        try:
+            response = requests.get(
+                api_base_url,
+                params={
+                    "serviceKey": normalized_service_key,
+                    "pageNo": "1",
+                    "numOfRows": str(FORECAST_ROWS),
+                    "dataType": "JSON",
+                    "base_date": base_date,
+                    "base_time": base_time,
+                    "nx": str(nx),
+                    "ny": str(ny),
+                },
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except requests.RequestException as exc:
+            logger.warning(
+                "weather forecast request failed: base_date=%s base_time=%s nx=%s ny=%s timeout_sec=%s error=%s",
+                base_date,
+                base_time,
+                nx,
+                ny,
+                timeout,
+                exc.__class__.__name__,
+            )
+            with _forecast_cache_lock:
+                _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_FAILURE_TTL_SECONDS), [])
+            return _stale_forecast(nx, ny, key_suffix, now)
 
-    result = payload.get("response", {}).get("header", {}).get("resultCode")
-    if result and result != "00":
-        logger.warning(
-            "weather forecast api returned non-success: base_date=%s base_time=%s nx=%s ny=%s result_code=%s result_msg=%s",
-            base_date,
-            base_time,
-            nx,
-            ny,
-            result,
-            payload.get("response", {}).get("header", {}).get("resultMsg"),
-        )
-        with _forecast_cache_lock:
-            _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_FAILURE_TTL_SECONDS), [])
-        return []
-    item = payload.get("response", {}).get("body", {}).get("items", {}).get("item") or []
-    if isinstance(item, dict):
-        items = [item]
-    elif isinstance(item, list):
-        items = item
-    else:
-        items = []
+        result = payload.get("response", {}).get("header", {}).get("resultCode")
+        if result and result != "00":
+            logger.warning(
+                "weather forecast api returned non-success: base_date=%s base_time=%s nx=%s ny=%s result_code=%s result_msg=%s",
+                base_date,
+                base_time,
+                nx,
+                ny,
+                result,
+                payload.get("response", {}).get("header", {}).get("resultMsg"),
+            )
+            with _forecast_cache_lock:
+                _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_FAILURE_TTL_SECONDS), [])
+            return _stale_forecast(nx, ny, key_suffix, now)
+        item = payload.get("response", {}).get("body", {}).get("items", {}).get("item") or []
+        if isinstance(item, dict):
+            items = [item]
+        elif isinstance(item, list):
+            items = item
+        else:
+            items = []
 
-    with _forecast_cache_lock:
-        _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_TTL_SECONDS), items)
-    return items
+        with _forecast_cache_lock:
+            _forecast_cache[cache_key] = (now + timedelta(seconds=FORECAST_TTL_SECONDS), items)
+            if items:
+                _last_good_forecast[(nx, ny, key_suffix)] = (now, items)
+        return items
+    finally:
+        with _forecast_cache_lock:
+            _inflight_forecast_keys.discard(cache_key)
 
 
 def _parse_slots(items: list[dict[str, Any]], target_date: date) -> list[ForecastSlot]:
