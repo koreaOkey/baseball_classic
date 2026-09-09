@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     # 시도당 HTTP 타임아웃. SDK 기본(120초)은 구글 방면 네트워크 장애 시
     # 내부 재시도까지 겹쳐 스레드를 분 단위로 점유하므로 짧게 제한한다.
     fcm_http_timeout_sec: int = 10
+    # FCM 대량 발송 시 연결 재사용을 위한 requests 세션 풀 크기.
+    # firebase-admin 기본 풀(pool_maxsize=10)로는 send_each 가 토큰마다 스레드를 띄워
+    # 동시 발송할 때 남는 연결이 없어 매번 새 TLS 핸드셰이크를 치른다 — 경기 시작 푸시 폭주 시
+    # CPU 가 튀고 "Connection pool is full, discarding connection" 경고가 쏟아진다.
+    # 발송 규모만큼 풀을 키우면 연결을 재사용해 폭주 비용이 사라진다(병렬·실시간 방식은 유지).
+    # 0 이하면 튜닝을 건너뛰고 SDK 기본값을 쓴다.
+    fcm_http_pool_size: int = 50
 
     # Public Data Portal / KMA short-term forecast
     weather_service_key: str = ""
