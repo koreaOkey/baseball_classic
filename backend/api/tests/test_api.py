@@ -32,6 +32,7 @@ from app.db import SessionLocal  # noqa: E402
 from app.models import AppConfig, DeviceToken, Game, GameBatterStat, GameEvent, GameLineupSlot, GameNote, GamePitcherStat, LiveViewSession, TeamRecord, TeamSubscriptionToken  # noqa: E402
 from app.services import _event_out_count, normalize_event_type, normalize_status  # noqa: E402
 from app.weather import build_hourly_weather, build_weather_summary, clear_weather_cache, _fetch_vilage_forecast  # noqa: E402
+from app import live_activity_sender as la_module  # noqa: E402
 
 
 def sample_snapshot() -> dict:
@@ -3247,7 +3248,17 @@ def test_la_is_significant_classification() -> None:
     assert main_module._la_is_significant(base, _la_state(lastEventType="HIT")) is True
 
 
+_LA_PAYLOAD = {
+    "homeScore": 3, "awayScore": 2, "inning": "7회말",
+    "ball": 2, "strike": 1, "out": 1,
+    "bases": {"first": True, "second": False, "third": True},
+    "pitcher": "Kim Starter", "batter": "Moon Batter",
+    "status": "LIVE", "lastEventType": None,
+}
+
+
 def test_send_live_activity_update_coalesce_dedupe_heartbeat() -> None:
+    """main.py 호환 경로: 기존 이름·patch 지점이 그대로 동작해야 한다."""
     sent: list[tuple[str, dict, str, int]] = []
     fake_cache: dict[str, dict] = {}
 
@@ -3260,60 +3271,255 @@ def test_send_live_activity_update_coalesce_dedupe_heartbeat() -> None:
     async def fake_set_cache(key: str, value: dict, ttl_sec: int = 300) -> None:
         fake_cache[key] = value
 
-    async def fake_send(token, content_state, *, event_type="update", priority=10, **kwargs):
-        sent.append((token, content_state, event_type, priority))
+    async def fake_send(token, content_state, *, event_type="update", priority=10, timestamp=None, **kwargs):
+        sent.append((token, content_state, event_type, timestamp))
         return True, False
 
-    payload = {
-        "homeScore": 3, "awayScore": 2, "inning": "7회말",
-        "ball": 2, "strike": 1, "out": 1,
-        "bases": {"first": True, "second": False, "third": True},
-        "pitcher": "Kim Starter", "batter": "Moon Batter",
-        "status": "LIVE", "lastEventType": None,
-    }
+    payload = dict(_LA_PAYLOAD)
+    cache_key = main_module._LA_LAST_STATE_CACHE_KEY.format(game_id="g1")
+
+    async def scenario() -> None:
+        # 첫 발송: 이전 상태 없음 → 즉시 발송
+        await main_module._send_live_activity_update("g1", dict(payload))
+        assert len(sent) == 1
+
+        # 동일 상태가 heartbeat 간격 내 재수신 → 발송 스킵
+        await main_module._send_live_activity_update("g1", dict(payload))
+        assert len(sent) == 1
+
+        # 볼카운트만 변화, 최소 간격 내 → 코얼레싱 스킵
+        await main_module._send_live_activity_update(
+            "g1", {**payload, "ball": 3, "lastEventType": "BALL"},
+        )
+        assert len(sent) == 1
+
+        # 최소 간격 경과 후 볼카운트 변화 → 발송
+        fake_cache[cache_key]["sentAt"] -= main_module._LA_ROUTINE_MIN_INTERVAL_SEC + 1
+        await main_module._send_live_activity_update(
+            "g1", {**payload, "ball": 3, "lastEventType": "BALL"},
+        )
+        assert len(sent) == 2
+
+        # 득점 변화 → 간격 무관 즉시 발송
+        await main_module._send_live_activity_update(
+            "g1", {**payload, "ball": 0, "homeScore": 4, "lastEventType": "SCORE"},
+        )
+        assert len(sent) == 3
+
+        # 동일 상태라도 heartbeat 간격 경과 → stale-date 갱신용 재전송
+        fake_cache[cache_key]["sentAt"] -= main_module._LA_HEARTBEAT_SEC + 1
+        await main_module._send_live_activity_update(
+            "g1", {**payload, "ball": 0, "homeScore": 4, "lastEventType": "SCORE"},
+        )
+        assert len(sent) == 4
+
+        # 경기 종료 event=end 는 항상 발송
+        await main_module._send_live_activity_update(
+            "g1", {**payload, "status": "FINISHED"}, "end",
+        )
+        assert len(sent) == 5 and sent[-1][2] == "end"
+
+        # APNs timestamp 는 경기별 단조 증가
+        timestamps = [entry[3] for entry in sent]
+        assert all(b > a for a, b in zip(timestamps, timestamps[1:]))
+        await main_module.live_activity_sender.shutdown()
 
     with patch.object(main_module, "_cached_live_activity_tokens", fake_tokens), \
             patch.object(main_module.redis_relay, "get_cache", fake_get_cache), \
             patch.object(main_module.redis_relay, "set_cache", fake_set_cache), \
             patch.object(main_module, "send_live_activity_push_with_result", fake_send):
-        cache_key = main_module._LA_LAST_STATE_CACHE_KEY.format(game_id="g1")
+        asyncio.run(scenario())
 
-        # 첫 발송: 이전 상태 없음 → 즉시 발송 (priority 는 항상 10)
-        asyncio.run(main_module._send_live_activity_update("g1", dict(payload)))
-        assert len(sent) == 1 and sent[-1][3] == 10
 
-        # 동일 상태가 heartbeat 간격 내 재수신 → 발송 스킵
-        asyncio.run(main_module._send_live_activity_update("g1", dict(payload)))
+class _FakeLARelay:
+    """Redis 없이 발송기 동작을 검증하기 위한 캐시·락·SCAN 대역."""
+
+    def __init__(self, *, lock_busy: bool = False) -> None:
+        self.cache: dict[str, dict] = {}
+        self.locks: dict[str, str] = {}
+        self.lock_busy = lock_busy
+        self.lock_attempts = 0
+
+    async def get_cache(self, key: str):
+        return self.cache.get(key)
+
+    async def set_cache(self, key: str, value: dict, ttl_sec: int = 300) -> None:
+        self.cache[key] = value
+
+    async def try_lock(self, key: str, ttl_ms: int):
+        self.lock_attempts += 1
+        if self.lock_busy or key in self.locks:
+            return None
+        self.locks[key] = "owner"
+        return "owner"
+
+    async def release_lock(self, key: str, token) -> None:
+        self.locks.pop(key, None)
+
+    async def scan_keys(self, pattern: str, *, limit: int = 500) -> list[str]:
+        prefix = pattern.rstrip("*")
+        return [key for key in self.cache if key.startswith(prefix)]
+
+
+class _FakeLAClock:
+    def __init__(self, start: float = 1_700_000_000.0) -> None:
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.now += max(0.0, seconds)
+        await asyncio.sleep(0)
+
+
+def _make_la_sender(*, relay=None, tokens=("tok1",), clock=None):
+    sent: list[dict] = []
+    relay = relay or _FakeLARelay()
+    clock = clock or _FakeLAClock()
+
+    async def token_loader(game_id: str) -> list[str]:
+        return list(tokens)
+
+    async def push(token, content_state, *, event_type="update", timestamp=None, stale_seconds=None, **kwargs):
+        sent.append({
+            "token": token, "state": dict(content_state), "event": event_type,
+            "ts": timestamp, "stale": stale_seconds,
+        })
+        return True, False
+
+    sender = la_module.LiveActivitySender(
+        relay=relay, token_loader=token_loader, push_sender=push, clock=clock, sleeper=clock.sleep,
+    )
+    return sender, sent, relay, clock
+
+
+async def _drain_la_tasks(sender) -> None:
+    for _ in range(5):
+        tasks = [task for task in list(sender._tasks) if not task.done()]
+        if not tasks:
+            return
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def test_la_sender_drops_stale_seq_even_if_processed_later() -> None:
+    sender, sent, relay, clock = _make_la_sender()
+
+    async def scenario() -> None:
+        newer = {**_LA_PAYLOAD, "homeScore": 4, "lastEventType": "SCORE"}
+        await sender.submit("g1", newer, seq=200.0, ingest_at=clock.now)
+        assert len(sent) == 1 and sent[-1]["state"]["homeScore"] == 4
+        # 더 오래된 스냅샷(seq 100)이 늦게 처리돼도 발송되지 않는다
+        await sender.submit("g1", dict(_LA_PAYLOAD), seq=100.0, ingest_at=clock.now)
         assert len(sent) == 1
+        assert sender.stats["skip_stale"] == 1
+        last = la_module.LastState.from_cache(relay.cache[la_module.LAST_STATE_CACHE_KEY.format(game_id="g1")])
+        assert last.state["homeScore"] == 4 and last.seq == 200.0
 
-        # 볼카운트만 변화, 최소 간격 내 → 코얼레싱 스킵
-        asyncio.run(main_module._send_live_activity_update(
-            "g1", {**payload, "ball": 3, "lastEventType": "BALL"},
-        ))
+    asyncio.run(scenario())
+
+
+def test_la_sender_trailing_flush_sends_coalesced_last_pitch() -> None:
+    sender, sent, relay, clock = _make_la_sender()
+
+    async def scenario() -> None:
+        await sender.submit("g1", dict(_LA_PAYLOAD), seq=1.0, ingest_at=clock.now)
         assert len(sent) == 1
+        clock.now += 5
+        await sender.submit("g1", {**_LA_PAYLOAD, "ball": 3, "lastEventType": "BALL"}, seq=2.0, ingest_at=clock.now)
+        assert len(sent) == 1 and sender.stats["skip_coalesce"] == 1
+        # 다음 ingest 없이도 간격 경과 후 미뤄진 마지막 상태가 발송된다
+        await _drain_la_tasks(sender)
+        assert len(sent) == 2 and sent[-1]["state"]["ball"] == 3
+        assert sent[-1]["ts"] > sent[0]["ts"]
+        assert clock.now - 1_700_000_000.0 >= la_module.ROUTINE_MIN_INTERVAL_SEC
 
-        # 최소 간격 경과 후 볼카운트 변화 → 발송
-        fake_cache[cache_key]["sentAt"] -= main_module._LA_ROUTINE_MIN_INTERVAL_SEC + 1
-        asyncio.run(main_module._send_live_activity_update(
-            "g1", {**payload, "ball": 3, "lastEventType": "BALL"},
-        ))
-        assert len(sent) == 2 and sent[-1][3] == 10
+    asyncio.run(scenario())
 
-        # 득점 변화 → 간격 무관 즉시 발송
-        asyncio.run(main_module._send_live_activity_update(
-            "g1", {**payload, "ball": 0, "homeScore": 4, "lastEventType": "SCORE"},
-        ))
-        assert len(sent) == 3 and sent[-1][3] == 10
 
-        # 동일 상태라도 heartbeat 간격 경과 → stale-date 갱신용 재전송
-        fake_cache[cache_key]["sentAt"] -= main_module._LA_HEARTBEAT_SEC + 1
-        asyncio.run(main_module._send_live_activity_update(
-            "g1", {**payload, "ball": 0, "homeScore": 4, "lastEventType": "SCORE"},
-        ))
+def test_la_sender_heartbeat_timer_resends_and_respects_cutoff_and_end() -> None:
+    sender, sent, relay, clock = _make_la_sender()
+    cache_key = la_module.LAST_STATE_CACHE_KEY.format(game_id="g1")
+
+    async def scenario() -> None:
+        await sender.submit("g1", dict(_LA_PAYLOAD), seq=1.0, ingest_at=clock.now)
+        assert len(sent) == 1
+        # 60s 미만 → heartbeat 없음
+        clock.now += 30
+        await sender.heartbeat_tick()
+        assert len(sent) == 1
+        # 60s 경과 → 같은 상태를 새 timestamp 로 재발송
+        clock.now += 31
+        await sender.heartbeat_tick()
+        assert len(sent) == 2 and sent[-1]["state"] == sent[0]["state"]
+        assert sent[-1]["ts"] > sent[0]["ts"] and sent[-1]["stale"] == la_module.STALE_SECONDS
+        assert sender.stats["heartbeat"] == 1
+        # 마지막 ingest 가 10분 넘게 끊기면 heartbeat 중단 (파이프라인 정지 → stale 로 떨어지게)
+        relay.cache[cache_key]["ingestAt"] = clock.now - la_module.HEARTBEAT_INGEST_CUTOFF_SEC - 1
+        clock.now += 61
+        await sender.heartbeat_tick()
+        assert len(sent) == 2
+        # 새 ingest 가 오면 다시 살아난다
+        await sender.submit("g1", {**_LA_PAYLOAD, "out": 2}, seq=2.0, ingest_at=clock.now)
+        assert len(sent) == 3
+        clock.now += 61
+        await sender.heartbeat_tick()
         assert len(sent) == 4
+        # 경기 종료 후에는 heartbeat 없음
+        await sender.submit("g1", {**_LA_PAYLOAD, "status": "FINISHED"}, event_type="end", seq=3.0, ingest_at=clock.now)
+        assert len(sent) == 5 and sent[-1]["event"] == "end"
+        clock.now += 61
+        await sender.heartbeat_tick()
+        assert len(sent) == 5
 
-        # 경기 종료 event=end 는 항상 발송
-        asyncio.run(main_module._send_live_activity_update(
-            "g1", {**payload, "status": "FINISHED"}, "end",
-        ))
-        assert len(sent) == 5 and sent[-1][2] == "end"
+    asyncio.run(scenario())
+
+
+def test_la_sender_lock_busy_skips_heartbeat_but_not_updates() -> None:
+    relay = _FakeLARelay(lock_busy=True)
+    sender, sent, relay, clock = _make_la_sender(relay=relay)
+    cache_key = la_module.LAST_STATE_CACHE_KEY.format(game_id="g1")
+
+    async def scenario() -> None:
+        # 다른 프로세스가 락을 오래 잡고 있어도 갱신 발송은 막지 않는다 (재시도 후 락 없이 진행)
+        await sender.submit("g1", dict(_LA_PAYLOAD), seq=1.0, ingest_at=clock.now)
+        assert len(sent) == 1 and sender.stats["lock_busy"] == 1
+        assert relay.lock_attempts > 1
+        # heartbeat 는 락을 못 잡으면 건너뛴다 (다른 프로세스가 보낸다)
+        clock.now += 61
+        await sender.heartbeat_tick()
+        assert len(sent) == 1 and sender.stats["heartbeat"] == 0
+        assert cache_key in relay.cache
+
+    asyncio.run(scenario())
+
+
+def test_la_sender_no_tokens_sends_nothing() -> None:
+    sender, sent, relay, clock = _make_la_sender(tokens=())
+
+    async def scenario() -> None:
+        await sender.submit("g1", dict(_LA_PAYLOAD), seq=1.0, ingest_at=clock.now)
+        assert sent == [] and sender.stats["no_tokens"] == 1
+        assert la_module.LAST_STATE_CACHE_KEY.format(game_id="g1") not in relay.cache
+
+    asyncio.run(scenario())
+
+
+def test_la_sender_concurrent_submits_keep_order() -> None:
+    sender, sent, relay, clock = _make_la_sender()
+
+    async def scenario() -> None:
+        older = dict(_LA_PAYLOAD)
+        newer = {**_LA_PAYLOAD, "homeScore": 4, "lastEventType": "SCORE"}
+        # 같은 경기 두 체인이 동시에 도착: 순서대로 직렬 처리되고 최신 상태로 끝난다
+        await asyncio.gather(
+            sender.submit("g1", older, seq=1.0, ingest_at=clock.now),
+            sender.submit("g1", newer, seq=2.0, ingest_at=clock.now),
+        )
+        assert [entry["state"]["homeScore"] for entry in sent] == [3, 4]
+        assert sent[1]["ts"] > sent[0]["ts"]
+        # 뒤늦게 도착한 오래된 체인은 버려진다
+        await sender.submit("g1", older, seq=0.5, ingest_at=clock.now)
+        assert len(sent) == 2 and sender.stats["skip_stale"] == 1
+
+    asyncio.run(scenario())

@@ -214,6 +214,64 @@ class RedisBroadcastRelay:
             return
         await self._run_cache_op("delete", self._publisher.delete(key))
 
+    # 프로세스 간 단기 락 (Live Activity 발송 직렬화 등). SET NX PX 로 잡고 소유 토큰이
+    # 일치할 때만 지운다. Redis 가 없거나 실패하면 "획득" 으로 저하시켜 발송을 막지 않는다
+    # (중복 가능, 현재 운영 수준). 반환값: 획득 시 소유 토큰, 다른 소유자가 잡고 있으면 None.
+    LOCK_DEGRADED_TOKEN = "no-redis"
+    _RELEASE_LOCK_SCRIPT = (
+        "if redis.call('get', KEYS[1]) == ARGV[1] then "
+        "return redis.call('del', KEYS[1]) else return 0 end"
+    )
+
+    async def try_lock(self, key: str, ttl_ms: int) -> str | None:
+        if not self.enabled or self._publisher is None:
+            return self.LOCK_DEGRADED_TOKEN
+        token = f"{self._source_instance_id}:{time.time_ns()}"
+        try:
+            acquired = await asyncio.wait_for(
+                self._publisher.set(key, token, nx=True, px=max(1, int(ttl_ms))),
+                timeout=REDIS_CACHE_OP_TIMEOUT_SEC,
+            )
+        except asyncio.TimeoutError:
+            self.stats["cache_timeout"] += 1
+            self._log_cache_failure("lock", "timeout")
+            return self.LOCK_DEGRADED_TOKEN
+        except (RedisConnectionError, RedisTimeoutError, OSError) as exc:
+            self.stats["cache_fail"] += 1
+            self._log_cache_failure("lock", f"{type(exc).__name__}: {exc}")
+            return self.LOCK_DEGRADED_TOKEN
+        except Exception:
+            self.stats["cache_fail"] += 1
+            logger.debug("redis lock failed", exc_info=True)
+            return self.LOCK_DEGRADED_TOKEN
+        return token if acquired else None
+
+    async def release_lock(self, key: str, token: str | None) -> None:
+        if not token or token == self.LOCK_DEGRADED_TOKEN:
+            return
+        if not self.enabled or self._publisher is None:
+            return
+        await self._run_cache_op(
+            "unlock",
+            self._publisher.eval(self._RELEASE_LOCK_SCRIPT, 1, key, token),
+        )
+
+    async def scan_keys(self, pattern: str, *, limit: int = 500) -> list[str]:
+        """패턴에 맞는 키를 최대 limit 개 돌려준다. 실패·미가용 시 빈 목록."""
+        if not self.enabled or self._publisher is None:
+            return []
+
+        async def _collect() -> list[str]:
+            found: list[str] = []
+            async for raw in self._publisher.scan_iter(match=pattern, count=100):
+                found.append(raw.decode() if isinstance(raw, bytes) else str(raw))
+                if len(found) >= limit:
+                    break
+            return found
+
+        result = await self._run_cache_op("scan", _collect())
+        return result if isinstance(result, list) else []
+
     async def publish(self, game_id: str, message: dict[str, Any]) -> None:
         if not self.enabled or self._publisher is None:
             return

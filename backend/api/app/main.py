@@ -53,6 +53,16 @@ from .models import (
     UserCheckinSeason,
 )
 from .redis_bus import RedisBroadcastRelay
+from .live_activity_sender import (
+    HEARTBEAT_SEC as _LA_HEARTBEAT_SEC,
+    LAST_STATE_CACHE_KEY as _LA_LAST_STATE_CACHE_KEY,
+    LAST_STATE_TTL_SEC as _LA_LAST_STATE_TTL_SEC,
+    ROUTINE_MIN_INTERVAL_SEC as _LA_ROUTINE_MIN_INTERVAL_SEC,
+    ROUTINE_ONLY_FIELDS as _LA_ROUTINE_ONLY_FIELDS,
+    SIGNIFICANT_EVENT_TYPES as _LA_SIGNIFICANT_EVENT_TYPES,
+    LiveActivitySender,
+    is_significant as _la_is_significant,
+)
 from .apns import (
     log_send_exceptions,
     send_live_activity_push_with_result,
@@ -581,15 +591,17 @@ async def lifespan(_: FastAPI):
             logger.exception("startup database initialization failed; continuing in degraded mode")
     purge_task = asyncio.create_task(_push_data_purge_loop())
     weather_prewarm_task = asyncio.create_task(_weather_prewarm_loop())
+    la_heartbeat_task = asyncio.create_task(live_activity_sender.run_heartbeat_loop())
     try:
         yield
     finally:
-        for task in (purge_task, weather_prewarm_task):
+        for task in (purge_task, weather_prewarm_task, la_heartbeat_task):
             task.cancel()
             try:
                 await task
             except (asyncio.CancelledError, Exception):
                 pass
+        await live_activity_sender.shutdown()
         await redis_relay.stop()
 
 
@@ -2123,117 +2135,44 @@ def _load_live_activity_tokens(game_id: str) -> list[str]:
         return [row.token for row in rows]
 
 
-# iOS 는 priority 10 liveactivity push 에 기기별 budget 을 두고 초과분을 조용히
-# 드롭한다(APNs 는 200 반환). 볼카운트성 갱신을 priority 5 로 보내는 정책은 실기기
-# 검증(2026-08-18)에서 잠금 상태 전달이 지연/유실돼 카드가 자주 stale 해지는 것으로
-# 확인됨 → 전부 priority 10 으로 보내되 볼카운트성 갱신은 코얼레싱해 budget 을 아낀다
-# (frequent-updates 엔타이틀먼트 빌드 전제; 구버전 앱은 기존과 동일하게 스로틀링).
-_LA_LAST_STATE_CACHE_KEY = "live_activity_last_state:{game_id}"
-_LA_LAST_STATE_TTL_SEC = 6 * 3600
-# 발송 정책 검증용 로거: 루트 레벨이 WARNING 이라 INFO 가 묻히므로 전용 로거만 개방
+# 잠금화면 Live Activity 발송기 (openspec decouple-live-activity-sender, 2026-09-09).
+# 발송 정책·직렬화·heartbeat 는 live_activity_sender 모듈에 있다. 여기서는 main 의
+# 토큰 로더/APNs 발송/프루닝을 주입하고 (람다로 감싸 테스트의 patch 가 그대로 먹게 한다)
+# 기존 이름(_send_live_activity_update, _la_is_significant, _LA_* 상수)을 호환용으로 남긴다.
 _la_send_logger = logging.getLogger("app.live_activity")
-_la_send_logger.setLevel(logging.INFO)
-_LA_HEARTBEAT_SEC = 60             # 상태 불변이어도 stale-date 갱신용 재전송 간격
-_LA_ROUTINE_MIN_INTERVAL_SEC = 20  # 볼카운트성 갱신 최소 발송 간격 (다음 ingest 가 곧 따라옴)
-# 이 필드만 변한 업데이트는 일상 갱신으로 간주 (스코어·주자·아웃·이닝·투수·상태 변화가 significant)
-_LA_ROUTINE_ONLY_FIELDS = frozenset({"ball", "strike", "batter", "lastEventType"})
-_LA_SIGNIFICANT_EVENT_TYPES = frozenset({
-    "HOMERUN", "SCORE", "SAC_FLY_SCORE",
-    "HIT", "WALK", "HIT_BY_PITCH",
-    "STEAL", "TAG_UP_ADVANCE",
-    "OUT", "DOUBLE_PLAY", "TRIPLE_PLAY",
-    "PITCHER_CHANGE",
-})
-
-
-def _la_is_significant(prev_state: dict[str, Any] | None, next_state: dict[str, Any]) -> bool:
-    if prev_state is None:
-        return True
-    if any(
-        prev_state.get(key) != value
-        for key, value in next_state.items()
-        if key not in _LA_ROUTINE_ONLY_FIELDS
-    ):
-        return True
-    return (next_state.get("lastEventType") or "").upper() in _LA_SIGNIFICANT_EVENT_TYPES
+live_activity_sender = LiveActivitySender(
+    relay=redis_relay,
+    token_loader=lambda game_id: _cached_live_activity_tokens(game_id),
+    push_sender=lambda *args, **kwargs: send_live_activity_push_with_result(*args, **kwargs),
+    prune_dead_tokens=lambda game_id, tokens: _prune_dead_live_activity_tokens(game_id, tokens),
+)
 
 
 async def _send_live_activity_update(
     game_id: str,
     state_payload: dict[str, Any],
     event_type: str = "update",
+    *,
+    seq: float | None = None,
+    ingest_at: float | None = None,
 ) -> None:
-    """Live Activity push로 잠금화면 업데이트"""
-    tokens = await _cached_live_activity_tokens(game_id)
-    if not tokens:
-        return
-
-    last_event_type = state_payload.get("lastEventType")
-    content_state = {
-        "homeScore": state_payload.get("homeScore", 0),
-        "awayScore": state_payload.get("awayScore", 0),
-        "inning": state_payload.get("inning", ""),
-        "ball": state_payload.get("ball", 0),
-        "strike": state_payload.get("strike", 0),
-        "out": state_payload.get("out", 0),
-        "baseFirst": state_payload.get("bases", {}).get("first", False),
-        "baseSecond": state_payload.get("bases", {}).get("second", False),
-        "baseThird": state_payload.get("bases", {}).get("third", False),
-        "pitcher": state_payload.get("pitcher", "") or "",
-        "batter": state_payload.get("batter", "") or "",
-        "status": state_payload.get("status", "LIVE"),
-        "lastEventType": last_event_type,
-    }
-
-    state_cache_key = _LA_LAST_STATE_CACHE_KEY.format(game_id=game_id)
-    cached_last = await redis_relay.get_cache(state_cache_key)
-    prev_state = cached_last.get("state") if isinstance(cached_last, dict) else None
-    last_sent_at = float(cached_last.get("sentAt") or 0) if isinstance(cached_last, dict) else 0.0
-    now = time.time()
-
-    if event_type == "end":
-        significant = True
-    elif prev_state == content_state:
-        # 상태 불변(이닝 교대 등): heartbeat 간격 경과 시에만 stale-date 갱신 재전송.
-        if now - last_sent_at < _LA_HEARTBEAT_SEC:
-            return
-        significant = False
-    else:
-        significant = _la_is_significant(prev_state, content_state)
-        # 볼카운트성 갱신 코얼레싱: 스킵해도 다음 ingest 가 최신 상태를 실어온다.
-        if not significant and now - last_sent_at < _LA_ROUTINE_MIN_INTERVAL_SEC:
-            return
-
-    results = await asyncio.gather(
-        *(
-            send_live_activity_push_with_result(token, content_state, event_type=event_type)
-            for token in tokens
-        ),
-        return_exceptions=True,
+    """Live Activity push 로 잠금화면 업데이트 (발송기 위임, 완료까지 대기)."""
+    await live_activity_sender.submit(
+        game_id, state_payload, event_type=event_type, seq=seq, ingest_at=ingest_at,
     )
-    log_send_exceptions("live-activity-push", results)
-    ok_count = sum(
-        1 for result in results
-        if not isinstance(result, BaseException) and result[0]
+
+
+async def _dispatch_live_activity_update(
+    game_id: str,
+    state_payload: dict[str, Any],
+    event_type: str,
+    seq: float,
+    ingest_at: float,
+) -> None:
+    """ingest 체인의 첫 항목. 발송 태스크만 띄우고 즉시 반환해 WS·캐시·팬아웃과 병렬로 진행한다."""
+    live_activity_sender.dispatch(
+        game_id, state_payload, event_type=event_type, seq=seq, ingest_at=ingest_at,
     )
-    _la_send_logger.info(
-        "[APNs-LA] game=%s sent=%d/%d significant=%s event=%s",
-        game_id, ok_count, len(tokens), significant, event_type,
-    )
-    await redis_relay.set_cache(
-        state_cache_key,
-        {"state": content_state, "sentAt": now},
-        ttl_sec=_LA_LAST_STATE_TTL_SEC,
-    )
-    dead_tokens: list[str] = []
-    for token, result in zip(tokens, results):
-        if isinstance(result, BaseException):
-            continue
-        ok, permanent = result
-        if not ok and permanent:
-            dead_tokens.append(token)
-    if dead_tokens:
-        await _prune_dead_live_activity_tokens(game_id, dead_tokens)
 
 
 @app.get("/team-records", response_model=list[TeamRecordOut])
@@ -2374,6 +2313,7 @@ def _ingest_crawler_snapshot_locked(
     game_summary_payload: dict[str, Any] | None = None
     response_status: GameStatus | None = None
     response_updated_at: datetime | None = None
+    ingest_committed_at: float = 0.0
 
     for attempt in range(len(SNAPSHOT_INGEST_RETRY_DELAYS_SECONDS) + 1):
         try:
@@ -2402,6 +2342,7 @@ def _ingest_crawler_snapshot_locked(
             response_status = normalize_status(game.status)
             response_updated_at = game.updated_at
             db.commit()
+            ingest_committed_at = time.time()
             state_payload = current_state_payload
             inserted_event_payload = current_event_payload
             game_summary_payload = current_game_summary_payload
@@ -2441,6 +2382,18 @@ def _ingest_crawler_snapshot_locked(
             status=response_status,
             updatedAt=response_updated_at,
         )
+
+    # Live Activity push (잠금화면). 체인 맨 앞에서 fire-and-forget 으로 띄워
+    # 아래 WS·캐시·팬아웃 지연과 무관하게 발송한다. seq/ingest_at = 커밋 시각.
+    la_event = "end" if state_payload.get("status") == "FINISHED" else "update"
+    if inserted_event_payload:
+        state_payload_with_event = {**state_payload, "lastEventType": inserted_event_payload[-1].get("type")}
+    else:
+        state_payload_with_event = {**state_payload, "lastEventType": None}
+    background_tasks.add_task(
+        _dispatch_live_activity_update,
+        game_id, state_payload_with_event, la_event, ingest_committed_at, ingest_committed_at,
+    )
 
     if inserted_event_payload:
         background_tasks.add_task(
@@ -2507,16 +2460,6 @@ def _ingest_crawler_snapshot_locked(
             state_payload.get("homeScore", 0) or 0,
             state_payload.get("awayScore", 0) or 0,
         )
-
-    # Live Activity push 전송 (잠금화면 실시간 업데이트)
-    la_event = "end" if state_payload.get("status") == "FINISHED" else "update"
-    if inserted_event_payload:
-        state_payload_with_event = {**state_payload, "lastEventType": inserted_event_payload[-1].get("type")}
-    else:
-        state_payload_with_event = {**state_payload, "lastEventType": None}
-    background_tasks.add_task(
-        _send_live_activity_update, game_id, state_payload_with_event, la_event,
-    )
 
     return IngestResult(
         gameId=game.id,
