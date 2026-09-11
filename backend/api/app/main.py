@@ -5,11 +5,15 @@ from typing import Annotated, Any, Callable
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+import ctypes
+import ctypes.util
 import hashlib
 import httpx
 import jwt
 import logging
+import os
 import secrets
+import sys
 import time
 import threading
 
@@ -409,6 +413,8 @@ GAME_DATA_PURGE_BATCH_PAUSE_SEC = 0.5
 # 받아 두면 목록 응답에도 항상 날씨가 실린다. 구장 수만큼만 KMA 를 호출한다(캐시 공유).
 WEATHER_PREWARM_INITIAL_DELAY_SEC = 10
 WEATHER_PREWARM_INTERVAL_SEC = 20 * 60  # KMA 성공 캐시 TTL(30분)보다 짧게 유지
+
+MEMORY_TRIM_INITIAL_DELAY_SEC = 60
 # 온디맨드 날씨 조회는 전용 스레드 풀에서 돌린다. 기본 to_thread 풀을 쓰면 상류(기상청) 지연 시
 # 날씨 요청이 풀을 점유해 DB 로더 등 다른 요청까지 느려진다 (2026-09-06).
 _weather_executor = ThreadPoolExecutor(max_workers=6, thread_name_prefix="weather")
@@ -569,6 +575,86 @@ async def _weather_prewarm_loop() -> None:
         await asyncio.sleep(WEATHER_PREWARM_INTERVAL_SEC)
 
 
+_libc: ctypes.CDLL | None = None
+_libc_resolved = False
+
+
+def _get_libc() -> ctypes.CDLL | None:
+    """glibc(malloc_trim 제공)를 1회 로드. Linux/glibc 아니면 None (그 외 환경은 no-op)."""
+    global _libc, _libc_resolved
+    if _libc_resolved:
+        return _libc
+    _libc_resolved = True
+    if sys.platform != "linux":
+        _libc = None
+        return None
+    for name in ("libc.so.6", ctypes.util.find_library("c")):
+        if not name:
+            continue
+        try:
+            candidate = ctypes.CDLL(name, use_errno=True)
+        except OSError:
+            continue
+        if hasattr(candidate, "malloc_trim"):
+            _libc = candidate
+            return _libc
+    _libc = None
+    return None
+
+
+def _malloc_trim() -> bool:
+    """반환되지 않은 glibc 힙 메모리를 OS 로 돌려준다. 성공 여부."""
+    libc = _get_libc()
+    if libc is None:
+        return False
+    try:
+        libc.malloc_trim(0)
+        return True
+    except Exception:
+        return False
+
+
+def _read_rss_bytes() -> int | None:
+    """현재 프로세스 RSS(바이트). Linux /proc 없으면 None."""
+    try:
+        with open("/proc/self/statm") as handle:
+            fields = handle.read().split()
+        return int(fields[1]) * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+async def _memory_trim_loop() -> None:
+    """주기적으로 malloc_trim 을 호출해 경기 후 반환되지 않은 힙 단편화를 OS 로 돌려준다.
+
+    trim 전후 RSS 를 로그로 남겨 효과를 직접 확인한다(계측 겸용). glibc/Linux 아니면 no-op.
+    """
+    if not settings.memory_trim_enabled:
+        return
+    if _get_libc() is None:
+        logger.info("[mem-trim] disabled: malloc_trim unavailable on this platform")
+        return
+    interval = max(60, settings.memory_trim_interval_sec)
+    await asyncio.sleep(MEMORY_TRIM_INITIAL_DELAY_SEC)
+    while True:
+        try:
+            before = await asyncio.to_thread(_read_rss_bytes)
+            trimmed = await asyncio.to_thread(_malloc_trim)
+            after = await asyncio.to_thread(_read_rss_bytes)
+            if trimmed and before is not None and after is not None:
+                freed_mb = (before - after) / 1048576
+                log = logger.info if freed_mb >= 1.0 else logger.debug
+                log(
+                    "[mem-trim] rss_before=%.0fMB rss_after=%.0fMB freed=%.1fMB",
+                    before / 1048576, after / 1048576, freed_mb,
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("[mem-trim] trim failed", exc_info=True)
+        await asyncio.sleep(interval)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     if not settings.supabase_jwt_secret:
@@ -592,10 +678,11 @@ async def lifespan(_: FastAPI):
     purge_task = asyncio.create_task(_push_data_purge_loop())
     weather_prewarm_task = asyncio.create_task(_weather_prewarm_loop())
     la_heartbeat_task = asyncio.create_task(live_activity_sender.run_heartbeat_loop())
+    memory_trim_task = asyncio.create_task(_memory_trim_loop())
     try:
         yield
     finally:
-        for task in (purge_task, weather_prewarm_task, la_heartbeat_task):
+        for task in (purge_task, weather_prewarm_task, la_heartbeat_task, memory_trim_task):
             task.cancel()
             try:
                 await task

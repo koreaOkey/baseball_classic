@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     # 0 이하면 튜닝을 건너뛰고 SDK 기본값을 쓴다.
     fcm_http_pool_size: int = 50
 
+    # 주기적 glibc malloc_trim: 경기 중 대량 스레드·DB 처리로 생긴 힙 단편화가 RSS 로 고착되어
+    # 반환되지 않는 것을 완화한다(비용 절감). Linux/glibc 전용, 그 외 환경은 자동 no-op.
+    memory_trim_enabled: bool = True
+    memory_trim_interval_sec: int = 600
+
     # Public Data Portal / KMA short-term forecast
     weather_service_key: str = ""
     weather_api_base_url: str = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst"
