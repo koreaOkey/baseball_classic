@@ -19,6 +19,8 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+import naver_http
+
 
 KST = ZoneInfo("Asia/Seoul")
 LIVE_STATUS_CODES = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
@@ -180,13 +182,7 @@ def _log_json_get_failure(url: str, exc: Exception) -> None:
 
 def _safe_json_get(url: str, timeout: float) -> Any | None:
     try:
-        response = requests.get(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
-            timeout=timeout,
-        )
-        response.raise_for_status()
-        payload = response.json()
+        payload = naver_http.get_json(url, timeout=timeout)
         if isinstance(payload, (dict, list)):
             return payload
     except Exception as exc:
@@ -643,18 +639,15 @@ def _fetch_schedule_games(
         )
 
     endpoint = f"{source_base_url.rstrip('/')}/schedule/games"
-    response = requests.get(
+    payload = naver_http.get_json(
         endpoint,
         params={
             "sectionId": section_id,
             "categoryId": category_id,
             "date": target_date.isoformat(),
         },
-        headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
         timeout=timeout,
     )
-    response.raise_for_status()
-    payload = response.json()
     result = (payload.get("result") or {}) if isinstance(payload, dict) else {}
     games = result.get("games") or []
     if isinstance(games, list):
@@ -671,18 +664,15 @@ def _fetch_schedule_games_via_calendar(
     timeout: float,
 ) -> list[dict[str, Any]]:
     calendar_endpoint = f"{source_base_url.rstrip('/')}/schedule/calendar"
-    response = requests.get(
+    payload = naver_http.get_json(
         calendar_endpoint,
         params={
             "sectionId": section_id,
             "categoryId": category_id,
             "date": target_date.isoformat(),
         },
-        headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
         timeout=timeout,
     )
-    response.raise_for_status()
-    payload = response.json()
     result = (payload.get("result") or {}) if isinstance(payload, dict) else {}
     dates = result.get("dates") or []
     if not isinstance(dates, list):
@@ -723,13 +713,7 @@ def _fetch_schedule_games_via_calendar(
     games: list[dict[str, Any]] = []
     for game_id in deduped_game_ids:
         game_endpoint = f"{source_base_url.rstrip('/')}/schedule/games/{game_id}"
-        game_response = requests.get(
-            game_endpoint,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
-            timeout=timeout,
-        )
-        game_response.raise_for_status()
-        game_payload = game_response.json()
+        game_payload = naver_http.get_json(game_endpoint, timeout=timeout)
         game_result = (game_payload.get("result") or {}) if isinstance(game_payload, dict) else {}
         game = game_result.get("game")
         if isinstance(game, dict):
@@ -745,13 +729,7 @@ def _fetch_team_rank_rows(
     timeout: float,
 ) -> list[dict[str, Any]]:
     endpoint = f"{source_base_url.rstrip('/')}/statistics/categories/{category_id}/seasons/{season_code}/teams"
-    response = requests.get(
-        endpoint,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; BaseballDispatcher/1.0)"},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    payload = response.json()
+    payload = naver_http.get_json(endpoint, timeout=timeout)
     result = (payload.get("result") or {}) if isinstance(payload, dict) else {}
     rows = result.get("seasonTeamStats") or []
     if isinstance(rows, list):

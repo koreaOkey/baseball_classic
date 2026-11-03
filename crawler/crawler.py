@@ -16,10 +16,10 @@ except ImportError:
     _HAS_EXCEL = False
 
 from backend_sender import build_snapshot_payload, post_snapshot_to_backend
+import naver_http
 
 
 BASE_URL = "https://api-gw.sports.naver.com"
-DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; BaseballClassicCrawler/1.0)"
 LIVE_STATUS = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
 # 경기 시작 전(중계 텍스트 없음)에는 폴링 주기를 늦춘다 (C6)
 PREGAME_IDLE_INTERVAL_SEC = 60
@@ -65,13 +65,7 @@ def is_terminal_status(status_code: Optional[str], status_info: Optional[str]) -
 
 
 def fetch_json(url: str) -> Dict[str, Any]:
-    response = requests.get(
-        url,
-        headers={"User-Agent": DEFAULT_USER_AGENT},
-        timeout=20,
-    )
-    response.raise_for_status()
-    return response.json()
+    return naver_http.get_json(url, timeout=20)
 
 
 def _pick_preview_player_value(player: Dict[str, Any], keys: List[str]) -> str:
