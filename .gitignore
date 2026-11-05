@@ -53,3 +53,7 @@ backend/api/**/*.db
 
 # Claude Code 병렬 워크트리 (로컬 전용)
 .claude/worktrees/
+
+# 팀별 워치 에셋 생성물 (2026-09-02 Higgsfield, 약 1.2GB). 앱 미반영이라 저장소에 넣지 않고 로컬에 보관
+/video/teams/
+/video/teams_penguin_v1/
