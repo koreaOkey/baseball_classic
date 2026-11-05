@@ -14,7 +14,7 @@
 - [x] 플레이오프 gameId 후보 직접 조회 + 강제 동기화 (사용자 실행): 55551026HTSS·1027HTSS·1029SSHT·1030SSHT·1101HTSS 5건 FINISHED 반영, 백엔드 `/games?from=2026-10-25&to=2026-11-03` 확인
 - [x] 일정 import 포스트시즌 대응: fallback `/schedule/games` 요청을 `date` 대신 웹과 같은 `fromDate`/`toDate`(+`upperCategoryId`, `size`)로 바꾸고 KBO만 남김. 11/3 밤 기준 백엔드에 11/4 이후 한국시리즈 경기가 0건이었다(대표 경기가 1차전에 머묾). 단위 테스트 추가, 크롤러 테스트 84개 통과
 - [x] 위 변경 실네트워크 확인 (11/5, 캘린더 경로를 끄고 fallback만 호출): 9/20 정규시즌 5경기, 10/26 `55551026HTSS02026`, 11/4 `77771104SSKT02026`, 11/5 0건(휴식일), 11/6 `77771106KTSS02026`. 같은 시점 배포본의 `date=` 요청은 11/5·11/6 모두 0건이었다(11/3과 달리 대표 경기도 돌려주지 않음). 그대로 두면 한국시리즈 3차전이 등록되지 않을 상황이라 바로 배포함. 크롤러 테스트 84개 통과
-- [ ] staging 푸시 → crawler_staging 재배포 SUCCESS, 11/6 3차전 `77771106KTSS02026` SCHEDULED 등록 확인
+- [x] staging 커밋 d385230 푸시(11/5 11:43) → crawler_staging 3c083097·baseball_classic a7fdc311 SUCCESS. 백엔드에 한국시리즈 3~7차전(`77771106KTSS`·`1107KTSS`·`1108KTSS`·`1110SSKT`·`1111SSKT`) 5건 SCHEDULED 등록(11:44:34~40). 새 크롤러 시작 import(11:45:02)에서 각 날짜 `fetched=1`, 이미 등록돼 `skipped_unchanged source=backend-state`. 크롤러 오류 0건, `/health` 정상. 등록 시각이 컨테이너 로그 시작보다 30초 앞서는데, 다른 세션 기록에 수동 동기화 흔적은 없음
 - [x] 한국시리즈 2차전(11/4 18:30, `77771104SSKT02026`) 라이브 ingest 확인: FINISHED 삼성 3-2 KT(11회 연장), 이벤트 709건(1~11회), 크롤러 `[backend]` 전송 1,043회·네이버 타임아웃/연결 끊김/fetch_failed 0건, freshness 18:00~23:10 33회 모두 issues 0. (19:13 점검은 세션이 바빠 제때 실행되지 않았고 23:18에 종료 점검과 함께 사후 확인함)
 - [ ] 푸시·워치 실기기 수신 확인 (사용자 확인 필요)
 - [x] spark `~/baseball_monitor/freshness_monitor.py`(+`run_freshness.sh`, `test_freshness_monitor.py` 7개 통과) 배포: 시작 40분 지난 SCHEDULED, 30분 갱신 없는 LIVE, 어제 미종료, `/games` 연속 실패 감지. 10/26 19:15 재현 시 알림 확인. 09:00 `railway_monitor` 보고에 "데이터:" 한 줄 추가 (백업 `~/var/backups/2026-11-03-freshness-monitor/`)
