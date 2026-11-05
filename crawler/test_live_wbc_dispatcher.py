@@ -800,3 +800,39 @@ def test_merge_relay_windows_keeps_exhausted_window_with_pending_final_sync() ->
 
     assert merged["20260905OBSK02026"] is existing
     assert merged["20260905OBSK02026"].final_sync_pending is True
+
+
+def test_fetch_schedule_games_fallback_uses_date_range_for_postseason(monkeypatch) -> None:
+    # 포스트시즌 gameId 는 캘린더에서 걸러져 fallback 으로 온다. 네이버는 `date` 를 무시하므로 fromDate/toDate 로 요청한다.
+    captured: dict = {}
+
+    def fake_get_json(url, *, params=None, timeout):
+        captured["url"] = url
+        captured["params"] = params
+        return {
+            "result": {
+                "games": [
+                    {"gameId": "77771104SSKT02026", "categoryId": "kbo", "gameDate": "2026-11-04"},
+                    {"gameId": "20261104OTHER2026", "categoryId": "kbaseballetc", "gameDate": "2026-11-04"},
+                ]
+            }
+        }
+
+    monkeypatch.setattr(live_wbc_dispatcher, "_fetch_schedule_games_via_calendar", lambda **kwargs: [])
+    monkeypatch.setattr(live_wbc_dispatcher.naver_http, "get_json", fake_get_json)
+
+    games = live_wbc_dispatcher._fetch_schedule_games(
+        source_base_url="https://api-gw.sports.naver.com",
+        section_id="kbaseball",
+        category_id="kbo",
+        target_date=date(2026, 11, 4),
+        timeout=5,
+    )
+
+    assert captured["url"] == "https://api-gw.sports.naver.com/schedule/games"
+    assert captured["params"]["fromDate"] == "2026-11-04"
+    assert captured["params"]["toDate"] == "2026-11-04"
+    assert captured["params"]["upperCategoryId"] == "kbaseball"
+    assert captured["params"]["categoryId"] == "kbo"
+    assert "date" not in captured["params"]
+    assert [g["gameId"] for g in games] == ["77771104SSKT02026"]

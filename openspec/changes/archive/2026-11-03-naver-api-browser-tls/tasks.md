@@ -8,8 +8,16 @@
 - [x] `crawler/requirements.txt`에 `curl_cffi==0.16.2` 추가, Linux py3.12 휠 확인
 - [x] `crawler/test_naver_http.py` 예외 변환 단위 테스트 추가, 크롤러 테스트 83개 통과 (uv, Python 3.12)
 - [x] Android/iOS, 모바일/워치 영향 확인: API·WS 프로토콜 무변경, 클라이언트 영향 없음
-- [ ] 로컬 실네트워크 스모크: 수정된 크롤러 코드로 11/3 일정과 한국시리즈 1차전 중계 조회 (사용자 실행)
-- [ ] staging 커밋·푸시 → Railway `crawler_staging` 재빌드, 로그에서 `[import]` 성공과 `windows_loaded` 확인
-- [ ] 누락 경기(플레이오프 2~5차전, 한국시리즈 1차전) 백필 여부 확인
-- [ ] 다음 한국시리즈 경기에서 라이브 ingest·푸시·워치 수신 확인
-- [ ] 후속: spark Railway 모니터에 데이터 최신성 점검 추가 (헬스는 정상인데 경기 데이터만 멈추는 장애 감지)
+- [x] 로컬 실네트워크 스모크 (사용자 실행): 11/3 일정 `77771103SSKT02026 RESULT 8:7`, 한국시리즈 1차전 중계 89타석
+- [x] staging 커밋 f440d34 푸시 → crawler_staging 2fc6feaa·baseball_classic a2f862d4 SUCCESS. 로그 `[import] synced gameId=77771103SSKT02026 status=FINISHED`, `windows_loaded=1`, 네이버 타임아웃 0건, 백엔드 `/games?date=2026-11-03`에 KT 8-7 삼성 FINISHED 반영
+- [x] `SCHEDULE_IMPORT_START_DATE=2026-10-26` 임시 설정 → 10/26~11/24 import 실행했지만 플레이오프는 0건. 포스트시즌 gameId(5555…)가 날짜로 시작하지 않아 캘린더 경로에서 걸러지고, `/schedule/games?date=`는 날짜와 무관하게 최근 경기(한국시리즈 1차전)만 돌려준다. 변수는 삭제함
+- [x] 플레이오프 gameId 후보 직접 조회 + 강제 동기화 (사용자 실행): 55551026HTSS·1027HTSS·1029SSHT·1030SSHT·1101HTSS 5건 FINISHED 반영, 백엔드 `/games?from=2026-10-25&to=2026-11-03` 확인
+- [x] 일정 import 포스트시즌 대응: fallback `/schedule/games` 요청을 `date` 대신 웹과 같은 `fromDate`/`toDate`(+`upperCategoryId`, `size`)로 바꾸고 KBO만 남김. 11/3 밤 기준 백엔드에 11/4 이후 한국시리즈 경기가 0건이었다(대표 경기가 1차전에 머묾). 단위 테스트 추가, 크롤러 테스트 84개 통과
+- [x] 위 변경 실네트워크 확인 (11/5, 캘린더 경로를 끄고 fallback만 호출): 9/20 정규시즌 5경기, 10/26 `55551026HTSS02026`, 11/4 `77771104SSKT02026`, 11/5 0건(휴식일), 11/6 `77771106KTSS02026`. 같은 시점 배포본의 `date=` 요청은 11/5·11/6 모두 0건이었다(11/3과 달리 대표 경기도 돌려주지 않음). 그대로 두면 한국시리즈 3차전이 등록되지 않을 상황이라 바로 배포함. 크롤러 테스트 84개 통과
+- [ ] staging 푸시 → crawler_staging 재배포 SUCCESS, 11/6 3차전 `77771106KTSS02026` SCHEDULED 등록 확인
+- [x] 한국시리즈 2차전(11/4 18:30, `77771104SSKT02026`) 라이브 ingest 확인: FINISHED 삼성 3-2 KT(11회 연장), 이벤트 709건(1~11회), 크롤러 `[backend]` 전송 1,043회·네이버 타임아웃/연결 끊김/fetch_failed 0건, freshness 18:00~23:10 33회 모두 issues 0. (19:13 점검은 세션이 바빠 제때 실행되지 않았고 23:18에 종료 점검과 함께 사후 확인함)
+- [ ] 푸시·워치 실기기 수신 확인 (사용자 확인 필요)
+- [x] spark `~/baseball_monitor/freshness_monitor.py`(+`run_freshness.sh`, `test_freshness_monitor.py` 7개 통과) 배포: 시작 40분 지난 SCHEDULED, 30분 갱신 없는 LIVE, 어제 미종료, `/games` 연속 실패 감지. 10/26 19:15 재현 시 알림 확인. 09:00 `railway_monitor` 보고에 "데이터:" 한 줄 추가 (백업 `~/var/backups/2026-11-03-freshness-monitor/`)
+- [x] spark crontab에 freshness 10분 cron 등록 (사용자 실행), 11/3 23:10 첫 실행 `today=1 issues=0`
+- [x] spark `RAILWAY_PROJECT_TOKEN` 재발급: 10/22부터 "Project Token not found"라 05:00 야간 재배포와 09:00 메트릭 조회가 실패했다(마지막 성공 재배포 10/20). 첫 재발급 토큰은 staging 환경 스코프라 Not Authorized → production 환경 토큰으로 교체. `railway_redeploy.sh --check` OK, `run_railway.sh --dry-run`에서 메트릭·비용·배포 정보 정상(월 환산 ≈ $2.95)
+- [x] 11/4 05:00 야간 재배포 "redeploy OK"(백엔드 9c29f217). 09:00 보고에 메모리 24h 평균 0.20 GB·월 환산 ≈ $2.65·"데이터: 어제 1경기 모두 종료·취소 반영 ✅" 정상 수신. freshness 밤사이 issues 0. 한국시리즈 2차전 `77771104SSKT02026`(18:30 수원)은 11/4 00:05 KST import에서 대표 경기로 SCHEDULED 등록됨, 크롤러 `windows_loaded=1`

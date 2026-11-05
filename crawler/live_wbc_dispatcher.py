@@ -638,20 +638,29 @@ def _fetch_schedule_games(
             exc,
         )
 
+    # 포스트시즌 gameId(5555…, 7777…)는 날짜로 시작하지 않아 캘린더 경로에서 걸러진다. 이 경우 여기로 오는데,
+    # 네이버는 `date` 파라미터를 무시하고 그때 대표 경기 1건만 돌려준다(2026-11-03 확인). 웹과 같은
+    # fromDate/toDate 로 그 날짜 경기를 받는다.
     endpoint = f"{source_base_url.rstrip('/')}/schedule/games"
     payload = naver_http.get_json(
         endpoint,
         params={
-            "sectionId": section_id,
+            "upperCategoryId": section_id,
             "categoryId": category_id,
-            "date": target_date.isoformat(),
+            "fromDate": target_date.isoformat(),
+            "toDate": target_date.isoformat(),
+            "size": 500,
         },
         timeout=timeout,
     )
     result = (payload.get("result") or {}) if isinstance(payload, dict) else {}
     games = result.get("games") or []
     if isinstance(games, list):
-        return [item for item in games if isinstance(item, dict)]
+        return [
+            item
+            for item in games
+            if isinstance(item, dict) and str(item.get("categoryId") or category_id) == category_id
+        ]
     return []
 
 
