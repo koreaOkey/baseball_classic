@@ -28,7 +28,7 @@
 
 ## 5. 배포·검증
 
-- [ ] 5.1 경기 없는 시간대에 staging 푸시(= 프로덕션) → Railway 배포 SUCCESS, `/health` 정상
+- [x] 5.1 경기 없는 시간대에 staging 푸시(= 프로덕션) → Railway 배포 SUCCESS, `/health` 정상 (bcb253e, deployment 52c45574, 2026-09-09 16:02 KST, 워커 2개 기동·Redis 구독 정상)
 - [ ] 5.2 다음 경기 Railway `[APNs-LA]` 로그로 검증: `lag_ms` 수 초 이내, `skip_stale`·`lock_busy` 빈도, 180s 초과 발송 공백 소멸, 이닝 교대 구간 `heartbeat` 발송 확인
 - [ ] 5.3 실기기: 잠금 1시간+ 방치 시 이닝 교대·투수 교체 구간에서 "동기화 지연" 미표시, 스코어·이닝 최신 유지 확인
 - [ ] 5.4 검증 후 openspec archive + 8/18 change 의 heartbeat 조항을 이 change 기준으로 main spec 동기화
