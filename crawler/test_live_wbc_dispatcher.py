@@ -836,3 +836,21 @@ def test_fetch_schedule_games_fallback_uses_date_range_for_postseason(monkeypatc
     assert captured["params"]["categoryId"] == "kbo"
     assert "date" not in captured["params"]
     assert [g["gameId"] for g in games] == ["77771104SSKT02026"]
+
+
+def test_relay_is_available_when_only_relay_is_blocked(monkeypatch) -> None:
+    # 2026-11-07: relay 만 막히고 경기 상세는 열려 있으면 경기 상세 기준으로 크롤러를 띄운다.
+    def fake_safe_json_get(url, timeout):
+        if url.endswith("/relay?inning=1"):
+            return None
+        if url.endswith("/schedule/games/77771108KTSS02026"):
+            return {"result": {"game": {"statusCode": "STARTED", "gameCenterUrl": {"relayTabUrl": "x"}}}}
+        return None
+
+    monkeypatch.setattr(live_wbc_dispatcher, "_safe_json_get", fake_safe_json_get)
+    assert live_wbc_dispatcher._relay_is_available("https://example.test", "77771108KTSS02026", 5) == (True, False, False)
+
+
+def test_relay_is_available_reports_fetch_failure_when_game_detail_fails(monkeypatch) -> None:
+    monkeypatch.setattr(live_wbc_dispatcher, "_safe_json_get", lambda url, timeout: None)
+    assert live_wbc_dispatcher._relay_is_available("https://example.test", "77771108KTSS02026", 5) == (False, False, True)

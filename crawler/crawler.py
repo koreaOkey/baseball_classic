@@ -25,6 +25,11 @@ LIVE_STATUS = {"LIVE", "ING", "PLAYING", "IN_PROGRESS", "STARTED"}
 PREGAME_IDLE_INTERVAL_SEC = 60
 # watch 루프에서 연속 크롤 실패가 이 횟수에 도달하면 비정상 종료해 dispatcher 재시작에 맡긴다 (C1)
 MAX_CONSECUTIVE_CRAWL_FAILURES = 10
+# 2026-11-07: 네이버가 relay 엔드포인트만 따로 막는다(경기 상세·preview 는 정상). relay 가 실패하면
+# 그 폴은 relay 없이 경기 상세만으로 스냅샷(스코어·이닝·상태)을 보내고, 막힌 엔드포인트에 매 폴
+# 타임아웃을 기다리지 않도록 일정 시간 relay 조회를 쉰다.
+RELAY_FAILURE_COOLDOWN_SEC = 300
+_relay_cooldown_until = 0.0
 FINAL_STATUS = {
     "RESULT",
     "END",
@@ -510,17 +515,28 @@ def crawl_once_detailed(
         "pitcher_changes": [],
     }
 
+    global _relay_cooldown_until
+    relay_available = time.monotonic() >= _relay_cooldown_until
     current_inning = _current_inning_number(game_data)
     inning_limit = max(9, current_inning)
     for inning in range(1, inning_limit + 1):
         cached = relay_cache.get(inning) if relay_cache is not None else None
-        if _should_fetch_inning(inning, current_inning, cached):
+        relay_data = cached or {}
+        if relay_available and _should_fetch_inning(inning, current_inning, cached):
             relay_url = f"{base_url}/schedule/games/{game_id}/relay?inning={inning}"
-            relay_data = fetch_json(relay_url).get("result", {}).get("textRelayData") or {}
-            if relay_cache is not None:
-                relay_cache[inning] = relay_data
-        else:
-            relay_data = cached
+            try:
+                relay_data = fetch_json(relay_url).get("result", {}).get("textRelayData") or {}
+            except requests.RequestException as exc:
+                relay_available = False
+                _relay_cooldown_until = time.monotonic() + RELAY_FAILURE_COOLDOWN_SEC
+                print(
+                    f"[relay][warn] gameId={game_id} relay_unavailable inning={inning} "
+                    f"cooldown={RELAY_FAILURE_COOLDOWN_SEC}s error={exc}",
+                    flush=True,
+                )
+            else:
+                if relay_cache is not None:
+                    relay_cache[inning] = relay_data
         relays_by_inning[inning] = relay_data
         parsed = parse_relay(relay_data, teams)
         combined["at_bats"].extend(parsed["at_bats"])

@@ -9,9 +9,13 @@
 - [x] 맥미니 `.env` 작성 (사용자 실행, 권한 600)
 - [x] 맥미니에서 위장 요청 확인 후 launchd 에이전트 등록·시작 (사용자 실행, 11/7 21:39 `state = running`)
 - [x] Railway crawler_staging: `CRAWLER_DISABLED=1` 설정 + `railway down` (사용자 실행, 배포 a3c6cb43 REMOVED)
-- [ ] 이 커밋 staging 푸시 (auto mode가 production deploy로 차단 → 사용자 실행), Railway 재배포 시 대기 로그 확인
+- [x] staging 푸시 d5353e4 (사용자 실행) → Railway crawler 83e539f6 SUCCESS, 로그 `[start] CRAWLER_DISABLED is set; crawler runs elsewhere (mac mini). idling.`
 - [x] 맥미니 import 성공: 3차전 `77771106KTSS02026` KT 1-5 삼성, 4차전 `77771107KTSS02026` KT 5-10 삼성 FINISHED 반영, 팀 순위 동기화, 네이버 일정·경기 상세 요청 정상
-- [ ] relay(`/relay?inning=N`) 요청만 맥미니에서 타임아웃 2회 — 엔드포인트별 진단(`naver_diag_relay.py`, 사용자 실행) 후 대응. 라이브 중계의 핵심 경로
+- [x] relay 차단: 맥미니(집 IP) 진단 결과 `/schedule/games/{id}/relay`만 0바이트 30초 타임아웃(1회·9회·회차 없음·다른 경기·Referer 추가 모두). 같은 경기 상세·preview는 0.04초 OK. 11/4 빌드 네이버 웹도 같은 주소를 별도 헤더 없이 호출 → relay만 쿠키/JS 수준 봇 검사로 추정. 대안 엔드포인트 진단(`naver_diag_alt.py`)·실제 브라우저 표시 여부 확인 후 대응 결정
+- [x] 대안 진단(사용자 실행): 브라우저 문자중계 표시 OK / `event`·`boxscore` 403, `relay/highLight`·`superb` 타임아웃, `record` OK, 경기 상세에 Rheb·ScoreByInning·CurrentPitcher·currentInning 있음
+- [x] 라이브 스코어 유지 모드 구현: crawler relay 실패 허용+5분 쿨다운, dispatcher relay 실패 시 경기 상세로 판정, backend_sender 경기 상세 폴백. 테스트 4개 추가, 크롤러 테스트 88개 통과
+- [ ] 맥미니에 반영(rsync + launchctl kickstart) 후 dispatcher가 크롤러를 띄우는지 확인
+- [ ] 후속(선택): 이벤트(햅틱·푸시)까지 살리려면 다른 문자중계 소스(KBO 공식·다음) 검토 — 사용자 결정
 - [ ] 11/8 14:00 한국시리즈 5차전 라이브 ingest 확인
 - [ ] 선택: 맥미니 이더넷 연결, `sudo pmset -a autorestart 1`, 자동 로그인 확인
 - [x] Android/iOS, 모바일/워치 영향 확인: 백엔드 무변경이라 영향 없음

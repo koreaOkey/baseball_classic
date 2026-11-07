@@ -483,3 +483,30 @@ def test_snapshot_payload_attaches_error_metadata_without_changing_type() -> Non
     assert event["type"] == _classify_event_type(
         {"type": 13, "text": "유격수 실책으로 출루"}
     )
+
+
+def test_snapshot_without_relay_uses_game_detail_rheb_and_line_score() -> None:
+    # 2026-11-07 네이버 relay 차단: relay 없이 경기 상세만으로 안타·실책·라인스코어·투수를 채운다.
+    game_data = {
+        **_mock_game_data(),
+        "statusCode": "STARTED",
+        "statusInfo": "9회말",
+        "homeTeamRheb": [2, 8, 2, 5],
+        "awayTeamRheb": [11, 15, 0, 6],
+        "homeTeamScoreByInning": ["0", "0", "0", "0", "0", "1", "0", "0", "1"],
+        "awayTeamScoreByInning": ["3", "0", "0", "0", "2", "2", "0", "0", "-"],
+        "homeCurrentPitcherName": "이기순",
+        "awayCurrentPitcherName": "박진형",
+    }
+
+    payload = build_snapshot_payload(game_data=game_data, relays_by_inning={})
+
+    assert payload["homeScore"] == 2 and payload["awayScore"] == 11
+    assert payload["homeHits"] == 8 and payload["awayHits"] == 15
+    assert payload["homeErrors"] == 2 and payload["awayErrors"] == 0
+    assert payload["lineScore"]["home"]["9"] == 1
+    assert "9" not in payload["lineScore"]["away"]
+    assert payload["inning"] == "9회말"
+    # 말 공격(홈) → 마운드는 원정 투수
+    assert payload["pitcher"] == "박진형"
+    assert payload["events"] == []

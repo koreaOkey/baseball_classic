@@ -397,12 +397,17 @@ def _relay_is_available(
     preview_url = f"{source_base_url.rstrip('/')}/schedule/games/{game_id}/preview"
 
     game_payload = _safe_json_get(game_url, timeout=timeout)
-    relay_payload = _safe_json_get(relay_url, timeout=timeout)
-    if not isinstance(game_payload, dict) or not isinstance(relay_payload, dict):
+    if not isinstance(game_payload, dict):
         return False, False, True
+    # 2026-11-07: 네이버가 relay 만 따로 막는 경우가 있다. relay 를 못 받아도 경기 상세(상태·
+    # gameCenterUrl·liveList)와 preview 라인업으로 판정해 크롤러를 띄운다. 크롤러는 relay 없이도
+    # 스코어·이닝·상태 스냅샷을 보낸다.
+    relay_payload = _safe_json_get(relay_url, timeout=timeout)
 
     game = (game_payload.get("result") or {}).get("game") or {}
-    relay_data = (relay_payload.get("result") or {}).get("textRelayData") or {}
+    relay_data = (
+        ((relay_payload.get("result") or {}).get("textRelayData") or {}) if isinstance(relay_payload, dict) else {}
+    )
     status_code = str(game.get("statusCode") or "").strip().upper()
     if status_code in TERMINAL_STATUS_CODES:
         return False, True, False

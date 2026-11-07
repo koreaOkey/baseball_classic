@@ -93,3 +93,39 @@ def test_snapshot_state_signature_changes_when_line_score_changes() -> None:
     assert unchanged == same
     assert with_line_score != unchanged
     assert with_errors != unchanged
+
+
+def test_crawl_once_detailed_survives_relay_block_and_cools_down(monkeypatch) -> None:
+    # 2026-11-07: 네이버가 relay 만 막는다. 경기 상세로 스냅샷을 만들고, 쿨다운 동안 relay 를 다시 부르지 않는다.
+    import requests
+
+    game_data = {
+        "gameId": "77771108KTSS02026",
+        "statusCode": "STARTED",
+        "statusInfo": "3회초",
+        "homeTeamName": "삼성",
+        "awayTeamName": "KT",
+    }
+    fetched_urls: list[str] = []
+
+    def fake_fetch_json(url: str):
+        fetched_urls.append(url)
+        if url.endswith("/schedule/games/77771108KTSS02026"):
+            return {"result": {"game": game_data}}
+        if "/relay" in url:
+            raise requests.Timeout("relay blocked")
+        return {"result": {}}
+
+    monkeypatch.setattr(crawler, "fetch_json", fake_fetch_json)
+    monkeypatch.setattr(crawler, "_relay_cooldown_until", 0.0)
+
+    first_game, first_relays, combined = crawl_once_detailed(game_id="77771108KTSS02026", base_url="https://example.test")
+    assert first_game is game_data
+    assert set(first_relays.keys()) == set(range(1, 10))
+    assert combined["at_bats"] == []
+    # 첫 relay 실패 뒤 같은 폴에서 나머지 이닝을 더 부르지 않는다
+    assert len([u for u in fetched_urls if "relay?inning=" in u]) == 1
+
+    fetched_urls.clear()
+    crawl_once_detailed(game_id="77771108KTSS02026", base_url="https://example.test")
+    assert [u for u in fetched_urls if "relay?inning=" in u] == []

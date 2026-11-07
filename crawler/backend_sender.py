@@ -571,6 +571,37 @@ def _extract_line_score(
     return None
 
 
+def _game_rheb(game_data: Dict[str, Any], side: str) -> Optional[List[int]]:
+    """경기 상세의 {side}TeamRheb = [득점, 안타, 실책, 볼넷]. 형식이 다르면 None."""
+    raw = game_data.get(f"{side}TeamRheb")
+    if not isinstance(raw, list) or len(raw) < 3:
+        return None
+    values = [_safe_int(value, default=-1) for value in raw[:4]]
+    if any(value < 0 for value in values[:3]):
+        return None
+    return values
+
+
+def _line_score_from_game(game_data: Dict[str, Any]) -> Optional[Dict[str, Dict[str, int]]]:
+    """relay 없이 경기 상세의 {side}TeamScoreByInning(1회부터 문자열 배열)으로 라인스코어를 만든다."""
+    line_score: Dict[str, Dict[str, int]] = {}
+    for side in ("home", "away"):
+        raw = game_data.get(f"{side}TeamScoreByInning")
+        if not isinstance(raw, list):
+            continue
+        side_scores: Dict[str, int] = {}
+        for index, score_value in enumerate(raw, start=1):
+            try:
+                score = int(str(score_value).strip())
+            except (TypeError, ValueError):
+                continue
+            if score >= 0:
+                side_scores[str(index)] = score
+        if side_scores:
+            line_score[side] = side_scores
+    return line_score or None
+
+
 def _extract_team_errors(
     relays_by_inning: Dict[int, Dict[str, Any]],
     fallback_state: Dict[str, Any],
@@ -869,6 +900,13 @@ def build_snapshot_payload(
     batter_id = str(latest_state.get("batter") or "").strip()
 
     pitcher_name = player_map.get(pitcher_id, "")
+    if latest_half is None:
+        # relay 가 없으면(네이버 relay 차단) 경기 상세의 "N회초/말"로 공격 팀을 정한다.
+        status_text = str(game_data.get("statusInfo") or game_data.get("currentInning") or "")
+        if "말" in status_text:
+            latest_half = "bottom"
+        elif "초" in status_text:
+            latest_half = "top"
     if not pitcher_name:
         if latest_half == "top":
             pitcher_name = (game_data.get("homeCurrentPitcherName") or "").strip()
@@ -1008,6 +1046,12 @@ def build_snapshot_payload(
         summary["awayHits"] = batter_summary["awayHits"]
         summary["homeHomeRuns"] = batter_summary["homeHomeRuns"]
         summary["awayHomeRuns"] = batter_summary["awayHomeRuns"]
+    elif not options:
+        # relay 가 없으면 안타 수를 경기 상세 R/H/E/B 에서 가져온다.
+        for side in ("home", "away"):
+            rheb = _game_rheb(game_data, side)
+            if rheb is not None:
+                summary[f"{side}Hits"] = max(summary[f"{side}Hits"], rheb[1])
 
     home_score = max(
         _safe_int(game_data.get("homeTeamScore"), default=0),
@@ -1060,8 +1104,12 @@ def build_snapshot_payload(
 
     # 이닝별 라인스코어/실책은 relay 데이터가 있을 때만 optional 로 포함한다.
     # (경기 전 스냅샷·구버전 백엔드와의 하위 호환을 위해 없으면 필드 자체를 생략)
-    line_score = _extract_line_score(relays_by_inning)
+    line_score = _extract_line_score(relays_by_inning) or _line_score_from_game(game_data)
     home_errors, away_errors = _extract_team_errors(relays_by_inning, latest_state)
+    if home_errors is None and (home_rheb := _game_rheb(game_data, "home")) is not None:
+        home_errors = home_rheb[2]
+    if away_errors is None and (away_rheb := _game_rheb(game_data, "away")) is not None:
+        away_errors = away_rheb[2]
     if line_score is not None:
         payload["lineScore"] = line_score
     if home_errors is not None:

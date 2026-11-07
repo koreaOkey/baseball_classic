@@ -20,6 +20,11 @@
   - 로그는 크롤러 자체 파일 로그(`log/`, 디스패처는 일 단위 7일, 경기별 파일은 14일 지나면 삭제)를 쓴다.
 - 백엔드는 그대로 Railway(`-4796`)를 쓴다. 크롤러는 공개 URL로 ingest한다.
 - `crawler/start.sh`에 `CRAWLER_DISABLED` 가드를 추가했다. Railway crawler_staging에 `CRAWLER_DISABLED=1`을 두면 staging 푸시로 재배포돼도 네이버를 호출하지 않고 대기만 한다. 크롤러 두 개가 동시에 도는 것을 막기 위해서다.
+- 네이버 relay 차단 대응(라이브 스코어 유지 모드). 맥미니(집 IP)에서도 `/schedule/games/{id}/relay`만 0바이트 타임아웃이 났다. `event`·`boxscore`는 403이었고, 경기 상세·`preview`·`record`는 정상이었다. 브라우저에서는 문자중계가 보인다.
+  - 크롤러: relay가 실패하면 그 폴은 relay 없이 경기 상세만으로 스냅샷을 보낸다. 실패 뒤 5분 동안은 relay를 다시 부르지 않는다.
+  - 디스패처: relay를 못 받아도 경기 상세와 preview로 판정해 크롤러를 띄운다. 이전에는 fetch_failed로 띄우지 않았다.
+  - 스냅샷: relay가 없을 때 안타·실책은 `{side}TeamRheb`, 라인스코어는 `{side}TeamScoreByInning`, 현재 투수는 "N회초/말" 기준 `{side}CurrentPitcherName`으로 채운다.
+  - 이 모드에서는 투구·타석 이벤트(햅틱·이벤트 푸시)가 없다. 앱에는 스코어·이닝·상태·라인스코어만 실시간으로 반영된다.
 - spark `~/baseball_crawler`에도 같은 준비(venv, systemd unit 파일)가 있다. 켜지 않은 예비로 둔다.
 
 ## Capabilities
