@@ -1,6 +1,13 @@
 #!/bin/sh
 set -e
 
+# 2026-11-07: 네이버가 Railway 서버 IP를 차단해 크롤러를 맥미니(집 IP)에서 돌린다. Railway 서비스는
+# CRAWLER_DISABLED=1 로 두어 staging 푸시로 재배포돼도 네이버를 호출하지 않고 대기만 한다.
+if [ -n "${CRAWLER_DISABLED:-}" ]; then
+  echo "[start] CRAWLER_DISABLED is set; crawler runs elsewhere (mac mini). idling."
+  while :; do sleep 3600; done
+fi
+
 # --enable-preview-lineup-precheck: NAVER /preview API 의 previewData.{home,away}TeamLineUp.fullLineUp
 # 또는 {home,away}Starter 가 노출되면 dispatcher 가 crawler 를 spawn. 라인업이 /relay 의 textRelays
 # 가 비어있는 상태(경기 시작 전 라인업 공개 ~30분 전)에서도 잡힌다.
