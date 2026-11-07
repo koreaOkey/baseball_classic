@@ -25,6 +25,12 @@
   - 디스패처: relay를 못 받아도 경기 상세와 preview로 판정해 크롤러를 띄운다. 이전에는 fetch_failed로 띄우지 않았다.
   - 스냅샷: relay가 없을 때 안타·실책은 `{side}TeamRheb`, 라인스코어는 `{side}TeamScoreByInning`, 현재 투수는 "N회초/말" 기준 `{side}CurrentPitcherName`으로 채운다.
   - 이 모드에서는 투구·타석 이벤트(햅틱·이벤트 푸시)가 없다. 앱에는 스코어·이닝·상태·라인스코어만 실시간으로 반영된다.
+- relay 브라우저 브리지(사용자 선택 3번).
+  - 맥미니에 실제 Chromium(Playwright, 창 표시)을 launchd `com.basehaptic.relay-bridge`로 상주시킨다.
+  - 브리지는 네이버 중계 페이지를 띄워 두고 `127.0.0.1:8790/fetch?url=`로 받은 api-gw URL을 그 페이지 안에서 fetch해 응답을 그대로 돌려준다. 허용하는 주소는 api-gw https만이다.
+  - 크롤러는 `NAVER_RELAY_BRIDGE_URL`이 있으면 relay URL만 브리지로 보낸다. 받은 JSON은 예전 relay와 같아서 기존 이벤트 분류·햅틱 경로가 그대로 동작한다.
+  - 브리지가 실패하면 위 스코어 유지 모드로 내려간다.
+  - 네이버가 일부러 브라우저만 통과시키는 경로를 자동화한 브라우저로 넘는 방식이라, 약관 위반 위험이 이전 단계보다 크다(사용자 감수).
 - spark `~/baseball_crawler`에도 같은 준비(venv, systemd unit 파일)가 있다. 켜지 않은 예비로 둔다.
 
 ## Capabilities

@@ -67,3 +67,53 @@ def test_invalid_json_is_a_requests_exception(monkeypatch) -> None:
 
     with pytest.raises(requests.RequestException):
         naver_http.get_json("https://example.test/x", timeout=1)
+
+
+class _BridgeResponse:
+    def __init__(self, status_code: int, payload: dict) -> None:
+        self.status_code = status_code
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code}", response=self)
+
+    def json(self) -> dict:
+        return self._payload
+
+
+def test_relay_url_goes_through_bridge_when_configured(monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(naver_http, "RELAY_BRIDGE_URL", "http://127.0.0.1:8790")
+    monkeypatch.setattr(
+        naver_http.requests,
+        "get",
+        lambda url, params=None, timeout=None: calls.append((url, params, timeout)) or _BridgeResponse(200, {"result": {}}),
+    )
+    monkeypatch.setattr(naver_http, "_get_session", lambda: pytest.fail("relay must not hit Naver directly"))
+
+    relay_url = "https://api-gw.sports.naver.com/schedule/games/77771108KTSS02026/relay?inning=3"
+    assert naver_http.get_json(relay_url, timeout=9) == {"result": {}}
+    assert calls == [("http://127.0.0.1:8790/fetch", {"url": relay_url}, 9)]
+
+
+def test_non_relay_urls_and_unset_bridge_stay_direct(monkeypatch) -> None:
+    session = _FakeSession(response=_FakeResponse(200, '{"ok": 1}'))
+    _use_session(monkeypatch, session)
+    monkeypatch.setattr(naver_http.requests, "get", lambda *a, **k: pytest.fail("bridge must not be used"))
+
+    monkeypatch.setattr(naver_http, "RELAY_BRIDGE_URL", "http://127.0.0.1:8790")
+    naver_http.get_json("https://api-gw.sports.naver.com/schedule/games/77771108KTSS02026", timeout=5)
+    naver_http.get_json("https://api-gw.sports.naver.com/schedule/games/77771108KTSS02026/relay/highLight", timeout=5)
+
+    monkeypatch.setattr(naver_http, "RELAY_BRIDGE_URL", "")
+    naver_http.get_json("https://api-gw.sports.naver.com/schedule/games/77771108KTSS02026/relay?inning=1", timeout=5)
+    assert len(session.calls) == 3
+
+
+def test_bridge_failure_is_a_requests_exception(monkeypatch) -> None:
+    monkeypatch.setattr(naver_http, "RELAY_BRIDGE_URL", "http://127.0.0.1:8790")
+    monkeypatch.setattr(naver_http.requests, "get", lambda *a, **k: _BridgeResponse(502, {}))
+
+    with pytest.raises(requests.RequestException):
+        naver_http.get_json("https://api-gw.sports.naver.com/schedule/games/x/relay?inning=1", timeout=5)

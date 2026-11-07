@@ -15,7 +15,11 @@
 - [x] 대안 진단(사용자 실행): 브라우저 문자중계 표시 OK / `event`·`boxscore` 403, `relay/highLight`·`superb` 타임아웃, `record` OK, 경기 상세에 Rheb·ScoreByInning·CurrentPitcher·currentInning 있음
 - [x] 라이브 스코어 유지 모드 구현: crawler relay 실패 허용+5분 쿨다운, dispatcher relay 실패 시 경기 상세로 판정, backend_sender 경기 상세 폴백. 테스트 4개 추가, 크롤러 테스트 88개 통과
 - [ ] 맥미니에 반영(rsync + launchctl kickstart) 후 dispatcher가 크롤러를 띄우는지 확인
-- [ ] 후속(선택): 이벤트(햅틱·푸시)까지 살리려면 다른 문자중계 소스(KBO 공식·다음) 검토 — 사용자 결정
+- [x] 맥미니에 스코어 유지 모드 반영(rsync + kickstart). 4차전을 경기 상세로 종료 판정·정리(`final_sync_recovered`)
+- [x] 사용자 선택 3번: relay 브라우저 브리지 구현(`crawler/naver_relay_bridge.py`, naver_http relay 라우팅), 맥미니 Playwright 1.64.1 + Chromium 설치, launchd plist·run.sh(`NAVER_RELAY_BRIDGE_URL`) 반영. 테스트 5개 추가, 크롤러 테스트 93개 통과
+- [x] 브리지 등록·시작(사용자 실행, 22:08:58 listening, `/health` ok)과 크롤러 재시작(22:09:03, 디스패처 환경에 `NAVER_RELAY_BRIDGE_URL` 확인). 4차전 1회 relay를 브리지로 받아 `200 318247B 0.66s` 확인(사용자 실행). 실제 경기 이벤트로 최종 확인
+- [x] 디스패처 새 판정 확인: relay 차단 중에도 `available=False final=True fetchFailed=False`로 4차전 종료 처리
+- [ ] 5차전에서 이벤트·햅틱 수신 확인
 - [ ] 11/8 14:00 한국시리즈 5차전 라이브 ingest 확인
 - [ ] 선택: 맥미니 이더넷 연결, `sudo pmset -a autorestart 1`, 자동 로그인 확인
 - [x] Android/iOS, 모바일/워치 영향 확인: 백엔드 무변경이라 영향 없음
